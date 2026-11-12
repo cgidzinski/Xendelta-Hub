@@ -42,9 +42,13 @@ describe("query keys", () => {
     expect(xenbudgetKeys.summary("b1", { p: 1 }).slice(0, 3)).toEqual([...xenbudgetKeys.summary("b1")]);
   });
 
-  it("XenDrive file keys", () => {
-    expect(xendriveKeys.files()).toEqual(["xendriveFiles"]);
-    expect(xendriveKeys.files("cat")).toEqual(["xendriveFiles", "cat"]);
+  it("XenDrive keys: everything sits under [xendrive], and a folder key is a prefix of its search variants", () => {
+    expect(xendriveKeys.all).toEqual(["xendrive"]);
+    expect(xendriveKeys.browse()).toEqual(["xendrive", "browse", null, ""]);
+    expect(xendriveKeys.browse("f1", "tax")).toEqual(["xendrive", "browse", "f1", "tax"]);
+    expect(xendriveKeys.browse("f1").slice(0, 2)).toEqual([...xendriveKeys.browseAll()]);
+    expect(xendriveKeys.file("x")).toEqual(["xendrive", "file", "x"]);
+    expect(xendriveKeys.publicFolder("t", "f")).toEqual(["xendrive", "public-folder", "t", "f"]);
   });
 
   it("no screen spells these keys out by hand again", () => {
@@ -57,7 +61,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xendriveFiles)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendrive)"[,\]]/.test(readFileSync(full, "utf8"))
         )
           bad.push(relative(root, full));
       }

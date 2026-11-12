@@ -50,7 +50,8 @@ export default function ProfileListItem({ profile, onNavigate, isSelected }: Pro
                 {profile?.xendrive?.fileCount} Files
               </Typography>
               <Typography variant="body2" color="text.secondary" textAlign="end">
-                {formatFileSize(profile?.xendrive?.spaceUsed || 0)} / {formatFileSize(profile?.xendrive?.spaceAllowed || 0)}
+                {formatFileSize(profile?.xendrive?.spaceUsed || 0)} /{" "}
+                {formatFileSize(profile?.xendrive?.spaceAllowed || 0)}
               </Typography>
             </Box>
           </Box>

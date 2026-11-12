@@ -32,7 +32,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     label: "XenDrive",
     icon: FolderIcon,
     path: "/internal/xendrive",
-    description: "Store and share your files",
+    description: "Store files in folders and share them",
   },
   {
     key: "xenlink",

@@ -99,7 +99,7 @@ Put data hooks in `src/client/hooks/<app>/`.
   `ApiError` that the shared client builds.
 - **Query keys:** one factory file, `hooks/<app>/keys.ts`, like `xensplitKeys`. Every `useQuery`,
   `invalidateQueries` and socket handler uses it, never an inline array, so a key cannot be spelled two ways.
-  (`queryKeys.test.ts` fails for XenSplit, XenBudget and XenBox if they are spelled out by hand; add your app to
+  (`queryKeys.test.ts` fails for XenSplit, XenBudget and XenDrive if they are spelled out by hand; add your app to
   that guard.) Keep keys hierarchical: `[app, "group", id]` must be a prefix of `[app, "group", id, "log"]`.
 - **Live updates:** `useSocketInvalidate(event, [keys], applies?)` refetches queries when a socket event arrives;
   `useSocketEvent(event, handler)` is the lower-level form (`hooks/useSocketEvent.ts`).

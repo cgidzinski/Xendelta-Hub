@@ -58,7 +58,7 @@ export default function XenDriveDownload() {
 
       if (response.ok && data.status) {
         setFileInfo({
-          filename: data.data.filename || "File",
+          filename: data.data.name || "File",
           size: data.data.size || 0,
           mimeType: data.data.mimeType || "application/octet-stream",
           requiresPassword: data.data.requiresPassword || false,
@@ -137,10 +137,11 @@ export default function XenDriveDownload() {
     const contentDisposition = response.headers.get("Content-Disposition");
     let filename = "download";
     if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
-      if (filenameMatch) {
-        filename = filenameMatch[1];
-      }
+      // The server sends the name RFC 5987-encoded (filename*=UTF-8''...) so any name survives
+      const encoded = contentDisposition.match(/filename*=UTF-8''([^;]+)/i);
+      const plain = contentDisposition.match(/filename="?([^";]+)"?/);
+      if (encoded) filename = decodeURIComponent(encoded[1]);
+      else if (plain) filename = plain[1];
     }
 
     // Create blob and download

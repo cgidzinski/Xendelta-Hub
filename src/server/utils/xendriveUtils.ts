@@ -1,24 +1,22 @@
 /**
- * Xendrive Utilities
- * Functions for handling chunked uploads to private GCS bucket
- * Streams chunks directly to GCS using resumable uploads
+ * XenDrive upload utilities
+ * Chunked uploads to the private GCS bucket, streamed through resumable uploads. A session is kept in
+ * Mongo (models/xendriveUploadSession.ts) and belongs to the person who started it.
  */
 
 import https from "https";
+import { Types } from "mongoose";
 import { privateBucket } from "../config/gcs";
 import { formatFileSize } from "./fileUtils";
 import { randomToken } from "./tokens";
-import { XenDriveMedia } from "../models/xendriveMedia";
+import { XenDriveFile } from "../models/xendriveFile";
+import { XenDriveFolder } from "../models/xendriveFolder";
 import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 
-// Sessions live in Mongo (models/xendriveUploadSession.ts). The storage file handle is rebuilt from
-// the owner and filename, so nothing about a session needs to stay in process memory.
-const gcsFileFor = (userId: string, filename: string) => privateBucket.file(`xendrive/${userId}/${filename}`);
+const gcsFileFor = (storagePath: string) => privateBucket.file(storagePath);
 
-/**
- * Generate a unique filename for xendrive files
- */
+/** A unique, storage-safe object name for an uploaded file. Never shown to people. */
 export function generateXendriveFilename(originalName: string): string {
   const ext = originalName.split(".").pop()?.toLowerCase() || "bin";
   const baseName = originalName.substring(0, originalName.lastIndexOf(".")) || "file";
@@ -28,44 +26,41 @@ export function generateXendriveFilename(originalName: string): string {
   return `${sanitizedBase}-${timestamp}-${random}.${ext}`;
 }
 
-/**
- * Detect content type from filename extension
- */
 function detectContentType(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
-  if (ext === "jpg" || ext === "jpeg") {
-    return "image/jpeg";
-  } else if (ext === "png") {
-    return "image/png";
-  } else if (ext === "gif") {
-    return "image/gif";
-  } else if (ext === "pdf") {
-    return "application/pdf";
-  } else if (ext === "zip") {
-    return "application/zip";
-  }
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "gif") return "image/gif";
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "zip") return "application/zip";
   return "application/octet-stream";
 }
 
+/** Throws unless `folderId` is one of this person's folders. null means the top level. */
+export async function assertOwnFolder(userId: string, folderId: string | null | undefined): Promise<void> {
+  if (!folderId) return;
+  const folder = await XenDriveFolder.exists({ _id: folderId, owner_id: userId });
+  if (!folder) throw new Error("Folder not found");
+}
+
 /**
- * Initiate a chunked upload session with GCS resumable upload
- * @param userId - User ID
- * @param filename - Original filename
- * @param totalChunks - Total number of chunks
- * @returns Upload session ID
+ * Start a chunked upload into a folder (null = top level) using a GCS resumable upload.
+ * @returns the upload session id
  */
-export async function initiateChunkedUpload(userId: string, filename: string, totalChunks: number): Promise<string> {
+export async function initiateChunkedUpload(
+  userId: string,
+  name: string,
+  totalChunks: number,
+  folderId: string | null = null,
+): Promise<string> {
+  await assertOwnFolder(userId, folderId);
   const uploadId = `xendrive-${Date.now()}-${randomToken(9)}`;
-  const finalFilename = generateXendriveFilename(filename);
-  const gcsPath = `xendrive/${userId}/${finalFilename}`;
+  const storedName = generateXendriveFilename(name);
+  const gcsFile = gcsFileFor(`xendrive/${userId}/${storedName}`);
 
-  const gcsFile = privateBucket.file(gcsPath);
-
-  // Start resumable upload session
-  const contentType = detectContentType(finalFilename);
   const [resumableUri] = await gcsFile.createResumableUpload({
     metadata: {
-      contentType,
+      contentType: detectContentType(storedName),
       cacheControl: "no-cache, no-store, must-revalidate",
     },
   });
@@ -73,21 +68,28 @@ export async function initiateChunkedUpload(userId: string, filename: string, to
   await XenDriveUploadSession.create({
     upload_id: uploadId,
     user_id: userId,
-    filename: finalFilename,
+    filename: storedName,
+    name,
+    folder_id: folderId,
     total_chunks: totalChunks,
     resumable_uri: resumableUri,
   });
   return uploadId;
 }
 
-/**
- * Upload a chunk directly to GCS using resumable upload HTTP API
- * @param uploadId - Upload session ID
- * @param chunkIndex - Index of the chunk (0-based)
- * @param chunkData - Chunk data buffer
- */
-export async function uploadChunk(uploadId: string, chunkIndex: number, chunkData: Buffer): Promise<void> {
-  const session = await XenDriveUploadSession.findOne({ upload_id: uploadId });
+/** The caller's own session, or null. Another person's session is indistinguishable from a missing one. */
+async function ownSession(uploadId: string, userId: string) {
+  return XenDriveUploadSession.findOne({ upload_id: uploadId, user_id: userId });
+}
+
+/** Upload one chunk straight to GCS over the resumable-upload HTTP API. */
+export async function uploadChunk(
+  uploadId: string,
+  userId: string,
+  chunkIndex: number,
+  chunkData: Buffer,
+): Promise<void> {
+  const session = await ownSession(uploadId, userId);
   if (!session) {
     throw new Error(`Upload session not found: ${uploadId}`);
   }
@@ -96,17 +98,14 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
     throw new Error(`Invalid chunk index: ${chunkIndex}`);
   }
 
-  // Calculate byte range for this chunk
   const startByte = session.bytes_uploaded;
   const endByte = startByte + chunkData.length - 1;
   const isLastChunk = chunkIndex === session.total_chunks - 1;
 
-  // Upload chunk directly to GCS using HTTP PUT to resumable URI
-  // The resumable URI from createResumableUpload includes authentication
   await new Promise<void>((resolve, reject) => {
     const url = new URL(session.resumable_uri);
 
-    // For the last chunk, include total size; otherwise use * for unknown total
+    // For the last chunk, include the total size; otherwise `*` for unknown total
     const totalSize = isLastChunk ? endByte + 1 : "*";
     const contentRange = `bytes ${startByte}-${endByte}/${totalSize}`;
 
@@ -123,11 +122,8 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
     };
 
     const req = https.request(options, (res) => {
-      if (res.statusCode === 308) {
-        // 308 Resume Incomplete - chunk uploaded successfully, more chunks expected
-        resolve();
-      } else if (res.statusCode === 200 || res.statusCode === 201) {
-        // Upload complete (usually on last chunk)
+      if (res.statusCode === 308 || res.statusCode === 200 || res.statusCode === 201) {
+        // 308 Resume Incomplete: stored, more chunks expected. 200/201: complete.
         resolve();
       } else {
         let errorBody = "";
@@ -148,97 +144,81 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
     req.end();
   });
 
-  // Update tracking
   await XenDriveUploadSession.updateOne(
     { upload_id: uploadId },
     { $inc: { bytes_uploaded: chunkData.length }, $addToSet: { received_chunks: chunkIndex } },
   );
 }
 
-/**
- * Finalize chunked upload: verify completion and create database record
- * File is already uploaded to GCS via streaming chunks
- * @param uploadId - Upload session ID
- * @returns Object with _id, url, filename, mimeType, and size
- */
+/** Verify every chunk arrived and create the file record. */
 export async function finalizeChunkedUpload(
   uploadId: string,
-): Promise<{ _id: string; url: string; filename: string; mimeType: string; size: number }> {
-  const session = await XenDriveUploadSession.findOne({ upload_id: uploadId });
+  userId: string,
+): Promise<{
+  _id: string;
+  name: string;
+  folder_id: string | null;
+  mimeType: string;
+  size: number;
+}> {
+  const session = await ownSession(uploadId, userId);
   if (!session) {
     throw new Error(`Upload session not found: ${uploadId}`);
   }
 
-  // Check if all chunks are received
   if (session.received_chunks.length !== session.total_chunks) {
     throw new Error(
       `Not all chunks received. Expected: ${session.total_chunks}, Received: ${session.received_chunks.length}`,
     );
   }
-  const gcsFile = gcsFileFor(session.user_id, session.filename);
 
-  // Get file metadata from GCS (file is already uploaded)
-  const [metadata] = await gcsFile.getMetadata();
+  const storagePath = `xendrive/${session.user_id}/${session.filename}`;
+  const [metadata] = await gcsFileFor(storagePath).getMetadata();
   const fileSize = parseInt(String(metadata.size ?? "0"), 10);
   const contentType = metadata.contentType || detectContentType(session.filename);
 
-  // Create database record
-  const mediaDoc = new XenDriveMedia({
-    location: "xendrive",
-    filename: session.filename,
+  const saved = await new XenDriveFile({
+    owner_id: session.user_id,
+    folder_id: session.folder_id || null,
+    name: session.name,
+    storage_path: storagePath,
     mimeType: contentType,
     size: fileSize,
-    uploadedBy: session.user_id,
-  });
-  const savedMedia = await mediaDoc.save();
-
-  // Update user's files array
-  await User.findByIdAndUpdate(session.user_id, {
-    $push: { "xendrive.files": savedMedia._id },
-  });
-
-  const gcsPath = `xendrive/${session.user_id}/${session.filename}`;
+  }).save();
 
   await XenDriveUploadSession.deleteOne({ upload_id: uploadId });
 
-  // Return metadata including _id
   return {
-    _id: savedMedia._id.toString(),
-    url: gcsPath, // Return GCS path instead of public URL (private bucket)
-    filename: session.filename,
+    _id: saved._id.toString(),
+    name: saved.name,
+    folder_id: saved.folder_id ? saved.folder_id.toString() : null,
     mimeType: contentType,
     size: fileSize,
   };
 }
 
-/**
- * Cleanup failed upload: delete partial GCS file and remove session
- * @param uploadId - Upload session ID
- */
-export async function cleanupFailedUpload(uploadId: string): Promise<void> {
-  const session = await XenDriveUploadSession.findOne({ upload_id: uploadId });
+/** Cancel an upload: delete the partial object and the session. Only the owner's session is touched. */
+export async function cleanupFailedUpload(uploadId: string, userId?: string): Promise<void> {
+  const session = await XenDriveUploadSession.findOne(
+    userId ? { upload_id: uploadId, user_id: userId } : { upload_id: uploadId },
+  );
   if (session) {
-    // Delete partial file from GCS if it exists
-    const gcsFile = gcsFileFor(session.user_id, session.filename);
+    const gcsFile = gcsFileFor(`xendrive/${session.user_id}/${session.filename}`);
     const [exists] = await gcsFile.exists();
     if (exists) {
       await gcsFile.delete().catch(() => {
-        // Ignore errors if file doesn't exist or deletion fails
+        // Ignore errors if the object doesn't exist or deletion fails
       });
     }
     await XenDriveUploadSession.deleteOne({ upload_id: uploadId });
   }
 }
 
-/**
- * Get upload session status
- * @param uploadId - Upload session ID
- * @returns Session status or null if not found
- */
 export async function getUploadSessionStatus(
   uploadId: string,
+  userId: string,
 ): Promise<{ totalChunks: number; receivedChunks: number } | null> {
-  const session = await XenDriveUploadSession.findOne({ upload_id: uploadId }).lean();
+  const session = await XenDriveUploadSession.findOne({ upload_id: uploadId, user_id: userId }).lean();
   if (!session) {
     return null;
   }
@@ -248,22 +228,31 @@ export async function getUploadSessionStatus(
   };
 }
 
-/**
- * Cleanup old upload sessions (older than 1 hour)
- */
+/** Cleanup old upload sessions (older than 1 hour). Run by the scheduler. */
 export async function cleanupOldSessions(): Promise<void> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const stale = await XenDriveUploadSession.find({ created_at: { $lt: oneHourAgo } }, "upload_id").lean();
   await Promise.all(stale.map((s) => cleanupFailedUpload(s.upload_id)));
 }
-// Periodic cleanup is registered as a Scheduler job in server.ts
 
-/**
- * Check if user has enough quota for a file upload
- * @param userId - User ID
- * @param fileSize - Size of file to upload in bytes
- * @returns Object with canUpload boolean and message
- */
+/** How much space and how many files a person's drive holds. */
+export async function usageFor(userId: string): Promise<{ fileCount: number; spaceUsed: number }> {
+  const [row] = await XenDriveFile.aggregate<{ _id: null; fileCount: number; spaceUsed: number }>([
+    { $match: { owner_id: new Types.ObjectId(userId) } },
+    { $group: { _id: null, fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
+  ]);
+  return { fileCount: row?.fileCount ?? 0, spaceUsed: row?.spaceUsed ?? 0 };
+}
+
+/** Usage for every owner in one pass (the admin user list). */
+export async function usageForAll(): Promise<Map<string, { fileCount: number; spaceUsed: number }>> {
+  const rows = await XenDriveFile.aggregate<{ _id: Types.ObjectId; fileCount: number; spaceUsed: number }>([
+    { $group: { _id: "$owner_id", fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
+  ]);
+  return new Map(rows.map((r) => [r._id.toString(), { fileCount: r.fileCount, spaceUsed: r.spaceUsed }]));
+}
+
+/** Check whether a person has room for `fileSize` more bytes. */
 export async function checkQuota(userId: string, fileSize: number): Promise<{ canUpload: boolean; message?: string }> {
   const user = await User.findById(userId).exec();
   if (!user) {
@@ -271,15 +260,10 @@ export async function checkQuota(userId: string, fileSize: number): Promise<{ ca
   }
 
   const spaceAllowed = user.xendrive?.spaceAllowed || 0;
+  const { spaceUsed } = await usageFor(userId);
 
-  // Calculate current space used by querying XenDriveMedia directly
-  // Note: location check is redundant since we're querying XenDriveMedia collection
-  const files = await XenDriveMedia.find({ uploadedBy: userId }).exec();
-  const currentSpaceUsed = files.reduce((acc: number, file: any) => acc + (file.size || 0), 0);
-  const newSpaceUsed = currentSpaceUsed + fileSize;
-
-  if (newSpaceUsed > spaceAllowed) {
-    const availableSpace = spaceAllowed - currentSpaceUsed;
+  if (spaceUsed + fileSize > spaceAllowed) {
+    const availableSpace = Math.max(0, spaceAllowed - spaceUsed);
     return {
       canUpload: false,
       message: `Quota exceeded. Available space: ${formatFileSize(availableSpace)}, File size: ${formatFileSize(fileSize)}`,

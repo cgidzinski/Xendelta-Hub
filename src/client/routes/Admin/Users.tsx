@@ -219,7 +219,9 @@ export default function Users() {
           const updatedUser = updatedUsers.find((u) => u._id === selectedUser._id);
           if (updatedUser) {
             setSelectedUser(updatedUser);
-            setEditingQuota(updatedUser.xendrive?.spaceAllowed ? formatFileSize(updatedUser.xendrive.spaceAllowed) : "");
+            setEditingQuota(
+              updatedUser.xendrive?.spaceAllowed ? formatFileSize(updatedUser.xendrive.spaceAllowed) : "",
+            );
           }
         }
       })
@@ -670,7 +672,9 @@ export default function Users() {
                       disabled={
                         isUpdatingUser ||
                         editingQuota ===
-                          (selectedUser.xendrive?.spaceAllowed ? formatFileSize(selectedUser.xendrive.spaceAllowed) : "")
+                          (selectedUser.xendrive?.spaceAllowed
+                            ? formatFileSize(selectedUser.xendrive.spaceAllowed)
+                            : "")
                       }
                     >
                       {isUpdatingUser ? "Saving..." : "Update"}

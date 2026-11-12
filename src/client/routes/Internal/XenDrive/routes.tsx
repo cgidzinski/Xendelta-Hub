@@ -8,6 +8,7 @@ const FileDetail = lazyPage(() => import("./FileDetail"));
 export const xendriveRoutes = (
   <>
     <Route path="xendrive" element={<XenDrive />} />
-    <Route path="xendrive/:fileId" element={<FileDetail />} />
+    <Route path="xendrive/folder/:folderId" element={<XenDrive />} />
+    <Route path="xendrive/file/:fileId" element={<FileDetail />} />
   </>
 );

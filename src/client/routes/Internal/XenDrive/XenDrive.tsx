@@ -1,207 +1,183 @@
+import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { Box, Button, InputAdornment, LinearProgress, TextField, Typography } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import CreateNewFolderOutlinedIcon from "@mui/icons-material/CreateNewFolderOutlined";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import { useSnackbar } from "notistack";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
-import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  Typography,
-  TextField,
-  InputAdornment,
-  Box,
-  Alert,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  LinearProgress,
-} from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import CloseIcon from "@mui/icons-material/Close";
+import EmptyState from "../../../components/ui/EmptyState";
+import ListSkeleton from "../../../components/ui/ListSkeleton";
+import ErrorDisplay from "../../../components/ErrorDisplay";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
-import { useSnackbar } from "notistack";
-import FileList from "./components/FileList";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { useXendriveUpload, useXendriveFiles } from "../../../hooks/xendrive/useXendrive";
+import { api } from "../../../config/api";
+import { useXendriveActions, useXendriveBrowse } from "../../../hooks/xendrive/useXendrive";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { formatFileSize } from "../../../utils/fileUtils";
+import type { FolderStats, XenDriveFolder } from "../../../types/XenDriveFile";
+import DriveBreadcrumbs from "./components/DriveBreadcrumbs";
+import DriveList from "./components/DriveList";
+import FolderDialog from "./components/FolderDialog";
+import FolderShareDialog from "./components/FolderShareDialog";
+import UploadDialog from "./components/UploadDialog";
+import { XENDRIVE_ROOT, folderPath } from "./paths";
 
 export default function XenDrive() {
   useTitle("XenDrive");
-  const navigate = useNavigate();
+  const { folderId } = useParams<{ folderId?: string }>();
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const { profile } = useUserProfile();
+  const { createFolder, renameFolder, deleteFolder } = useXendriveActions();
+
   const [search, setSearch] = useState("");
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [renaming, setRenaming] = useState<XenDriveFolder | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
-  const { data: files, isLoading, isError, error, refetch } = useXendriveFiles(search || undefined);
-  const { uploadFile, isUploading } = useXendriveUpload();
+  const { data, isLoading, isError, error, refetch } = useXendriveBrowse(folderId ?? null, search.trim() || undefined);
+  const sharing = data?.folders.find((f) => f._id === sharingId) ?? null;
 
-  const handleOpenUploadDialog = () => {
-    setUploadDialogOpen(true);
-    setSelectedFile(null);
-    setUploadProgress(0);
-  };
-
-  const handleCloseUploadDialog = () => {
-    setUploadDialogOpen(false);
-    setSelectedFile(null);
-    setUploadProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+  const removeFolder = async (folder: XenDriveFolder) => {
+    let detail = "Everything inside it is deleted too.";
+    try {
+      const stats = await api.get<FolderStats>(`/api/xendrive/folders/${folder._id}/stats`);
+      if (stats.files + stats.folders > 0) {
+        const parts = [
+          stats.files ? `${stats.files} ${stats.files === 1 ? "file" : "files"} (${formatFileSize(stats.size)})` : "",
+          stats.folders ? `${stats.folders} ${stats.folders === 1 ? "folder" : "folders"}` : "",
+        ].filter(Boolean);
+        detail = `It holds ${parts.join(" and ")}, which are deleted too.`;
+      } else {
+        detail = "It is empty.";
+      }
+    } catch {
+      /* fall back to the generic wording */
     }
+    const ok = await confirm({
+      title: `Delete "${folder.name}"?`,
+      message: `${detail} This can't be undone.`,
+      confirmLabel: "Delete folder",
+    });
+    if (!ok) return;
+    deleteFolder.mutate(folder._id, {
+      onSuccess: () => enqueueSnackbar("Folder deleted", { variant: "success" }),
+      onError: (e: Error) => enqueueSnackbar(e.message || "Couldn't delete the folder", { variant: "error" }),
+    });
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) return;
-
-    // Check quota
-    const spaceUsed = profile?.xendrive?.spaceUsed || 0;
-    const spaceAllowed = profile?.xendrive?.spaceAllowed || 0;
-    if (spaceUsed + selectedFile.size > spaceAllowed) {
-      enqueueSnackbar("Quota exceeded. Please delete some files or upgrade your plan.", { variant: "error" });
-      return;
-    }
-
-    await uploadFile({
-      file: selectedFile,
-      onProgress: (progress) => {
-        setUploadProgress(progress);
-      },
-    })
-      .then((newFile) => {
-        handleCloseUploadDialog();
-        enqueueSnackbar("File uploaded successfully", { variant: "success" });
-        navigate(`/internal/xendrive/${newFile._id}`);
-      })
-      .catch((error: Error) => {
-        enqueueSnackbar(error.message || "Failed to upload file", { variant: "error" });
-        setUploadProgress(0);
-      });
-  };
-
-  const quotaPercentage = profile?.xendrive ? (profile.xendrive.spaceUsed / profile.xendrive.spaceAllowed) * 100 : 0;
-  const canUpload =
-    selectedFile && profile?.xendrive
-      ? profile.xendrive.spaceUsed + selectedFile.size <= profile.xendrive.spaceAllowed
-      : true;
+  const usage = profile?.xendrive;
+  const quotaPercentage = usage && usage.spaceAllowed > 0 ? (usage.spaceUsed / usage.spaceAllowed) * 100 : 0;
+  const empty = !!data && data.folders.length === 0 && data.files.length === 0;
 
   return (
     <PageContainer>
       <PageHeader
         title="XenDrive"
         actions={
-          <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={handleOpenUploadDialog}>
-            Upload
-          </Button>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button
+              variant="outlined"
+              startIcon={<CreateNewFolderOutlinedIcon />}
+              onClick={() => setNewFolderOpen(true)}
+            >
+              New folder
+            </Button>
+            <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={() => setUploadOpen(true)}>
+              Upload
+            </Button>
+          </Box>
         }
       />
 
-      {/* Quota Display */}
-      {profile?.xendrive && (
+      {usage && (
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Storage: {formatFileSize(profile.xendrive.spaceUsed)} / {formatFileSize(profile.xendrive.spaceAllowed)}
+              Storage: {formatFileSize(usage.spaceUsed)} / {formatFileSize(usage.spaceAllowed)}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {profile.xendrive.fileCount} {profile.xendrive.fileCount === 1 ? "file" : "files"}
+              {usage.fileCount} {usage.fileCount === 1 ? "file" : "files"}
             </Typography>
           </Box>
           <LinearProgress
             variant="determinate"
-            value={quotaPercentage}
+            value={Math.min(100, quotaPercentage)}
             color={quotaPercentage > 90 ? "error" : quotaPercentage > 75 ? "warning" : "primary"}
             sx={{ height: 8, borderRadius: 1 }}
           />
         </Box>
       )}
 
-      <Dialog open={uploadDialogOpen} onClose={handleCloseUploadDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6">Upload File</Typography>
-            <IconButton onClick={handleCloseUploadDialog} size="small">
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileSelect}
-              style={{ display: "none" }}
-              id="file-upload-input"
-            />
-            <label htmlFor="file-upload-input">
-              <Button variant="outlined" component="span" fullWidth sx={{ mb: 2 }}>
-                Browse Files
-              </Button>
-            </label>
-            {selectedFile && (
-              <Box>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  Selected: {selectedFile.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Size: {formatFileSize(selectedFile.size)}
-                </Typography>
-                {!canUpload && (
-                  <Alert severity="error" sx={{ mb: 2 }}>
-                    File size exceeds available quota. Available:{" "}
-                    {formatFileSize((profile?.xendrive?.spaceAllowed || 0) - (profile?.xendrive?.spaceUsed || 0))}
-                  </Alert>
-                )}
-              </Box>
-            )}
-            {isUploading && (
-              <Box sx={{ mt: 2 }}>
-                <LinearProgress variant="determinate" value={uploadProgress} sx={{ mb: 1 }} />
-                <Typography variant="body2" color="text.secondary" align="center">
-                  {Math.round(uploadProgress)}% uploaded
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseUploadDialog} disabled={isUploading}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleUpload} disabled={!selectedFile || isUploading || !canUpload}>
-            {isUploading ? "Uploading..." : "Upload"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <TextField
         fullWidth
-        placeholder="Search files..."
+        placeholder="Search all files..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          },
         }}
-        sx={{ mb: 4 }}
+        sx={{ mb: 2 }}
       />
 
-      <FileList files={files} isLoading={isLoading} isError={isError} error={error} onRetry={() => refetch()} />
+      {data?.searching ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Search results in all folders
+        </Typography>
+      ) : (
+        <DriveBreadcrumbs crumbs={data?.breadcrumb ?? []} folderTo={folderPath} rootTo={XENDRIVE_ROOT} />
+      )}
+
+      {isLoading && !data ? (
+        <ListSkeleton rows={5} height={64} gap={1.5} />
+      ) : isError ? (
+        <ErrorDisplay error={error ?? null} title="Couldn't load this folder" onRetry={() => refetch()} />
+      ) : empty ? (
+        <EmptyState
+          icon={<FolderOpenIcon />}
+          title={data?.searching ? "No files match" : folderId ? "This folder is empty" : "No files yet"}
+          description={data?.searching ? "Try a different name." : "Upload files or make a folder to get started."}
+        />
+      ) : (
+        <DriveList
+          folders={data?.folders ?? []}
+          files={data?.files ?? []}
+          folderTo={folderPath}
+          onRename={setRenaming}
+          onShare={(f) => setSharingId(f._id)}
+          onDelete={removeFolder}
+        />
+      )}
+
+      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} folderId={folderId ?? null} />
+
+      <FolderDialog
+        open={newFolderOpen}
+        onClose={() => setNewFolderOpen(false)}
+        onSave={async (name) => {
+          const { folder } = await createFolder.mutateAsync({ name, parentId: folderId ?? null });
+          enqueueSnackbar(`Folder "${folder.name}" created`, { variant: "success" });
+        }}
+      />
+      <FolderDialog
+        open={!!renaming}
+        onClose={() => setRenaming(null)}
+        initialName={renaming?.name ?? ""}
+        onSave={async (name) => {
+          await renameFolder.mutateAsync({ folderId: renaming!._id, name });
+        }}
+      />
+      <FolderShareDialog folder={sharing} onClose={() => setSharingId(null)} />
     </PageContainer>
   );
 }

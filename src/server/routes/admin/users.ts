@@ -1,4 +1,5 @@
 import express = require("express");
+import { usageFor, usageForAll } from "../../utils/xendriveUtils";
 import {
   adminGrantItemSchema,
   adminUpdateUserSchema,
@@ -22,19 +23,15 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     requireAdmin,
     async function (_req: express.Request, res: express.Response) {
-      const users = await User.find({}, "username email _id roles avatar xendrive points inventory")
-        .populate("xendrive.files")
-        .exec();
+      const users = await User.find({}, "username email _id roles avatar xendrive points inventory").exec();
+      const usage = await usageForAll();
 
       return res.json({
         status: true,
         message: "",
         data: {
           users: users.map((user: any) => {
-            // Calculate quota stats
-            const xendriveFiles = user.xendrive?.files || [];
-            const fileCount = xendriveFiles.length;
-            const spaceUsed = xendriveFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
+            const { fileCount, spaceUsed } = usage.get(user._id.toString()) ?? { fileCount: 0, spaceUsed: 0 };
 
             return {
               _id: user._id,
@@ -94,7 +91,7 @@ module.exports = function (app: express.Application) {
         }
         // Initialize xendrive if it doesn't exist
         if (!user.xendrive) {
-          user.xendrive = { files: [], spaceAllowed: 0 };
+          user.xendrive = { spaceAllowed: 0 };
         }
         user.xendrive.spaceAllowed = xendriveQuota;
       }
@@ -102,10 +99,7 @@ module.exports = function (app: express.Application) {
       await user.save();
 
       // Get updated quota stats
-      await user.populate("xendrive.files");
-      const xendriveFiles = user.xendrive?.files || [];
-      const fileCount = xendriveFiles.length;
-      const spaceUsed = xendriveFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
+      const { fileCount, spaceUsed } = await usageFor(user._id.toString());
 
       return res.json({
         status: true,

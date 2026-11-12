@@ -3,17 +3,23 @@ import {
   validate,
   validateParams,
   validateQuery,
-  xenBoxChunkSchema,
-  xenBoxDownloadQuerySchema,
-  xenBoxFileIdParamSchema,
-  xenBoxFinalizeSchema,
-  xenBoxInitiateSchema,
-  xenBoxListQuerySchema,
-  xenBoxSettingsSchema,
-  xenBoxShareTokenParamSchema,
-  xenBoxUploadIdParamSchema,
+  xenDriveBrowseQuerySchema,
+  xenDriveChunkSchema,
+  xenDriveDownloadQuerySchema,
+  xenDriveFileIdParamSchema,
+  xenDriveFinalizeSchema,
+  xenDriveFolderCreateSchema,
+  xenDriveFolderIdParamSchema,
+  xenDriveFolderRenameSchema,
+  xenDriveFolderTokenFileParamSchema,
+  xenDriveFolderTokenParamSchema,
+  xenDriveInitiateSchema,
+  xenDrivePublicFolderQuerySchema,
+  xenDriveSettingsSchema,
+  xenDriveShareTokenParamSchema,
+  xenDriveUploadIdParamSchema,
 } from "../utils/validation";
-import { AppError } from "../utils/http";
+import { AppError, callerId } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
 import {
   initiateChunkedUpload,
@@ -22,311 +28,352 @@ import {
   cleanupFailedUpload,
   getUploadSessionStatus,
   checkQuota,
+  assertOwnFolder,
+  usageFor,
 } from "../utils/xendriveUtils";
+import {
+  MAX_FOLDER_DEPTH,
+  breadcrumbOf,
+  deleteFolderTree,
+  depthOf,
+  folderStats,
+  isInside,
+} from "../utils/xendriveFolders";
+import { randomToken } from "../utils/tokens";
 import { generateSignedUrl } from "../utils/gcsUtils";
 import { privateBucket } from "../config/gcs";
-import { AuthenticatedRequest } from "../types";
-import { XenDriveMedia } from "../models/xendriveMedia";
-import { User } from "../models/user";
+import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
+import { XenDriveFolder } from "../models/xendriveFolder";
+
+/** RFC 5987 header value so any file name (spaces, accents, quotes) downloads under its own name. */
+const attachment = (name: string) => `attachment; filename*=UTF-8''${encodeURIComponent(name)}`;
+
+const serializeFile = (file: XenDriveFileDocument | any) => ({
+  _id: file._id.toString(),
+  name: file.name,
+  folder_id: file.folder_id ? file.folder_id.toString() : null,
+  mimeType: file.mimeType,
+  size: file.size,
+  createdAt: file.createdAt.toISOString(),
+  shareToken: file.shareToken,
+  hasPassword: !!file.password,
+  password: file.password || null, // returned to the owner in plain text, as it always has been
+  expiry: file.expiry ? file.expiry.toISOString() : null,
+});
+
+const serializeFolder = (folder: any) => ({
+  _id: folder._id.toString(),
+  name: folder.name,
+  parent_id: folder.parent_id ? folder.parent_id.toString() : null,
+  shared: !!folder.share?.enabled,
+  shareToken: folder.share?.enabled ? folder.share.token : null,
+  created_at: folder.created_at.toISOString(),
+});
+
+/** One of the caller's files, or a 404 (a stranger's file looks the same as a missing one). */
+async function ownFile(fileId: string, userId: string) {
+  const file = await XenDriveFile.findOne({ _id: fileId, owner_id: userId }).exec();
+  if (!file) throw new AppError(404, "File not found");
+  return file;
+}
+
+async function ownFolder(folderId: string, userId: string) {
+  const folder = await XenDriveFolder.findOne({ _id: folderId, owner_id: userId }).exec();
+  if (!folder) throw new AppError(404, "Folder not found");
+  return folder;
+}
+
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** No two folders with the same name side by side. */
+async function assertNameFree(userId: string, parentId: string | null, name: string, exceptId?: string) {
+  const clash = await XenDriveFolder.exists({
+    owner_id: userId,
+    parent_id: parentId,
+    name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+    ...(exceptId ? { _id: { $ne: exceptId } } : {}),
+  });
+  if (clash) throw new AppError(409, "A folder with that name already exists here");
+}
+
+/** A shared folder, looked up by its public token. */
+async function sharedFolder(token: string) {
+  const folder = await XenDriveFolder.findOne({ "share.token": token, "share.enabled": true }).exec();
+  if (!folder) throw new AppError(404, "Link not found");
+  return folder;
+}
 
 module.exports = function (app: express.Application) {
-  // Initiate chunked upload
+  // ---------------------------------------------------------------------------------------------
+  // Uploads: initiate -> chunk* -> finalize. A session belongs to whoever started it.
+  // ---------------------------------------------------------------------------------------------
+
   app.post(
     "/api/xendrive/initiate",
     authenticateToken,
-    validate(xenBoxInitiateSchema),
+    validate(xenDriveInitiateSchema),
     async function (req: express.Request, res: express.Response) {
-      const { filename, totalChunks, fileSize } = req.body;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
+      const { filename, totalChunks, fileSize, folderId } = req.body;
+      const userId = callerId(req);
 
-      if (!filename) {
-        return res.status(400).json({
-          status: false,
-          message: "Filename is required",
-        });
+      try {
+        await assertOwnFolder(userId, folderId);
+      } catch {
+        throw new AppError(404, "Folder not found");
       }
 
-      if (!totalChunks || totalChunks < 1) {
-        return res.status(400).json({
-          status: false,
-          message: "Total chunks must be a positive number",
-        });
-      }
-
-      if (!fileSize || fileSize < 1) {
-        return res.status(400).json({
-          status: false,
-          message: "File size is required",
-        });
-      }
-
-      // Check quota before initiating upload
       const quotaCheck = await checkQuota(userId, fileSize);
-      if (!quotaCheck.canUpload) {
-        return res.status(403).json({
-          status: false,
-          message: quotaCheck.message || "Quota exceeded",
-        });
-      }
+      if (!quotaCheck.canUpload) throw new AppError(403, quotaCheck.message || "Quota exceeded");
 
-      const uploadId = await initiateChunkedUpload(userId, filename, totalChunks);
-
-      return res.json({
-        status: true,
-        message: "Upload session initiated",
-        data: { uploadId },
-      });
+      const uploadId = await initiateChunkedUpload(userId, filename, totalChunks, folderId ?? null);
+      return res.json({ status: true, message: "Upload session initiated", data: { uploadId } });
     },
   );
 
-  // Upload a chunk
   app.post(
     "/api/xendrive/chunk",
     authenticateToken,
-    validate(xenBoxChunkSchema),
+    validate(xenDriveChunkSchema),
     async function (req: express.Request, res: express.Response) {
-      const uploadId = req.body.uploadId as string;
-      const chunkIndex = parseInt(req.body.chunkIndex as string);
-      const chunkData = req.body.chunkData;
-
-      if (!uploadId) {
-        return res.status(400).json({
-          status: false,
-          message: "Upload ID is required",
-        });
+      const { uploadId, chunkIndex, chunkData } = req.body;
+      const chunkBuffer = Buffer.from(chunkData, "base64");
+      try {
+        await uploadChunk(uploadId, callerId(req), chunkIndex, chunkBuffer);
+      } catch (e) {
+        if (/session not found/i.test((e as Error).message)) throw new AppError(404, "Upload session not found");
+        throw e;
       }
-
-      if (chunkIndex === undefined || isNaN(chunkIndex)) {
-        return res.status(400).json({
-          status: false,
-          message: "Chunk index is required",
-        });
-      }
-
-      if (!chunkData) {
-        return res.status(400).json({
-          status: false,
-          message: "Chunk data is required",
-        });
-      }
-
-      // Convert base64 chunk data to buffer
-      let chunkBuffer: Buffer;
-      if (typeof chunkData === "string") {
-        chunkBuffer = Buffer.from(chunkData, "base64");
-      } else if (Buffer.isBuffer(chunkData)) {
-        chunkBuffer = chunkData;
-      } else {
-        return res.status(400).json({
-          status: false,
-          message: "Invalid chunk data format",
-        });
-      }
-
-      await uploadChunk(uploadId, chunkIndex, chunkBuffer);
-
-      return res.json({
-        status: true,
-        message: "Chunk uploaded successfully",
-        data: { chunkIndex },
-      });
+      return res.json({ status: true, message: "Chunk uploaded successfully", data: { chunkIndex } });
     },
   );
 
-  // Finalize chunked upload
   app.post(
     "/api/xendrive/finalize",
     authenticateToken,
-    validate(xenBoxFinalizeSchema),
+    validate(xenDriveFinalizeSchema),
     async function (req: express.Request, res: express.Response) {
-      const uploadId = req.body.uploadId as string;
-
-      if (!uploadId) {
-        return res.status(400).json({
-          status: false,
-          message: "Upload ID is required",
-        });
+      try {
+        const fileData = await finalizeChunkedUpload(req.body.uploadId, callerId(req));
+        return res.json({ status: true, message: "File uploaded successfully", data: fileData });
+      } catch (e) {
+        if (/session not found/i.test((e as Error).message)) throw new AppError(404, "Upload session not found");
+        if (/Not all chunks/i.test((e as Error).message)) throw new AppError(400, (e as Error).message);
+        throw e;
       }
-
-      const fileData = await finalizeChunkedUpload(uploadId);
-
-      return res.json({
-        status: true,
-        message: "File uploaded successfully",
-        data: fileData,
-      });
     },
   );
 
-  // Get upload session status
   app.get(
     "/api/xendrive/status/:uploadId",
     authenticateToken,
-    validateParams(xenBoxUploadIdParamSchema),
+    validateParams(xenDriveUploadIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const uploadId = req.params.uploadId;
+      const status = await getUploadSessionStatus(req.params.uploadId as string, callerId(req));
+      if (!status) throw new AppError(404, "Upload session not found");
+      return res.json({ status: true, data: status });
+    },
+  );
 
-      const status = await getUploadSessionStatus(uploadId);
-      if (!status) {
-        return res.status(404).json({
-          status: false,
-          message: "Upload session not found",
+  // Cancel an upload and remove its partial file
+  app.delete(
+    "/api/xendrive/uploads/:uploadId",
+    authenticateToken,
+    validateParams(xenDriveUploadIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      await cleanupFailedUpload(req.params.uploadId as string, callerId(req));
+      return res.json({ status: true, message: "Upload session cancelled" });
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------------
+  // Browsing: one folder at a time, or a search across the whole drive
+  // ---------------------------------------------------------------------------------------------
+
+  app.get(
+    "/api/xendrive/browse",
+    authenticateToken,
+    validateQuery(xenDriveBrowseQuerySchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = callerId(req);
+      const folderId = (req.query.folder as string | undefined) || null;
+      const search = ((req.query.search as string | undefined) || "").trim();
+
+      if (search) {
+        const files = await XenDriveFile.find({
+          owner_id: userId,
+          name: { $regex: escapeRegex(search), $options: "i" },
+        })
+          .sort({ createdAt: -1 })
+          .limit(200)
+          .exec();
+        return res.json({
+          status: true,
+          data: { folder: null, breadcrumb: [], folders: [], files: files.map(serializeFile), searching: true },
         });
       }
 
+      const folder = folderId ? await ownFolder(folderId, userId) : null;
+      const [folders, files, breadcrumb] = await Promise.all([
+        XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec(),
+        XenDriveFile.find({ owner_id: userId, folder_id: folderId }).sort({ createdAt: -1 }).exec(),
+        folderId ? breadcrumbOf(folderId, userId) : Promise.resolve([]),
+      ]);
+
       return res.json({
         status: true,
-        data: status,
+        data: {
+          folder: folder ? { _id: folder._id.toString(), name: folder.name } : null,
+          breadcrumb,
+          folders: folders.map(serializeFolder),
+          files: files.map(serializeFile),
+          searching: false,
+        },
       });
     },
   );
 
-  // Cancel/cleanup failed upload
-  app.delete(
-    "/api/xendrive/:uploadId",
+  // The latest files anywhere in the drive, and the totals (the home screen card)
+  app.get("/api/xendrive/recent", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const userId = callerId(req);
+    const [files, usage] = await Promise.all([
+      XenDriveFile.find({ owner_id: userId }).sort({ createdAt: -1 }).limit(3).exec(),
+      usageFor(userId),
+    ]);
+    return res.json({ status: true, data: { files: files.map(serializeFile), ...usage } });
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // Folders
+  // ---------------------------------------------------------------------------------------------
+
+  app.post(
+    "/api/xendrive/folders",
     authenticateToken,
-    validateParams(xenBoxUploadIdParamSchema),
+    validate(xenDriveFolderCreateSchema),
     async function (req: express.Request, res: express.Response) {
-      const uploadId = req.params.uploadId;
+      const userId = callerId(req);
+      const { name } = req.body;
+      const parentId: string | null = req.body.parentId ?? null;
 
-      await cleanupFailedUpload(uploadId);
-
-      return res.json({
-        status: true,
-        message: "Upload session cancelled",
-      });
-    },
-  );
-
-  // List user's xendrive files
-  app.get(
-    "/api/xendrive/files",
-    authenticateToken,
-    validateQuery(xenBoxListQuerySchema),
-    async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
-      const search = req.query.search as string | undefined;
-
-      // Build query - only files uploaded by this user
-      // Note: location check is redundant since we're querying XenDriveMedia collection
-      const query: any = { uploadedBy: userId };
-
-      // Add search filter if provided
-      if (search && search.trim()) {
-        query.filename = { $regex: search.trim(), $options: "i" };
+      if (parentId) await ownFolder(parentId, userId);
+      if ((await depthOf(parentId)) >= MAX_FOLDER_DEPTH) {
+        throw new AppError(400, `Folders can only be nested ${MAX_FOLDER_DEPTH} levels deep`);
       }
+      await assertNameFree(userId, parentId, name);
 
-      const files = await XenDriveMedia.find(query)
-        .sort({ createdAt: -1 })
-        .select("_id location filename mimeType size uploadedBy createdAt shareToken password expiry")
-        .exec();
-
-      // Format files for response
-      const formattedFiles = files.map((file: any) => ({
-        _id: file._id.toString(),
-        location: file.location,
-        filename: file.filename,
-        mimeType: file.mimeType,
-        size: file.size,
-        uploadedBy: file.uploadedBy.toString(),
-        createdAt: file.createdAt.toISOString(),
-        shareToken: file.shareToken,
-        hasPassword: !!file.password,
-        password: file.password || null, // Return plain text password
-        expiry: file.expiry ? file.expiry.toISOString() : null,
-      }));
-
-      return res.json({
-        status: true,
-        data: { files: formattedFiles },
-      });
+      const folder = await XenDriveFolder.create({ owner_id: userId, parent_id: parentId, name });
+      return res.json({ status: true, message: "Folder created", data: { folder: serializeFolder(folder) } });
     },
   );
 
-  // Get signed URL for xendrive file
+  app.put(
+    "/api/xendrive/folders/:folderId",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    validate(xenDriveFolderRenameSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = callerId(req);
+      const folder = await ownFolder(req.params.folderId as string, userId);
+      await assertNameFree(userId, folder.parent_id ? folder.parent_id.toString() : null, req.body.name, folder.id);
+      folder.name = req.body.name;
+      await folder.save();
+      return res.json({ status: true, message: "Folder renamed", data: { folder: serializeFolder(folder) } });
+    },
+  );
+
+  // What deleting a folder would remove, so the client can say so before asking
+  app.get(
+    "/api/xendrive/folders/:folderId/stats",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const folder = await ownFolder(req.params.folderId as string, callerId(req));
+      return res.json({ status: true, data: await folderStats(folder.id) });
+    },
+  );
+
+  app.delete(
+    "/api/xendrive/folders/:folderId",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const folder = await ownFolder(req.params.folderId as string, callerId(req));
+      await deleteFolderTree(folder.id);
+      return res.json({ status: true, message: "Folder deleted" });
+    },
+  );
+
+  // Public link for a folder: enable (or fetch the current one), rotate, disable
+  const folderShare = (action: "enable" | "rotate" | "disable") =>
+    async function (req: express.Request, res: express.Response) {
+      const folder = await ownFolder(req.params.folderId as string, callerId(req));
+      if (action === "disable") {
+        folder.share = { enabled: false, token: folder.share?.token };
+      } else {
+        const keep = action === "enable" && folder.share?.token;
+        folder.share = { enabled: true, token: keep ? folder.share!.token : randomToken(16) };
+      }
+      await folder.save();
+      return res.json({ status: true, data: { folder: serializeFolder(folder) } });
+    };
+  app.post(
+    "/api/xendrive/folders/:folderId/share",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    folderShare("enable"),
+  );
+  app.post(
+    "/api/xendrive/folders/:folderId/share/rotate",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    folderShare("rotate"),
+  );
+  app.delete(
+    "/api/xendrive/folders/:folderId/share",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    folderShare("disable"),
+  );
+
+  // ---------------------------------------------------------------------------------------------
+  // Files (owner)
+  // ---------------------------------------------------------------------------------------------
+
+  app.get(
+    "/api/xendrive/files/:fileId",
+    authenticateToken,
+    validateParams(xenDriveFileIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await ownFile(req.params.fileId as string, callerId(req));
+      const breadcrumb = file.folder_id ? await breadcrumbOf(file.folder_id.toString(), callerId(req)) : [];
+      return res.json({ status: true, data: { file: serializeFile(file), breadcrumb } });
+    },
+  );
+
   app.get(
     "/api/xendrive/files/:fileId/url",
     authenticateToken,
-    validateParams(xenBoxFileIdParamSchema),
+    validateParams(xenDriveFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const fileId = req.params.fileId;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
-
-      // Find file and verify ownership
-      const file = await XenDriveMedia.findById(fileId).exec();
-      if (!file) {
-        return res.status(404).json({
-          status: false,
-          message: "File not found",
-        });
-      }
-
-      if (file.uploadedBy?.toString() !== userId) {
-        return res.status(403).json({
-          status: false,
-          message: "Access denied",
-        });
-      }
-
-      // Generate signed URL
-      const gcsPath = `xendrive/${userId}/${file.filename}`;
-      const signedUrl = await generateSignedUrl(gcsPath, 15); // 15 minutes expiry
-
-      return res.json({
-        status: true,
-        data: { url: signedUrl },
-      });
+      const file = await ownFile(req.params.fileId as string, callerId(req));
+      const url = await generateSignedUrl(file.storage_path, 15); // 15 minutes
+      return res.json({ status: true, data: { url } });
     },
   );
 
-  // Update file settings (password/expiry)
+  // Rename, set or clear the password, set or clear the expiry
   app.put(
     "/api/xendrive/files/:fileId/settings",
     authenticateToken,
-    validateParams(xenBoxFileIdParamSchema),
-    validate(xenBoxSettingsSchema),
+    validateParams(xenDriveFileIdParamSchema),
+    validate(xenDriveSettingsSchema),
     async function (req: express.Request, res: express.Response) {
-      const fileId = req.params.fileId;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
-      const { password, expiry } = req.body;
+      const file = await ownFile(req.params.fileId as string, callerId(req));
+      const { password, expiry, name } = req.body;
 
-      // Find file and verify ownership
-      const file = await XenDriveMedia.findById(fileId).exec();
-      if (!file) {
-        return res.status(404).json({
-          status: false,
-          message: "File not found",
-        });
-      }
-
-      if (file.uploadedBy?.toString() !== userId) {
-        return res.status(403).json({
-          status: false,
-          message: "Access denied",
-        });
-      }
-
-      // Update password if provided
-      if (password !== undefined) {
-        if (password === "" || password === null) {
-          // Remove password
-          file.password = undefined;
-        } else {
-          // Set new password (plain text)
-          file.password = password;
-        }
-      }
-
-      // Update expiry if provided
-      if (expiry !== undefined) {
-        if (expiry === "" || expiry === null) {
-          // Remove expiry
-          file.expiry = undefined;
-        } else {
-          // Set expiry date
-          file.expiry = new Date(expiry);
-        }
-      }
+      if (name !== undefined) file.name = name;
+      if (password !== undefined) file.password = password === "" || password === null ? undefined : password;
+      if (expiry !== undefined) file.expiry = expiry === "" || expiry === null ? undefined : new Date(expiry);
 
       await file.save();
 
@@ -334,8 +381,9 @@ module.exports = function (app: express.Application) {
         status: true,
         message: "File settings updated successfully",
         data: {
+          name: file.name,
           hasPassword: !!file.password,
-          password: file.password || null, // Return plain text password
+          password: file.password || null,
           expiry: file.expiry ? file.expiry.toISOString() : null,
           shareUrl: `${req.protocol}://${req.get("host")}/xendrive/${file.shareToken}`,
         },
@@ -343,35 +391,37 @@ module.exports = function (app: express.Application) {
     },
   );
 
-  // Public file info endpoint (no authentication required)
+  app.delete(
+    "/api/xendrive/files/:fileId",
+    authenticateToken,
+    validateParams(xenDriveFileIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await ownFile(req.params.fileId as string, callerId(req));
+      // The pre-delete hook removes the stored bytes too
+      await XenDriveFile.findByIdAndDelete(file.id);
+      return res.json({ status: true, message: "File deleted successfully" });
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------------
+  // Public: a single file's own link
+  // ---------------------------------------------------------------------------------------------
+
   app.get(
     "/api/xendrive/info/:shareToken",
-    validateParams(xenBoxShareTokenParamSchema),
+    validateParams(xenDriveShareTokenParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const shareToken = req.params.shareToken;
+      const file = await XenDriveFile.findOne({ shareToken: req.params.shareToken }).exec();
+      if (!file) throw new AppError(404, "File not found");
 
-      // Find file by share token
-      const file = await XenDriveMedia.findOne({ shareToken }).exec();
-      if (!file) {
-        return res.status(404).json({
-          status: false,
-          message: "File not found",
-        });
-      }
-
-      // Check if file is expired
       if (file.isExpired()) {
-        return res.status(403).json({
-          status: false,
-          message: "Link expired",
-          isExpired: true,
-        });
+        return res.status(403).json({ status: false, message: "Link expired", isExpired: true });
       }
 
       return res.json({
         status: true,
         data: {
-          filename: file.filename,
+          name: file.name,
           size: file.size,
           mimeType: file.mimeType,
           requiresPassword: !!file.password,
@@ -381,121 +431,110 @@ module.exports = function (app: express.Application) {
     },
   );
 
-  // Public file download endpoint (no authentication required)
   app.get(
     "/api/xendrive/download/:shareToken",
-    validateParams(xenBoxShareTokenParamSchema),
-    validateQuery(xenBoxDownloadQuerySchema),
+    validateParams(xenDriveShareTokenParamSchema),
+    validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const shareToken = req.params.shareToken;
       const { password } = req.query;
 
-      // Find file by share token
-      const file = await XenDriveMedia.findOne({ shareToken }).exec();
-      if (!file) {
-        return res.status(404).json({
-          status: false,
-          message: "File not found",
-        });
-      }
+      const file = await XenDriveFile.findOne({ shareToken: req.params.shareToken }).exec();
+      if (!file) throw new AppError(404, "File not found");
 
-      // Check if file is expired
       if (file.isExpired()) {
-        return res.status(403).json({
-          status: false,
-          message: "Link expired",
-        });
+        return res.status(403).json({ status: false, message: "Link expired" });
       }
 
-      // Check password if file has one
       if (file.password) {
-        if (!password || typeof password !== "string") {
+        const wrong = !password || typeof password !== "string" || !file.validPassword(password);
+        if (wrong) {
           return res.status(401).json({
             status: false,
-            message: "Password required",
+            message: !password ? "Password required" : "Incorrect password",
             requiresPassword: true,
-            filename: file.filename,
-            expiry: file.expiry ? file.expiry.toISOString() : null,
-          });
-        }
-
-        if (!file.validPassword(password)) {
-          return res.status(401).json({
-            status: false,
-            message: "Incorrect password",
-            requiresPassword: true,
-            filename: file.filename,
+            name: file.name,
             expiry: file.expiry ? file.expiry.toISOString() : null,
           });
         }
       }
 
-      // File is valid, stream it from GCS
-      if (!file.uploadedBy) throw new AppError(404, "File not found");
-      const userId = file.uploadedBy.toString();
-      const gcsPath = `xendrive/${userId}/${file.filename}`;
-      const gcsFile = privateBucket.file(gcsPath);
-
-      // Check if file exists
-      const [exists] = await gcsFile.exists();
-      if (!exists) {
-        return res.status(404).json({
-          status: false,
-          message: "File not found in storage",
-        });
-      }
-
-      // Set headers for file download
-      res.setHeader("Content-Type", file.mimeType);
-      res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
-      if (file.size != null) res.setHeader("Content-Length", file.size);
-      // Add expiry info to headers if available
-      if (file.expiry) {
-        res.setHeader("X-File-Expiry", file.expiry.toISOString());
-      }
-
-      // Stream file from GCS
-      gcsFile.createReadStream().pipe(res);
+      return streamFile(res, file);
     },
   );
 
-  // Delete xendrive file
-  app.delete(
-    "/api/xendrive/files/:fileId",
-    authenticateToken,
-    validateParams(xenBoxFileIdParamSchema),
+  // ---------------------------------------------------------------------------------------------
+  // Public: a folder's link. Browse the shared folder and everything under it, and download from it.
+  // A file's own password does not apply here: the owner shared the whole folder. An expired file is hidden.
+  // ---------------------------------------------------------------------------------------------
+
+  app.get(
+    "/api/xendrive/public/folder/:token",
+    validateParams(xenDriveFolderTokenParamSchema),
+    validateQuery(xenDrivePublicFolderQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const fileId = req.params.fileId;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
+      const root = await sharedFolder(req.params.token as string);
+      const requested = (req.query.folder as string | undefined) || root.id;
 
-      // Find file and verify ownership
-      const file = await XenDriveMedia.findById(fileId).exec();
-      if (!file) {
-        return res.status(404).json({
-          status: false,
-          message: "File not found",
-        });
-      }
+      if (!(await isInside(requested, root.id))) throw new AppError(404, "Folder not found");
+      const current = await XenDriveFolder.findOne({ _id: requested, owner_id: root.owner_id }).exec();
+      if (!current) throw new AppError(404, "Folder not found");
 
-      if (file.uploadedBy?.toString() !== userId) {
-        return res.status(403).json({
-          status: false,
-          message: "Access denied",
-        });
-      }
-
-      // Delete from database (pre-delete hook will handle GCS deletion)
-      await XenDriveMedia.findByIdAndDelete(fileId);
-
-      // Remove from user's files array
-      await User.findByIdAndUpdate(userId, {
-        $pull: { "xendrive.files": fileId },
-      });
+      const now = new Date();
+      const [folders, files, breadcrumb] = await Promise.all([
+        XenDriveFolder.find({ owner_id: root.owner_id, parent_id: requested }).sort({ name: 1 }).exec(),
+        XenDriveFile.find({
+          owner_id: root.owner_id,
+          folder_id: requested,
+          $or: [{ expiry: null }, { expiry: { $exists: false } }, { expiry: { $gt: now } }],
+        })
+          .sort({ name: 1 })
+          .exec(),
+        breadcrumbOf(requested, root.owner_id.toString(), root.id),
+      ]);
 
       return res.json({
         status: true,
-        message: "File deleted successfully",
+        data: {
+          root: { _id: root.id, name: root.name },
+          folder: { _id: current.id, name: current.name },
+          breadcrumb,
+          folders: folders.map((f) => ({ _id: f.id, name: f.name })),
+          files: files.map((f) => ({
+            _id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            size: f.size,
+            createdAt: f.createdAt.toISOString(),
+          })),
+        },
       });
     },
   );
+
+  app.get(
+    "/api/xendrive/public/folder/:token/files/:fileId",
+    validateParams(xenDriveFolderTokenFileParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const root = await sharedFolder(req.params.token as string);
+      const file = await XenDriveFile.findOne({ _id: req.params.fileId, owner_id: root.owner_id }).exec();
+      if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
+        throw new AppError(404, "File not found");
+      }
+      if (file.isExpired()) throw new AppError(403, "Link expired");
+      return streamFile(res, file);
+    },
+  );
 };
+
+/** Send a stored file to the response, under its own name. */
+async function streamFile(res: express.Response, file: XenDriveFileDocument) {
+  const gcsFile = privateBucket.file(file.storage_path);
+  const [exists] = await gcsFile.exists();
+  if (!exists) throw new AppError(404, "File not found in storage");
+
+  res.setHeader("Content-Type", file.mimeType);
+  res.setHeader("Content-Disposition", attachment(file.name));
+  if (file.size != null) res.setHeader("Content-Length", file.size);
+  if (file.expiry) res.setHeader("X-File-Expiry", file.expiry.toISOString());
+  gcsFile.createReadStream().pipe(res);
+}

@@ -1,37 +1,27 @@
 import EmptyState from "../../../../components/ui/EmptyState";
 import { Box, Typography, Skeleton } from "@mui/material";
-import { useXendriveFiles } from "../../../../hooks/xendrive/useXendrive";
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
+import { useXendriveRecent } from "../../../../hooks/xendrive/useXendrive";
+import { formatFileSize } from "../../../../utils/fileUtils";
 
 export default function XenDriveCardBody() {
-  const { data: files, isLoading } = useXendriveFiles();
+  const { data, isLoading } = useXendriveRecent();
 
   if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 2 }} />;
 
-  const fileList = files || [];
-  const totalSize = fileList.reduce((sum, f) => sum + (f.size || 0), 0);
-  const recent = [...fileList]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 3);
+  const recent = data?.files ?? [];
 
   return (
     <Box>
       <Box sx={{ display: "flex", gap: 2, mb: 1.5 }}>
         <Typography variant="body2" color="text.secondary">
           <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
-            {fileList.length}
+            {data?.fileCount ?? 0}
           </Box>{" "}
           files
         </Typography>
         <Typography variant="body2" color="text.secondary">
           <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
-            {formatBytes(totalSize)}
+            {formatFileSize(data?.spaceUsed ?? 0)}
           </Box>{" "}
           used
         </Typography>
@@ -43,10 +33,10 @@ export default function XenDriveCardBody() {
           {recent.map((f) => (
             <Box key={f._id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
               <Typography variant="body2" noWrap sx={{ flex: 1 }}>
-                {f.filename}
+                {f.name}
               </Typography>
               <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>
-                {formatBytes(f.size)}
+                {formatFileSize(f.size)}
               </Typography>
             </Box>
           ))}

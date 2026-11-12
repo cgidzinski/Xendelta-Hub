@@ -45,7 +45,6 @@ const userSchema = new Schema({
     expires: { type: Date },
   },
   xendrive: {
-    files: [{ type: Schema.Types.ObjectId, ref: "XenDriveMedia" }],
     spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 0 }, // 0GB
   },
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],

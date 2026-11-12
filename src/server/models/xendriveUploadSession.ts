@@ -7,7 +7,9 @@ import mongoose, { Schema, type InferSchemaType } from "mongoose";
 const xendriveUploadSessionSchema = new Schema({
   upload_id: { type: String, required: true, unique: true },
   user_id: { type: String, required: true },
-  filename: { type: String, required: true },
+  filename: { type: String, required: true }, // the generated storage name
+  name: { type: String, required: true }, // the original file name, shown to people
+  folder_id: { type: String, default: null },
   total_chunks: { type: Number, required: true },
   received_chunks: { type: [Number], default: [] },
   resumable_uri: { type: String, required: true },

@@ -1,33 +1,33 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Container,
-  Typography,
   Box,
   Button,
   Paper,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   IconButton,
   Chip,
   InputAdornment,
+  Typography,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ClearIcon from "@mui/icons-material/Clear";
-import { useTitle } from "../../../hooks/useTitle";
 import { useSnackbar } from "notistack";
-import { useXendrive, useXendriveFileSettings, useXendriveFiles } from "../../../hooks/xendrive/useXendrive";
-import { formatFileSize } from "../../../utils/fileUtils";
 import { format } from "date-fns";
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
+import ErrorDisplay from "../../../components/ErrorDisplay";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
+import { useTitle } from "../../../hooks/useTitle";
+import { fileShareUrl, useXendriveActions, useXendriveFile } from "../../../hooks/xendrive/useXendrive";
+import { formatFileSize } from "../../../utils/fileUtils";
+import DriveBreadcrumbs from "./components/DriveBreadcrumbs";
+import { XENDRIVE_ROOT, folderPath } from "./paths";
 
 const EXPIRY_OPTIONS = [
   { label: "+1 Min", amount: 1, unit: "minute" as const },
@@ -36,6 +36,8 @@ const EXPIRY_OPTIONS = [
   { label: "+1 Week", amount: 1, unit: "week" as const },
   { label: "+1 Month", amount: 1, unit: "month" as const },
 ];
+
+const MS = { minute: 60_000, hour: 3_600_000, day: 86_400_000, week: 604_800_000 };
 
 const getMimeTypeLabel = (mimeType: string) => {
   if (mimeType.startsWith("image/")) return "Image";
@@ -51,179 +53,163 @@ export default function FileDetail() {
   const { fileId } = useParams<{ fileId: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { data: files, refetch } = useXendriveFiles();
-  const { deleteFile, isDeleting } = useXendrive();
-  const { mutateAsync: updateSettings, isPending: isUpdating } = useXendriveFileSettings();
+  const confirm = useConfirm();
+  const { data, isLoading, isError, error, refetch } = useXendriveFile(fileId);
+  const { deleteFile, updateFileSettings } = useXendriveActions();
 
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const file = data?.file;
+  const breadcrumb = data?.breadcrumb ?? [];
+  const backTo = file?.folder_id ? folderPath(file.folder_id) : XENDRIVE_ROOT;
+
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [expiryDate, setExpiryDate] = useState<Date | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
 
-  const file = files?.find((f) => f._id === fileId);
-
-  useTitle(file ? `XenDrive - ${file.filename}` : "XenDrive - File Detail");
+  useTitle(file ? `XenDrive - ${file.name}` : "XenDrive - File");
 
   useEffect(() => {
-    if (!file && files && files.length > 0) {
-      // File not found, redirect to list
-      navigate("/internal/xendrive");
-    }
-  }, [file, files, navigate]);
-
-  const shareUrl = useMemo(() => {
-    if (file?.shareToken) {
-      return `${window.location.origin}/xendrive/${file.shareToken}`;
-    }
-    return null;
-  }, [file?.shareToken]);
-
-  useEffect(() => {
+    setName(file?.name ?? "");
     setExpiryDate(file?.expiry ? new Date(file.expiry) : null);
     setPassword(file?.password || "");
-  }, [file?.expiry, file?.password]);
+  }, [file?.name, file?.expiry, file?.password]);
 
-  const handleDelete = () => {
-    if (!fileId) return;
+  const shareUrl = useMemo(() => (file?.shareToken ? fileShareUrl(file.shareToken) : null), [file?.shareToken]);
 
-    deleteFile(fileId, {
+  const handleDelete = async () => {
+    if (!file) return;
+    const ok = await confirm({
+      title: "Delete this file?",
+      message: `"${file.name}" will be deleted for good, and its link stops working.`,
+      confirmLabel: "Delete file",
+    });
+    if (!ok) return;
+    deleteFile.mutate(file._id, {
       onSuccess: () => {
-        setDeleteDialogOpen(false);
-        enqueueSnackbar("File deleted successfully", { variant: "success" });
-        navigate("/internal/xendrive");
+        enqueueSnackbar("File deleted", { variant: "success" });
+        navigate(backTo);
       },
-      onError: (error: Error) => {
-        enqueueSnackbar(error.message || "Failed to delete file", { variant: "error" });
-      },
+      onError: (e: Error) => enqueueSnackbar(e.message || "Failed to delete file", { variant: "error" }),
     });
   };
 
-  const handleSaveSettings = async () => {
-    if (!fileId) return;
-
-    await updateSettings({
-      fileId,
-      settings: {
-        password: password || null,
-        expiry: expiryDate?.toISOString() || null,
-      },
-    });
-    refetch();
-    enqueueSnackbar("Settings saved successfully", { variant: "success" });
-  };
-
-  const handleAddTime = (amount: number, unit: "minute" | "hour" | "day" | "week" | "month") => {
-    const baseDate = expiryDate && expiryDate > new Date() ? expiryDate : new Date();
-    const newDate = new Date(baseDate);
-    const multipliers = {
-      minute: 60 * 1000,
-      hour: 3600 * 1000,
-      day: 86400 * 1000,
-      week: 604800 * 1000,
-      month: 2592000000,
-    };
-    newDate.setTime(newDate.getTime() + amount * (unit === "month" ? 0 : multipliers[unit]));
-    if (unit === "month") newDate.setMonth(newDate.getMonth() + amount);
-    setExpiryDate(newDate);
-  };
-
-  const handleClearExpiry = () => {
-    setExpiryDate(null);
-  };
-
-  const handleCopyUrl = () => {
-    if (shareUrl) {
-      navigator.clipboard.writeText(shareUrl);
-      setUrlCopied(true);
-      enqueueSnackbar("URL copied to clipboard", { variant: "success" });
-      setTimeout(() => setUrlCopied(false), 2000);
+  const handleSave = async () => {
+    if (!file) return;
+    try {
+      await updateFileSettings.mutateAsync({
+        fileId: file._id,
+        settings: {
+          name: name.trim() || file.name,
+          password: password || null,
+          expiry: expiryDate?.toISOString() || null,
+        },
+      });
+      refetch();
+      enqueueSnackbar("Saved", { variant: "success" });
+    } catch (e) {
+      enqueueSnackbar((e as Error).message || "Couldn't save", { variant: "error" });
     }
   };
 
-  const fileInfo = useMemo(
-    () =>
-      file
-        ? [
-            { label: "File Size", value: formatFileSize(file.size) },
-            { label: "MIME Type", value: file.mimeType },
-            { label: "Uploaded", value: format(new Date(file.createdAt), "PPpp") },
-          ]
-        : [],
-    [file],
-  );
+  const addTime = (amount: number, unit: "minute" | "hour" | "day" | "week" | "month") => {
+    const base = expiryDate && expiryDate > new Date() ? expiryDate : new Date();
+    const next = new Date(base);
+    if (unit === "month") next.setMonth(next.getMonth() + amount);
+    else next.setTime(next.getTime() + amount * MS[unit]);
+    setExpiryDate(next);
+  };
 
-  if (!file) {
+  const copyUrl = () => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setUrlCopied(true);
+    enqueueSnackbar("Link copied", { variant: "success" });
+    setTimeout(() => setUrlCopied(false), 2000);
+  };
+
+  const info = file
+    ? [
+        { label: "File size", value: formatFileSize(file.size) },
+        { label: "Type", value: file.mimeType },
+        { label: "Uploaded", value: format(new Date(file.createdAt), "PPpp") },
+      ]
+    : [];
+
+  if (isError) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <PageContainer>
+        <ErrorDisplay error={error ?? null} title="Couldn't load this file" onRetry={() => refetch()} />
+      </PageContainer>
+    );
+  }
+
+  if (isLoading || !file) {
+    return (
+      <PageContainer>
         <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
           <CircularProgress />
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 3 } }}>
-      <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-        <IconButton onClick={() => navigate("/internal/xendrive")} sx={{ flexShrink: 0 }}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexGrow: 1, minWidth: 0 }}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-            File Details
-          </Typography>
-          {shareUrl && (
-            <IconButton
-              onClick={handleCopyUrl}
-              color={urlCopied ? "success" : "default"}
-              sx={{ flexShrink: 0 }}
-              size="small"
-              title="Copy share link"
-            >
-              <ContentCopyIcon />
-            </IconButton>
-          )}
-        </Box>
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", flexShrink: 0 }}>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={() => setDeleteDialogOpen(true)}
-            disabled={isDeleting}
-            size="small"
-          >
-            Delete
-          </Button>
-          <Button variant="contained" onClick={handleSaveSettings} disabled={isUpdating} size="small">
-            {isUpdating ? "Saving..." : "Save Settings"}
-          </Button>
-        </Box>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="File"
+        onBack={() => navigate(backTo)}
+        actions={
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {shareUrl && (
+              <IconButton
+                onClick={copyUrl}
+                color={urlCopied ? "success" : "default"}
+                aria-label="Copy link"
+                size="small"
+              >
+                <ContentCopyIcon />
+              </IconButton>
+            )}
+            <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={handleDelete} size="small">
+              Delete
+            </Button>
+            <Button variant="contained" onClick={handleSave} disabled={updateFileSettings.isPending} size="small">
+              {updateFileSettings.isPending ? "Saving..." : "Save"}
+            </Button>
+          </Box>
+        }
+      />
 
-      {file?.hasPassword && (
+      <DriveBreadcrumbs crumbs={breadcrumb} folderTo={folderPath} rootTo={XENDRIVE_ROOT} />
+
+      {file.hasPassword && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          This file requires a password to download
+          This file's link asks for a password
         </Alert>
       )}
-      {file?.expiry && (
+      {file.expiry && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          This link expires on {format(new Date(file.expiry), "PPpp")}
+          This file's link expires on {format(new Date(file.expiry), "PPpp")}
         </Alert>
       )}
 
-      <Paper sx={{ p: { xs: 1.5, sm: 2 }, overflow: "hidden", mb: 3 }}>
+      <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mb: 3 }}>
         <Box sx={{ mb: 1.5 }}>
-          <Typography variant="h6" sx={{ mb: 0.5, wordBreak: "break-word" }}>
-            {file.filename}
-          </Typography>
+          <TextField
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            fullWidth
+            size="small"
+            slotProps={{ htmlInput: { maxLength: 255 } }}
+            sx={{ mb: 1 }}
+          />
           <Chip label={getMimeTypeLabel(file.mimeType)} size="small" />
         </Box>
-
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          {fileInfo.map(({ label, value }) => (
+          {info.map(({ label, value }) => (
             <Box key={label}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>
+              <Typography variant="body2" color="text.secondary">
                 {label}
               </Typography>
               <Typography variant="body2" sx={{ wordBreak: "break-word" }}>
@@ -234,42 +220,41 @@ export default function FileDetail() {
         </Box>
       </Paper>
 
-      <Paper sx={{ p: { xs: 2, sm: 3 }, overflow: "hidden" }}>
+      <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Share Settings
+          Share settings
         </Typography>
-
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <TextField
             label="Password (leave empty to remove)"
-            type="text"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={file?.hasPassword ? "Enter new password or leave empty" : "Set a password"}
-            helperText="Optional: Protect file with a password"
+            placeholder={file.hasPassword ? "Enter new password or leave empty" : "Set a password"}
+            helperText="Optional: protect this file's link with a password"
             fullWidth
-            InputProps={{
-              startAdornment: file?.hasPassword ? (
-                <LockIcon sx={{ mr: 1, color: "text.secondary" }} />
-              ) : (
-                <LockOpenIcon sx={{ mr: 1, color: "text.secondary" }} />
-              ),
-              endAdornment: password ? (
-                <InputAdornment position="end">
-                  <IconButton edge="end" onClick={() => setPassword("")} size="small" sx={{ mr: -1 }}>
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : null,
+            slotProps={{
+              input: {
+                startAdornment: file.hasPassword ? (
+                  <LockIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ) : (
+                  <LockOpenIcon sx={{ mr: 1, color: "text.secondary" }} />
+                ),
+                endAdornment: password ? (
+                  <InputAdornment position="end">
+                    <IconButton edge="end" onClick={() => setPassword("")} size="small" aria-label="Clear password">
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
             }}
           />
-
           <Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Expiry Time
+              Expiry time
             </Typography>
             <Box sx={{ mb: 2, p: 2, bgcolor: "background.default", borderRadius: 1 }}>
-              <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
+              <Typography sx={{ fontWeight: 500 }}>
                 {expiryDate ? format(expiryDate, "PPpp") : "No expiry set"}
               </Typography>
               {expiryDate && expiryDate <= new Date() && (
@@ -278,12 +263,16 @@ export default function FileDetail() {
                 </Typography>
               )}
             </Box>
-            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
-              <Button variant={expiryDate === null ? "contained" : "outlined"} size="small" onClick={handleClearExpiry}>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Button
+                variant={expiryDate === null ? "contained" : "outlined"}
+                size="small"
+                onClick={() => setExpiryDate(null)}
+              >
                 None
               </Button>
               {EXPIRY_OPTIONS.map(({ label, amount, unit }) => (
-                <Button key={label} variant="outlined" size="small" onClick={() => handleAddTime(amount, unit)}>
+                <Button key={label} variant="outlined" size="small" onClick={() => addTime(amount, unit)}>
                   {label}
                 </Button>
               ))}
@@ -291,19 +280,6 @@ export default function FileDetail() {
           </Box>
         </Box>
       </Paper>
-
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete File</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to delete "{file.filename}"? This action cannot be undone.</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained" disabled={isDeleting}>
-            {isDeleting ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
+    </PageContainer>
   );
 }
