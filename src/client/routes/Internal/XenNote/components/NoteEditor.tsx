@@ -5,6 +5,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  Collapse,
   IconButton,
   MenuItem,
   Stack,
@@ -16,6 +17,8 @@ import {
   useTheme,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
@@ -34,7 +37,18 @@ import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { noteShareUrl, useXenNoteActions } from "../../../../hooks/xennote/useXenNote";
 import type { XenNote, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
-import { changeType, draftFromNote, emptyDraft, isDirty, isEmptyDraft, toInput, type NoteDraft } from "../noteDraft";
+import {
+  changeType,
+  draftFromNote,
+  emptyDraft,
+  isDirty,
+  isEmptyDraft,
+  moveItem,
+  toInput,
+  type NoteDraft,
+} from "../noteDraft";
+
+const AUTOSAVE_MS = 800;
 
 interface NoteEditorProps {
   open: boolean;
@@ -84,6 +98,10 @@ export default function NoteEditor({
   );
   const [draft, setDraft] = useState<NoteDraft>(initial);
   const [saving, setSaving] = useState(false);
+  // Autosave state for an existing note: shown beside Done as "Saving…" then "Saved"
+  const [autosave, setAutosave] = useState<"idle" | "saving" | "saved">("idle");
+  const [showDone, setShowDone] = useState(false);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
   // What the server holds for this note right now (photos and the link change it outside the draft).
   const [live, setLive] = useState<XenNote | null>(note);
 
@@ -99,6 +117,28 @@ export default function NoteEditor({
 
   const readOnly = !!live && !live.can_edit;
   const set = (patch: Partial<NoteDraft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  // An existing note saves itself shortly after you stop typing; a new one is created when you press Done.
+  useEffect(() => {
+    if (!open || readOnly || !live || !isDirty(draft, draftFromNote(live))) return;
+    if (draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim())) return;
+    const timer = setTimeout(async () => {
+      setAutosave("saving");
+      try {
+        const saved = await actions.updateNote.mutateAsync({ id: live._id, input: toInput(draft) });
+        setLive((cur) => (cur && cur._id === saved._id ? { ...cur, ...saved } : cur));
+        setAutosave("saved");
+      } catch (e) {
+        setAutosave("idle");
+        enqueueSnackbar((e as Error).message || "Couldn't save the note", { variant: "error" });
+      }
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, live, open, readOnly]);
+  useEffect(() => {
+    if (open) setAutosave("idle");
+  }, [open, initial]);
   const writableNotebooks = notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor");
 
   const pendingUrls = useMemo(() => draft.pendingImages.map((f) => URL.createObjectURL(f)), [draft.pendingImages]);
@@ -192,6 +232,11 @@ export default function NoteEditor({
               Delete
             </Button>
           )}
+          {autosave !== "idle" && (
+            <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: 1 }}>
+              {autosave === "saving" ? "Saving…" : "Saved"}
+            </Typography>
+          )}
           <Button variant="contained" onClick={saveAndClose} disabled={saving || linkError}>
             {readOnly ? "Close" : "Done"}
           </Button>
@@ -242,57 +287,104 @@ export default function NoteEditor({
 
         {draft.type === "checklist" && (
           <Box>
-            {draft.checklist.map((item, i) => (
-              <Box key={item._id ?? i} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Checkbox
-                  checked={item.done}
-                  disabled={readOnly}
-                  onChange={(e) => updateItem(i, { done: e.target.checked })}
-                  slotProps={{ input: { "aria-label": `Done: ${item.text || "item"}` } }}
-                />
-                <TextField
-                  variant="standard"
-                  fullWidth
-                  value={item.text}
-                  disabled={readOnly}
-                  onChange={(e) => updateItem(i, { text: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      set({
-                        checklist: [
-                          ...draft.checklist.slice(0, i + 1),
-                          { text: "", done: false },
-                          ...draft.checklist.slice(i + 1),
-                        ],
-                      });
-                    }
+            {(() => {
+              const row = (item: NoteDraft["checklist"][number], i: number) => (
+                <Box
+                  key={item._id ?? i}
+                  draggable={!readOnly && !item.done}
+                  onDragStart={() => setDragFrom(i)}
+                  onDragOver={(e) => dragFrom !== null && e.preventDefault()}
+                  onDrop={() => {
+                    if (dragFrom !== null) set({ checklist: moveItem(draft.checklist, dragFrom, i) });
+                    setDragFrom(null);
                   }}
-                  slotProps={{
-                    htmlInput: { maxLength: 500, "aria-label": `Item ${i + 1}` },
-                    input: { sx: { textDecoration: item.done ? "line-through" : "none" } },
-                  }}
-                />
-                {!readOnly && (
-                  <IconButton
-                    aria-label="Remove item"
-                    size="small"
-                    onClick={() => set({ checklist: draft.checklist.filter((_, idx) => idx !== i) })}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
-            ))}
-            {!readOnly && (
-              <Button
-                startIcon={<AddIcon />}
-                onClick={() => set({ checklist: [...draft.checklist, { text: "", done: false }] })}
-                sx={{ mt: 0.5 }}
-              >
-                Add item
-              </Button>
-            )}
+                  onDragEnd={() => setDragFrom(null)}
+                  sx={{ display: "flex", alignItems: "center", gap: 0.5, opacity: dragFrom === i ? 0.4 : 1 }}
+                >
+                  {!readOnly && !item.done && (
+                    <DragIndicatorIcon
+                      fontSize="small"
+                      aria-label="Drag to reorder"
+                      sx={{ color: "text.disabled", cursor: "grab" }}
+                    />
+                  )}
+                  <Checkbox
+                    checked={item.done}
+                    disabled={readOnly}
+                    onChange={(e) => updateItem(i, { done: e.target.checked })}
+                    slotProps={{ input: { "aria-label": `Done: ${item.text || "item"}` } }}
+                  />
+                  <TextField
+                    variant="standard"
+                    fullWidth
+                    value={item.text}
+                    disabled={readOnly}
+                    onChange={(e) => updateItem(i, { text: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        set({
+                          checklist: [
+                            ...draft.checklist.slice(0, i + 1),
+                            { text: "", done: false },
+                            ...draft.checklist.slice(i + 1),
+                          ],
+                        });
+                      }
+                    }}
+                    slotProps={{
+                      htmlInput: { maxLength: 500, "aria-label": `Item ${i + 1}` },
+                      input: { sx: { textDecoration: item.done ? "line-through" : "none" } },
+                    }}
+                  />
+                  {!readOnly && (
+                    <IconButton
+                      aria-label="Remove item"
+                      size="small"
+                      onClick={() => set({ checklist: draft.checklist.filter((_, idx) => idx !== i) })}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                </Box>
+              );
+              const indexed = draft.checklist.map((item, i) => ({ item, i }));
+              const active = indexed.filter((x) => !x.item.done);
+              const done = indexed.filter((x) => x.item.done);
+              return (
+                <>
+                  {active.map((x) => row(x.item, x.i))}
+                  {!readOnly && (
+                    <Button
+                      startIcon={<AddIcon />}
+                      onClick={() => set({ checklist: [...draft.checklist, { text: "", done: false }] })}
+                      sx={{ mt: 0.5 }}
+                    >
+                      Add item
+                    </Button>
+                  )}
+                  {done.length > 0 && (
+                    <Box sx={{ mt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => setShowDone((v) => !v)}
+                        aria-expanded={showDone}
+                        startIcon={
+                          <ExpandMoreIcon
+                            sx={{ transform: showDone ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}
+                          />
+                        }
+                        sx={{ mt: 0.5, textTransform: "none" }}
+                      >
+                        {done.length} completed
+                      </Button>
+                      <Collapse in={showDone}>{done.map((x) => row(x.item, x.i))}</Collapse>
+                    </Box>
+                  )}
+                </>
+              );
+            })()}
           </Box>
         )}
 

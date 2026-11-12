@@ -218,6 +218,26 @@ describe("notebooks and sharing", () => {
     expect((await api(viewer).put(`/notes/${shared._id}`, { title: "now ok" })).status).toBe(200);
   });
 
+  it("shows who last changed a shared note, never for a private one, and counts the rail", async () => {
+    const [owner, editor] = await Promise.all([createUser(), createUser()]);
+    const nb = await notebook(owner, "Trip");
+    await api(owner).post(`/notebooks/${nb._id}/members`, { userIds: [String(editor.user._id)], role: "editor" });
+    const shared = await note(owner, { title: "packing", notebook_id: nb._id });
+    const loose = await note(owner, { title: "private" });
+    await note(owner, { title: "old", archived: true });
+
+    await api(editor).put(`/notes/${shared._id}`, { title: "packing list" });
+    const seen = (await api(owner).get("/notes")).body.data.notes;
+    expect(seen.find((n: any) => n._id === shared._id).updated_by_name).toBe(editor.user.username);
+    expect(seen.find((n: any) => n._id === loose._id).updated_by_name).toBeNull();
+    expect((await api(owner).get(`/notes/${shared._id}`)).body.data.note.updated_by_name).toBe(editor.user.username);
+
+    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 2, mine: 1, archived: 1 });
+    // the editor sees the shared note but not the owner's private or archived ones
+    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 1, mine: 0, archived: 0 });
+    expect((await api().get("/counts")).status).toBe(401);
+  });
+
   it("a member can leave, the owner can remove people, and the owner cannot leave", async () => {
     const [owner, member] = await Promise.all([createUser(), createUser()]);
     const nb = await notebook(owner);

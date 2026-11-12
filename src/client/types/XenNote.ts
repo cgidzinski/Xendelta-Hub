@@ -34,8 +34,16 @@ export interface XenNote {
   labels: string[];
   can_edit: boolean;
   share: { enabled: boolean; token: string | null } | null; // only for people who can edit
+  updated_by_name: string | null; // who last changed it, in a shared notebook
   created_at: string;
   updated_at: string;
+}
+
+/** How many notes each part of the rail holds. */
+export interface XenNoteCounts {
+  all: number;
+  mine: number;
+  archived: number;
 }
 
 /** What a public link shows: no owner, no sharing details. */

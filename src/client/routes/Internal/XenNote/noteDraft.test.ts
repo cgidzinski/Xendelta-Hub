@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { changeType, draftFromNote, emptyDraft, hostOf, isDirty, isEmptyDraft, toInput } from "./noteDraft";
+import {
+  changeType,
+  checklistProgress,
+  draftFromNote,
+  emptyDraft,
+  hostOf,
+  isDirty,
+  isEmptyDraft,
+  moveItem,
+  toInput,
+} from "./noteDraft";
 import type { XenNote } from "../../../types/XenNote";
 
 describe("changeType", () => {
@@ -100,5 +110,30 @@ describe("draftFromNote / hostOf", () => {
   it("shows a link's host without www, and the raw text when it isn't an address", () => {
     expect(hostOf("https://www.example.com/a/b")).toBe("example.com");
     expect(hostOf("not a url")).toBe("not a url");
+  });
+});
+
+describe("moveItem", () => {
+  it("moves an item to a new position", () => {
+    expect(moveItem(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
+    expect(moveItem(["a", "b", "c", "d"], 3, 1)).toEqual(["a", "d", "b", "c"]);
+  });
+  it("leaves the list alone for a no-op or out-of-range move", () => {
+    const list = ["a", "b"];
+    expect(moveItem(list, 1, 1)).toBe(list);
+    expect(moveItem(list, 0, 5)).toBe(list);
+    expect(moveItem(list, -1, 0)).toBe(list);
+  });
+});
+
+describe("checklistProgress", () => {
+  it("counts ticked items out of those with text", () => {
+    expect(
+      checklistProgress([
+        { text: "a", done: true },
+        { text: "b", done: false },
+        { text: "  ", done: true },
+      ]),
+    ).toEqual({ done: 1, total: 2 });
   });
 });

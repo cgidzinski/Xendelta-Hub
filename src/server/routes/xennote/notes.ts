@@ -15,7 +15,16 @@ import { randomToken } from "../../utils/tokens";
 import { deleteFromGCS } from "../../utils/gcsUtils";
 import { roleOf } from "../../utils/membership";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
-import { escapeRegex, loadNote, loadNotebook, myNotebooks, notifyChange, serializeNote, type NoteDoc } from "./shared";
+import {
+  escapeRegex,
+  loadNote,
+  loadNotebook,
+  myNotebooks,
+  namesForNotes,
+  notifyChange,
+  serializeNote,
+  type NoteDoc,
+} from "./shared";
 
 /**
  * Apply a create/update body to a note, then make the note consistent with its type: a checklist
@@ -81,12 +90,28 @@ export function registerNoteRoutes(app: any) {
     }
 
     const notes = await XenNote.find({ $and: and }).sort({ pinned: -1, updated_at: -1 }).limit(500);
+    const names = await namesForNotes(notes);
     const data = await Promise.all(
       notes.map((n) =>
-        serializeNote(n, { uid, role: n.notebook_id ? (roles.get(String(n.notebook_id)) ?? null) : "owner" }),
+        serializeNote(n, { uid, role: n.notebook_id ? (roles.get(String(n.notebook_id)) ?? null) : "owner", names }),
       ),
     );
     res.json({ status: true, message: "Notes retrieved", data: { notes: data } });
+  });
+
+  // How many notes each part of the rail holds: everything, my private ones, and the archive.
+  app.get("/api/xennote/counts", async (req: Request, res: Response) => {
+    const uid = callerId(req);
+    const books = await myNotebooks(uid);
+    const visible = {
+      $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }],
+    };
+    const [all, mine, archived] = await Promise.all([
+      XenNote.countDocuments({ ...visible, archived: { $ne: true } }),
+      XenNote.countDocuments({ notebook_id: null, owner_id: uid, archived: { $ne: true } }),
+      XenNote.countDocuments({ ...visible, archived: true }),
+    ]);
+    res.json({ status: true, message: "Counts retrieved", data: { all, mine, archived } });
   });
 
   app.get("/api/xennote/labels", async (req: Request, res: Response) => {

@@ -117,3 +117,18 @@ export function hostOf(url: string): string {
     return url;
   }
 }
+
+/** Move checklist item `from` to position `to` (drag to reorder). Out-of-range moves change nothing. */
+export function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items;
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+/** Ticked items out of those with text, for the card's progress bar. */
+export function checklistProgress(items: Array<{ text: string; done: boolean }>): { done: number; total: number } {
+  const real = items.filter((i) => i.text.trim());
+  return { done: real.filter((i) => i.done).length, total: real.length };
+}
