@@ -59,8 +59,11 @@ Use **XenKitchen** (`routes/xenkitchen.ts`, `Internal/XenKitchen/`) as the worke
 - Answer with the app-wide envelope `{ status, message, data }`.
 - Real-time updates: emit through the `SocketManager` (see how `xensplit:group_update` is sent) and name events
   `<app>:<thing>_update`.
-- Notifications go through `notify()`; uploads go through the shared upload helpers (see `utils/mediaUtils.ts`),
-  and a long upload needs the client's progress bar (below).
+- Notifications go through `notify()`. **Files a person uploads in your app are XenDrive files**: register a source with
+  `registerDriveSource` (see `utils/xenNoteFiles.ts`) and store them with `storeAppFiles` from `utils/appFiles.ts`, not
+  `uploadToGCS`, so they are owned by the uploader, listed under XenDrive > From apps and deleted properly (`docs/storage.md`).
+  Only small, resized or admin-only images (avatars, a group image) use `utils/mediaUtils.ts`. A long upload needs the
+  client's progress bar (below).
 
 ## 3. Client app folder, routes and registry
 

@@ -10,6 +10,7 @@ import { fileKindOf } from "../lib/fileKind";
 import { useFolderDrop } from "../lib/useFileDrop";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
+import SourceChips from "./SourceChips";
 import type { DriveListHandlers } from "./DriveTable";
 
 interface DriveGridProps {
@@ -142,19 +143,21 @@ function FileCard({
         />
 
         <Box className="reveal" sx={[{ position: "absolute", top: 6, right: 6, display: "flex", gap: 0.5 }, reveal]}>
-          <Tooltip title={file.shared ? "Copy link" : "Copy link (turns it on)"}>
-            <IconButton
-              size="small"
-              aria-label={`Copy link to ${file.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onCopyLink(file);
-              }}
-              sx={{ bgcolor: "background.paper", "&:hover": { bgcolor: "background.paper" } }}
-            >
-              <LinkIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {!file.source && (
+            <Tooltip title={file.shared ? "Copy link" : "Copy link (turns it on)"}>
+              <IconButton
+                size="small"
+                aria-label={`Copy link to ${file.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopyLink(file);
+                }}
+                sx={{ bgcolor: "background.paper", "&:hover": { bgcolor: "background.paper" } }}
+              >
+                <LinkIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Download">
             <IconButton
               size="small"
@@ -194,6 +197,11 @@ function FileCard({
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
             {formatFileSize(file.size)} · {formatModified(file.createdAt)}
           </Typography>
+          {file.source && (
+            <Box sx={{ mt: 0.5 }}>
+              <SourceChips file={file} />
+            </Box>
+          )}
         </Box>
         <IconButton
           size="small"

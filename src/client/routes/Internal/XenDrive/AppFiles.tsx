@@ -15,6 +15,7 @@ import { downloadFile, useXendriveActions, useXendriveAppFiles } from "../../../
 import { formatFileSize } from "../../../utils/fileUtils";
 import type { XenDriveFile } from "../../../types/XenDriveFile";
 import FileTypeIcon from "./components/FileTypeIcon";
+import SourceChips from "./components/SourceChips";
 
 /**
  * Files that apps stored in the drive for you (chat attachments, ...). They count toward your storage but are kept out of
@@ -96,6 +97,7 @@ export default function AppFiles() {
                       <Typography variant="caption" color="text.secondary">
                         {formatFileSize(file.size)} · {format(new Date(file.createdAt), "MMM d, yyyy")}
                       </Typography>
+                      <SourceChips file={file} showSource={false} />
                     </Box>
                     <Tooltip title="Download">
                       <IconButton aria-label={`Download ${file.name}`} onClick={() => downloadFile(file._id)}>

@@ -109,6 +109,21 @@ describe("chat uploads", () => {
     expect((await request(t.app).get("/api/xendrive/app-files").set(as(b.token))).body.data.count).toBe(0);
   });
 
+  it("lets a chat attachment start even when it is bigger than the person's whole storage, because it doesn't count", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chatId = await openChat(a, [b]);
+    const huge = 5 * 1024 * 1024 * 1024;
+    const body = { filename: "big.bin", totalChunks: 1, fileSize: huge };
+    const asChat = await request(t.app)
+      .post("/api/xendrive/initiate")
+      .set(as(a.token))
+      .send({ ...body, source: { app: "chat", ref: chatId } });
+    expect(asChat.status, JSON.stringify(asChat.body)).toBe(200);
+    // an ordinary upload of the same size is still refused
+    const plain = await request(t.app).post("/api/xendrive/initiate").set(as(a.token)).send(body);
+    expect(plain.status).toBe(403);
+  });
+
   it("only lets a member of the chat upload for it, and never into a folder", async () => {
     const [a, b, outsider] = [await createUser(), await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
@@ -128,16 +143,6 @@ describe("chat uploads", () => {
       .set(as(a.token))
       .send({ ...body, folderId: String(new mongoose.Types.ObjectId()), source: { app: "chat", ref: chatId } });
     expect(withFolder.status).toBe(400);
-  });
-
-  it("refuses an upload that doesn't fit the sender's storage", async () => {
-    const [a, b] = [await createUser(), await createUser()];
-    const chatId = await openChat(a, [b]);
-    const tooBig = await request(t.app)
-      .post("/api/xendrive/initiate")
-      .set(as(a.token))
-      .send({ filename: "huge.zip", totalChunks: 1, fileSize: 2 * 1024 ** 3, source: { app: "chat", ref: chatId } });
-    expect(tooBig.status).toBe(403);
   });
 
   it("keeps a tagged file private: no renaming or public link from XenDrive, but it can be deleted", async () => {

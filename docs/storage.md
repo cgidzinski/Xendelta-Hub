@@ -1,22 +1,34 @@
 # Where uploads live, and what counts toward storage
 
-**Only XenDrive files count toward a person's storage.** `usageFor` and `checkQuota`
-(`src/server/utils/xendriveUtils.ts`) look at `XenDriveFile` and nothing else. Every other upload goes straight to
-cloud storage through `uploadToGCS` (`src/server/utils/gcsUtils.ts`), capped only by multer's size limit per file
-(`src/server/config/multer.ts`, `src/server/constants/index.ts`) and a cap per item. Those bytes cost money and
-count for nobody.
+Every file a person uploads is a `XenDriveFile` owned by them, in the private bucket. Files uploaded straight to XenDrive
+**count toward the person's storage**; files an app stores for them (photos, chat attachments) are tagged with where they
+came from and are **exempt from the quota for now** (`counted: false`). `usageFor` and `checkQuota`
+(`src/server/utils/xendriveUtils.ts`) only add up files that count (`counted` not `false`).
 
-| Where | Route / helper | Bucket | Limit today |
-|---|---|---|---|
-| XenSplit expense photos | `routes/xensplit.ts` → `uploadToGCS` | private | 10 MB each, 10 per expense |
-| XenSplit group image | `mediaUtils.uploadXenSplitGroupImageFile` | public | resized |
-| XenBudget item photos | `routes/xenbudget/items.ts` → `uploadToGCS` | private | 10 MB each, 10 per item |
-| XenNote photos | `routes/xennote/images.ts` → `uploadToGCS` | private | 15 MB each (resized), 10 per note |
-| XenKitchen photos | `routes/xenkitchen.ts` → `uploadToGCS` | private | 15 MB each (resized), 10 per item |
-| Recipaint assets | `mediaUtils.uploadRecipaintAsset` (+ thumbnail) | public | `MAX_RECIPAINT_ASSET_SIZE` |
-| Avatars | `mediaUtils.uploadAvatarFile` | public | 5 MB, resized |
-| Blog assets (admin) | `mediaUtils.uploadBlogAsset` | public | `MAX_BLOG_ASSET_SIZE` |
-| **XenDrive** | `routes/xendrive.ts`, chunked sessions | private | **counts: `checkQuota`** |
+| Where | Stored as | Bucket | Limit today | Counts? |
+|---|---|---|---|---|
+| **XenDrive** uploads | `XenDriveFile`, `checkQuota` | private | the person's quota | **yes** |
+| Chat attachments | tagged file, `source: { app: "chat", ref: conversationId }` | private | quota check skipped | no |
+| XenSplit expense photos | tagged file, `ref` = group id | private | 10 MB each, 10 per expense | no |
+| XenBudget item photos | tagged file, `ref` = book id | private | 10 MB each, 10 per item | no |
+| XenNote photos | tagged file, `ref` = note id | private | 15 MB each (resized), 10 per note | no |
+| XenKitchen photos | tagged file, `ref` = item id | private (was public) | 15 MB each (resized), 10 per item | no |
+| XenSplit group image | `mediaUtils.uploadXenSplitGroupImageFile` | public | resized, one per group | exempt |
+| Avatars | `mediaUtils.uploadAvatarFile` | public | 5 MB, resized, one per person | exempt |
+| Blog assets (admin) | `mediaUtils.uploadBlogAsset` | public | `MAX_BLOG_ASSET_SIZE`, admins only | exempt |
+| Recipaint assets | `mediaUtils.uploadRecipaintAsset` (+ thumbnail) | public | 10 MB each, no count cap | exempt, **open item** |
+
+**Open item: Recipaint assets.** Any signed-in user can upload any number of 10 MB images to the public bucket, and they
+aren't resized. They stay outside XenDrive for now. Cap how many a recipe can hold, or resize them, before this grows.
+
+**The rule to switch on later.** Today every app's files are tagged but not counted. The intended rule once counting is
+switched on: files in a **shared space** (a XenSplit group, or a XenBudget book, XenNote notebook or XenKitchen book with
+more than one member) stay exempt, and files in a space only the owner uses count. It is one function per app:
+`DriveSourceApp.counts(ref)` in `utils/driveSources.ts`. Files already stored have their `counted` flag set when they are
+created, so switching the rule on also needs a migration that re-evaluates the existing ones.
+
+Per-file size limits (multer, `src/server/config/multer.ts`) and per-item photo counts stay as they are; with no quota
+in force for apps, they are what bounds an item.
 
 ## How an app stores files in XenDrive (built for chat attachments, #175)
 A chat upload is a real `XenDriveFile` owned by the sender with `source: { app: "chat", ref: <conversationId> }` and no
@@ -26,33 +38,52 @@ folder. The pieces:
   (chat does it in `chat/service.ts`): `verify` says whether a person may store files for a `ref` (chat: they are a
   member), `describe` names each `ref` for the person ("Weekend trip"). XenDrive never learns what a chat is.
 - **Uploading** uses the ordinary chunked flow. `POST /api/xendrive/initiate` takes an optional `source`; it is checked with
-  `assertDriveSource`, refused together with a folder, and checked against the quota like any upload. The upload session
+  `assertDriveSource` and refused together with a folder. The quota check runs only if the source says its files count. The upload session
   carries the tag to the finished file. On the client, `uploadOne({ file, source })`.
-- **Hidden from the drive's own lists.** `driveOnly = { "source.app": { $exists: false } }` is merged into My Drive and folder
-  contents, search, recent, shared, and the overview. A tagged file also can't be renamed or given a public link from XenDrive
-  (`assertNotAppFile`); it can be deleted, which deletes the stored bytes.
+- **The drive's own lists.** `driveOnly` is merged into My Drive and folder contents, search, recent, shared, and the overview.
+  It filters out tagged files when `SHOW_APP_FILES_IN_DRIVE` is false and is empty while it is true (see Visibility below). A
+  tagged file can't be renamed or given a public link from XenDrive (`assertNotAppFile`); it can be deleted, which deletes the
+  stored bytes.
 - **XenDrive > From apps** (`GET /api/xendrive/app-files`) lists them grouped by app and then by `ref`, with sizes, download,
   delete and "Delete all" per group, so people can free the space. The sidebar entry appears once there is anything to show
   (`appFiles` in `GET /api/xendrive/recent`). Index `{ owner_id, "source.app", createdAt }`.
-- **They count toward the quota.** `usageFor` and `checkQuota` don't filter on `source`.
+- **Counting.** The finished file's `counted` flag comes from the source's `counts(ref)`. `usageFor` and `checkQuota` add up
+  only files that count.
 - **Choosing an existing XenDrive file** in an app attaches it by id: no copy, no extra storage, no tag.
 - **Access for others.** The file stays private in the uploader's drive. Chat members download an attachment through
   `GET /api/chat/conversations/:id/messages/:seq/attachments/:fileId`, which checks membership and that the file is on that
   message, then signs a short-lived link.
 
-## Fix later: make the other apps follow the rule
-Store XenSplit, XenBudget, XenNote and XenKitchen photos as tagged `XenDriveFile`s (`source.app` = the app key),
-through one helper that replaces the scattered `uploadToGCS` calls:
+## How the other apps use it (#232)
+XenSplit, XenBudget, XenNote and XenKitchen store photos as tagged files through `utils/appFiles.ts`:
 
-```ts
-storeAppFile(userId, { app, ref }, file)   // runs checkQuota, uploads, creates the tagged XenDriveFile
-```
+- `storeAppFiles(userId, { app, ref }, files)`: checks the person may store for that `ref` (`assertDriveSource`), checks the
+  quota when the app says the files count, uploads to the private bucket, and creates the tagged files. All or nothing:
+  if one upload or record fails, what was stored is removed.
+- `copyAppFiles(userId, { app, ref }, origins)`: gives the person their own copy of each photo, copied inside storage.
+  XenKitchen uses it when an item is duplicated, copied to another book or saved from a shared link. Every copy is its own
+  file, so deleting one item never touches another's photos.
+- `removeAppFiles(ids)`: deletes the files and their bytes. `signedUrlsFor(ids, minutes)`: short-lived links.
+- Each app's source is registered next to its code (`utils/xensplitFiles.ts`, `xenBudgetFiles.ts`, `xenNoteFiles.ts`,
+  `xenKitchenFiles.ts`). It says who may store files for a `ref`, names each `ref` for the person, whether the files count,
+  and what to do when the person deletes a file from XenDrive (`onRemoved`: pull it off the expense, item or note).
+- An image on an expense, item or note is `{ file_id, uploaded_by }`. `gcs_path` (and XenKitchen's `url`) are the old
+  shape; the migration `1794700000000-app-photos-to-xendrive` links existing photos and removes them.
+- A photo belongs to **whoever uploaded it**, not to the group, book or notebook. Leaving a shared space keeps the person's
+  photos in their XenDrive (listed under From apps as "A group you're no longer in") until they delete them, and deleting one
+  removes it from the space. Deleting the expense's group, the item, the note or the book deletes the photos too.
+- The ref is the thing the photo is on, so "Delete all" in From apps means something: the group for XenSplit and the book for
+  XenBudget; the note for XenNote and the item for XenKitchen, because those can move between notebooks and books.
 
-- Avatars, group images, Recipaint assets and blog assets are small, resized or admin-only, and can stay exempt.
-- It needs a migration that backfills `XenDriveFile` rows for photos that already exist. That turns existing photos
-  into usage overnight, so tell people first, and rehearse it on a restored copy (`migrations/README.md`).
-- Photos in a shared space (an expense in a group) are owned by whoever uploaded them. Decide whether leaving the
-  group keeps them counting for the uploader.
-- It ties to the ongoing-cost plan in `docs/monetization.md` ("Gems to keep files stored or shared").
+**Visibility.** While `SHOW_APP_FILES_IN_DRIVE` is true (`utils/driveSources.ts`), tagged files show in My Drive, recent and
+search as well as under From apps, marked "From <app>" and "Doesn't count toward storage". Set it to false to hide them
+from the drive's own lists again; nothing else changes. They can't be renamed, moved or given a public link from XenDrive.
 
-Tracked in the follow-up issue "Count app uploads toward XenDrive storage".
+**The migration** tags every existing photo for its owner (the group, book or note owner; XenKitchen's item creator): nobody
+recorded who uploaded a photo. Records are `counted: false`, so nobody's usage changes. XenSplit, XenBudget and XenNote photos
+stay where they are (the record's `storage_path` is the old path). XenKitchen photos are copied from the public bucket to the
+private one; the public original is deleted only after the item points at the copy. Rehearse it on a restored copy
+(`migrations/README.md`).
+
+It ties to the ongoing-cost plan in `docs/monetization.md` ("Gems to keep files stored or shared"): once counting is on, the
+quota is what gems extend.

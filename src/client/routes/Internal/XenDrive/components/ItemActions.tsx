@@ -69,6 +69,14 @@ function entriesFor(target: ActionTarget, h: ItemActionHandlers): Entry[] {
     ];
   }
   const { file } = target;
+  // A file an app stored stays private: it can be opened, downloaded and deleted, but not shared or renamed here.
+  if (file.source) {
+    return [
+      { key: "open", label: "Open", icon: <OpenInNewIcon />, run: () => h.onOpen(target) },
+      { key: "download", label: "Download", icon: <FileDownloadOutlinedIcon />, run: () => h.onDownload(file) },
+      { key: "delete", label: "Delete", icon: <DeleteOutlineIcon />, danger: true, run: () => h.onDelete(target) },
+    ];
+  }
   return [
     { key: "open", label: "Open", icon: <OpenInNewIcon />, run: () => h.onOpen(target) },
     {
