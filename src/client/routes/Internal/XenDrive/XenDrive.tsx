@@ -1,6 +1,16 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Button, Fab, IconButton, InputAdornment, LinearProgress, TextField, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Collapse,
+  Fab,
+  IconButton,
+  InputAdornment,
+  LinearProgress,
+  TextField,
+  Typography,
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CreateNewFolderOutlinedIcon from "@mui/icons-material/CreateNewFolderOutlined";
@@ -8,6 +18,8 @@ import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import SearchIcon from "@mui/icons-material/Search";
+import TuneIcon from "@mui/icons-material/Tune";
+import { alpha } from "@mui/material/styles";
 import { useSnackbar } from "notistack";
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -16,7 +28,14 @@ import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
-import { downloadFile, fileShareUrl, useXendriveActions, useXendriveBrowse } from "../../../hooks/xendrive/useXendrive";
+import {
+  downloadFile,
+  fileShareUrl,
+  useXendriveActions,
+  useXendriveAppFiles,
+  useXendriveBrowse,
+  useXendriveRecent,
+} from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import type { XenDriveFile, XenDriveFolder } from "../../../types/XenDriveFile";
 import {
@@ -31,7 +50,7 @@ import DriveBreadcrumbs from "./components/DriveBreadcrumbs";
 import { useDrive } from "./components/DriveContext";
 import DriveGrid from "./components/DriveGrid";
 import DriveTable, { type DriveListHandlers } from "./components/DriveTable";
-import { FilterChip, SelectionBar, ViewToggle, type DriveViewMode } from "./components/DriveControls";
+import { FilterSelect, SelectionBar, ViewToggle, type DriveViewMode } from "./components/DriveControls";
 import DeleteFolderDialog from "./components/DeleteFolderDialog";
 import FileShareDialog from "./components/FileShareDialog";
 import FolderDialog from "./components/FolderDialog";
@@ -43,6 +62,14 @@ import { XENDRIVE_ROOT, filePath, folderPath } from "./paths";
 const isViewMode = (v: unknown): v is DriveViewMode => v === "list" || v === "grid";
 
 const VIEW_TITLE = { shared: "Shared links", recent: "Recent" } as const;
+
+/** The hidden source filter: what the list shows besides the files the person uploaded to XenDrive themselves. */
+const SOURCE_DRIVE = "drive";
+const SOURCE_OPTIONS = [
+  { value: SOURCE_DRIVE, label: "Only my XenDrive files" },
+  { value: "all", label: "Everything, with app files" },
+  { value: "uncounted", label: "Outside my storage" },
+];
 
 export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const navigate = useNavigate();
@@ -58,6 +85,9 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const q = useDeferredValue(search).trim();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [linkFilter, setLinkFilter] = useState<LinkFilter>("all");
+  // Files apps stored for the person (photos, chat attachments) are left out of the drive unless they ask for them here.
+  const [source, setSource] = useState<string>(SOURCE_DRIVE);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [menu, setMenu] = useState<{ target: ActionTarget; anchor: HTMLElement } | null>(null);
@@ -68,9 +98,27 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const [sharingFileId, setSharingFileId] = useState<string | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<XenDriveFolder | null>(null);
 
+  const { data: recent } = useXendriveRecent();
+  const { data: appFiles } = useXendriveAppFiles(moreOpen);
+  // Only people who have app files ever see the control
+  const hasAppFiles = !!recent?.appFiles?.count;
+  const sourceActive = source !== SOURCE_DRIVE;
+  const sourceOptions = useMemo(
+    () => [
+      ...SOURCE_OPTIONS,
+      ...(appFiles?.apps ?? []).map((a) => ({ value: a.app, label: `Only from ${a.label}` })),
+      // keep the current choice selectable while the list of apps loads
+      ...(sourceActive && !SOURCE_OPTIONS.some((o) => o.value === source) && !appFiles
+        ? [{ value: source, label: `Only from ${source}` }]
+        : []),
+    ],
+    [appFiles, source, sourceActive],
+  );
+
   const { data, isLoading, isError, error, refetch } = useXendriveBrowse(folderId ?? null, q || undefined, {
     view,
     thumbs: mode === "grid",
+    source: sourceActive ? source : undefined,
   });
 
   useTitle(view ? `XenDrive - ${VIEW_TITLE[view]}` : data?.folder ? `XenDrive - ${data.folder.name}` : "XenDrive");
@@ -202,7 +250,8 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const bulkCopyLinks = async () => {
     try {
       const urls: string[] = [];
-      for (const f of selectedFiles) {
+      // a file an app stored can't have a public link
+      for (const f of selectedFiles.filter((f) => !f.source)) {
         const url = await ensureLink(f);
         if (url) urls.push(url);
       }
@@ -317,14 +366,14 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
         </Box>
       )}
 
-      {/* search and filters */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", mb: 2 }}>
+      {/* search and filters: the search takes a row to itself on a phone, then the two filters share the next one */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: moreOpen ? 1 : 2 }}>
         <TextField
           placeholder="Search everything in My Drive"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           size="small"
-          sx={{ flex: "1 1 280px" }}
+          sx={{ flex: { xs: "1 1 100%", md: "1 1 280px" } }}
           slotProps={{
             htmlInput: { "aria-label": "Search everything in My Drive" },
             input: {
@@ -336,14 +385,62 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
             },
           }}
         />
-        <FilterChip label="Type" value={typeFilter} options={TYPE_FILTERS} neutral="all" onChange={setTypeFilter} />
-        <FilterChip label="Link" value={linkFilter} options={LINK_FILTERS} neutral="all" onChange={setLinkFilter} />
+        <FilterSelect
+          label="Type"
+          value={typeFilter}
+          options={TYPE_FILTERS}
+          onChange={setTypeFilter}
+          sx={{ flex: { xs: "1 1 0", md: "0 0 150px" } }}
+        />
+        <FilterSelect
+          label="Link"
+          value={linkFilter}
+          options={LINK_FILTERS}
+          onChange={setLinkFilter}
+          sx={{ flex: { xs: "1 1 0", md: "0 0 150px" } }}
+        />
+        {!view && (hasAppFiles || sourceActive) && (
+          <IconButton
+            aria-label="More filters"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((open) => !open)}
+            color={sourceActive ? "primary" : "default"}
+            sx={(t) => ({
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              border: 1,
+              borderColor: sourceActive ? "primary.main" : "divider",
+              borderRadius: 1.5,
+              ...(sourceActive ? { bgcolor: alpha(t.palette.primary.main, 0.08) } : {}),
+            })}
+          >
+            <TuneIcon fontSize="small" />
+          </IconButton>
+        )}
       </Box>
+      {!view && (
+        <Collapse in={moreOpen} unmountOnExit>
+          <Box sx={{ mb: 2 }}>
+            <FilterSelect
+              label="Show"
+              value={source}
+              options={sourceOptions}
+              onChange={setSource}
+              sx={{ width: { xs: "100%", md: 320 } }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
+              Photos and attachments that apps stored for you stay out of My Drive. Choose what to show here.
+            </Typography>
+          </Box>
+        </Collapse>
+      )}
 
       {selected.size > 0 && (
         <SelectionBar
           count={selected.size}
           fileCount={selectedFiles.length}
+          linkCount={selectedFiles.filter((f) => !f.source).length}
           onClear={() => setSelected(new Set())}
           onDownload={bulkDownload}
           onCopyLinks={bulkCopyLinks}
@@ -360,7 +457,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
         <EmptyState
           icon={<FolderOpenIcon />}
           title={
-            filtered || searching
+            filtered || searching || sourceActive
               ? "Nothing matches"
               : view === "shared"
                 ? "Nothing shared yet"
@@ -371,7 +468,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
                     : "No files yet"
           }
           description={
-            filtered || searching
+            filtered || searching || sourceActive
               ? "Try a different search, or clear the filters."
               : view === "shared"
                 ? "Files and folders with a public link show up here."

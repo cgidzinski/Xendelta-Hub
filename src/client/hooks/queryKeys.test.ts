@@ -47,8 +47,18 @@ describe("query keys", () => {
 
   it("XenDrive keys: everything sits under [xendrive], and a folder key is a prefix of its search variants", () => {
     expect(xendriveKeys.all).toEqual(["xendrive"]);
-    expect(xendriveKeys.browse()).toEqual(["xendrive", "browse", null, "", "folder", false]);
-    expect(xendriveKeys.browse("f1", "tax")).toEqual(["xendrive", "browse", "f1", "tax", "folder", false]);
+    expect(xendriveKeys.browse()).toEqual(["xendrive", "browse", null, "", "folder", false, ""]);
+    expect(xendriveKeys.browse("f1", "tax")).toEqual(["xendrive", "browse", "f1", "tax", "folder", false, ""]);
+    // files apps stored for the person are a different listing
+    expect(xendriveKeys.browse("f1", "", "folder", false, "all")).toEqual([
+      "xendrive",
+      "browse",
+      "f1",
+      "",
+      "folder",
+      false,
+      "all",
+    ]);
     expect(xendriveKeys.browse("f1").slice(0, 2)).toEqual([...xendriveKeys.browseAll()]);
     expect(xendriveKeys.file("x")).toEqual(["xendrive", "file", "x"]);
     expect(xendriveKeys.publicFolder("t", "f")).toEqual(["xendrive", "public-folder", "t", "f"]);

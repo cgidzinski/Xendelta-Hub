@@ -1,23 +1,18 @@
-import { useState } from "react";
 import {
   Box,
   Button,
-  Chip,
   IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
   MenuItem,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import LinkIcon from "@mui/icons-material/Link";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
@@ -44,65 +39,43 @@ export function ViewToggle({ value, onChange }: { value: DriveViewMode; onChange
   );
 }
 
-interface FilterChipProps<T extends string> {
+interface FilterSelectProps<T extends string> {
   label: string;
   value: T;
   options: Array<{ value: T; label: string }>;
-  /** The value that means "no filter". */
-  neutral: T;
   onChange: (v: T) => void;
+  sx?: SxProps<Theme>;
 }
 
-/** A chip that opens a short list: Type, Link. Highlighted while it is narrowing the list. */
-export function FilterChip<T extends string>({ label, value, options, neutral, onChange }: FilterChipProps<T>) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const active = value !== neutral;
-  const current = options.find((o) => o.value === value);
+/**
+ * A boxed field that opens a short list (Type, Link), like XenBudget's Source. Fields sit side by side and share the row
+ * on a phone: they shrink, and a long choice ellipsises instead of pushing the page sideways.
+ */
+export function FilterSelect<T extends string>({ label, value, options, onChange, sx }: FilterSelectProps<T>) {
   return (
-    <>
-      <Chip
-        label={active ? current?.label : label}
-        clickable
-        variant={active ? "filled" : "outlined"}
-        color={active ? "primary" : "default"}
-        onClick={(e) => setAnchor(e.currentTarget)}
-        // the trailing icon is a clear button while filtering, and an arrow that opens the list otherwise
-        onDelete={(e) =>
-          active
-            ? onChange(neutral)
-            : setAnchor((e.currentTarget as HTMLElement).closest(".MuiChip-root") as HTMLElement)
-        }
-        deleteIcon={active ? <CloseIcon /> : <KeyboardArrowDownIcon />}
-        aria-label={`${label} filter`}
-      />
-      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
-        {options.map((o) => (
-          <MenuItem
-            key={o.value}
-            selected={o.value === value}
-            onClick={() => {
-              onChange(o.value);
-              setAnchor(null);
-            }}
-            sx={{ minWidth: 190 }}
-          >
-            <ListItemText>{o.label}</ListItemText>
-            {o.value === value && (
-              <ListItemIcon sx={{ minWidth: 0, ml: 2 }}>
-                <CheckIcon fontSize="small" />
-              </ListItemIcon>
-            )}
-          </MenuItem>
-        ))}
-      </Menu>
-    </>
+    <TextField
+      select
+      size="small"
+      label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      sx={[{ minWidth: 0 }, ...(Array.isArray(sx) ? sx : [sx])]}
+    >
+      {options.map((o) => (
+        <MenuItem key={o.value} value={o.value}>
+          {o.label}
+        </MenuItem>
+      ))}
+    </TextField>
   );
 }
 
 interface SelectionBarProps {
   count: number;
-  /** How many of the selected are files (downloads and links only apply to files). */
+  /** How many of the selected are files (downloads only apply to files). */
   fileCount: number;
+  /** How many can have a public link (not the files an app stored). */
+  linkCount: number;
   onClear: () => void;
   onDownload: () => void;
   onCopyLinks: () => void;
@@ -110,7 +83,15 @@ interface SelectionBarProps {
 }
 
 /** Replaces the toolbar while things are selected: what you can do to all of them. */
-export function SelectionBar({ count, fileCount, onClear, onDownload, onCopyLinks, onDelete }: SelectionBarProps) {
+export function SelectionBar({
+  count,
+  fileCount,
+  linkCount,
+  onClear,
+  onDownload,
+  onCopyLinks,
+  onDelete,
+}: SelectionBarProps) {
   return (
     <Box
       role="toolbar"
@@ -137,7 +118,7 @@ export function SelectionBar({ count, fileCount, onClear, onDownload, onCopyLink
       <Button color="inherit" startIcon={<FileDownloadOutlinedIcon />} onClick={onDownload} disabled={fileCount === 0}>
         Download
       </Button>
-      <Button color="inherit" startIcon={<LinkIcon />} onClick={onCopyLinks} disabled={fileCount === 0}>
+      <Button color="inherit" startIcon={<LinkIcon />} onClick={onCopyLinks} disabled={linkCount === 0}>
         Copy links
       </Button>
       <Box sx={{ flex: 1 }} />

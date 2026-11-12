@@ -84,16 +84,23 @@ describe("chat uploads", () => {
     expect(stored.folder_id).toBeNull();
     expect(stored.counted).toBe(true);
 
-    // While SHOW_APP_FILES_IN_DRIVE is on it is in My Drive, search and recent too (marked as an app's file)...
-    const root = await request(t.app).get("/api/xendrive/browse").set(as(a.token));
-    expect(root.body.data.files).toHaveLength(1);
-    expect(root.body.data.files[0]).toMatchObject({ _id: fileId, counted: true, source: { app: "chat" } });
-    expect(
-      (await request(t.app).get("/api/xendrive/browse?search=plan").set(as(a.token))).body.data.files,
-    ).toHaveLength(1);
+    // Hidden from My Drive, search and recent unless asked for...
+    const browse = (query: string) => request(t.app).get(`/api/xendrive/browse${query}`).set(as(a.token));
+    expect((await browse("")).body.data.files).toHaveLength(0);
+    expect((await browse("?search=plan")).body.data.files).toHaveLength(0);
+    expect((await browse("?view=recent")).body.data.files).toHaveLength(0);
+    // ...which they do with a source: everything, or just chat's files. It counts, so it isn't in "uncounted".
+    const all = await browse("?source=all");
+    expect(all.body.data.files).toHaveLength(1);
+    expect(all.body.data.files[0]).toMatchObject({ _id: fileId, counted: true, source: { app: "chat" } });
+    expect((await browse("?source=chat")).body.data.files).toHaveLength(1);
+    expect((await browse("?source=chat&search=plan")).body.data.files).toHaveLength(1);
+    expect((await browse("?source=xensplit")).body.data.files).toHaveLength(0);
+    expect((await browse("?source=uncounted")).body.data.files).toHaveLength(0);
 
-    // ...and it counts toward their storage; the overview says how much apps hold.
+    // It counts toward their storage; the overview says how much apps hold.
     const overview = (await request(t.app).get("/api/xendrive/recent").set(as(a.token))).body.data;
+    expect(overview.files).toHaveLength(0);
     expect(overview.fileCount).toBe(1);
     expect(overview.spaceUsed).toBe(6);
     expect(overview.appFiles).toEqual({ count: 1, size: 6 });

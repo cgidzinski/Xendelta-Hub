@@ -25,7 +25,7 @@ import {
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
-import { assertDriveSource, driveOnly, driveSourceApp } from "../utils/driveSources";
+import { assertDriveSource, driveListFilter, driveOnly, driveSourceApp } from "../utils/driveSources";
 import {
   initiateChunkedUpload,
   uploadChunk,
@@ -257,6 +257,9 @@ module.exports = function (app: express.Application) {
       const search = ((req.query.search as string | undefined) || "").trim();
       const view = req.query.view as "shared" | "recent" | undefined;
       const thumbs = req.query.thumbs === "true";
+      // Files an app stored for the person only show when they ask for them (a source).
+      const source = req.query.source as string | undefined;
+      const listFilter = driveListFilter(source);
 
       // One response shape for every way of looking at the drive
       const send = async (folderDocs: any[], fileDocs: any[], extra: Record<string, unknown>) => {
@@ -280,7 +283,7 @@ module.exports = function (app: express.Application) {
       if (search) {
         const files = await XenDriveFile.find({
           owner_id: userId,
-          ...driveOnly,
+          ...listFilter,
           name: { $regex: escapeRegex(search), $options: "i" },
         })
           .sort({ createdAt: -1 })
@@ -301,7 +304,7 @@ module.exports = function (app: express.Application) {
       }
 
       if (view === "recent") {
-        const files = await XenDriveFile.find({ owner_id: userId, ...driveOnly })
+        const files = await XenDriveFile.find({ owner_id: userId, ...listFilter })
           .sort({ createdAt: -1 })
           .limit(50)
           .exec();
@@ -309,9 +312,13 @@ module.exports = function (app: express.Application) {
       }
 
       const folder = folderId ? await ownFolder(folderId, userId) : null;
+      // Folders hold only the person's own files, so they step aside when looking at one app's or uncounted files.
+      const showFolders = !source || source === "all";
       const [folders, files, breadcrumb] = await Promise.all([
-        XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec(),
-        XenDriveFile.find({ owner_id: userId, ...driveOnly, folder_id: folderId })
+        showFolders
+          ? XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec()
+          : Promise.resolve([]),
+        XenDriveFile.find({ owner_id: userId, ...listFilter, folder_id: folderId })
           .sort({ createdAt: -1 })
           .exec(),
         folderId ? breadcrumbOf(folderId, userId) : Promise.resolve([]),

@@ -94,18 +94,24 @@ interface BrowseOptions {
   view?: BrowseView;
   /** Ask for picture links (the grid view shows them). */
   thumbs?: boolean;
+  /**
+   * Files apps stored for the person are left out unless asked for: "all", "uncounted" (outside their storage), or one
+   * app's key. Leave it out for the drive's own files only.
+   */
+  source?: string;
 }
 
 /** One folder's contents, the shared or recent view, or search results across the whole drive. */
 export const useXendriveBrowse = (folderId?: string | null, search?: string, options: BrowseOptions = {}) =>
   useQuery({
-    queryKey: xendriveKeys.browse(folderId, search, options.view, options.thumbs),
+    queryKey: xendriveKeys.browse(folderId, search, options.view, options.thumbs, options.source),
     queryFn: () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       else if (options.view === "shared" || options.view === "recent") params.set("view", options.view);
       else if (folderId) params.set("folder", folderId);
       if (options.thumbs) params.set("thumbs", "true");
+      if (options.source && options.view !== "shared") params.set("source", options.source);
       return api.get<BrowseResult>(`/api/xendrive/browse?${params.toString()}`);
     },
     retry: 1,
@@ -137,10 +143,11 @@ export const useXendriveRecent = () =>
   });
 
 /** Everything apps have stored on the person's behalf, grouped by app and by where it came from. */
-export const useXendriveAppFiles = () =>
+export const useXendriveAppFiles = (enabled = true) =>
   useQuery({
     queryKey: xendriveKeys.appFiles(),
     queryFn: () => api.get<AppFilesResult>("/api/xendrive/app-files"),
+    enabled,
   });
 
 /** What deleting or sharing a folder involves. Only fetched while `folderId` is set. */
