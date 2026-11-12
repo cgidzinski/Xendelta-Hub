@@ -10,21 +10,11 @@ import { formatFileSize } from "./fileUtils";
 import { randomToken } from "./tokens";
 import { XenBoxMedia } from "../models/xenboxMedia";
 import { User } from "../models/user";
+import { XenBoxUploadSession } from "../models/xenboxUploadSession";
 
-// Upload session interface
-interface UploadSession {
-  userId: string;
-  filename: string;
-  totalChunks: number;
-  receivedChunks: Set<number>;
-  gcsFile: any; // GCS File object
-  resumableUri: string; // GCS resumable upload URI
-  bytesUploaded: number; // Track total bytes uploaded
-  createdAt: number;
-}
-
-// Store upload sessions in memory (consider Redis for production)
-const uploadSessions = new Map<string, UploadSession>();
+// Sessions live in Mongo (models/xenboxUploadSession.ts). The storage file handle is rebuilt from
+// the owner and filename, so nothing about a session needs to stay in process memory.
+const gcsFileFor = (userId: string, filename: string) => privateBucket.file(`xenbox/${userId}/${filename}`);
 
 /**
  * Generate a unique filename for xenbox files
@@ -80,18 +70,13 @@ export async function initiateChunkedUpload(userId: string, filename: string, to
     },
   });
 
-  const session: UploadSession = {
-    userId,
+  await XenBoxUploadSession.create({
+    upload_id: uploadId,
+    user_id: userId,
     filename: finalFilename,
-    totalChunks,
-    receivedChunks: new Set(),
-    gcsFile,
-    resumableUri,
-    bytesUploaded: 0,
-    createdAt: Date.now(),
-  };
-
-  uploadSessions.set(uploadId, session);
+    total_chunks: totalChunks,
+    resumable_uri: resumableUri,
+  });
   return uploadId;
 }
 
@@ -102,24 +87,24 @@ export async function initiateChunkedUpload(userId: string, filename: string, to
  * @param chunkData - Chunk data buffer
  */
 export async function uploadChunk(uploadId: string, chunkIndex: number, chunkData: Buffer): Promise<void> {
-  const session = uploadSessions.get(uploadId);
+  const session = await XenBoxUploadSession.findOne({ upload_id: uploadId });
   if (!session) {
     throw new Error(`Upload session not found: ${uploadId}`);
   }
 
-  if (chunkIndex < 0 || chunkIndex >= session.totalChunks) {
+  if (chunkIndex < 0 || chunkIndex >= session.total_chunks) {
     throw new Error(`Invalid chunk index: ${chunkIndex}`);
   }
 
   // Calculate byte range for this chunk
-  const startByte = session.bytesUploaded;
+  const startByte = session.bytes_uploaded;
   const endByte = startByte + chunkData.length - 1;
-  const isLastChunk = chunkIndex === session.totalChunks - 1;
+  const isLastChunk = chunkIndex === session.total_chunks - 1;
 
   // Upload chunk directly to GCS using HTTP PUT to resumable URI
   // The resumable URI from createResumableUpload includes authentication
   await new Promise<void>((resolve, reject) => {
-    const url = new URL(session.resumableUri);
+    const url = new URL(session.resumable_uri);
 
     // For the last chunk, include total size; otherwise use * for unknown total
     const totalSize = isLastChunk ? endByte + 1 : "*";
@@ -164,8 +149,10 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
   });
 
   // Update tracking
-  session.bytesUploaded += chunkData.length;
-  session.receivedChunks.add(chunkIndex);
+  await XenBoxUploadSession.updateOne(
+    { upload_id: uploadId },
+    { $inc: { bytes_uploaded: chunkData.length }, $addToSet: { received_chunks: chunkIndex } },
+  );
 }
 
 /**
@@ -177,21 +164,22 @@ export async function uploadChunk(uploadId: string, chunkIndex: number, chunkDat
 export async function finalizeChunkedUpload(
   uploadId: string,
 ): Promise<{ _id: string; url: string; filename: string; mimeType: string; size: number }> {
-  const session = uploadSessions.get(uploadId);
+  const session = await XenBoxUploadSession.findOne({ upload_id: uploadId });
   if (!session) {
     throw new Error(`Upload session not found: ${uploadId}`);
   }
 
   // Check if all chunks are received
-  if (session.receivedChunks.size !== session.totalChunks) {
+  if (session.received_chunks.length !== session.total_chunks) {
     throw new Error(
-      `Not all chunks received. Expected: ${session.totalChunks}, Received: ${session.receivedChunks.size}`,
+      `Not all chunks received. Expected: ${session.total_chunks}, Received: ${session.received_chunks.length}`,
     );
   }
+  const gcsFile = gcsFileFor(session.user_id, session.filename);
 
   // Get file metadata from GCS (file is already uploaded)
-  const [metadata] = await session.gcsFile.getMetadata();
-  const fileSize = parseInt(metadata.size || "0", 10);
+  const [metadata] = await gcsFile.getMetadata();
+  const fileSize = parseInt(String(metadata.size ?? "0"), 10);
   const contentType = metadata.contentType || detectContentType(session.filename);
 
   // Create database record
@@ -200,19 +188,18 @@ export async function finalizeChunkedUpload(
     filename: session.filename,
     mimeType: contentType,
     size: fileSize,
-    uploadedBy: session.userId,
+    uploadedBy: session.user_id,
   });
   const savedMedia = await mediaDoc.save();
 
   // Update user's files array
-  await User.findByIdAndUpdate(session.userId, {
+  await User.findByIdAndUpdate(session.user_id, {
     $push: { "xenbox.files": savedMedia._id },
   });
 
-  const gcsPath = `xenbox/${session.userId}/${session.filename}`;
+  const gcsPath = `xenbox/${session.user_id}/${session.filename}`;
 
-  // Cleanup session (no disk cleanup needed)
-  uploadSessions.delete(uploadId);
+  await XenBoxUploadSession.deleteOne({ upload_id: uploadId });
 
   // Return metadata including _id
   return {
@@ -229,17 +216,17 @@ export async function finalizeChunkedUpload(
  * @param uploadId - Upload session ID
  */
 export async function cleanupFailedUpload(uploadId: string): Promise<void> {
-  const session = uploadSessions.get(uploadId);
+  const session = await XenBoxUploadSession.findOne({ upload_id: uploadId });
   if (session) {
     // Delete partial file from GCS if it exists
-    const [exists] = await session.gcsFile.exists();
+    const gcsFile = gcsFileFor(session.user_id, session.filename);
+    const [exists] = await gcsFile.exists();
     if (exists) {
-      await session.gcsFile.delete().catch(() => {
+      await gcsFile.delete().catch(() => {
         // Ignore errors if file doesn't exist or deletion fails
       });
     }
-    // Remove session
-    uploadSessions.delete(uploadId);
+    await XenBoxUploadSession.deleteOne({ upload_id: uploadId });
   }
 }
 
@@ -248,14 +235,16 @@ export async function cleanupFailedUpload(uploadId: string): Promise<void> {
  * @param uploadId - Upload session ID
  * @returns Session status or null if not found
  */
-export function getUploadSessionStatus(uploadId: string): { totalChunks: number; receivedChunks: number } | null {
-  const session = uploadSessions.get(uploadId);
+export async function getUploadSessionStatus(
+  uploadId: string,
+): Promise<{ totalChunks: number; receivedChunks: number } | null> {
+  const session = await XenBoxUploadSession.findOne({ upload_id: uploadId }).lean();
   if (!session) {
     return null;
   }
   return {
-    totalChunks: session.totalChunks,
-    receivedChunks: session.receivedChunks.size,
+    totalChunks: session.total_chunks,
+    receivedChunks: session.received_chunks.length,
   };
 }
 
@@ -263,14 +252,9 @@ export function getUploadSessionStatus(uploadId: string): { totalChunks: number;
  * Cleanup old upload sessions (older than 1 hour)
  */
 export async function cleanupOldSessions(): Promise<void> {
-  const oneHourAgo = Date.now() - 60 * 60 * 1000;
-  const cleanupPromises: Promise<void>[] = [];
-  for (const [uploadId, session] of uploadSessions.entries()) {
-    if (session.createdAt < oneHourAgo) {
-      cleanupPromises.push(cleanupFailedUpload(uploadId));
-    }
-  }
-  await Promise.all(cleanupPromises);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const stale = await XenBoxUploadSession.find({ created_at: { $lt: oneHourAgo } }, "upload_id").lean();
+  await Promise.all(stale.map((s) => cleanupFailedUpload(s.upload_id)));
 }
 // Periodic cleanup is registered as a Scheduler job in server.ts
 

@@ -166,7 +166,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const uploadId = req.params.uploadId;
 
-      const status = getUploadSessionStatus(uploadId);
+      const status = await getUploadSessionStatus(uploadId);
       if (!status) {
         return res.status(404).json({
           status: false,
