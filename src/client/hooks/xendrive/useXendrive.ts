@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UPLOAD_TIMEOUT_MS, api } from "../../config/api";
 import type {
   BrowseResult,
+  BrowseView,
+  FileDetailResult,
   FolderStats,
   PublicFolderView,
   XenDriveFile,
@@ -22,12 +24,6 @@ export interface XenDriveUploaded {
   size: number;
 }
 
-function sliceFile(file: File, chunkSize: number): Blob[] {
-  const chunks: Blob[] = [];
-  for (let offset = 0; offset < file.size; offset += chunkSize) chunks.push(file.slice(offset, offset + chunkSize));
-  return chunks;
-}
-
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -37,63 +33,75 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-interface UploadFileParams {
-  file: File;
-  /** The folder to upload into; omit for the top level. */
-  folderId?: string | null;
-  onProgress?: (percent: number) => void;
+/** Set `cancelled` to stop an upload between chunks; the half-written file is removed. */
+export interface UploadSignal {
+  cancelled: boolean;
 }
 
-/** Upload one file in 10 MB chunks: initiate (checks quota), send each chunk, finalize. */
-export const useXendriveUpload = () => {
-  const queryClient = useQueryClient();
+export class UploadCancelled extends Error {
+  constructor() {
+    super("Upload cancelled");
+  }
+}
 
-  const { mutateAsync: uploadFile, isPending: isUploading } = useMutation({
-    mutationFn: async ({ file, folderId, onProgress }: UploadFileParams): Promise<XenDriveUploaded> => {
-      const chunks = sliceFile(file, CHUNK_SIZE);
-      const totalChunks = Math.max(1, chunks.length);
+/**
+ * Upload one file in 10 MB chunks: initiate (checks quota and the folder), send each chunk, finalize.
+ * Not a hook, so the upload queue can run it outside any component.
+ */
+export async function uploadOne(params: {
+  file: File;
+  folderId?: string | null;
+  signal?: UploadSignal;
+  onProgress?: (percent: number) => void;
+}): Promise<XenDriveUploaded> {
+  const { file, folderId, signal, onProgress } = params;
+  const chunkCount = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
 
-      const { uploadId } = await api.post<{ uploadId: string }>("/api/xendrive/initiate", {
-        filename: file.name,
-        totalChunks,
-        fileSize: file.size,
-        folderId: folderId ?? null,
-      });
-
-      try {
-        for (let i = 0; i < chunks.length; i++) {
-          await api.post(
-            "/api/xendrive/chunk",
-            { uploadId, chunkIndex: i, chunkData: await blobToBase64(chunks[i]) },
-            { timeout: UPLOAD_TIMEOUT_MS },
-          );
-          onProgress?.(((i + 1) / totalChunks) * 100);
-        }
-        return await api.post<XenDriveUploaded>("/api/xendrive/finalize", { uploadId });
-      } catch (error) {
-        // Don't leave a half-written file behind
-        api.delete(`/api/xendrive/uploads/${uploadId}`).catch(() => undefined);
-        throw error;
-      } finally {
-        queryClient.invalidateQueries({ queryKey: xendriveKeys.all });
-        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      }
-    },
+  const { uploadId } = await api.post<{ uploadId: string }>("/api/xendrive/initiate", {
+    filename: file.name,
+    totalChunks: chunkCount,
+    fileSize: Math.max(1, file.size),
+    folderId: folderId ?? null,
   });
 
-  return { uploadFile, isUploading };
-};
+  try {
+    for (let i = 0; i < chunkCount; i++) {
+      if (signal?.cancelled) throw new UploadCancelled();
+      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      await api.post(
+        "/api/xendrive/chunk",
+        { uploadId, chunkIndex: i, chunkData: await blobToBase64(chunk) },
+        { timeout: UPLOAD_TIMEOUT_MS },
+      );
+      onProgress?.(((i + 1) / chunkCount) * 100);
+    }
+    if (signal?.cancelled) throw new UploadCancelled();
+    return await api.post<XenDriveUploaded>("/api/xendrive/finalize", { uploadId });
+  } catch (error) {
+    // Don't leave a half-written file behind
+    api.delete(`/api/xendrive/uploads/${uploadId}`).catch(() => undefined);
+    throw error;
+  }
+}
 
 // ---------- reading ----------
 
-/** One folder's contents, or search results across the whole drive. */
-export const useXendriveBrowse = (folderId?: string | null, search?: string) =>
+interface BrowseOptions {
+  view?: BrowseView;
+  /** Ask for picture links (the grid view shows them). */
+  thumbs?: boolean;
+}
+
+/** One folder's contents, the shared or recent view, or search results across the whole drive. */
+export const useXendriveBrowse = (folderId?: string | null, search?: string, options: BrowseOptions = {}) =>
   useQuery({
-    queryKey: xendriveKeys.browse(folderId, search),
+    queryKey: xendriveKeys.browse(folderId, search, options.view, options.thumbs),
     queryFn: () => {
       const params = new URLSearchParams();
-      if (folderId) params.set("folder", folderId);
       if (search) params.set("search", search);
+      else if (options.view === "shared" || options.view === "recent") params.set("view", options.view);
+      else if (folderId) params.set("folder", folderId);
+      if (options.thumbs) params.set("thumbs", "true");
       return api.get<BrowseResult>(`/api/xendrive/browse?${params.toString()}`);
     },
     retry: 1,
@@ -104,21 +112,22 @@ export const useXendriveBrowse = (folderId?: string | null, search?: string) =>
 export const useXendriveFile = (fileId: string | undefined) =>
   useQuery({
     queryKey: xendriveKeys.file(fileId),
-    queryFn: () =>
-      api.get<{ file: XenDriveFile; breadcrumb: Array<{ _id: string; name: string }> }>(
-        `/api/xendrive/files/${fileId}`,
-      ),
+    queryFn: () => api.get<FileDetailResult>(`/api/xendrive/files/${fileId}`),
     enabled: !!fileId,
     retry: false,
   });
 
+/** The newest files, the totals, and how many things have a public link (the home card and the sidebar). */
 export const useXendriveRecent = () =>
   useQuery({
     queryKey: xendriveKeys.recent(),
-    queryFn: () => api.get<{ files: XenDriveFile[]; fileCount: number; spaceUsed: number }>("/api/xendrive/recent"),
+    queryFn: () =>
+      api.get<{ files: XenDriveFile[]; fileCount: number; spaceUsed: number; sharedCount: number }>(
+        "/api/xendrive/recent",
+      ),
   });
 
-/** What deleting a folder would remove. Only fetched while the confirmation is open. */
+/** What deleting or sharing a folder involves. Only fetched while `folderId` is set. */
 export const useXendriveFolderStats = (folderId: string | null) =>
   useQuery({
     queryKey: xendriveKeys.folderStats(folderId ?? ""),
@@ -139,6 +148,13 @@ export const usePublicFolder = (token: string | undefined, folderId?: string | n
   });
 
 // ---------- changing ----------
+
+export interface FileSettings {
+  name?: string;
+  password?: string | null;
+  expiry?: string | null;
+  shareEnabled?: boolean;
+}
 
 /** All the drive mutations. Each refreshes whatever is on screen and the usage in the profile. */
 export const useXendriveActions = () => {
@@ -175,19 +191,31 @@ export const useXendriveActions = () => {
     onSuccess: refresh,
   });
   const updateFileSettings = useMutation({
-    mutationFn: (v: {
-      fileId: string;
-      settings: { password?: string | null; expiry?: string | null; name?: string };
-    }) =>
-      api.put<{ shareUrl: string; hasPassword: boolean; expiry: string | null; name: string }>(
+    mutationFn: (v: { fileId: string; settings: FileSettings }) =>
+      api.put<{ name: string; shared: boolean; hasPassword: boolean; expiry: string | null; shareUrl: string }>(
         `/api/xendrive/files/${v.fileId}/settings`,
         v.settings,
       ),
     onSuccess: refresh,
   });
+  const rotateFileLink = useMutation({
+    mutationFn: (fileId: string) => api.post<{ file: XenDriveFile }>(`/api/xendrive/files/${fileId}/share/rotate`),
+    onSuccess: refresh,
+  });
 
-  return { createFolder, renameFolder, deleteFolder, shareFolder, deleteFile, updateFileSettings };
+  return { createFolder, renameFolder, deleteFolder, shareFolder, deleteFile, updateFileSettings, rotateFileLink };
 };
+
+/** Save a file to the computer under its real name. */
+export async function downloadFile(fileId: string): Promise<void> {
+  const { url } = await api.get<{ url: string }>(`/api/xendrive/files/${fileId}/url?download=1`);
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 /** Where a shared link points, for copying. */
 export const fileShareUrl = (token: string) => `${window.location.origin}/xendrive/${token}`;

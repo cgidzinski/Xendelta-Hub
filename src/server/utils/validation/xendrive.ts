@@ -34,7 +34,12 @@ export const xenDriveDownloadQuerySchema = z.object({ password: z.string().max(2
 export const xenDriveBrowseQuerySchema = z.object({
   folder: objectIdSchema.optional(),
   search: z.string().max(200).optional(),
+  // A flat view across the whole drive: everything with a public link, or the latest files.
+  view: z.enum(["shared", "recent"]).optional(),
+  // Also return a picture link for each image (the grid view shows them).
+  thumbs: z.enum(["true"]).optional(),
 });
+export const xenDriveFileUrlQuerySchema = z.object({ download: z.enum(["1"]).optional() });
 // A public folder link: optionally a sub-folder of the shared one.
 export const xenDrivePublicFolderQuerySchema = z.object({ folder: objectIdSchema.optional() });
 
@@ -42,6 +47,7 @@ export const xenDriveSettingsSchema = z.object({
   password: z.string().max(200).nullish(),
   expiry: z.string().max(64).nullish(),
   name: z.string().trim().min(1).max(255).optional(),
+  shareEnabled: z.boolean().optional(),
 });
 
 export const xenDriveFolderCreateSchema = z.object({

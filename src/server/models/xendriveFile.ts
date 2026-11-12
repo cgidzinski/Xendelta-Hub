@@ -16,11 +16,13 @@ const xendriveFileSchema = new Schema({
   password: { type: String }, // Plain text password for the file's own link (optional)
   expiry: { type: Date }, // Expiry date for the file's own link (optional)
   shareToken: { type: String, unique: true, sparse: true }, // Unique token for the file's own link
+  // The link only works while this is on. New files start private; turning it on is one switch.
+  shareEnabled: { type: Boolean, default: false },
 });
 
 xendriveFileSchema.index({ owner_id: 1, folder_id: 1 });
 
-// Every file has a share token so its link is one click away.
+// Every file has a share token ready, so turning its link on is instant. It does nothing until shareEnabled.
 xendriveFileSchema.pre("save", function (next) {
   if (!this.shareToken) this.shareToken = randomToken(16);
   next();

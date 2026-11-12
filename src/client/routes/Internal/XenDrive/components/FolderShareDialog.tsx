@@ -1,25 +1,34 @@
-import { Alert, Box, Button, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
+import { Box, Button, InputAdornment, Stack, Switch, TextField, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
+import LinkIcon from "@mui/icons-material/Link";
+import { alpha } from "@mui/material/styles";
 import { useSnackbar } from "notistack";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
-import { folderShareUrl, useXendriveActions } from "../../../../hooks/xendrive/useXendrive";
+import { folderShareUrl, useXendriveActions, useXendriveFolderStats } from "../../../../hooks/xendrive/useXendrive";
 import type { XenDriveFolder } from "../../../../types/XenDriveFile";
+import { folderContentsLabel } from "../lib/driveFormat";
 
 interface FolderShareDialogProps {
+  /** The folder being shared, kept current by the page behind. */
   folder: XenDriveFolder | null;
   onClose: () => void;
 }
 
-/** Turn a folder's public link on or off, copy it, or replace it with a new one. */
+/** Turn a folder's public link on or off, copy it, replace it, and see exactly what people would be able to see. */
 export default function FolderShareDialog({ folder, onClose }: FolderShareDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const { shareFolder } = useXendriveActions();
-  // The folder prop is a snapshot from the list; the mutation result is the live state.
+  const { data: stats } = useXendriveFolderStats(folder?._id ?? null);
+
+  // The page behind refetches after each change; the mutation result is a fallback until it has
   const fresh = shareFolder.data?.folder;
-  const live = fresh && folder && fresh._id === folder._id ? fresh : folder;
+  const live = fresh && folder && fresh._id === folder._id ? { ...folder, ...fresh } : folder;
   const url = live?.shareToken ? folderShareUrl(live.shareToken) : null;
+  const on = !!url;
   const busy = shareFolder.isPending;
 
   const act = (action: "enable" | "rotate" | "disable") =>
@@ -38,65 +47,118 @@ export default function FolderShareDialog({ folder, onClose }: FolderShareDialog
     if (ok) act("rotate");
   };
 
+  const stop = async () => {
+    const ok = await confirm({
+      title: "Stop sharing this folder?",
+      message: "Its link stops working right away.",
+      confirmLabel: "Stop sharing",
+    });
+    if (ok) act("disable");
+  };
+
   return (
     <ResponsiveDialog
       open={!!folder}
       onClose={onClose}
       maxWidth="sm"
-      title={`Share "${folder?.name ?? ""}"`}
+      title={`Share “${folder?.name ?? ""}”`}
       actions={<Button onClick={onClose}>Done</Button>}
     >
-      {url ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Alert severity="info">
-            Anyone with this link can open this folder and everything inside it, and download the files. They can't
-            change anything.
-          </Alert>
-          <TextField
-            fullWidth
-            value={url}
-            label="Link"
-            slotProps={{
-              input: {
-                readOnly: true,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="Copy link"
-                      edge="end"
-                      onClick={() => {
-                        navigator.clipboard.writeText(url);
-                        enqueueSnackbar("Link copied", { variant: "success" });
-                      }}
-                    >
-                      <ContentCopyIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
+      <Stack spacing={2.5}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.75, pb: 2, borderBottom: 1, borderColor: "divider" }}>
+          <Box
+            sx={(t) => ({
+              width: 40,
+              height: 40,
+              borderRadius: 2.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: t.palette.primary.main,
+              bgcolor: alpha(t.palette.primary.main, 0.16),
+            })}
+          >
+            <LinkIcon />
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontWeight: 500 }}>Anyone with the link</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Can view and download. Can’t change anything.
+            </Typography>
+          </Box>
+          <Switch
+            checked={on}
+            disabled={busy}
+            onChange={(e) => (e.target.checked ? act("enable") : stop())}
+            slotProps={{ input: { "aria-label": "Folder link" } }}
           />
-          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            <Button variant="outlined" onClick={rotate} disabled={busy}>
-              Make a new link
-            </Button>
-            <Button variant="outlined" color="error" onClick={() => act("disable")} disabled={busy}>
-              Stop sharing
-            </Button>
-          </Box>
         </Box>
-      ) : (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+
+        {on && url && (
+          <>
+            <TextField
+              fullWidth
+              value={url}
+              slotProps={{
+                htmlInput: { readOnly: true, "aria-label": "Folder link" },
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<ContentCopyIcon />}
+                        onClick={() => {
+                          navigator.clipboard.writeText(url);
+                          enqueueSnackbar("Link copied", { variant: "success" });
+                        }}
+                      >
+                        Copy link
+                      </Button>
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+
+            <Box sx={{ p: 2, borderRadius: 2.5, border: 1, borderColor: "divider" }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                What people can see
+              </Typography>
+              <Stack spacing={0.75}>
+                <Line ok>
+                  {stats ? folderContentsLabel(stats) : "Everything in this folder"}, including everything added later
+                </Line>
+                <Line ok>Files with a password or their own link off can still be downloaded through it</Line>
+                <Line>Nothing above “{folder?.name}” and nobody’s name</Line>
+              </Stack>
+            </Box>
+
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Button variant="outlined" onClick={rotate} disabled={busy}>
+                Make a new link
+              </Button>
+              <Button variant="outlined" color="error" onClick={stop} disabled={busy}>
+                Stop sharing
+              </Button>
+            </Box>
+          </>
+        )}
+        {!on && (
           <Typography color="text.secondary">
-            This folder is private. Turn on a link to let anyone with it view and download what is inside.
+            This folder is private. Turn the link on to let anyone with it open this folder and everything inside it.
           </Typography>
-          <Box>
-            <Button variant="contained" onClick={() => act("enable")} disabled={busy}>
-              Create link
-            </Button>
-          </Box>
-        </Box>
-      )}
+        )}
+      </Stack>
     </ResponsiveDialog>
+  );
+}
+
+function Line({ ok, children }: { ok?: boolean; children: React.ReactNode }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, color: ok ? "text.primary" : "text.secondary" }}>
+      {ok ? <CheckIcon fontSize="small" color="success" /> : <CloseIcon fontSize="small" />}
+      <Typography variant="body2">{children}</Typography>
+    </Box>
   );
 }
