@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
 import type {
   XenBudgetBook,
@@ -59,8 +59,7 @@ export function useXenBudgetImport(bookId: string) {
   // exactly the same code that the import will run. It writes nothing.
   const previewMutation = useMutation({
     mutationFn: async ({ items, skip_rules }: { items: ImportCandidate[]; skip_rules?: boolean }) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/items/preview`, { items, skip_rules });
-      return res.data.data as ImportPreviewResult;
+      return api.post<ImportPreviewResult>(`/api/xenbudget/books/${bookId}/items/preview`, { items, skip_rules });
     },
   });
 
@@ -73,16 +72,14 @@ export function useXenBudgetImport(bookId: string) {
 
   const importMutation = useMutation({
     mutationFn: async (request: BulkImportRequest) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/items/bulk`, request);
-      return res.data.data as BulkImportResult;
+      return api.post<BulkImportResult>(`/api/xenbudget/books/${bookId}/items/bulk`, request);
     },
     onSuccess: invalidate,
   });
 
   const undoMutation = useMutation({
     mutationFn: async (batchId: string) => {
-      const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/imports/${batchId}`);
-      return res.data.data as { deleted: number };
+      return api.delete<{ deleted: number }>(`/api/xenbudget/books/${bookId}/imports/${batchId}`);
     },
     onSuccess: () => {
       invalidate();
@@ -100,16 +97,14 @@ export function useXenBudgetImport(bookId: string) {
 
   const updatePresetMutation = useMutation({
     mutationFn: async ({ presetId, input }: { presetId: string; input: PresetInput }) => {
-      const res = await apiClient.put(`/api/xenbudget/books/${bookId}/import-presets/${presetId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`/api/xenbudget/books/${bookId}/import-presets/${presetId}`, input);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] }),
   });
 
   const deletePresetMutation = useMutation({
     mutationFn: async (presetId: string) => {
-      const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/import-presets/${presetId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`/api/xenbudget/books/${bookId}/import-presets/${presetId}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] }),
   });

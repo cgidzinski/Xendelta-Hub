@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { PaintType } from "@shared/recipaint/paints";
 
 /** A paint the user owns. The recipe-step shape (RecipePaint) is a snapshot of these fields. */
@@ -35,18 +34,15 @@ export const paintKeys = {
 };
 
 const fetchPaints = async (): Promise<CollectionPaint[]> => {
-  const response = await apiClient.get<ApiResponse<{ paints: CollectionPaint[] }>>("/api/paints");
-  return response.data.data!.paints;
+  return (await api.get<{ paints: CollectionPaint[] }>("/api/paints")).paints;
 };
 
 const createPaint = async (draft: PaintDraft): Promise<CollectionPaint> => {
-  const response = await apiClient.post<ApiResponse<{ paint: CollectionPaint }>>("/api/paints", draft);
-  return response.data.data!.paint;
+  return (await api.post<{ paint: CollectionPaint }>("/api/paints", draft)).paint;
 };
 
 const updatePaint = async ({ id, data }: { id: string; data: Partial<PaintDraft> }): Promise<CollectionPaint> => {
-  const response = await apiClient.put<ApiResponse<{ paint: CollectionPaint }>>(`/api/paints/${id}`, data);
-  return response.data.data!.paint;
+  return (await api.put<{ paint: CollectionPaint }>(`/api/paints/${id}`, data)).paint;
 };
 
 const deletePaint = async (id: string): Promise<void> => {

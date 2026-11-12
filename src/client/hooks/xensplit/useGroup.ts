@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import type { XenSplit } from "./types";
 import { splitDeleted } from "./splitDeleted";
 
@@ -9,8 +9,7 @@ export function useXenSplit(groupId: string) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["xensplit", "group", groupId],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xensplit/groups/${groupId}`);
-      return res.data.data as XenSplit;
+      return api.get<XenSplit>(`/api/xensplit/groups/${groupId}`);
     },
     // Keeps soft-deleted records out of group.expenses/settlements/exchanges for every
     // consumer, moving them to group.deleted for the views that reveal them.
@@ -32,12 +31,11 @@ export function useXenSplit(groupId: string) {
       default_currency?: string;
       secondary_currencies?: string[];
     }) => {
-      const res = await apiClient.put(`/api/xensplit/groups/${groupId}`, {
+      return api.put<XenSplit>(`/api/xensplit/groups/${groupId}`, {
         name,
         default_currency,
         secondary_currencies,
       });
-      return res.data.data as XenSplit;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
@@ -49,8 +47,7 @@ export function useXenSplit(groupId: string) {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("image", file);
-      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/image`, formData);
-      return res.data.data as XenSplit;
+      return api.post<XenSplit>(`/api/xensplit/groups/${groupId}/image`, formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
@@ -60,8 +57,7 @@ export function useXenSplit(groupId: string) {
 
   const addMembersMutation = useMutation({
     mutationFn: async (memberIds: string[]) => {
-      const res = await apiClient.post(`/api/xensplit/groups/${groupId}/members`, { memberIds });
-      return res.data.data as XenSplit;
+      return api.post<XenSplit>(`/api/xensplit/groups/${groupId}/members`, { memberIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { Recipe, RecipeSummary } from "../../types/Recipe";
 
 // Asset upload types
@@ -56,35 +55,31 @@ const PUBLIC_RECIPES_LIMIT = 24;
 const fetchRecipes = async (search?: string): Promise<RecipeSummary[]> => {
   const params: Record<string, string | number> = { limit: MY_RECIPES_LIMIT };
   if (search) params.search = search;
-  const response = await apiClient.get<ApiResponse<RecipesResponse>>("/api/recipaint", { params });
-  return response.data.data!.recipes;
+  return (await api.get<RecipesResponse>("/api/recipaint", { params })).recipes;
 };
 
 const fetchPublicRecipes = async (): Promise<RecipeSummary[]> => {
-  const response = await apiClient.get<ApiResponse<RecipesResponse>>("/api/recipaint/public", {
-    params: { limit: PUBLIC_RECIPES_LIMIT },
-  });
-  return response.data.data!.recipes;
+  return (
+    await api.get<RecipesResponse>("/api/recipaint/public", {
+      params: { limit: PUBLIC_RECIPES_LIMIT },
+    })
+  ).recipes;
 };
 
 const fetchRecipe = async (id: string): Promise<Recipe> => {
-  const response = await apiClient.get<ApiResponse<RecipeResponse>>(`/api/recipaint/${id}`);
-  return response.data.data!.recipe;
+  return (await api.get<RecipeResponse>(`/api/recipaint/${id}`)).recipe;
 };
 
 const createRecipe = async (data: CreateRecipeData): Promise<Recipe> => {
-  const response = await apiClient.post<ApiResponse<RecipeResponse>>("/api/recipaint", data);
-  return response.data.data!.recipe;
+  return (await api.post<RecipeResponse>("/api/recipaint", data)).recipe;
 };
 
 const fetchPublicRecipe = async (id: string): Promise<Recipe> => {
-  const response = await apiClient.get<ApiResponse<RecipeResponse>>(`/api/recipaint/public/${id}`);
-  return response.data.data!.recipe;
+  return (await api.get<RecipeResponse>(`/api/recipaint/public/${id}`)).recipe;
 };
 
 const updateRecipe = async ({ id, data }: { id: string; data: UpdateRecipeData }): Promise<Recipe> => {
-  const response = await apiClient.put<ApiResponse<RecipeResponse>>(`/api/recipaint/${id}`, data);
-  return response.data.data!.recipe;
+  return (await api.put<RecipeResponse>(`/api/recipaint/${id}`, data)).recipe;
 };
 
 const deleteRecipe = async (id: string): Promise<void> => {
@@ -95,11 +90,7 @@ const uploadRecipaintAsset = async (file: File): Promise<RecipaintAssetUploadRes
   const formData = new FormData();
   formData.append("asset", file);
 
-  const response = await apiClient.post<ApiResponse<RecipaintAssetUploadResponse>>(
-    "/api/recipaint/upload-asset",
-    formData,
-  );
-  return response.data.data!;
+  return api.post<RecipaintAssetUploadResponse>("/api/recipaint/upload-asset", formData);
 };
 
 const deleteRecipaintAsset = async (assetUrl: string): Promise<void> => {
@@ -254,8 +245,7 @@ export const useDeleteRecipe = () => {
 };
 
 const cloneRecipe = async (id: string): Promise<Recipe> => {
-  const response = await apiClient.post<ApiResponse<RecipeResponse>>(`/api/recipaint/${id}/clone`);
-  return response.data.data!.recipe;
+  return (await api.post<RecipeResponse>(`/api/recipaint/${id}/clone`)).recipe;
 };
 
 export const useCloneRecipe = () => {

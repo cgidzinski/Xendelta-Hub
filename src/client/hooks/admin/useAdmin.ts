@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 
 // Types
@@ -23,8 +23,7 @@ export const adminKeys = {
 
 // API functions
 const fetchAdminRole = async (): Promise<string[]> => {
-  const response = await apiClient.get<ApiResponse<RolesResponse>>("/api/auth/roles/verify");
-  return response.data.data!.roles;
+  return (await api.get<RolesResponse>("/api/auth/roles/verify")).roles;
 };
 
 const sendNotificationToAllUsers = async (
@@ -48,8 +47,7 @@ const sendNotificationToAllUsers = async (
 };
 
 const deleteAllMessagesData = async (): Promise<DeleteMessagesResponse> => {
-  const response = await apiClient.delete<ApiResponse<DeleteMessagesResponse>>("/api/admin/messages/all");
-  return response.data.data!;
+  return api.delete<DeleteMessagesResponse>("/api/admin/messages/all");
 };
 
 const triggerServerErrorRequest = async (): Promise<void> => {

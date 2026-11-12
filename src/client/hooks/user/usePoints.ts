@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { useSnackbar } from "notistack";
 import { userProfileKeys } from "./useUserProfile";
@@ -38,8 +38,7 @@ export const pointsShopItemsKeys = {
 
 // API functions
 const fetchPointsShopItems = async (): Promise<PointsShopItem[]> => {
-  const response = await apiClient.get<ApiResponse<PointsShopItemsResponse>>("/api/points/shop");
-  return response.data.data!.items;
+  return (await api.get<PointsShopItemsResponse>("/api/points/shop")).items;
 };
 
 const buyPointsItem = async (item: PointsShopItem): Promise<BuyPointsItemResponse> => {

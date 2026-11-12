@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { userProfileKeys } from "./useUserProfile";
 
 // Types
@@ -72,15 +71,11 @@ export const userMessagesKeys = {
 
 // API functions
 const fetchUserConversations = async (): Promise<Conversation[]> => {
-  const response = await apiClient.get<ApiResponse<{ conversations: Conversation[] }>>("/api/user/messages");
-  return response.data.data!.conversations;
+  return (await api.get<{ conversations: Conversation[] }>("/api/user/messages")).conversations;
 };
 
 const fetchConversationById = async (conversationId: string): Promise<Conversation> => {
-  const response = await apiClient.get<ApiResponse<{ conversation: Conversation }>>(
-    `/api/user/messages/${conversationId}`,
-  );
-  return response.data.data!.conversation;
+  return (await api.get<{ conversation: Conversation }>(`/api/user/messages/${conversationId}`)).conversation;
 };
 
 const markConversationAsRead = async (conversationId: string): Promise<void> => {
@@ -92,21 +87,20 @@ const sendMessageToConversation = async (
   message: string,
   parentMessageId?: string,
 ): Promise<Message> => {
-  const response = await apiClient.post<ApiResponse<{ message: Message }>>(`/api/user/messages/${conversationId}`, {
-    message,
-    parentMessageId,
-  });
-  return response.data.data!.message;
+  return (
+    await api.post<{ message: Message }>(`/api/user/messages/${conversationId}`, {
+      message,
+      parentMessageId,
+    })
+  ).message;
 };
 
 const replyToMessage = async (conversationId: string, messageId: string, message: string): Promise<Message> => {
-  const response = await apiClient.post<ApiResponse<{ message: Message }>>(
-    `/api/user/messages/${conversationId}/reply/${messageId}`,
-    {
+  return (
+    await api.post<{ message: Message }>(`/api/user/messages/${conversationId}/reply/${messageId}`, {
       message,
-    },
-  );
-  return response.data.data!.message;
+    })
+  ).message;
 };
 
 const deleteMessageFromConversation = async (conversationId: string, messageId: string): Promise<void> => {
@@ -114,46 +108,46 @@ const deleteMessageFromConversation = async (conversationId: string, messageId: 
 };
 
 const createNewConversation = async (participants: string[], message?: string): Promise<Conversation> => {
-  const response = await apiClient.post<ApiResponse<{ conversation: Conversation }>>("/api/user/messages", {
-    participants,
-    message,
-  });
-  return response.data.data!.conversation;
+  return (
+    await api.post<{ conversation: Conversation }>("/api/user/messages", {
+      participants,
+      message,
+    })
+  ).conversation;
 };
 
 const addParticipantsToConversation = async (
   conversationId: string,
   participantIds: string[],
 ): Promise<Conversation> => {
-  const response = await apiClient.post<ApiResponse<{ conversation: Conversation }>>(
-    `/api/user/messages/${conversationId}/participants`,
-    {
+  return (
+    await api.post<{ conversation: Conversation }>(`/api/user/messages/${conversationId}/participants`, {
       participantIds,
-    },
-  );
-  return response.data.data!.conversation;
+    })
+  ).conversation;
 };
 
 const removeParticipantFromConversation = async (
   conversationId: string,
   participantId: string,
 ): Promise<Conversation> => {
-  const response = await apiClient.delete<ApiResponse<{ conversation: Conversation }>>(
-    `/api/user/messages/${conversationId}/participants/${participantId}`,
-  );
-  return response.data.data!.conversation;
+  return (
+    await api.delete<{ conversation: Conversation }>(
+      `/api/user/messages/${conversationId}/participants/${participantId}`,
+    )
+  ).conversation;
 };
 
 const updateConversationNameFn = async (conversationId: string, name: string): Promise<boolean> => {
-  const response = await apiClient.put<ApiResponse<{ status: boolean }>>(`/api/user/messages/${conversationId}/name`, {
-    name,
-  });
-  return response.data.data!.status;
+  return (
+    await api.put<{ status: boolean }>(`/api/user/messages/${conversationId}/name`, {
+      name,
+    })
+  ).status;
 };
 
 const leaveConversationFn = async (conversationId: string): Promise<boolean> => {
-  const response = await apiClient.post<ApiResponse<{ status: boolean }>>(`/api/user/messages/${conversationId}/leave`);
-  return response.data.data!.status;
+  return (await api.post<{ status: boolean }>(`/api/user/messages/${conversationId}/leave`)).status;
 };
 
 // Hooks

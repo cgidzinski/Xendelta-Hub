@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { api } from "../../config/api";
 import type { XenSplitLogPage } from "./types";
 
 /**
@@ -13,10 +13,9 @@ export function useXenSplitGroupLog(groupId: string, enabled: boolean) {
   const query = useInfiniteQuery({
     queryKey: ["xensplit", "group", groupId, "log"],
     queryFn: async ({ pageParam }) => {
-      const res = await apiClient.get(`/api/xensplit/groups/${groupId}/log`, {
+      return api.get<XenSplitLogPage>(`/api/xensplit/groups/${groupId}/log`, {
         params: pageParam ? { before: pageParam } : {},
       });
-      return res.data.data as XenSplitLogPage;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextBefore ?? undefined,

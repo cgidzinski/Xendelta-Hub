@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 import { PaintType } from "@shared/recipaint/paints";
 
 /** An entry in the shared catalogue. Read-only: it comes from a committed JSON, not the DB. */
@@ -28,16 +27,17 @@ export const paintCatalogueKeys = {
 };
 
 const searchCatalogue = async (q: string, brand: string, range: string): Promise<CataloguePaint[]> => {
-  const response = await apiClient.get<ApiResponse<{ paints: CataloguePaint[] }>>("/api/paint-catalogue", {
-    params: {
-      ...(q ? { q } : {}),
-      ...(brand ? { brand } : {}),
-      ...(range ? { range } : {}),
-      // Browsing a whole range with no query needs more than a default page.
-      limit: 50,
-    },
-  });
-  return response.data.data!.paints;
+  return (
+    await api.get<{ paints: CataloguePaint[] }>("/api/paint-catalogue", {
+      params: {
+        ...(q ? { q } : {}),
+        ...(brand ? { brand } : {}),
+        ...(range ? { range } : {}),
+        // Browsing a whole range with no query needs more than a default page.
+        limit: 50,
+      },
+    })
+  ).paints;
 };
 
 /**
@@ -71,8 +71,7 @@ export function usePaintCatalogueBrands(enabled = true) {
   const { data } = useQuery({
     queryKey: paintCatalogueKeys.brands(),
     queryFn: async () => {
-      const response = await apiClient.get<ApiResponse<{ brands: CatalogueBrand[] }>>("/api/paint-catalogue/brands");
-      return response.data.data!.brands;
+      return (await api.get<{ brands: CatalogueBrand[] }>("/api/paint-catalogue/brands")).brands;
     },
     enabled,
     // Generated from a committed file - it only changes when the app is redeployed.

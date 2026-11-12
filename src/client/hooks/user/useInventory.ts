@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { useSnackbar } from "notistack";
 import { userProfileKeys } from "./useUserProfile";
@@ -34,8 +34,7 @@ interface UseInventoryReturn {
 }
 
 const fetchInventory = async (): Promise<InventoryItem[]> => {
-  const response = await apiClient.get<ApiResponse<InventoryResponse>>("/api/user/inventory");
-  return response.data.data!.inventory;
+  return (await api.get<InventoryResponse>("/api/user/inventory")).inventory;
 };
 
 const redeemInventoryItem = async (inventoryItemId: string): Promise<boolean> => {

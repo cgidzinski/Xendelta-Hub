@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { userProfileKeys } from "../user/useUserProfile";
 
 // Types
@@ -39,8 +38,7 @@ export const adminUsersKeys = {
 
 // API functions
 const fetchUsers = async (): Promise<User[]> => {
-  const response = await apiClient.get<ApiResponse<UsersResponse>>("/api/admin/users");
-  return response.data.data!.users;
+  return (await api.get<UsersResponse>("/api/admin/users")).users;
 };
 
 const updateUser = async (userId: string, updates: { roles?: string[]; xenboxQuota?: number }): Promise<void> => {
@@ -76,11 +74,8 @@ const sendUserNotification = async (
   userId: string,
   data: { title: string; message: string; link?: string; channels: NotifyChannel[] },
 ): Promise<SendUserNotificationResult> => {
-  const response = await apiClient.post<ApiResponse<{ result: SendUserNotificationResult }>>(
-    `/api/admin/notifications/user/${userId}`,
-    data,
-  );
-  return response.data.data!.result;
+  return (await api.post<{ result: SendUserNotificationResult }>(`/api/admin/notifications/user/${userId}`, data))
+    .result;
 };
 
 // Hooks

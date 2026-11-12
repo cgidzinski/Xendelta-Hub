@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { api } from "../../config/api";
 import { scaleBudgetToRange } from "../../routes/Internal/XenBudget/components/budget/scaleBudgetToRange";
 import { normalizedAmounts } from "../../routes/Internal/XenBudget/components/budget/periodDisplay";
 import type { XenBudgetBook, BudgetInput, BudgetStatusResponse } from "./types";
@@ -29,14 +29,13 @@ export function useXenBudgetStatus(bookId: string, currency?: string, range?: Bu
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["xenbudget", "budget-status", bookId, currency, from, to, history],
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xenbudget/books/${bookId}/budget-status`, {
+      return api.get<BudgetStatusResponse>(`/api/xenbudget/books/${bookId}/budget-status`, {
         params: {
           ...(currency ? { currency } : {}),
           ...(from !== undefined && to !== undefined ? { from, to } : {}),
           ...(history ? { history } : {}),
         },
       });
-      return res.data.data as BudgetStatusResponse;
     },
     enabled: !!bookId,
     staleTime: 0,
@@ -78,24 +77,21 @@ export function useXenBudgetBudgets(bookId: string) {
 
   const createMutation = useMutation({
     mutationFn: async (input: BudgetInput) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/budgets`, input);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(`/api/xenbudget/books/${bookId}/budgets`, input);
     },
     onSuccess: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ budgetId, input }: { budgetId: string; input: BudgetInput }) => {
-      const res = await apiClient.put(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`, input);
     },
     onSuccess: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (budgetId: string) => {
-      const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`/api/xenbudget/books/${bookId}/budgets/${budgetId}`);
     },
     onSuccess: invalidate,
   });

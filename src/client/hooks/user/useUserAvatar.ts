@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 import { userProfileKeys } from "./useUserProfile";
 
 // Types
@@ -23,13 +22,11 @@ const uploadAvatar = async (file: File): Promise<AvatarUploadResponseData> => {
   const formData = new FormData();
   formData.append("avatar", file);
 
-  const response = await apiClient.post<ApiResponse<AvatarUploadResponseData>>("/api/user/avatar", formData);
-  return response.data.data!;
+  return api.post<AvatarUploadResponseData>("/api/user/avatar", formData);
 };
 
 const makeAdmin = async (): Promise<MakeAdminResponse> => {
-  const response = await apiClient.post<ApiResponse<MakeAdminResponse>>("/api/user/make-admin");
-  return response.data.data!;
+  return api.post<MakeAdminResponse>("/api/user/make-admin");
 };
 
 // Hooks

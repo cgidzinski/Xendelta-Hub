@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 import { userProfileKeys } from "./useUserProfile";
 
 interface PinnedAppsResponse {
@@ -13,8 +12,7 @@ interface UpdatePinnedAppsData {
 }
 
 const updatePinnedApps = async (data: UpdatePinnedAppsData): Promise<PinnedAppsResponse> => {
-  const response = await apiClient.put<ApiResponse<PinnedAppsResponse>>("/api/user/pinned-apps", data);
-  return response.data.data!;
+  return api.put<PinnedAppsResponse>("/api/user/pinned-apps", data);
 };
 
 export const usePinnedApps = () => {

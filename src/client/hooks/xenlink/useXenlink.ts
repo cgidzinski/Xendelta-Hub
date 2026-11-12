@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 import { enqueueSnackbar, useSnackbar } from "notistack";
 import { userProfileKeys } from "../user/useUserProfile";
 
@@ -29,23 +28,19 @@ export const xenLinkKeys = {
 // API functions
 const fetchXenLink = async (search?: string): Promise<XenLink[]> => {
   const params = search ? { search } : {};
-  const response = await apiClient.get<ApiResponse<XenLinksResponse>>("/api/xenlink/list", { params });
-  return response.data.data!.links;
+  return (await api.get<XenLinksResponse>("/api/xenlink/list", { params })).links;
 };
 
 const createXenLink = async (link: XenLink): Promise<XenLink> => {
-  const response = await apiClient.post<ApiResponse<XenLink>>(`/api/xenlink`, link);
-  return response.data.data!;
+  return api.post<XenLink>(`/api/xenlink`, link);
 };
 
 const updateXenLink = async (link: XenLink): Promise<XenLink> => {
-  const response = await apiClient.put<ApiResponse<XenLink>>(`/api/xenlink`, link);
-  return response.data.data!;
+  return api.put<XenLink>(`/api/xenlink`, link);
 };
 
 const deleteXenLink = async (linkId: string): Promise<XenLink> => {
-  const response = await apiClient.delete<ApiResponse<XenLink>>(`/api/xenlink/${linkId}`);
-  return response.data.data!;
+  return api.delete<XenLink>(`/api/xenlink/${linkId}`);
 };
 
 // Hooks
