@@ -74,7 +74,7 @@ async function uploadForChat(me: U, conversationId: string, name = "plan.pdf") {
 }
 
 describe("chat uploads", () => {
-  it("stores a tagged XenDrive file that counts toward the quota but stays out of the drive's lists", async () => {
+  it("stores a tagged XenDrive file that doesn't count toward the quota and shows in the drive for now", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
@@ -82,22 +82,20 @@ describe("chat uploads", () => {
     const stored = await mongoose.model("XenDriveFile").findById(fileId).lean<any>();
     expect(stored.source).toEqual({ app: "chat", ref: chatId });
     expect(stored.folder_id).toBeNull();
+    expect(stored.counted).toBe(false);
 
-    // Not in My Drive, search, recent or shared...
+    // While SHOW_APP_FILES_IN_DRIVE is on it is in My Drive, search and recent too (marked as an app's file)...
     const root = await request(t.app).get("/api/xendrive/browse").set(as(a.token));
-    expect(root.body.data.files).toHaveLength(0);
+    expect(root.body.data.files).toHaveLength(1);
+    expect(root.body.data.files[0]).toMatchObject({ _id: fileId, counted: false, source: { app: "chat" } });
     expect(
       (await request(t.app).get("/api/xendrive/browse?search=plan").set(as(a.token))).body.data.files,
-    ).toHaveLength(0);
-    expect(
-      (await request(t.app).get("/api/xendrive/browse?view=recent").set(as(a.token))).body.data.files,
-    ).toHaveLength(0);
+    ).toHaveLength(1);
 
-    // ...but it counts toward their storage, and the overview says how much apps hold.
+    // ...but it doesn't use their storage, and the overview says how much apps hold.
     const overview = (await request(t.app).get("/api/xendrive/recent").set(as(a.token))).body.data;
-    expect(overview.files).toHaveLength(0);
-    expect(overview.fileCount).toBe(1);
-    expect(overview.spaceUsed).toBe(6);
+    expect(overview.fileCount).toBe(0);
+    expect(overview.spaceUsed).toBe(0);
     expect(overview.appFiles).toEqual({ count: 1, size: 6 });
 
     // And it is listed under From apps, grouped by chat, named for the reader.

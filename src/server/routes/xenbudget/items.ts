@@ -13,8 +13,9 @@ import {
 import { resolveCategories, computeImportHash, roundMoney } from "../../utils/xenBudgetUtils";
 import { MAX_XENBUDGET_IMAGES_PER_ITEM } from "../../constants";
 import { uploadXenBudgetImages } from "../../config/multer";
-import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../../utils/gcsUtils";
-import { generateUniqueFilename } from "../../utils/mediaUtils";
+import { generateSignedUrl } from "../../utils/gcsUtils";
+import { storeAppFiles, removeAppFiles, signedUrlsFor } from "../../utils/appFiles";
+import { XENBUDGET_SOURCE, removeItemPhotos } from "../../utils/xenBudgetFiles";
 import { applyRules, normalizeFlagNames, withDerivedUncategorised } from "../../utils/xenBudgetRules";
 import { merchantMatchPattern } from "../../utils/xenBudgetRecurring";
 import { serializeItem, serializeItems } from "../../utils/xenBudgetSerializer";
@@ -475,10 +476,11 @@ export function registerItemRoutes(app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        const result = await XenBudgetItem.deleteOne({ _id: req.params.itemId, book_id: book._id });
-        if (result.deletedCount === 0) {
+        const item = await XenBudgetItem.findOneAndDelete({ _id: req.params.itemId, book_id: book._id });
+        if (!item) {
           return res.status(404).json({ status: false, message: "Item not found" });
         }
+        await removeItemPhotos(item.images ?? []);
         broadcastBook(book);
         res.json({ status: true, message: "Item deleted" });
       } catch (error) {
@@ -512,14 +514,20 @@ export function registerItemRoutes(app: any) {
             .json({ status: false, message: `Cannot exceed ${MAX_XENBUDGET_IMAGES_PER_ITEM} images per item` });
         }
 
-        for (const file of files) {
-          const filename = generateUniqueFilename(file.originalname);
-          const gcsPath = `xenbudget-images/${req.params.bookId}/${req.params.itemId}/${filename}`;
-          await uploadToGCS(file.buffer, gcsPath, file.mimetype, true);
-          item.images.push({ gcs_path: gcsPath });
+        // Stored as XenDrive files owned by the uploader (tagged to this book); all or nothing.
+        const userId = callerId(req);
+        const stored = await storeAppFiles(
+          userId,
+          { app: XENBUDGET_SOURCE, ref: req.params.bookId as string },
+          files.map((file) => ({ buffer: file.buffer, name: file.originalname, mimeType: file.mimetype })),
+        );
+        for (const file of stored) item.images.push({ file_id: file._id, uploaded_by: userId });
+        try {
+          await item.save();
+        } catch (error) {
+          await removeAppFiles(stored.map((f) => f._id));
+          throw error;
         }
-
-        await item.save();
         broadcastBook(book);
         res.json({ status: true, message: "Images uploaded", data: serializeItem(item) });
       } catch (error) {
@@ -545,7 +553,7 @@ export function registerItemRoutes(app: any) {
           return res.status(404).json({ status: false, message: "Image not found" });
         }
 
-        await deleteFromGCS(item.images[imageIndex].gcs_path, true).catch(() => {});
+        await removeItemPhotos([item.images[imageIndex]]);
         item.images.splice(imageIndex, 1);
         await item.save();
         broadcastBook(book);
@@ -572,12 +580,23 @@ export function registerItemRoutes(app: any) {
           return res.json({ status: true, data: [] });
         }
 
-        const signedUrls = await Promise.all(
-          item.images.map(async (img: any) => ({
-            _id: img._id.toString(),
-            signedUrl: await generateSignedUrl(img.gcs_path, 15),
-          })),
+        const fileUrls = await signedUrlsFor(
+          item.images.filter((img: any) => img.file_id).map((img: any) => img.file_id),
+          15,
         );
+        const signedUrls = (
+          await Promise.all(
+            item.images.map(async (img: any) => ({
+              _id: img._id.toString(),
+              // Photos not yet moved to XenDrive still have a storage path.
+              signedUrl: img.file_id
+                ? fileUrls.get(String(img.file_id))
+                : img.gcs_path
+                  ? await generateSignedUrl(img.gcs_path, 15)
+                  : undefined,
+            })),
+          )
+        ).filter((u): u is { _id: string; signedUrl: string } => !!u.signedUrl);
 
         res.json({ status: true, data: signedUrls });
       } catch (error) {

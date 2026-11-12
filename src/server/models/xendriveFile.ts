@@ -24,6 +24,9 @@ const xendriveFileSchema = new Schema({
     app: { type: String },
     ref: { type: String },
   },
+  // Does this file count toward the owner's storage quota? Files uploaded straight to XenDrive do. Files an app stored
+  // for the person are tagged but, for now, exempt (docs/storage.md). Rows that predate the flag have none and count.
+  counted: { type: Boolean, default: true },
 });
 
 xendriveFileSchema.index({ owner_id: 1, folder_id: 1 });

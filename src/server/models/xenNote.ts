@@ -41,8 +41,18 @@ const noteSchema = new Schema({
   title: { type: String, default: "", maxlength: MAX_TITLE },
   body: { type: String, default: "", maxlength: MAX_BODY },
   checklist: { type: [checklistItemSchema], default: [] },
-  // Photos live in the private bucket; clients get short-lived signed URLs.
-  images: { type: [{ gcs_path: { type: String, required: true } }], default: [] },
+  // Each photo is a XenDriveFile owned by whoever uploaded it (source `xennote`, ref = this note); clients get
+  // short-lived signed URLs. `gcs_path` is a photo from before that; the migration fills `file_id` and it goes away.
+  images: {
+    type: [
+      {
+        file_id: { type: Schema.Types.ObjectId, ref: "XenDriveFile" },
+        uploaded_by: { type: String },
+        gcs_path: { type: String },
+      },
+    ],
+    default: [],
+  },
   link: {
     url: { type: String, default: "", maxlength: MAX_URL_LENGTH },
     title: { type: String, default: "", maxlength: MAX_TITLE },

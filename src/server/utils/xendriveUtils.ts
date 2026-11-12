@@ -14,6 +14,7 @@ import { XenDriveFolder } from "../models/xendriveFolder";
 import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
+import { driveSourceApp } from "./driveSources";
 
 const gcsFileFor = (storagePath: string) => privateBucket.file(storagePath);
 
@@ -180,6 +181,11 @@ export async function finalizeChunkedUpload(
   const fileSize = parseInt(String(metadata.size ?? "0"), 10);
   const contentType = metadata.contentType || detectContentType(session.filename);
 
+  // An app's file counts only if that app says so for this ref (utils/driveSources.ts). Direct uploads always count.
+  const counted = session.source_app
+    ? ((await driveSourceApp(session.source_app)?.counts(session.source_ref ?? "")) ?? true)
+    : true;
+
   const saved = await new XenDriveFile({
     owner_id: session.user_id,
     folder_id: session.folder_id || null,
@@ -187,6 +193,7 @@ export async function finalizeChunkedUpload(
     storage_path: storagePath,
     mimeType: contentType,
     size: fileSize,
+    counted,
     ...(session.source_app ? { source: { app: session.source_app, ref: session.source_ref } } : {}),
   }).save();
 
@@ -239,10 +246,13 @@ export async function cleanupOldSessions(): Promise<void> {
   await Promise.all(stale.map((s) => cleanupFailedUpload(s.upload_id)));
 }
 
+/** Only files that count toward storage. Files an app stored for the person may be exempt (`counted: false`). */
+const countedOnly = { counted: { $ne: false } } as const;
+
 /** How much space and how many files a person's drive holds. */
 export async function usageFor(userId: string): Promise<{ fileCount: number; spaceUsed: number }> {
   const [row] = await XenDriveFile.aggregate<{ _id: null; fileCount: number; spaceUsed: number }>([
-    { $match: { owner_id: new Types.ObjectId(userId) } },
+    { $match: { owner_id: new Types.ObjectId(userId), ...countedOnly } },
     { $group: { _id: null, fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
   ]);
   return { fileCount: row?.fileCount ?? 0, spaceUsed: row?.spaceUsed ?? 0 };
@@ -251,6 +261,7 @@ export async function usageFor(userId: string): Promise<{ fileCount: number; spa
 /** Usage for every owner in one pass (the admin user list). */
 export async function usageForAll(): Promise<Map<string, { fileCount: number; spaceUsed: number }>> {
   const rows = await XenDriveFile.aggregate<{ _id: Types.ObjectId; fileCount: number; spaceUsed: number }>([
+    { $match: countedOnly },
     { $group: { _id: "$owner_id", fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
   ]);
   return new Map(rows.map((r) => [r._id.toString(), { fileCount: r.fileCount, spaceUsed: r.spaceUsed }]));

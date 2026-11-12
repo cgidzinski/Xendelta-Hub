@@ -239,11 +239,10 @@ export interface XenBudgetCategoryWeight {
   percentage?: number;
 }
 
-/** A receipt photo attached to an item. Only the GCS path is stored; display URLs are
+/** A receipt photo attached to an item. It is a XenDrive file; display URLs are
  *  resolved on demand via the signed-URL endpoint (see useXenBudgetItemImageUrls). */
 export interface XenBudgetItemImage {
   _id: string;
-  gcs_path: string;
 }
 
 export interface XenBudgetItem {

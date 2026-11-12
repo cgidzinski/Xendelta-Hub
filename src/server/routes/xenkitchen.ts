@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { publicBucket } from "../config/gcs";
 import sharp from "sharp";
-import crypto from "crypto";
 import { z } from "zod";
 import { XenKitchenBook, XenKitchenCategory, XenKitchenItem } from "../models/xenKitchen";
 import { User } from "../models/user";
@@ -9,7 +7,9 @@ import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { uploadXenKitchenImages } from "../config/multer";
 import { MAX_XENKITCHEN_IMAGES } from "../constants";
-import { uploadToGCS, deleteFromGCS } from "../utils/gcsUtils";
+import { storeAppFiles, copyAppFiles, removeAppFiles } from "../utils/appFiles";
+import { XENKITCHEN_SOURCE, removeKitchenPhotos, withPhotoUrls } from "../utils/xenKitchenFiles";
+import { AppError } from "../utils/http";
 import { notify } from "../utils/notificationUtils";
 import {
   validate,
@@ -62,12 +62,16 @@ const fail = (res: Response, code: number, message: string) => res.status(code).
 const handle =
   (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, _next: NextFunction) =>
     fn(req, res).catch((err) => {
+      // A deliberate refusal (not enough storage, a photo that can't be read) says why.
+      if (err instanceof AppError) return fail(res, err.status, err.message);
       console.error(">>> XenKitchen error:", err);
       if (!res.headersSent) fail(res, 500, "Something went wrong");
     });
 
+/** The file's name with the extension of what it was re-encoded to ("IMG_1.heic" → "IMG_1.webp"). */
+const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
+
 const IMAGE_MAX_EDGE = 1600;
-const IMMUTABLE_CACHE = "public, max-age=31536000, immutable";
 const validIcon = (icon?: string) => (CATEGORY_ICONS as readonly string[]).includes(icon ?? "");
 
 // ---------- books ----------
@@ -174,7 +178,8 @@ async function categoriesForBooks(bookIds: any[]) {
 }
 
 /** Serializes items for the caller, with book names, roles and who added them. */
-async function serializeFor(uid: string, items: any[], books: any[]) {
+async function serializeFor(uid: string, rawItems: any[], books: any[]) {
+  const items = await withPhotoUrls(rawItems.map((i) => (typeof i.toObject === "function" ? i.toObject() : i)));
   const { map } = await categoriesForBooks(books.map((b) => b._id));
   const people = await usernamesFor(items.flatMap((i) => [i.created_by, i.updated_by]));
   const usernames = new Map([...people].map(([id, u]) => [id, u.username]));
@@ -222,9 +227,6 @@ async function processImage(file: Express.Multer.File): Promise<{ buffer: Buffer
   return { buffer, contentType: "image/webp", ext: "webp" };
 }
 
-const deleteImages = (images: Array<{ gcs_path: string }>) =>
-  Promise.all(images.map((img) => deleteFromGCS(img.gcs_path, false).catch(() => {})));
-
 const categoryBelongs = async (bookId: any, categoryId: unknown) =>
   !categoryId || !!(await XenKitchenCategory.exists({ _id: categoryId, book_id: bookId }));
 
@@ -247,17 +249,23 @@ async function cloneItem(src: any, bookId: any, uid: string, categoryId: any, ti
     created_by: uid,
     updated_by: uid,
   });
-  for (const img of src.images || []) {
-    const name = img.gcs_path.split("/").pop();
-    const dest = `xenkitchen/${bookId}/${copy._id}/${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${name}`;
-    try {
-      await publicBucket.file(img.gcs_path).copy(publicBucket.file(dest));
-      copy.images.push({ gcs_path: dest, url: `https://storage.googleapis.com/${publicBucket.name}/${dest}` });
-    } catch (e) {
-      console.error(">>> XenKitchen photo copy failed:", img.gcs_path, e);
-    }
-  }
+  // The copy is saved first: its photos are tagged to it, and a photo can only be stored for an item that exists.
   await copy.save();
+  // Every copy gets its own photos, owned by whoever made the copy, so deleting one item never touches another's.
+  const origins = (src.images || []).flatMap((img: any): Array<{ fileId: string } | { publicPath: string }> =>
+    img.file_id ? [{ fileId: String(img.file_id) }] : img.gcs_path ? [{ publicPath: img.gcs_path }] : [],
+  );
+  try {
+    const photos = await copyAppFiles(uid, { app: XENKITCHEN_SOURCE, ref: String(copy._id) }, origins);
+    if (photos.length > 0) {
+      for (const file of photos) copy.images.push({ file_id: file._id, uploaded_by: uid });
+      await copy.save();
+    }
+  } catch (error) {
+    // Not enough storage for the photos: no half-copied item either.
+    await copy.deleteOne();
+    throw error;
+  }
   return copy;
 }
 
@@ -300,10 +308,11 @@ module.exports = function (app: any) {
       if (!item) return fail(res, 404, "This link isn't available");
       const { map } = await categoriesForBooks([item.book_id]);
       const creator = item.created_by ? await User.findById(item.created_by, "username").lean().exec() : null;
+      const [shown] = await withPhotoUrls([item]);
       res.json({
         status: true,
         message: "OK",
-        data: { item: serializeItem(item, map, { isPublic: true }), owner: creator?.username ?? null },
+        data: { item: serializeItem(shown, map, { isPublic: true }), owner: creator?.username ?? null },
       });
     }),
   );
@@ -334,7 +343,7 @@ module.exports = function (app: any) {
             color: c.color,
             layout: c.layout,
           })),
-          items: items.map((i: any) => serializeItem(i, map, { isPublic: true })),
+          items: (await withPhotoUrls(items)).map((i: any) => serializeItem(i, map, { isPublic: true })),
         },
       });
     }),
@@ -350,10 +359,11 @@ module.exports = function (app: any) {
         : null;
       if (!book || !item) return fail(res, 404, "This link isn't available");
       const { map } = await categoriesForBooks([book._id]);
+      const [shown] = await withPhotoUrls([item]);
       res.json({
         status: true,
         message: "OK",
-        data: { item: serializeItem(item, map, { isPublic: true }), owner: null, book: { name: book.name } },
+        data: { item: serializeItem(shown, map, { isPublic: true }), owner: null, book: { name: book.name } },
       });
     }),
   );
@@ -443,7 +453,7 @@ module.exports = function (app: any) {
       await XenKitchenItem.deleteMany({ book_id: book._id }).exec();
       await XenKitchenCategory.deleteMany({ book_id: book._id }).exec();
       await book.deleteOne();
-      await deleteImages(items.flatMap((i: any) => i.images || []));
+      await removeKitchenPhotos(items.flatMap((i: any) => i.images || []));
       await ensureBooks(uid);
       res.json({ status: true, message: "Book deleted" });
     }),
@@ -821,7 +831,7 @@ module.exports = function (app: any) {
       const { ids } = xenKitchenBulkDeleteSchema.parse(req.body);
       const items = await editableIds(uid, ids);
       await XenKitchenItem.deleteMany({ _id: { $in: items.map((i) => i._id) } }).exec();
-      await deleteImages(items.flatMap((i) => i.images || []));
+      await removeKitchenPhotos(items.flatMap((i) => i.images || []));
       res.json({ status: true, message: `Deleted ${items.length}`, data: { deleted: items.length } });
     }),
   );
@@ -870,9 +880,9 @@ module.exports = function (app: any) {
     handle(async (req, res) => {
       const loaded = await loadItem(req, res, "edit");
       if (!loaded) return;
-      const images = loaded.item.images.map((i: any) => ({ gcs_path: i.gcs_path }));
+      const images = loaded.item.images.map((i: any) => ({ file_id: i.file_id, gcs_path: i.gcs_path }));
       await loaded.item.deleteOne();
-      await deleteImages(images);
+      await removeKitchenPhotos(images);
       res.json({ status: true, message: "Deleted" });
     }),
   );
@@ -984,28 +994,28 @@ module.exports = function (app: any) {
         return fail(res, 400, `Up to ${MAX_XENKITCHEN_IMAGES} photos per item`);
       }
 
-      for (const file of files) {
-        let processed;
-        try {
-          processed = await processImage(file);
-        } catch {
-          // Most likely an iPhone HEIC this server can't decode. Safari converts to JPEG on
-          // upload, so this is rare; say what to do rather than failing silently.
-          return fail(res, 400, `Couldn't read "${file.originalname}". Try a JPEG or PNG.`);
-        }
-        const name = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${processed.ext}`;
-        const gcsPath = `xenkitchen/${book._id}/${item._id}/${name}`;
-        const url = (await uploadToGCS(
-          processed.buffer,
-          gcsPath,
-          processed.contentType,
-          false,
-          IMMUTABLE_CACHE,
-        )) as string;
-        item.images.push({ gcs_path: gcsPath, url });
-        item.updated_by = uid;
-        // Save after each photo, so one bad file doesn't orphan the ones already stored.
+      // Resize them all first, so one unreadable file fails the request before anything is stored.
+      const processed = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const image = await processImage(file);
+            return { buffer: image.buffer, mimeType: image.contentType, name: renamed(file.originalname, image.ext) };
+          } catch {
+            // Most likely an iPhone HEIC this server can't decode. Safari converts to JPEG on
+            // upload, so this is rare; say what to do rather than failing silently.
+            throw new AppError(400, `Couldn't read "${file.originalname}". Try a JPEG or PNG.`);
+          }
+        }),
+      );
+      // Stored as private XenDrive files owned by the uploader (tagged to this item); all or nothing.
+      const stored = await storeAppFiles(uid, { app: XENKITCHEN_SOURCE, ref: String(item._id) }, processed);
+      for (const file of stored) item.images.push({ file_id: file._id, uploaded_by: uid });
+      item.updated_by = uid;
+      try {
         await item.save();
+      } catch (error) {
+        await removeAppFiles(stored.map((f) => f._id));
+        throw error;
       }
       await respondItem(res, item, book, uid);
     }),
@@ -1021,10 +1031,10 @@ module.exports = function (app: any) {
       const { item, book } = loaded;
       const img = item.images.id(req.params.imageId);
       if (!img) return fail(res, 404, "Photo not found");
-      const gcsPath = img.gcs_path;
+      const removed = { file_id: img.file_id, gcs_path: img.gcs_path };
       img.deleteOne();
       await item.save();
-      await deleteImages([{ gcs_path: gcsPath }]);
+      await removeKitchenPhotos([removed]);
       await respondItem(res, item, book, callerId(req));
     }),
   );

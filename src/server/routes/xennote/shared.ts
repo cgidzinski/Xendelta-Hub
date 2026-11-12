@@ -4,6 +4,7 @@ import { AppError, callerId } from "../../utils/http";
 import { XenNote, XenNotebook, type XenNoteAttrs, type XenNotebookAttrs } from "../../models/xenNote";
 import { User } from "../../models/user";
 import { generateSignedUrl } from "../../utils/gcsUtils";
+import { signedUrlsFor } from "../../utils/appFiles";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { canEdit, canManage, canView, roleOf, type MemberRole } from "../../utils/membership";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../../utils/publicUser";
@@ -59,13 +60,23 @@ export function notifyChange(notebook: NotebookDoc | null, ownerId: string) {
 
 const SIGNED_URL_MINUTES = 60;
 
-async function signedImages(images: Array<{ _id: unknown; gcs_path: string }>) {
-  return Promise.all(
+async function signedImages(images: Array<{ _id: unknown; file_id?: unknown; gcs_path?: string | null }>) {
+  const fileUrls = await signedUrlsFor(
+    images.filter((i) => i.file_id).map((i) => i.file_id as string),
+    SIGNED_URL_MINUTES,
+  );
+  const signed = await Promise.all(
     images.map(async (img) => ({
       _id: String(img._id),
-      url: await generateSignedUrl(img.gcs_path, SIGNED_URL_MINUTES),
+      // Photos not yet moved to XenDrive still have a storage path.
+      url: img.file_id
+        ? fileUrls.get(String(img.file_id))
+        : img.gcs_path
+          ? await generateSignedUrl(img.gcs_path, SIGNED_URL_MINUTES)
+          : undefined,
     })),
   );
+  return signed.filter((i): i is { _id: string; url: string } => !!i.url);
 }
 
 /** A note as its owner or a notebook member sees it. */

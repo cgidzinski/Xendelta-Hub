@@ -258,6 +258,8 @@ export async function publishMessage(chat: ConversationDocument, message: Messag
 // toward the sender's storage, stay out of My Drive, and show under XenDrive > From apps > Chat (utils/driveSources.ts).
 registerDriveSource("chat", {
   label: "Chat",
+  // Exempt like every app's files for now; only direct XenDrive uploads count toward storage.
+  counts: async () => false,
   verify: async (userId, ref) =>
     Types.ObjectId.isValid(ref) && !!(await Conversation.exists({ _id: ref, "members.user_id": userId })),
   describe: async (userId, refs) => {

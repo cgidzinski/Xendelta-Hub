@@ -108,7 +108,6 @@ export function serializeItem(item: any, batchLabelById?: Map<string, string>): 
     images: Array.isArray(obj.images)
       ? obj.images.map((img: any) => ({
           _id: img._id?.toString() ?? img._id,
-          gcs_path: img.gcs_path,
         }))
       : obj.images,
     ...(sourceLabel ? { source_label: sourceLabel } : {}),

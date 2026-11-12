@@ -1,15 +1,18 @@
 import type { Request, Response } from "express";
-import crypto from "crypto";
 import sharp from "sharp";
 import { validateParams, xenNoteIdParamSchema, xenNoteImageParamSchema } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
 import { uploadXenNoteImages } from "../../config/multer";
-import { deleteFromGCS, uploadToGCS } from "../../utils/gcsUtils";
+import { storeAppFiles, removeAppFiles } from "../../utils/appFiles";
+import { XENNOTE_SOURCE, removeNotePhotos } from "../../utils/xenNoteFiles";
 import { roleOf } from "../../utils/membership";
 import { MAX_NOTE_IMAGES } from "../../../shared/xennote/notes";
 import { loadNote, notifyChange, serializeNote } from "./shared";
 
 const IMAGE_MAX_EDGE = 1600;
+
+/** The file's name with the extension of what it was re-encoded to ("IMG_1.heic" → "IMG_1.webp"). */
+const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
 
 /** Resize to a sensible size, honour EXIF rotation, and re-encode as WebP (GIF stays GIF). */
 async function processImage(file: Express.Multer.File): Promise<{ buffer: Buffer; contentType: string; ext: string }> {
@@ -37,19 +40,26 @@ export function registerNoteImageRoutes(app: any) {
         throw new AppError(400, `A note can have up to ${MAX_NOTE_IMAGES} photos`);
       }
 
-      for (const file of files) {
-        let processed;
-        try {
-          processed = await processImage(file);
-        } catch {
-          throw new AppError(400, `Couldn't read "${file.originalname}". Try a JPEG or PNG.`);
-        }
-        const path = `xennote/${note.id}/${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${processed.ext}`;
-        await uploadToGCS(processed.buffer, path, processed.contentType, true);
-        note.images.push({ gcs_path: path });
-        note.updated_by = uid;
-        // Save after each photo, so one bad file doesn't orphan the ones already stored.
+      // Resize them all first, so one unreadable file fails the request before anything is stored.
+      const processed = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const image = await processImage(file);
+            return { buffer: image.buffer, mimeType: image.contentType, name: renamed(file.originalname, image.ext) };
+          } catch {
+            throw new AppError(400, `Couldn't read "${file.originalname}". Try a JPEG or PNG.`);
+          }
+        }),
+      );
+      // Stored as XenDrive files owned by the uploader (tagged to this note); all or nothing.
+      const stored = await storeAppFiles(uid, { app: XENNOTE_SOURCE, ref: note.id as string }, processed);
+      for (const file of stored) note.images.push({ file_id: file._id, uploaded_by: uid });
+      note.updated_by = uid;
+      try {
         await note.save();
+      } catch (error) {
+        await removeAppFiles(stored.map((f) => f._id));
+        throw error;
       }
       notifyChange(notebook, note.owner_id);
       res.json({
@@ -68,7 +78,7 @@ export function registerNoteImageRoutes(app: any) {
       const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
       const image = note.images.find((i) => String(i._id) === req.params.imageId);
       if (!image) throw new AppError(404, "Photo not found");
-      await deleteFromGCS(image.gcs_path, true).catch(() => undefined);
+      await removeNotePhotos([image]);
       note.images.pull(image._id);
       note.updated_by = uid;
       await note.save();

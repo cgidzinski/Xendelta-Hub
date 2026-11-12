@@ -7,8 +7,10 @@ import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadXenSplitImages } from "../config/multer";
-import { uploadToGCS, deleteFromGCS, generateSignedUrl } from "../utils/gcsUtils";
-import { generateUniqueFilename, uploadXenSplitGroupImageFile } from "../utils/mediaUtils";
+import { generateSignedUrl } from "../utils/gcsUtils";
+import { storeAppFiles, signedUrlsFor } from "../utils/appFiles";
+import { XENSPLIT_SOURCE, removeExpensePhotos, removeGroupPhotos } from "../utils/xensplitFiles";
+import { uploadXenSplitGroupImageFile } from "../utils/mediaUtils";
 import { MAX_XENSPLIT_IMAGES_PER_EXPENSE } from "../constants";
 import {
   validate,
@@ -301,6 +303,7 @@ module.exports = function (app: any) {
         const memberIds = group.members.map((m: any) => m.toString());
 
         await XenSplit.findByIdAndDelete(groupId);
+        await removeGroupPhotos(group);
         await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
         await deleteXenSplitLogs(groupId);
 
@@ -510,6 +513,7 @@ module.exports = function (app: any) {
         // Delete group if no members left
         if (group.members.length === 0) {
           await XenSplit.findByIdAndDelete(groupId);
+          await removeGroupPhotos(group);
           await ScheduledTask.deleteMany({ task_type: XENSPLIT_RECURRING_TASK_TYPE, "payload.group_id": groupId });
           await deleteXenSplitLogs(groupId);
           SocketManager.getInstance().notifyXenSplitGroupsUpdated([targetUserId]);
@@ -1042,24 +1046,14 @@ module.exports = function (app: any) {
             .json({ status: false, message: `Cannot exceed ${MAX_XENSPLIT_IMAGES_PER_EXPENSE} images per expense` });
         }
 
-        // Upload to storage in parallel: a request with several phone photos used to upload them
-        // one after another, which on a slow connection ran past the client's patience even though
-        // the server was still working. If any one fails, remove the ones that made it so a retry
-        // doesn't leave orphans behind, and save nothing.
-        const gcsPaths = files.map(
-          (file) => `xensplit-images/${groupId}/${expenseId}/${generateUniqueFilename(file.originalname)}`,
+        // Stored as XenDrive files owned by the uploader (tagged to this group). The files upload in parallel, and if
+        // any one fails the ones that made it are removed and nothing is saved, so a retry leaves no orphans.
+        const stored = await storeAppFiles(
+          userId,
+          { app: XENSPLIT_SOURCE, ref: groupId as string },
+          files.map((file) => ({ buffer: file.buffer, name: file.originalname, mimeType: file.mimetype })),
         );
-        const results = await Promise.allSettled(
-          files.map((file, i) => uploadToGCS(file.buffer, gcsPaths[i], file.mimetype, true)),
-        );
-        if (results.some((r) => r.status === "rejected")) {
-          await Promise.allSettled(
-            gcsPaths.filter((_, i) => results[i].status === "fulfilled").map((p) => deleteFromGCS(p, true)),
-          );
-          const failure = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
-          throw failure.reason;
-        }
-        for (const gcsPath of gcsPaths) expense.images.push({ gcs_path: gcsPath });
+        for (const file of stored) expense.images.push({ file_id: file._id, uploaded_by: userId });
 
         await group.save();
         await logXenSplit(groupId, userId, "expense_images_added", {
@@ -1114,7 +1108,7 @@ module.exports = function (app: any) {
         }
 
         const image = expense.images[imageIndex];
-        await deleteFromGCS(image.gcs_path, true).catch(() => {});
+        await removeExpensePhotos([image]);
         expense.images.splice(imageIndex, 1);
         await group.save();
         await logXenSplit(groupId, userId, "expense_image_removed", {
@@ -1162,12 +1156,23 @@ module.exports = function (app: any) {
           return res.json({ status: true, data: [] });
         }
 
-        const signedUrls = await Promise.all(
-          expense.images.map(async (img: any) => ({
-            _id: img._id.toString(),
-            signedUrl: await generateSignedUrl(img.gcs_path, 15),
-          })),
+        const fileUrls = await signedUrlsFor(
+          expense.images.filter((img: any) => img.file_id).map((img: any) => img.file_id),
+          15,
         );
+        const signedUrls = (
+          await Promise.all(
+            expense.images.map(async (img: any) => ({
+              _id: img._id.toString(),
+              // Photos not yet moved to XenDrive still have a storage path.
+              signedUrl: img.file_id
+                ? fileUrls.get(String(img.file_id))
+                : img.gcs_path
+                  ? await generateSignedUrl(img.gcs_path, 15)
+                  : undefined,
+            })),
+          )
+        ).filter((u): u is { _id: string; signedUrl: string } => !!u.signedUrl);
 
         res.json({ status: true, data: signedUrls });
       } catch (error) {

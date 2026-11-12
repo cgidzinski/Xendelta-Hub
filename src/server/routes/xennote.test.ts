@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
+import { XenDriveFile } from "../models/xendriveFile";
+import { usageFor } from "../utils/xendriveUtils";
 
 // XenNote through the real routes, models and validation against an in-memory database. Only storage is faked.
 
@@ -18,7 +20,7 @@ vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xennote/index.js")]);
+  t = await startTestApp([() => import("./xennote/index.js"), () => import("./xendrive.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -299,7 +301,7 @@ describe("photos", () => {
     const up = await send(2);
     expect(up.status, JSON.stringify(up.body)).toBe(200);
     expect(up.body.data.note.images).toHaveLength(2);
-    expect(up.body.data.note.images[0].url).toMatch(/^https:\/\/signed\.example\/xennote\//);
+    expect(up.body.data.note.images[0].url).toMatch(/^https:\/\/signed\.example\/xendrive\//);
     expect(stored.size).toBe(2);
 
     expect((await send(9)).status).toBe(400); // 2 + 9 would pass the limit of 10
@@ -311,6 +313,42 @@ describe("photos", () => {
 
     expect((await api(me).del(`/notes/${n._id}`)).status).toBe(200);
     expect(stored.size).toBe(0);
+  });
+
+  it("stores photos as tagged XenDrive files that don't count toward storage, and the file can be deleted there", async () => {
+    const me = await createUser();
+    const uid = String(me.user._id);
+    const n = await note(me, { type: "image", title: "Garden", notebook_id: undefined });
+    const before = await usageFor(uid);
+    const up = await request(t.app)
+      .post(`/api/xennote/notes/${n._id}/images`)
+      .set({ Authorization: `Bearer ${me.token}` })
+      .attach("images", PNG, "a.png")
+      .attach("images", PNG, "b.png");
+    expect(up.status, JSON.stringify(up.body)).toBe(200);
+
+    const files = await XenDriveFile.find({ owner_id: uid, "source.app": "xennote" });
+    expect(files).toHaveLength(2);
+    expect(files.every((f) => f.source?.ref === n._id && f.counted === false && f.mimeType === "image/webp")).toBe(
+      true,
+    );
+    expect(await usageFor(uid)).toEqual(before);
+
+    const apps = (
+      await request(t.app)
+        .get("/api/xendrive/app-files")
+        .set({ Authorization: `Bearer ${me.token}` })
+    ).body.data;
+    expect(apps.apps[0]).toMatchObject({ app: "xennote", label: "XenNote" });
+    expect(apps.apps[0].groups[0].label).toBe("Garden");
+
+    // deleting the file in XenDrive takes the photo off the note
+    const del = await request(t.app)
+      .delete(`/api/xendrive/files/${files[0]._id}`)
+      .set({ Authorization: `Bearer ${me.token}` });
+    expect(del.status).toBe(200);
+    const read = await api(me).get(`/notes/${n._id}`);
+    expect(read.body.data.note.images).toHaveLength(1);
   });
 
   it("a viewer cannot add photos", async () => {
