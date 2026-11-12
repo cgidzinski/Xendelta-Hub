@@ -11,5 +11,5 @@ const linkFields = {
 export const xenLinkCreateSchema = z.object(linkFields);
 export const xenLinkUpdateSchema = z.object({ _id: objectIdSchema, ...linkFields });
 export const xenLinkIdParamSchema = z.object({ linkId: objectIdSchema });
-// Slugs are base62 counters (see models/xenlink.ts); allow a little headroom for future formats.
+// Slugs are random base64url strings (older links have base62 counters); see models/xenlink.ts.
 export const xenLinkSlugParamSchema = z.object({ slug: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "Invalid slug") });
