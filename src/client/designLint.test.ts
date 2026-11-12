@@ -35,7 +35,6 @@ const ON_IMAGE_OVERLAY = [
   "routes/Internal/XenLink/components/LinkList.tsx",
   "routes/Internal/XenBudget/components/ItemForm.tsx",
   "routes/Internal/XenKitchen/components/ItemCard.tsx",
-  "routes/Internal/XenKitchen/components/ItemEditor.tsx",
   "routes/Internal/XenKitchen/components/ItemView.tsx",
   "routes/Internal/Xensplit/components/ExpenseForm.tsx",
   "routes/Internal/Xensplit/GroupDetail.tsx",
