@@ -25,8 +25,18 @@ import type {
   SettleDebtInput,
 } from "../../../../hooks/xensplit/types";
 import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
+import type { Cosmetics } from "@shared/cosmetics";
+import UserName from "../../../../components/user/UserName";
 
-export function PersonStack({ avatar, name }: { avatar?: string | null; name: string }) {
+export function PersonStack({
+  avatar,
+  name,
+  cosmetics,
+}: {
+  avatar?: string | null;
+  name: string;
+  cosmetics?: Cosmetics;
+}) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
       <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>
@@ -37,7 +47,7 @@ export function PersonStack({ avatar, name }: { avatar?: string | null; name: st
         noWrap
         sx={{ maxWidth: "100%", textTransform: "capitalize", lineHeight: 1.2, color: "text.secondary" }}
       >
-        {name}
+        <UserName user={{ username: name, cosmetics }} />
       </Typography>
     </Box>
   );
@@ -142,9 +152,9 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
             py: 1.5,
           }}
         >
-          <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} />
+          <PersonStack avatar={s.fromUser.avatar} name={s.fromUser.username} cosmetics={s.fromUser.cosmetics} />
           <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
-          <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} />
+          <PersonStack avatar={s.toUser.avatar} name={s.toUser.username} cosmetics={s.toUser.cosmetics} />
         </Box>
 
         <EtransferNote etransfer={s.toUser.etransfer} settlementCurrency={s.currency} />
@@ -210,7 +220,8 @@ interface CompletedProps {
   onClose: () => void;
   getMember: (
     userId: string,
-  ) => { avatar?: string | null; username: string; etransfer?: EtransferInfo | null } | undefined;
+  ) =>
+    { avatar?: string | null; username: string; cosmetics?: Cosmetics; etransfer?: EtransferInfo | null } | undefined;
   userId: string;
   deleteSettlement: (id: string) => void;
   isDeletingSettlement: boolean;
@@ -283,9 +294,13 @@ export default function SettlementDetailDialog({
               mb: 2,
             }}
           >
-            <PersonStack avatar={fromMember?.avatar} name={fromMember?.username ?? "?"} />
+            <PersonStack
+              avatar={fromMember?.avatar}
+              name={fromMember?.username ?? "?"}
+              cosmetics={fromMember?.cosmetics}
+            />
             <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
-            <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} />
+            <PersonStack avatar={toMember?.avatar} name={toMember?.username ?? "?"} cosmetics={toMember?.cosmetics} />
           </Box>
 
           <EtransferNote etransfer={toMember?.etransfer} settlementCurrency={s.currency} sx={{ mb: 2 }} />

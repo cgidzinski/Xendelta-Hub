@@ -19,6 +19,8 @@ import type { DirectDebt } from "../../../hooks/xensplit/types";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import { computeDirectDebts, computeBalanceBreakdown, currenciesInGroup } from "../../../utils/xensplitExplain";
 import DebtWebChart, { type DebtEdge } from "./components/DebtWebChart";
+import type { Cosmetics } from "@shared/cosmetics";
+import UserName from "../../../components/user/UserName";
 
 type Mode = "simplified" | "direct";
 
@@ -233,7 +235,17 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-function PersonRow({ avatar, name, sub }: { avatar?: string | null; name: string; sub?: string }) {
+function PersonRow({
+  avatar,
+  name,
+  sub,
+  cosmetics,
+}: {
+  avatar?: string | null;
+  name: string;
+  sub?: string;
+  cosmetics?: Cosmetics;
+}) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
       <Avatar src={avatar || undefined} sx={{ width: 36, height: 36 }}>
@@ -241,7 +253,7 @@ function PersonRow({ avatar, name, sub }: { avatar?: string | null; name: string
       </Avatar>
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "capitalize" }} noWrap>
-          {name}
+          <UserName user={{ username: name, cosmetics }} />
         </Typography>
         {sub && (
           <Typography variant="caption" color="text.secondary">
@@ -261,7 +273,7 @@ function NodeDetail({
   netBalance,
 }: {
   userId: string;
-  member: { username: string; avatar: string | null } | undefined;
+  member: { username: string; avatar: string | null; cosmetics?: Cosmetics } | undefined;
   group: GroupDetailContext["group"];
   currency: string;
   netBalance: number;
@@ -274,7 +286,12 @@ function NodeDetail({
   return (
     <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5, gap: 1 }}>
-        <PersonRow avatar={member?.avatar} name={member?.username ?? "?"} sub={netLabel} />
+        <PersonRow
+          avatar={member?.avatar}
+          name={member?.username ?? "?"}
+          sub={netLabel}
+          cosmetics={member?.cosmetics}
+        />
         <Typography variant="subtitle1" sx={{ fontWeight: 800, color: netColor, whiteSpace: "nowrap" }}>
           {formatCurrency(Math.abs(netBalance), currency)}
         </Typography>
@@ -328,7 +345,7 @@ function EdgeDetail({
   mode: Mode;
   group: GroupDetailContext["group"];
   currency: string;
-  getMember: (userId: string) => { username: string; avatar: string | null } | undefined;
+  getMember: (userId: string) => { username: string; avatar: string | null; cosmetics?: Cosmetics } | undefined;
   netFrom: number;
   netTo: number;
 }) {
@@ -351,14 +368,14 @@ function EdgeDetail({
   return (
     <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1.5, mb: 1.5 }}>
-        <PersonRow avatar={from?.avatar} name={from?.username ?? "?"} />
+        <PersonRow avatar={from?.avatar} name={from?.username ?? "?"} cosmetics={from?.cosmetics} />
         <Box sx={{ textAlign: "center", flexShrink: 0 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
             {formatCurrency(edge.amount, currency)}
           </Typography>
           <EastIcon sx={{ fontSize: 20, color: "text.disabled" }} />
         </Box>
-        <PersonRow avatar={to?.avatar} name={to?.username ?? "?"} />
+        <PersonRow avatar={to?.avatar} name={to?.username ?? "?"} cosmetics={to?.cosmetics} />
       </Box>
       <Divider sx={{ mb: 1.5 }} />
 
@@ -368,21 +385,32 @@ function EdgeDetail({
             {sharedExpenses.length === 0 ? (
               <>
                 This is a simplified payment. To keep settling-up simple,{" "}
-                <strong style={{ textTransform: "capitalize" }}>{from?.username}</strong>'s debt is routed straight to{" "}
-                <strong style={{ textTransform: "capitalize" }}>{to?.username}</strong> — even if they never shared an
-                expense directly.
+                <strong style={{ textTransform: "capitalize" }}>
+                  <UserName user={from} />
+                </strong>
+                's debt is routed straight to{" "}
+                <strong style={{ textTransform: "capitalize" }}>
+                  <UserName user={to} />
+                </strong>{" "}
+                — even if they never shared an expense directly.
               </>
             ) : (
               <>
                 This payment is backed by an expense{" "}
-                <strong style={{ textTransform: "capitalize" }}>{from?.username}</strong> and{" "}
-                <strong style={{ textTransform: "capitalize" }}>{to?.username}</strong> shared directly.
+                <strong style={{ textTransform: "capitalize" }}>
+                  <UserName user={from} />
+                </strong>{" "}
+                and{" "}
+                <strong style={{ textTransform: "capitalize" }}>
+                  <UserName user={to} />
+                </strong>{" "}
+                shared directly.
               </>
             )}
           </Typography>
           <Box sx={{ display: "flex", justifyContent: "space-between" }}>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: "capitalize" }}>
-              {from?.username} owes overall
+              <UserName user={from} /> owes overall
             </Typography>
             <Typography variant="caption" sx={{ fontWeight: 700, color: "error.main" }}>
               {formatCurrency(Math.abs(netFrom), currency)}
@@ -390,7 +418,7 @@ function EdgeDetail({
           </Box>
           <Box sx={{ display: "flex", justifyContent: "space-between" }}>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: "capitalize" }}>
-              {to?.username} is owed overall
+              <UserName user={to} /> is owed overall
             </Typography>
             <Typography variant="caption" sx={{ fontWeight: 700, color: "success.main" }}>
               {formatCurrency(Math.abs(netTo), currency)}
@@ -421,7 +449,7 @@ function EdgeDetail({
                 <Typography variant="body2" color="text.secondary" noWrap>
                   {e.title}{" "}
                   <Box component="span" sx={{ color: "text.disabled" }}>
-                    · {payer?.username} paid
+                    · <UserName user={payer} /> paid
                   </Box>
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>

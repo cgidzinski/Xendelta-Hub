@@ -1,6 +1,7 @@
 import express = require("express");
 import { blogListQuerySchema, blogSlugParamSchema, validateParams, validateQuery } from "../utils/validation";
 import { BlogPost } from "../models/blogPost";
+import { PUBLIC_USER_FIELDS } from "../utils/publicUser";
 
 module.exports = function (app: express.Application) {
   app.get(
@@ -13,7 +14,7 @@ module.exports = function (app: express.Application) {
 
       const totalCount = await BlogPost.countDocuments({ published: true }).exec();
       const posts = await BlogPost.find({ published: true })
-        .populate("author", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
         .sort({ featured: -1, publishDate: -1 })
         .skip(skip)
         .limit(limit)
@@ -40,7 +41,7 @@ module.exports = function (app: express.Application) {
     validateParams(blogSlugParamSchema),
     async function (req: express.Request, res: express.Response) {
       const post = await BlogPost.findOne({ slug: req.params.slug, published: true })
-        .populate("author", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
         .lean()
         .exec();
 

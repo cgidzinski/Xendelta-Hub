@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { filtersToParams, type CookMethod, type KitchenFilters, type KitchenLayout } from "@shared/xenkitchen/kitchen";
+import type { Cosmetics } from "@shared/cosmetics";
 
 export type BookRole = "owner" | "editor" | "viewer";
 
@@ -11,6 +12,7 @@ export interface KitchenBookMember {
   role: BookRole;
   username: string;
   avatar: string | null;
+  cosmetics?: Cosmetics;
 }
 
 export interface KitchenBook {

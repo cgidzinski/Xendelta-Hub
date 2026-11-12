@@ -28,6 +28,7 @@ import { STABLE_CURRENCY_MENU_PROPS } from "../../../utils/currencyUtils";
 import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
+import UserName from "../../../components/user/UserName";
 
 // Past a dozen the pip row is no longer countable at a glance, and the figure beside
 // it already says the same thing.
@@ -152,6 +153,7 @@ export default function BookOverview() {
       user_id: m.user_id,
       username: m.username,
       avatar: m.avatar,
+      cosmetics: m.cosmetics,
       total: byId.get(m.user_id)?.total ?? 0,
       income: byId.get(m.user_id)?.income ?? 0,
     }));
@@ -230,7 +232,7 @@ export default function BookOverview() {
                       {person.username[0]?.toUpperCase()}
                     </Avatar>
                     <Typography variant="body2" sx={{ flexGrow: 1 }} noWrap>
-                      {person.username}
+                      <UserName user={person} />
                     </Typography>
                     <Typography variant="caption" sx={{ color: INCOME_COLOR, fontWeight: 600 }}>
                       +{formatCurrency(person.income, summary.currency)}

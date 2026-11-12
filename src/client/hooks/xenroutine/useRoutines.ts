@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
+import type { Cosmetics } from "@shared/cosmetics";
 
 export type IntervalUnit = "days" | "weeks" | "months" | "years";
 export type DueStatus = "ok" | "due_soon" | "overdue";
@@ -16,6 +17,7 @@ export interface RoutineMember {
   role: "owner" | "editor";
   username: string;
   avatar: string | null;
+  cosmetics?: Cosmetics;
 }
 
 export interface RoutineHistoryEntry {

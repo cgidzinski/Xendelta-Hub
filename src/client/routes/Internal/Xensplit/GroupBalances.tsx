@@ -3,6 +3,7 @@ import { Box, Typography, Avatar } from "@mui/material";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
+import UserName from "../../../components/user/UserName";
 
 export default function GroupBalances() {
   const { balancesData } = useOutletContext<GroupDetailContext>();
@@ -51,7 +52,7 @@ export default function GroupBalances() {
                   {balance.user.username[0]?.toUpperCase()}
                 </Avatar>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                  {balance.user.username}
+                  <UserName user={balance.user} />
                 </Typography>
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
                   {isSettled ? (

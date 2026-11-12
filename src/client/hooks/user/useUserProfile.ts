@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../config/api";
 import type { EtransferInfo } from "@shared/etransfer";
+import type { Cosmetics } from "@shared/cosmetics";
 
 /** "" is the default (never chosen) and resolves to dark; "system" explicitly follows the OS. */
 export type ThemePreference = "light" | "dark" | "system" | "";
@@ -13,6 +14,7 @@ export interface UserProfile {
   email: string;
   avatar: string;
   roles?: string[];
+  cosmetics?: Cosmetics;
   gems: number;
   unread_messages: boolean;
   unread_notifications: boolean;

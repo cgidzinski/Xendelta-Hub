@@ -3,6 +3,7 @@
 
 import { serializePiggyBanks } from "./xenBudgetPiggyBanks";
 import { withDerivedUncategorised } from "./xenBudgetRules";
+import { cosmeticsOf } from "./publicUser";
 
 /** Flattens populated User refs into { user_id, username, avatar }. */
 export function transformMembers(obj: any): any {
@@ -11,7 +12,12 @@ export function transformMembers(obj: any): any {
     members: Array.isArray(obj.members)
       ? obj.members.map((m: any) =>
           m._id
-            ? { user_id: m._id.toString(), username: m.username || "Unknown", avatar: m.avatar || null }
+            ? {
+                user_id: m._id.toString(),
+                username: m.username || "Unknown",
+                avatar: m.avatar || null,
+                cosmetics: cosmeticsOf(m),
+              }
             : { user_id: m.toString(), username: "Unknown", avatar: null },
         )
       : obj.members,
@@ -19,7 +25,7 @@ export function transformMembers(obj: any): any {
 }
 
 /**
- * Book response payload. The book must already be populate("members", "username avatar")-ed.
+ * Book response payload. The book must already be populate("members", "username avatar cosmetics")-ed.
  * `item_count` is optional because the list view counts items in one batched query rather
  * than per book.
  *

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiClient, api } from "../../config/api";
 import { userProfileKeys } from "./useUserProfile";
+import type { Cosmetics } from "@shared/cosmetics";
 
 // Types
 export interface Message {
@@ -12,12 +13,14 @@ export interface Message {
   time: string;
   parentMessageId?: string;
   senderUsername?: string;
+  senderCosmetics?: Cosmetics;
   isSystemMessage?: boolean;
 }
 
 export interface ParticipantInfo {
   _id: string;
   username: string;
+  cosmetics?: Cosmetics;
 }
 
 export interface Conversation {
@@ -239,6 +242,7 @@ export const useUserMessages = (): UseUserMessagesReturn => {
           time: new Date().toISOString(),
           parentMessageId: parentMessageId,
           senderUsername: userProfile.username,
+          senderCosmetics: userProfile.cosmetics,
         };
 
         const updatedConversations = previousConversations.map((conv) => {

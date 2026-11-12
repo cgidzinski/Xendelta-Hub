@@ -59,6 +59,8 @@ const BODY_EXEMPT: Record<string, string> = {
   "PUT /api/user/messages/:conversationId/mark-read": "no body: path identifies the conversation",
   "POST /api/user/messages/:conversationId/leave": "no body: path identifies the conversation",
   "POST /api/user/inventory/:inventoryItemId/use": "no body: path identifies the item",
+  "POST /api/user/inventory/:inventoryItemId/equip": "no body: path identifies the item",
+  "POST /api/user/inventory/:inventoryItemId/unequip": "no body: path identifies the item",
 };
 
 function walk(dir: string, out: string[] = []): string[] {

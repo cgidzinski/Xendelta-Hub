@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { UserProfile } from "../hooks/user/useUserProfile";
 import { formatFileSize } from "../utils/fileUtils";
+import UserName from "./user/UserName";
 
 interface ProfileListItemProps {
   onNavigate?: () => void;
@@ -38,7 +39,7 @@ export default function ProfileListItem({ profile, onNavigate, isSelected }: Pro
                 {profile?.username?.charAt(0).toUpperCase()}
               </Avatar>
             </ListItemAvatar>
-            <ListItemText primary={profile?.username} secondary={profile?.email} />
+            <ListItemText primary={<UserName user={profile} />} secondary={profile?.email} />
           </Box>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <LinearProgress

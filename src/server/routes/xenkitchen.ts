@@ -50,6 +50,7 @@ import {
   suggestIngredients,
 } from "../utils/xenKitchen";
 import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "@shared/xenkitchen/kitchen";
+import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 const callerName = (req: Request) => (req as AuthenticatedRequest).user!.username;
@@ -156,7 +157,7 @@ async function loadItem(req: Request, res: Response, need: Need) {
 async function usernamesFor(ids: Array<string | null | undefined>): Promise<Map<string, any>> {
   const unique = [...new Set(ids.filter(Boolean))] as string[];
   const users = unique.length
-    ? await User.find({ _id: { $in: unique } }, "username avatar")
+    ? await User.find({ _id: { $in: unique } }, PUBLIC_USER_FIELDS)
         .lean()
         .exec()
     : [];
@@ -202,6 +203,7 @@ async function serializeBook(book: any, uid: string) {
       role: m.role,
       username: people.get(m.user_id)?.username ?? "Unknown",
       avatar: people.get(m.user_id)?.avatar ?? null,
+      cosmetics: cosmeticsOf(people.get(m.user_id)),
     })),
     // Only the owner manages the link, so only they see the token.
     share: { enabled: !!book.share?.enabled, token: owner && book.share?.enabled ? (book.share.token ?? null) : null },

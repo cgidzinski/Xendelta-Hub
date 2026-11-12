@@ -18,6 +18,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { UserSelect } from "../../../../components/UserSelect";
 import type { SearchedUser } from "../../../../hooks/useUserSearch";
 import type { Routine } from "../../../../hooks/xenroutine/useRoutines";
+import UserName from "../../../../components/user/UserName";
 
 interface Props {
   open: boolean;
@@ -75,7 +76,7 @@ export default function ShareDialog({ open, routine, onClose, onAdd, onRemove }:
                   {m.username[0]?.toUpperCase()}
                 </Avatar>
               </ListItemAvatar>
-              <ListItemText primary={m.username} />
+              <ListItemText primary={<UserName user={m} />} />
             </ListItem>
           ))}
         </List>

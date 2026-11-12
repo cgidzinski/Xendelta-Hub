@@ -1,6 +1,7 @@
 import { Box, Typography, Avatar, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
 import type { XenSplitMember } from "../../../../hooks/xensplit/types";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
+import UserName from "../../../../components/user/UserName";
 
 interface MemberSelectProps {
   members: XenSplitMember[];
@@ -30,7 +31,9 @@ export function MemberSelect({ members, label, value, excludeId, onChange }: Mem
               <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
                 {m.username[0]?.toUpperCase()}
               </Avatar>
-              <Typography variant="body2">{m.username}</Typography>
+              <Typography variant="body2">
+                <UserName user={m} />
+              </Typography>
             </Box>
           );
         }}
@@ -41,7 +44,9 @@ export function MemberSelect({ members, label, value, excludeId, onChange }: Mem
               <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
                 {m.username[0]?.toUpperCase()}
               </Avatar>
-              <Typography variant="body2">{m.username}</Typography>
+              <Typography variant="body2">
+                <UserName user={m} />
+              </Typography>
             </Box>
           </MenuItem>
         ))}

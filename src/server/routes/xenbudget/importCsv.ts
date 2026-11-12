@@ -16,6 +16,7 @@ import { FLAG_UNCATEGORISED, FLAG_POSSIBLE_DUPLICATE, FLAG_OFF_BUDGET } from "..
 import { applyRules, withDerivedUncategorised } from "../../utils/xenBudgetRules";
 
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 import {
   bookDateToUtc,
   broadcastBook,
@@ -249,7 +250,7 @@ export function registerImportRoutes(app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
 
         // A live count rather than the recorded row_count: items may have been deleted
         // individually since, and a history that overstates what is still there would
@@ -327,7 +328,7 @@ export function registerImportRoutes(app: any) {
         const preset = book.import_presets.create(req.body);
         book.import_presets.push(preset);
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({
           status: true,
@@ -354,7 +355,7 @@ export function registerImportRoutes(app: any) {
         if (!preset) return res.status(404).json({ status: false, message: "Preset not found" });
         Object.assign(preset, req.body);
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Preset updated", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -375,7 +376,7 @@ export function registerImportRoutes(app: any) {
         if (!preset) return res.status(404).json({ status: false, message: "Preset not found" });
         book.import_presets.pull({ _id: preset._id });
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Preset deleted", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {

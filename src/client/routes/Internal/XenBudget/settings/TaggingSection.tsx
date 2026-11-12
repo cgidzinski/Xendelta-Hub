@@ -31,6 +31,7 @@ import ReapplyRulesDialog from "../components/ReapplyRulesDialog";
 import { CategoryChip, FlagChip } from "../components/LabelChip";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import EmptyState from "../../../../components/ui/EmptyState";
+import UserName from "../../../../components/user/UserName";
 
 export default function TaggingSection() {
   const { book } = useOutletContext<BookDetailContext>();
@@ -139,7 +140,7 @@ export default function TaggingSection() {
           key={`p-${id}`}
           size="small"
           variant="outlined"
-          label={member?.username ?? "member"}
+          label={<UserName user={member} fallback="member" />}
           avatar={
             member?.avatar ? <Avatar src={member.avatar} sx={{ width: 16, height: 16, fontSize: 10 }} /> : undefined
           }

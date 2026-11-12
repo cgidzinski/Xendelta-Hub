@@ -13,6 +13,7 @@ import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { resolveLabelColor } from "./LabelChip";
 import LabelPicker from "./LabelPicker";
+import UserName from "../../../../components/user/UserName";
 
 export interface SplitDraft {
   key: string;
@@ -189,7 +190,9 @@ export default function WeightedSplitEditor({
                 <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
                   {m.username[0]?.toUpperCase()}
                 </Avatar>
-                <Typography variant="caption">{m.username}</Typography>
+                <Typography variant="caption">
+                  <UserName user={m} />
+                </Typography>
               </Box>
             );
           })}
@@ -250,7 +253,7 @@ export default function WeightedSplitEditor({
                       {m.username[0]?.toUpperCase()}
                     </Avatar>
                     <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                      {m.username}
+                      <UserName user={m} />
                     </Typography>
                     {draft && !amountless && splitType === "equal" && evenField()}
                     {draft && !amountless && splitType !== "equal" && valueField(draft)}
@@ -270,7 +273,7 @@ export default function WeightedSplitEditor({
                       {m?.username[0]?.toUpperCase()}
                     </Avatar>
                     <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
-                      {m?.username ?? draft.key}
+                      <UserName user={m} fallback={draft.key} />
                     </Typography>
                     {valueField(draft)}
                   </Stack>

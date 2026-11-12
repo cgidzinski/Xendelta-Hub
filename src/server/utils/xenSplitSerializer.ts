@@ -1,3 +1,4 @@
+import { publicUserFields, cosmeticsOf } from "./publicUser";
 import { ScheduledTask } from "../models/scheduledTask";
 import { XENSPLIT_RECURRING_TASK_TYPE } from "./xensplitRecurringHandler";
 import { DEFAULT_CURRENCY } from "@shared/currencies";
@@ -7,7 +8,7 @@ import { DEFAULT_CURRENCY } from "@shared/currencies";
  * each one's e-transfer destination travels with the group — it goes no further than
  * the groups they belong to.
  */
-export const MEMBER_FIELDS = "username avatar etransfer";
+export const MEMBER_FIELDS = publicUserFields("etransfer");
 
 /** Null rather than a blank handle, so the UI has one thing to check before rendering. */
 export function serializeEtransfer(etransfer: any): { handle: string; currency: string } | null {
@@ -25,6 +26,7 @@ export function transformMembers(obj: any): any {
                 user_id: m._id.toString(),
                 username: m.username || "Unknown",
                 avatar: m.avatar || null,
+                cosmetics: cosmeticsOf(m),
                 etransfer: serializeEtransfer(m.etransfer),
               }
             : { user_id: m.toString(), username: "Unknown", avatar: null, etransfer: null },

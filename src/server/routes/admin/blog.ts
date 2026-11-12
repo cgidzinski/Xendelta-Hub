@@ -16,6 +16,7 @@ import { uploadBlogAsset as multerUploadBlogAsset } from "../../config/multer";
 import { uploadBlogAsset, generateUniqueFilename } from "../../utils/mediaUtils";
 import { deleteFromGCS } from "../../utils/gcsUtils";
 import { AuthenticatedRequest } from "../../types";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 module.exports = function (app: express.Application) {
   app.get(
@@ -23,7 +24,11 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     requireAdmin,
     async function (_req: express.Request, res: express.Response) {
-      const posts = await BlogPost.find({}).populate("author", "username avatar").sort({ createdAt: -1 }).lean().exec();
+      const posts = await BlogPost.find({})
+        .populate("author", PUBLIC_USER_FIELDS)
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec();
 
       return res.json({
         status: true,
@@ -60,7 +65,7 @@ module.exports = function (app: express.Application) {
 
       await post.save();
 
-      const saved = await BlogPost.findById(post._id).populate("author", "username avatar").lean().exec();
+      const saved = await BlogPost.findById(post._id).populate("author", PUBLIC_USER_FIELDS).lean().exec();
 
       return res.json({
         status: true,
@@ -212,7 +217,7 @@ module.exports = function (app: express.Application) {
 
       await post.save();
 
-      const updated = await BlogPost.findById(post._id).populate("author", "username avatar").lean().exec();
+      const updated = await BlogPost.findById(post._id).populate("author", PUBLIC_USER_FIELDS).lean().exec();
 
       return res.json({
         status: true,

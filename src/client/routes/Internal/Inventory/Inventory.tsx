@@ -22,7 +22,7 @@ export default function Inventory() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { profile } = useUserProfile();
-  const { inventory, isLoading, isError, error, refetch, redeemItem, trashItem } = useInventory();
+  const { inventory, isLoading, isError, error, refetch, redeemItem, trashItem, wearItem } = useInventory();
   const [view, setView] = useState<InventoryView>("all");
   // The item a request is in flight for, so only its card shows as busy.
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -115,6 +115,8 @@ export default function Inventory() {
                     item={item}
                     onRedeem={(i) => withPending(i, () => redeemItem(i._id))}
                     onTrash={handleTrash}
+                    onWear={(i, wear) => withPending(i, () => wearItem(i._id, wear))}
+                    worn={profile?.cosmetics?.badge === item.itemKey}
                     busy={pendingId === item._id}
                   />
                 </Grid>

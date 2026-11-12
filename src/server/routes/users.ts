@@ -4,6 +4,8 @@ import { loadCaller, AppError } from "../utils/http";
 import { User } from "../models/user";
 import { Notification } from "../models/notification";
 import { ITEMS } from "../constants/items";
+import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
+import { unequipIfNotOwned } from "../utils/cosmetics";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
@@ -72,6 +74,7 @@ module.exports = function (app: express.Application) {
           avatar: user.avatar || "/avatars/default-avatar.png",
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           gems: user.gems || 0,
+          cosmetics: user.cosmetics?.badge ? { badge: user.cosmetics.badge } : {},
           unread_messages: hasUnreadMessages,
           unread_notifications: hasUnreadNotifications,
           has_new_notifications: !!hasNewNotifications,
@@ -508,7 +511,7 @@ module.exports = function (app: express.Application) {
   // Directory for the message participant picker. Deliberately just the public profile
   // (id, username, avatar): emails and roles are admin-only (see /api/admin/users).
   app.get("/api/users", authenticateToken, async function (_req: express.Request, res: express.Response) {
-    const users = await User.find({}, "username _id avatar").exec();
+    const users = await User.find({}, PUBLIC_USER_FIELDS).exec();
 
     return res.json({
       status: true,
@@ -518,6 +521,7 @@ module.exports = function (app: express.Application) {
           _id: user._id,
           username: user.username,
           avatar: user.avatar || "/avatars/default-avatar.png",
+          cosmetics: cosmeticsOf(user),
         })),
       },
     });
@@ -537,7 +541,7 @@ module.exports = function (app: express.Application) {
         query.username = { $regex: q, $options: "i" };
       }
 
-      const users = await User.find(query, "username _id avatar").limit(20).exec();
+      const users = await User.find(query, PUBLIC_USER_FIELDS).limit(20).exec();
 
       return res.json({
         status: true,
@@ -549,6 +553,7 @@ module.exports = function (app: express.Application) {
               _id: user._id,
               username: user.username,
               avatar: user.avatar || "/avatars/default-avatar.png",
+              cosmetics: cosmeticsOf(user),
             })),
         },
       });
@@ -644,6 +649,50 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  // Wear a cosmetic from the inventory. One item per slot; wearing another replaces it.
+  app.post(
+    "/api/user/inventory/:inventoryItemId/equip",
+    authenticateToken,
+    validateParams(inventoryItemIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const { inventoryItemId } = req.params;
+      const owner = await User.findOne({ _id: userId }, { inventory: { $elemMatch: { _id: inventoryItemId } } }).exec();
+      if (!owner) throw new AppError(404, "User not found");
+      const item = owner.inventory?.[0];
+      if (!item) throw new AppError(404, "Item not found in inventory");
+      const slot = ITEMS[item.itemKey]?.cosmetic?.slot;
+      if (!slot) throw new AppError(400, "This item cannot be worn");
+
+      await User.updateOne({ _id: userId }, { $set: { [`cosmetics.${slot}`]: item.itemKey } }).exec();
+      return res.json({ status: true, message: `Now wearing ${item.name}` });
+    },
+  );
+
+  // Take a worn cosmetic off. The item stays in the inventory.
+  app.post(
+    "/api/user/inventory/:inventoryItemId/unequip",
+    authenticateToken,
+    validateParams(inventoryItemIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = (req as AuthenticatedRequest).user!._id;
+      const { inventoryItemId } = req.params;
+      const owner = await User.findOne({ _id: userId }, { inventory: { $elemMatch: { _id: inventoryItemId } } }).exec();
+      if (!owner) throw new AppError(404, "User not found");
+      const item = owner.inventory?.[0];
+      if (!item) throw new AppError(404, "Item not found in inventory");
+      const slot = ITEMS[item.itemKey]?.cosmetic?.slot;
+      if (!slot) throw new AppError(400, "This item cannot be worn");
+
+      // Only if this is what is worn: another copy or item in the slot is left alone.
+      await User.updateOne(
+        { _id: userId, [`cosmetics.${slot}`]: item.itemKey },
+        { $unset: { [`cosmetics.${slot}`]: "" } },
+      ).exec();
+      return res.json({ status: true, message: `Took off ${item.name}` });
+    },
+  );
+
   // Trash inventory item
   app.delete(
     "/api/user/inventory/:inventoryItemId",
@@ -665,6 +714,7 @@ module.exports = function (app: express.Application) {
 
       user.inventory.pull({ _id: inventoryItemId });
       await user.save();
+      await unequipIfNotOwned(userId, item.itemKey);
 
       return res.json({
         status: true,

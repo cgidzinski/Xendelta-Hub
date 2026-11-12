@@ -11,6 +11,7 @@ import { roundMoney } from "../../utils/xenBudgetUtils";
 
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
 import { broadcastBook, callerId, isMember, loadBookForMember, normalizeMeasures } from "./shared";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 // A budget's target has to exist in this book, or it would silently never match: a
 // person who isn't a member has no shares here, and a misspelled category is on no item.
@@ -58,7 +59,7 @@ export function registerBudgetRoutes(app: any) {
 
         book.budgets.push(toBudgetFields(req.body));
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Budget created", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -83,7 +84,7 @@ export function registerBudgetRoutes(app: any) {
 
         Object.assign(budget, toBudgetFields(req.body));
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Budget updated", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -104,7 +105,7 @@ export function registerBudgetRoutes(app: any) {
         if (!budget) return res.status(404).json({ status: false, message: "Budget not found" });
         book.budgets.pull({ _id: budget._id });
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Budget deleted", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {

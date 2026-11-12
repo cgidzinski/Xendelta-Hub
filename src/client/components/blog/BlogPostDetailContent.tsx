@@ -7,6 +7,7 @@ import rehypeRaw from "rehype-raw";
 import { BlogPost } from "../../types/BlogPost";
 import LoadingSpinner from "../LoadingSpinner";
 import ErrorDisplay from "../ErrorDisplay";
+import UserName from "../user/UserName";
 
 const markdownStyles = {
   "& p": {
@@ -154,7 +155,9 @@ export default function BlogPostDetailContent({ post, isLoading, error, onBackCl
         {post.author && (
           <Stack direction="row" spacing={1} alignItems="center" color="text.secondary">
             <Person fontSize="small" />
-            <Typography variant="body2">{post.author.username}</Typography>
+            <Typography variant="body2">
+              <UserName user={post.author} />
+            </Typography>
           </Stack>
         )}
         <Stack direction="row" spacing={1} alignItems="center" color="text.secondary">

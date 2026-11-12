@@ -30,6 +30,7 @@ import {
   type RoutineLike,
 } from "../utils/xenRoutine";
 import { sendActivityNotices } from "../utils/xenRoutineReminders";
+import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 
@@ -56,7 +57,7 @@ async function loadRoutine(req: Request, res: Response, need: "edit" | "act") {
 
 async function serialize(routines: any[], uid: string) {
   const ids = [...new Set(routines.flatMap((r) => r.members.map((m: any) => m.user_id)))];
-  const users = await User.find({ _id: { $in: ids } }, "username avatar")
+  const users = await User.find({ _id: { $in: ids } }, PUBLIC_USER_FIELDS)
     .lean()
     .exec();
   const byId = new Map<string, any>(users.map((u: any) => [u._id.toString(), u]));
@@ -86,6 +87,7 @@ async function serialize(routines: any[], uid: string) {
         role: m.role,
         username: byId.get(m.user_id)?.username ?? "Unknown",
         avatar: byId.get(m.user_id)?.avatar ?? null,
+        cosmetics: cosmeticsOf(byId.get(m.user_id)),
       })),
       history: [...obj.history].reverse().map((h: any) => ({
         ...h,

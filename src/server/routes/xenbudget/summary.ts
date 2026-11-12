@@ -7,6 +7,7 @@ import { roundMoney, seedPeriods } from "../../utils/xenBudgetUtils";
 import { detectRecurring, monthlyCommitted, normalizeMerchant } from "../../utils/xenBudgetRecurring";
 import { coverageByMerchant } from "../../utils/xenBudgetCoverage";
 import { baseItemMatch, loadBookForMember, mongoose, plainRules, toDraft } from "./shared";
+import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../../utils/publicUser";
 
 // How far back recurring detection and the merchant rollup look when the caller doesn't
 // say. Long enough to see a yearly renewal repeat, short enough that a decade-old book
@@ -203,7 +204,7 @@ export function registerSummaryRoutes(app: any) {
           const users = await User.find({
             _id: { $in: personIds.filter((id: string) => mongoose.Types.ObjectId.isValid(id)) },
           })
-            .select("username avatar")
+            .select(PUBLIC_USER_FIELDS)
             .lean();
           users.forEach((u: any) => userMap.set(u._id.toString(), u));
         }
@@ -246,6 +247,7 @@ export function registerSummaryRoutes(app: any) {
               user_id: r._id,
               username: userMap.get(r._id)?.username || "Unknown",
               avatar: userMap.get(r._id)?.avatar || null,
+              cosmetics: cosmeticsOf(userMap.get(r._id)),
               total: roundMoney(r.total),
               income: roundMoney(r.income),
               count: r.count,

@@ -5,6 +5,7 @@ import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import { useInbox } from "../../../../hooks/user/useInbox";
+import UserName from "../../../../components/user/UserName";
 
 function StatItem({ icon, value, active }: { icon: React.ReactNode; value: number; active?: boolean }) {
   return (
@@ -52,7 +53,7 @@ export default function CompactHomeHeader() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0 }}>
         <Avatar src={profile?.avatar} alt={profile?.username} sx={{ width: 36, height: 36, flexShrink: 0 }} />
         <Typography variant="h6" noWrap sx={{ minWidth: 0, fontWeight: 600 }}>
-          Welcome back, {profile?.username}!
+          Welcome back, <UserName user={profile} />!
         </Typography>
       </Box>
 

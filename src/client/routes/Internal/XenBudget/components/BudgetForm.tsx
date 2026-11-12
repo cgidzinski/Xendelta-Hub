@@ -32,6 +32,7 @@ import LabelPicker from "./LabelPicker";
 import { budgetPeriodWindow } from "./budget/budgetForRange";
 import { directionOf } from "./budget/budgetKind";
 import { monthlyEquivalent, windowLabel } from "./budget/periodDisplay";
+import UserName from "../../../../components/user/UserName";
 
 /**
  * What a budget watches. Three values on one axis rather than a type plus a direction: a
@@ -257,7 +258,7 @@ export default function BudgetForm({ open, onClose, book, budget, onSubmit, isSu
                       )
                       .map((m) => (
                         <MenuItem key={m.user_id} value={m.user_id}>
-                          {m.username}
+                          <UserName user={m} />
                         </MenuItem>
                       ))}
                   </TextField>

@@ -9,6 +9,7 @@ import PaintChip from "./PaintChip";
 import RecipeSteps from "./RecipeSteps";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { aggregatePaints } from "@shared/recipaint/paints";
+import UserName from "../../../../components/user/UserName";
 
 interface RecipeViewProps {
   recipe: Recipe;
@@ -86,7 +87,10 @@ export default function RecipeView({
               {author.username.charAt(0).toUpperCase()}
             </Avatar>
             <Typography variant="body2" color="text.secondary">
-              Created by <strong>{author.username}</strong>
+              Created by{" "}
+              <strong>
+                <UserName user={author} />
+              </strong>
             </Typography>
           </Stack>
         )}

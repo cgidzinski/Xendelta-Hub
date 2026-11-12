@@ -6,6 +6,7 @@ import { User } from "../../models/user";
 import { generateSignedUrl } from "../../utils/gcsUtils";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { canEdit, canManage, canView, roleOf, type MemberRole } from "../../utils/membership";
+import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../../utils/publicUser";
 
 // Access and serialising for XenNote. Everything who-may-do-what goes through utils/membership.ts.
 //   - A notebook note follows its notebook's roles (viewers read; editors and owners write).
@@ -124,7 +125,7 @@ export async function serializePublicNote(note: NoteDoc) {
 export async function serializeNotebook(book: NotebookDoc, uid: string, noteCount: number) {
   const role = roleOf(book.toObject(), uid);
   const ids = book.members.map((m) => m.user_id);
-  const people = ids.length ? await User.find({ _id: { $in: ids } }, "username avatar").lean() : [];
+  const people = ids.length ? await User.find({ _id: { $in: ids } }, PUBLIC_USER_FIELDS).lean() : [];
   const byId = new Map(people.map((u) => [String(u._id), u]));
   return {
     _id: book.id as string,
@@ -137,6 +138,7 @@ export async function serializeNotebook(book: NotebookDoc, uid: string, noteCoun
       role: m.role,
       username: byId.get(m.user_id)?.username ?? "Unknown",
       avatar: byId.get(m.user_id)?.avatar ?? null,
+      cosmetics: cosmeticsOf(byId.get(m.user_id)),
     })),
     // Only the owner sees (and manages) the notebook's public link.
     share: role === "owner" ? { enabled: !!book.share?.enabled, token: book.share?.token ?? null } : null,

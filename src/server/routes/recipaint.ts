@@ -17,6 +17,7 @@ import { sanitizeCompletedSteps } from "@shared/recipaint/progress";
 import { isSameId } from "../utils/objectId";
 import { Recipe } from "../models/recipe";
 import { RecipeProgress } from "../models/recipeProgress";
+import { PUBLIC_USER_FIELDS } from "../utils/publicUser";
 const mongoose = require("mongoose");
 const {
   Types: { ObjectId },
@@ -55,8 +56,8 @@ async function findRecipeSummaries(match: any, limit: number, offset: number) {
 
   // $lookup would need two more stages per field; populate() on plain objects is clearer.
   return Recipe.populate(recipes, [
-    { path: "author", select: "username avatar" },
-    { path: "owner", select: "username avatar" },
+    { path: "author", select: PUBLIC_USER_FIELDS },
+    { path: "owner", select: PUBLIC_USER_FIELDS },
   ]);
 }
 
@@ -106,8 +107,8 @@ module.exports = function (app: express.Application) {
       const recipeId = req.params.id;
 
       const recipe = await Recipe.findById(recipeId)
-        .populate("author", "username avatar")
-        .populate("owner", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
+        .populate("owner", PUBLIC_USER_FIELDS)
         .lean()
         .exec();
 
@@ -145,8 +146,8 @@ module.exports = function (app: express.Application) {
       const recipeId = req.params.id;
 
       const recipe = await Recipe.findById(recipeId)
-        .populate("author", "username avatar")
-        .populate("owner", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
+        .populate("owner", PUBLIC_USER_FIELDS)
         .lean()
         .exec();
 
@@ -219,8 +220,8 @@ module.exports = function (app: express.Application) {
       await recipe.save();
 
       const saved = await Recipe.findById(recipe._id)
-        .populate("author", "username avatar")
-        .populate("owner", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
+        .populate("owner", PUBLIC_USER_FIELDS)
         .lean()
         .exec();
 
@@ -287,8 +288,8 @@ module.exports = function (app: express.Application) {
       await recipe.save();
 
       const updated = await Recipe.findById(recipe._id)
-        .populate("author", "username avatar")
-        .populate("owner", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
+        .populate("owner", PUBLIC_USER_FIELDS)
         .lean()
         .exec();
 
@@ -493,7 +494,7 @@ module.exports = function (app: express.Application) {
       const userId = (req as AuthenticatedRequest).user!._id;
       const recipeId = req.params.id;
 
-      const originalRecipe = await Recipe.findById(recipeId).populate("author", "username avatar").lean().exec();
+      const originalRecipe = await Recipe.findById(recipeId).populate("author", PUBLIC_USER_FIELDS).lean().exec();
 
       if (!originalRecipe) {
         return res.status(404).json({
@@ -534,8 +535,8 @@ module.exports = function (app: express.Application) {
       await clonedRecipe.save();
 
       const saved = await Recipe.findById(clonedRecipe._id)
-        .populate("author", "username avatar")
-        .populate("owner", "username avatar")
+        .populate("author", PUBLIC_USER_FIELDS)
+        .populate("owner", PUBLIC_USER_FIELDS)
         .lean()
         .exec();
 

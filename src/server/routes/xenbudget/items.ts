@@ -18,6 +18,7 @@ import { applyRules, normalizeFlagNames, withDerivedUncategorised } from "../../
 import { merchantMatchPattern } from "../../utils/xenBudgetRecurring";
 import { serializeItem, serializeItems } from "../../utils/xenBudgetSerializer";
 import { csvLine } from "../../utils/csvWriter";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 import {
   baseItemMatch,
   bookDateToUtc,
@@ -138,7 +139,7 @@ export function registerItemRoutes(app: any) {
         // differently — the one property that matters for a file someone hands to somebody
         // else. Exporting from the client would only ever cover the pages it had loaded.
         if (q.format === "csv") {
-          await book.populate("members", "username avatar");
+          await book.populate("members", PUBLIC_USER_FIELDS);
           const usernameById = new Map<string, string>(
             (book.members as any[]).map((m: any) => [m._id.toString(), m.username || "Unknown"]),
           );

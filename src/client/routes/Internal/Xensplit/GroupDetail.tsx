@@ -72,6 +72,7 @@ import type {
   CreateExchangeInput,
   UpdateExpenseInput,
 } from "../../../hooks/xensplit/types";
+import UserName from "../../../components/user/UserName";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -961,7 +962,7 @@ export default function GroupDetail() {
                         Paid by
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {payer?.username ?? "Unknown"}
+                        <UserName user={payer} fallback="Unknown" />
                       </Typography>
                     </Box>
                     <Box sx={{ textAlign: "right", flexShrink: 0 }}>
@@ -1002,7 +1003,7 @@ export default function GroupDetail() {
                                 {member?.username?.[0]?.toUpperCase()}
                               </Avatar>
                               <Typography variant="body2" sx={{ flexGrow: 1 }}>
-                                {member?.username ?? "?"}
+                                <UserName user={member} fallback="?" />
                               </Typography>
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {e.split_type === "percent" && split.percentage != null

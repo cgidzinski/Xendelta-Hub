@@ -23,6 +23,7 @@ import { FLAG_OFF_BUDGET } from "../../constants";
 
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
 import { summarizePiggyBank } from "../../utils/xenBudgetPiggyBanks";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 import {
   bookDateToUtc,
   broadcastBook,
@@ -149,7 +150,7 @@ async function linkedItem(book: any, contribution: any): Promise<any | null> {
 
 async function saveAndRespond(req: Request, res: Response, book: any, message: string) {
   await book.save();
-  await book.populate("members", "username avatar");
+  await book.populate("members", PUBLIC_USER_FIELDS);
   broadcastBook(book);
   res.json({ status: true, message, data: serializeBookFor(book, callerId(req)) });
 }
@@ -402,7 +403,7 @@ export function registerPiggyBankRoutes(app: any) {
         const book = await loadBookForMember(req, res);
         if (!book) return;
         // memberById below needs real User docs, not raw ObjectIds.
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         const q = req.query as Record<string, string>;
         const asOf = q.as_of ? new Date(q.as_of) : new Date();
         const currency = q.currency || book.default_currency;
