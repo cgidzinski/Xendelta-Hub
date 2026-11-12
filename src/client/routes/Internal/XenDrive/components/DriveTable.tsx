@@ -64,11 +64,19 @@ const tableSx = {
     "& .s-size": { display: "none" },
   },
   [WIDE]: {
-    "& .row": { gridTemplateColumns: "44px minmax(0,1fr) 140px 96px 220px 44px" },
+    "& .row": { gridTemplateColumns: "44px minmax(0,1fr) 150px 110px 200px 44px", columnGap: 2 },
     "& .c-mod, & .c-link": { display: "block" },
+    "& .c-size": { pr: 1 },
     "& .s-mod, & .under": { display: "none" },
   },
 } as const;
+
+/** What the Link column shows when nothing is shared: a quiet dash, so the column does not look broken. */
+const NoLink = () => (
+  <Typography variant="body2" color="text.disabled" aria-hidden>
+    —
+  </Typography>
+);
 
 function FolderRow({ folder, h }: { folder: XenDriveFolder; h: DriveListHandlers }) {
   const drop = useFolderDrop((files) => h.onDropFiles(folder._id, files));
@@ -119,7 +127,7 @@ function FolderRow({ folder, h }: { folder: XenDriveFolder; h: DriveListHandlers
       <Typography className="c-size" variant="body2" color="text.secondary">
         {itemCountLabel(folder.itemCount)}
       </Typography>
-      <Box className="c-link">{linkChip}</Box>
+      <Box className="c-link">{linkChip || <NoLink />}</Box>
       <IconButton
         aria-label={`Actions for ${folder.name}`}
         onClick={(e) => {
@@ -178,7 +186,7 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
         {formatFileSize(file.size)}
       </Typography>
       <Box className="c-link">
-        <LinkChips file={file} />
+        {file.shared || file.hasPassword || file.expiry ? <LinkChips file={file} /> : <NoLink />}
       </Box>
       <IconButton
         aria-label={`Actions for ${file.name}`}

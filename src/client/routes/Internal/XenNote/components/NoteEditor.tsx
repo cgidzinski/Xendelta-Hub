@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { alpha } from "@mui/material/styles";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Autocomplete,
   Box,
@@ -6,14 +7,21 @@ import {
   Checkbox,
   Chip,
   Collapse,
+  Dialog,
+  DialogContent,
   IconButton,
+  InputBase,
+  ListItemIcon,
+  Menu,
   MenuItem,
+  Popover,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
   Typography,
+  useMediaQuery,
   useTheme,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -25,9 +33,12 @@ import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import NotesIcon from "@mui/icons-material/Notes";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { useSnackbar } from "notistack";
@@ -63,13 +74,6 @@ interface NoteEditorProps {
   labelSuggestions: string[];
 }
 
-const TYPES: Array<{ value: NoteType; label: string; icon: ReactElement }> = [
-  { value: "text", label: "Note", icon: <NotesIcon fontSize="small" /> },
-  { value: "checklist", label: "List", icon: <CheckBoxOutlinedIcon fontSize="small" /> },
-  { value: "image", label: "Photos", icon: <ImageOutlinedIcon fontSize="small" /> },
-  { value: "link", label: "Link", icon: <LinkIcon fontSize="small" /> },
-];
-
 /**
  * Write or edit a note. Closing saves it (like Keep) unless it is empty or was not changed; delete is
  * explicit. A person with view-only access sees the note without being able to change it.
@@ -91,7 +95,13 @@ export default function NoteEditor({
 
   const initial = useMemo(
     () =>
-      note ? draftFromNote(note) : emptyDraft({ type: startType ?? "text", notebook_id: startNotebookId ?? null }),
+      note
+        ? draftFromNote(note)
+        : emptyDraft({
+            type: startType ?? "text",
+            notebook_id: startNotebookId ?? null,
+            checklist: startType === "checklist" ? [{ text: "", done: false }] : [],
+          }),
     // The draft is reset each time the dialog opens, for a given note or a fresh start
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [open, note?._id, startType, startNotebookId],
@@ -102,6 +112,12 @@ export default function NoteEditor({
   const [autosave, setAutosave] = useState<"idle" | "saving" | "saved">("idle");
   const [showDone, setShowDone] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
+  const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
+  const [bookAnchor, setBookAnchor] = useState<HTMLElement | null>(null);
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   // What the server holds for this note right now (photos and the link change it outside the draft).
   const [live, setLive] = useState<XenNote | null>(note);
 
@@ -182,7 +198,7 @@ export default function NoteEditor({
     }
   };
 
-  const addPhotos = async (files: FileList | null) => {
+  const addPhotos = async (files: ArrayLike<File> | null) => {
     if (!files || files.length === 0) return;
     const list = Array.from(files);
     if (!live) return set({ pendingImages: [...draft.pendingImages, ...list] });
@@ -218,20 +234,379 @@ export default function NoteEditor({
   const updateItem = (i: number, patch: Partial<NoteDraft["checklist"][number]>) =>
     set({ checklist: draft.checklist.map((item, idx) => (idx === i ? { ...item, ...patch } : item)) });
 
+  const colorOpen = !!colorAnchor;
+  // The writing area reads as a field: a soft inset with a border, tall enough not to feel cramped.
+  const fieldSx = {
+    bgcolor: alpha(theme.palette.text.primary, 0.05),
+    border: 1,
+    borderColor: "divider",
+    borderRadius: 2,
+    p: 2,
+    minHeight: 240,
+    alignItems: "flex-start",
+    fontSize: 16,
+    lineHeight: 1.6,
+    "&:focus-within": { borderColor: "primary.main" },
+  } as const;
+  const isList = draft.type === "checklist";
+
   return (
-    <ResponsiveDialog
-      open={open}
-      onClose={saveAndClose}
-      maxWidth="sm"
-      title={readOnly ? "Note" : live ? "Edit note" : "New note"}
-      slotProps={{ paper: { sx: noteSurfaceSx(draft.color)(theme) } }}
-      actions={
-        <>
-          {live && !readOnly && (
-            <Button color="error" startIcon={<DeleteOutlineIcon />} onClick={remove} sx={{ mr: "auto" }}>
-              Delete
-            </Button>
+    <>
+      <Dialog
+        open={open}
+        onClose={saveAndClose}
+        fullWidth
+        maxWidth={false}
+        fullScreen={isMobile}
+        sx={{ "& .MuiDialog-container": { alignItems: isMobile ? "stretch" : "flex-start" } }}
+        onPaste={(e) => {
+          const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+          if (!readOnly && images.length) {
+            e.preventDefault();
+            addPhotos(images);
+          }
+        }}
+        slotProps={{
+          paper: {
+            sx: [{ maxWidth: 680, mt: { sm: 8 }, borderRadius: { sm: 3 } }, noteSurfaceSx(draft.color)],
+          },
+          backdrop: { sx: { bgcolor: alpha(theme.palette.common.black, 0.4) } },
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, pl: 3, pr: 1, pt: 1.5 }}>
+          <InputBase
+            fullWidth
+            placeholder="Title"
+            value={draft.title}
+            onChange={(e) => set({ title: e.target.value })}
+            disabled={readOnly}
+            slotProps={{ input: { maxLength: 200, "aria-label": "Title" } }}
+            sx={{ fontSize: 20, fontWeight: 500 }}
+          />
+          {readOnly ? (
+            <IconButton aria-label="Close" onClick={saveAndClose}>
+              <CloseIcon />
+            </IconButton>
+          ) : (
+            <>
+              <Tooltip title={draft.pinned ? "Unpin" : "Pin"}>
+                <IconButton
+                  aria-label={draft.pinned ? "Unpin" : "Pin"}
+                  aria-pressed={draft.pinned}
+                  onClick={() => set({ pinned: !draft.pinned })}
+                >
+                  {draft.pinned ? <PushPinIcon color="primary" /> : <PushPinOutlinedIcon />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="More">
+                <IconButton aria-label="More" onClick={(e) => setMoreAnchor(e.currentTarget)}>
+                  <MoreVertIcon />
+                </IconButton>
+              </Tooltip>
+            </>
           )}
+        </Box>
+
+        <DialogContent sx={{ pt: 1.5, px: { xs: 2, sm: 3 } }}>
+          <Stack spacing={2.5}>
+            {!live && !readOnly && !draft.body.trim() && draft.checklist.every((i) => !i.text.trim()) && (
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={isList ? "list" : "note"}
+                aria-label="Note or list"
+                onChange={(_, v: "note" | "list" | null) => {
+                  if (!v) return;
+                  setDraft((d) => {
+                    const next = changeType(d, v === "list" ? "checklist" : "text");
+                    return v === "list" && next.checklist.length === 0
+                      ? { ...next, checklist: [{ text: "", done: false }] }
+                      : next;
+                  });
+                }}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                <ToggleButton value="note" sx={{ gap: 0.75, px: 2, textTransform: "none" }}>
+                  <NotesIcon fontSize="small" />
+                  Note
+                </ToggleButton>
+                <ToggleButton value="list" sx={{ gap: 0.75, px: 2, textTransform: "none" }}>
+                  <CheckBoxOutlinedIcon fontSize="small" />
+                  List
+                </ToggleButton>
+              </ToggleButtonGroup>
+            )}
+            {(draft.type === "text" || draft.type === "image") && (
+              <InputBase
+                fullWidth
+                multiline
+                minRows={draft.type === "image" ? 4 : 9}
+                maxRows={22}
+                sx={fieldSx}
+                autoFocus={!live && draft.type === "text"}
+                placeholder={draft.type === "image" ? "Add a caption" : "Take a note…"}
+                value={draft.body}
+                onChange={(e) => set({ body: e.target.value })}
+                disabled={readOnly}
+                slotProps={{ input: { maxLength: 20000, "aria-label": draft.type === "image" ? "Caption" : "Note" } }}
+              />
+            )}
+
+            {draft.type === "checklist" && (
+              <Box sx={{ ...fieldSx, display: "block" }}>
+                {(() => {
+                  const row = (item: NoteDraft["checklist"][number], i: number) => (
+                    <Box
+                      key={item._id ?? i}
+                      draggable={!readOnly && !item.done}
+                      onDragStart={() => setDragFrom(i)}
+                      onDragOver={(e) => dragFrom !== null && e.preventDefault()}
+                      onDrop={() => {
+                        if (dragFrom !== null) set({ checklist: moveItem(draft.checklist, dragFrom, i) });
+                        setDragFrom(null);
+                      }}
+                      onDragEnd={() => setDragFrom(null)}
+                      sx={{ display: "flex", alignItems: "center", gap: 0.5, opacity: dragFrom === i ? 0.4 : 1 }}
+                    >
+                      {!readOnly && !item.done && (
+                        <DragIndicatorIcon
+                          fontSize="small"
+                          aria-label="Drag to reorder"
+                          sx={{ color: "text.disabled", cursor: "grab" }}
+                        />
+                      )}
+                      <Checkbox
+                        checked={item.done}
+                        disabled={readOnly}
+                        onChange={(e) => updateItem(i, { done: e.target.checked })}
+                        slotProps={{ input: { "aria-label": `Done: ${item.text || "item"}` } }}
+                      />
+                      <TextField
+                        variant="standard"
+                        fullWidth
+                        autoFocus={!live && i === 0}
+                        value={item.text}
+                        disabled={readOnly}
+                        onChange={(e) => updateItem(i, { text: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            set({
+                              checklist: [
+                                ...draft.checklist.slice(0, i + 1),
+                                { text: "", done: false },
+                                ...draft.checklist.slice(i + 1),
+                              ],
+                            });
+                          }
+                        }}
+                        slotProps={{
+                          htmlInput: { maxLength: 500, "aria-label": `Item ${i + 1}` },
+                          input: { sx: { textDecoration: item.done ? "line-through" : "none" } },
+                        }}
+                      />
+                      {!readOnly && (
+                        <IconButton
+                          aria-label="Remove item"
+                          size="small"
+                          onClick={() => set({ checklist: draft.checklist.filter((_, idx) => idx !== i) })}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  );
+                  const indexed = draft.checklist.map((item, i) => ({ item, i }));
+                  const active = indexed.filter((x) => !x.item.done);
+                  const done = indexed.filter((x) => x.item.done);
+                  return (
+                    <>
+                      {active.map((x) => row(x.item, x.i))}
+                      {!readOnly && (
+                        <Button
+                          startIcon={<AddIcon />}
+                          onClick={() => set({ checklist: [...draft.checklist, { text: "", done: false }] })}
+                          sx={{ mt: 0.5 }}
+                        >
+                          Add item
+                        </Button>
+                      )}
+                      {done.length > 0 && (
+                        <Box sx={{ mt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                          <Button
+                            size="small"
+                            color="inherit"
+                            onClick={() => setShowDone((v) => !v)}
+                            aria-expanded={showDone}
+                            startIcon={
+                              <ExpandMoreIcon
+                                sx={{ transform: showDone ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}
+                              />
+                            }
+                            sx={{ mt: 0.5, textTransform: "none" }}
+                          >
+                            {done.length} completed
+                          </Button>
+                          <Collapse in={showDone}>{done.map((x) => row(x.item, x.i))}</Collapse>
+                        </Box>
+                      )}
+                    </>
+                  );
+                })()}
+              </Box>
+            )}
+
+            {draft.type === "link" && (
+              <Stack spacing={1.5}>
+                <TextField
+                  label="Web address"
+                  placeholder="https://"
+                  value={draft.link.url}
+                  onChange={(e) => set({ link: { ...draft.link, url: e.target.value } })}
+                  error={linkError}
+                  helperText={linkError ? "Use a web address that starts with http:// or https://" : " "}
+                  fullWidth
+                  disabled={readOnly}
+                />
+                <TextField
+                  label="Link title"
+                  value={draft.link.title}
+                  onChange={(e) => set({ link: { ...draft.link, title: e.target.value } })}
+                  fullWidth
+                  disabled={readOnly}
+                  slotProps={{ htmlInput: { maxLength: 200 } }}
+                />
+                <TextField
+                  label="Description"
+                  value={draft.link.description}
+                  onChange={(e) => set({ link: { ...draft.link, description: e.target.value } })}
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  disabled={readOnly}
+                  slotProps={{ htmlInput: { maxLength: 1000 } }}
+                />
+              </Stack>
+            )}
+
+            {(draft.type === "image" || (live?.images.length ?? 0) + draft.pendingImages.length > 0) && (
+              <Box>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  {(live?.images ?? []).map((img) => (
+                    <Box key={img._id} sx={{ position: "relative" }}>
+                      <Box
+                        component="img"
+                        src={img.url}
+                        alt=""
+                        sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
+                      />
+                      {!readOnly && (
+                        <IconButton
+                          size="small"
+                          aria-label="Remove photo"
+                          onClick={() => removePhoto(img._id)}
+                          sx={{ position: "absolute", top: 2, right: 2, bgcolor: "background.paper" }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  ))}
+                  {pendingUrls.map((url, i) => (
+                    <Box key={url} sx={{ position: "relative" }}>
+                      <Box
+                        component="img"
+                        src={url}
+                        alt=""
+                        sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
+                      />
+                      <IconButton
+                        size="small"
+                        aria-label="Remove photo"
+                        onClick={() => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
+                        sx={{ position: "absolute", top: 2, right: 2, bgcolor: "background.paper" }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            {(draft.labels.length > 0 || draft.notebook_id) && (
+              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+                {draft.notebook_id && (
+                  <Chip
+                    size="small"
+                    icon={<MenuBookOutlinedIcon />}
+                    label={notebooks.find((b) => b._id === draft.notebook_id)?.name ?? "Notebook"}
+                  />
+                )}
+                {draft.labels.map((label) => (
+                  <Chip
+                    key={label}
+                    size="small"
+                    variant="outlined"
+                    label={label}
+                    onDelete={readOnly ? undefined : () => set({ labels: draft.labels.filter((l) => l !== label) })}
+                  />
+                ))}
+              </Box>
+            )}
+          </Stack>
+        </DialogContent>
+
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.25,
+            px: 1,
+            py: 0.75,
+            borderTop: 1,
+            borderColor: "divider",
+          }}
+        >
+          {!readOnly && (
+            <>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                id="xennote-photo-input"
+                onChange={(e) => addPhotos(e.target.files)}
+              />
+              <Tooltip title="Add photos">
+                <IconButton
+                  size="small"
+                  aria-label="Add photos"
+                  disabled={actions.addImages.isPending}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <AddPhotoAlternateOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Colour">
+                <IconButton size="small" aria-label="Colour" onClick={(e) => setColorAnchor(e.currentTarget)}>
+                  <PaletteOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Labels">
+                <IconButton size="small" aria-label="Labels" onClick={(e) => setLabelAnchor(e.currentTarget)}>
+                  <LabelOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Notebook">
+                <IconButton size="small" aria-label="Notebook" onClick={(e) => setBookAnchor(e.currentTarget)}>
+                  <MenuBookOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+          <Box sx={{ flex: 1 }} />
           {autosave !== "idle" && (
             <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: 1 }}>
               {autosave === "saving" ? "Saving…" : "Saved"}
@@ -240,376 +615,171 @@ export default function NoteEditor({
           <Button variant="contained" onClick={saveAndClose} disabled={saving || linkError}>
             {readOnly ? "Close" : "Done"}
           </Button>
-        </>
-      }
-    >
-      <Stack spacing={2}>
-        {!readOnly && (
-          <ToggleButtonGroup
-            exclusive
+        </Box>
+      </Dialog>
+
+      <Popover
+        open={colorOpen}
+        anchorEl={colorAnchor}
+        onClose={() => setColorAnchor(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "left" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Box sx={{ display: "flex", gap: 1, p: 1.5 }} role="group" aria-label="Note colour">
+          {NOTE_COLORS.map((c) => {
+            const main = swatchColor(theme, c);
+            return (
+              <IconButton
+                key={c}
+                size="small"
+                aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
+                aria-pressed={draft.color === c}
+                onClick={() => {
+                  set({ color: c });
+                  setColorAnchor(null);
+                }}
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: main ?? "background.paper",
+                  border: 2,
+                  borderColor: draft.color === c ? "text.primary" : "divider",
+                }}
+              />
+            );
+          })}
+        </Box>
+      </Popover>
+
+      <Popover
+        open={!!labelAnchor}
+        anchorEl={labelAnchor}
+        onClose={() => setLabelAnchor(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "left" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Box sx={{ p: 1.5, width: 280 }}>
+          <Autocomplete
+            multiple
+            freeSolo
             size="small"
-            value={draft.type}
-            onChange={(_, v: NoteType | null) => v && setDraft((d) => changeType(d, v))}
-            aria-label="Note type"
-            sx={{ flexWrap: "wrap" }}
-          >
-            {TYPES.map((t) => (
-              <ToggleButton key={t.value} value={t.value} sx={{ gap: 0.5, textTransform: "none" }}>
-                {t.icon} {t.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        )}
-
-        <TextField
-          label="Title"
-          value={draft.title}
-          onChange={(e) => set({ title: e.target.value })}
-          fullWidth
-          autoFocus={!live}
-          disabled={readOnly}
-          slotProps={{ htmlInput: { maxLength: 200 } }}
-        />
-
-        {(draft.type === "text" || draft.type === "image") && (
-          <TextField
-            label={draft.type === "image" ? "Caption" : readOnly ? "Note" : "Take a note…"}
-            value={draft.body}
-            onChange={(e) => set({ body: e.target.value })}
-            fullWidth
-            multiline
-            minRows={draft.type === "image" ? 2 : 5}
-            maxRows={14}
-            disabled={readOnly}
-            slotProps={{ htmlInput: { maxLength: 20000 } }}
+            options={labelSuggestions}
+            value={draft.labels}
+            onChange={(_, v) => set({ labels: v as string[] })}
+            renderTags={() => null}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                autoFocus
+                placeholder="Add a label"
+                slotProps={{ htmlInput: { ...params.inputProps, "aria-label": "Add a label" } }}
+              />
+            )}
           />
-        )}
+        </Box>
+      </Popover>
 
-        {draft.type === "checklist" && (
-          <Box>
-            {(() => {
-              const row = (item: NoteDraft["checklist"][number], i: number) => (
-                <Box
-                  key={item._id ?? i}
-                  draggable={!readOnly && !item.done}
-                  onDragStart={() => setDragFrom(i)}
-                  onDragOver={(e) => dragFrom !== null && e.preventDefault()}
-                  onDrop={() => {
-                    if (dragFrom !== null) set({ checklist: moveItem(draft.checklist, dragFrom, i) });
-                    setDragFrom(null);
-                  }}
-                  onDragEnd={() => setDragFrom(null)}
-                  sx={{ display: "flex", alignItems: "center", gap: 0.5, opacity: dragFrom === i ? 0.4 : 1 }}
-                >
-                  {!readOnly && !item.done && (
-                    <DragIndicatorIcon
-                      fontSize="small"
-                      aria-label="Drag to reorder"
-                      sx={{ color: "text.disabled", cursor: "grab" }}
-                    />
-                  )}
-                  <Checkbox
-                    checked={item.done}
-                    disabled={readOnly}
-                    onChange={(e) => updateItem(i, { done: e.target.checked })}
-                    slotProps={{ input: { "aria-label": `Done: ${item.text || "item"}` } }}
-                  />
-                  <TextField
-                    variant="standard"
-                    fullWidth
-                    value={item.text}
-                    disabled={readOnly}
-                    onChange={(e) => updateItem(i, { text: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        set({
-                          checklist: [
-                            ...draft.checklist.slice(0, i + 1),
-                            { text: "", done: false },
-                            ...draft.checklist.slice(i + 1),
-                          ],
-                        });
-                      }
-                    }}
-                    slotProps={{
-                      htmlInput: { maxLength: 500, "aria-label": `Item ${i + 1}` },
-                      input: { sx: { textDecoration: item.done ? "line-through" : "none" } },
-                    }}
-                  />
-                  {!readOnly && (
-                    <IconButton
-                      aria-label="Remove item"
-                      size="small"
-                      onClick={() => set({ checklist: draft.checklist.filter((_, idx) => idx !== i) })}
-                    >
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              );
-              const indexed = draft.checklist.map((item, i) => ({ item, i }));
-              const active = indexed.filter((x) => !x.item.done);
-              const done = indexed.filter((x) => x.item.done);
-              return (
-                <>
-                  {active.map((x) => row(x.item, x.i))}
-                  {!readOnly && (
-                    <Button
-                      startIcon={<AddIcon />}
-                      onClick={() => set({ checklist: [...draft.checklist, { text: "", done: false }] })}
-                      sx={{ mt: 0.5 }}
-                    >
-                      Add item
-                    </Button>
-                  )}
-                  {done.length > 0 && (
-                    <Box sx={{ mt: 1.5, borderTop: 1, borderColor: "divider" }}>
-                      <Button
-                        size="small"
-                        color="inherit"
-                        onClick={() => setShowDone((v) => !v)}
-                        aria-expanded={showDone}
-                        startIcon={
-                          <ExpandMoreIcon
-                            sx={{ transform: showDone ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}
-                          />
-                        }
-                        sx={{ mt: 0.5, textTransform: "none" }}
-                      >
-                        {done.length} completed
-                      </Button>
-                      <Collapse in={showDone}>{done.map((x) => row(x.item, x.i))}</Collapse>
-                    </Box>
-                  )}
-                </>
-              );
-            })()}
-          </Box>
-        )}
+      <Menu anchorEl={bookAnchor} open={!!bookAnchor} onClose={() => setBookAnchor(null)}>
+        {[{ _id: "", name: "Private (only me)" }, ...writableNotebooks].map((b) => (
+          <MenuItem
+            key={b._id}
+            selected={(draft.notebook_id ?? "") === b._id}
+            onClick={() => {
+              set({ notebook_id: b._id || null });
+              setBookAnchor(null);
+            }}
+          >
+            {b.name}
+          </MenuItem>
+        ))}
+      </Menu>
 
-        {draft.type === "link" && (
-          <Stack spacing={1.5}>
+      <Menu anchorEl={moreAnchor} open={!!moreAnchor} onClose={() => setMoreAnchor(null)}>
+        <MenuItem
+          onClick={() => {
+            setDraft((d) => changeType(d, isList ? "text" : "checklist"));
+            setMoreAnchor(null);
+          }}
+        >
+          <ListItemIcon>
+            {isList ? <NotesIcon fontSize="small" /> : <CheckBoxOutlinedIcon fontSize="small" />}
+          </ListItemIcon>
+          {isList ? "Turn into a note" : "Turn into a list"}
+        </MenuItem>
+        <MenuItem
+          sx={{ display: live ? "flex" : "none" }}
+          onClick={() => {
+            set({ archived: !draft.archived });
+            setMoreAnchor(null);
+          }}
+        >
+          <ListItemIcon>
+            <ArchiveOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          {draft.archived ? "Unarchive" : "Archive"}
+        </MenuItem>
+        <MenuItem
+          sx={{ display: live ? "flex" : "none" }}
+          onClick={() => {
+            setMoreAnchor(null);
+            setShareOpen(true);
+          }}
+        >
+          <ListItemIcon>
+            <LinkIcon fontSize="small" />
+          </ListItemIcon>
+          Public link
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setMoreAnchor(null);
+            remove();
+          }}
+          sx={{ color: "error.main", display: live ? "flex" : "none" }}
+        >
+          <ListItemIcon sx={{ color: "inherit" }}>
+            <DeleteOutlineIcon fontSize="small" />
+          </ListItemIcon>
+          Delete
+        </MenuItem>
+      </Menu>
+
+      <ResponsiveDialog open={shareOpen} onClose={() => setShareOpen(false)} maxWidth="xs" title="Public link">
+        {shareToken ? (
+          <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
             <TextField
-              label="Web address"
-              placeholder="https://"
-              value={draft.link.url}
-              onChange={(e) => set({ link: { ...draft.link, url: e.target.value } })}
-              error={linkError}
-              helperText={linkError ? "Use a web address that starts with http:// or https://" : " "}
-              fullWidth
-              disabled={readOnly}
+              size="small"
+              value={noteShareUrl(shareToken)}
+              slotProps={{ input: { readOnly: true } }}
+              sx={{ flex: 1, minWidth: 200 }}
             />
-            <TextField
-              label="Link title"
-              value={draft.link.title}
-              onChange={(e) => set({ link: { ...draft.link, title: e.target.value } })}
-              fullWidth
-              disabled={readOnly}
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-            />
-            <TextField
-              label="Description"
-              value={draft.link.description}
-              onChange={(e) => set({ link: { ...draft.link, description: e.target.value } })}
-              fullWidth
-              multiline
-              minRows={2}
-              disabled={readOnly}
-              slotProps={{ htmlInput: { maxLength: 1000 } }}
-            />
-          </Stack>
-        )}
-
-        {draft.type === "image" && (
-          <Box>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {(live?.images ?? []).map((img) => (
-                <Box key={img._id} sx={{ position: "relative" }}>
-                  <Box
-                    component="img"
-                    src={img.url}
-                    alt=""
-                    sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
-                  />
-                  {!readOnly && (
-                    <IconButton
-                      size="small"
-                      aria-label="Remove photo"
-                      onClick={() => removePhoto(img._id)}
-                      sx={{ position: "absolute", top: 2, right: 2, bgcolor: "background.paper" }}
-                    >
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              ))}
-              {pendingUrls.map((url, i) => (
-                <Box key={url} sx={{ position: "relative" }}>
-                  <Box
-                    component="img"
-                    src={url}
-                    alt=""
-                    sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
-                  />
-                  <IconButton
-                    size="small"
-                    aria-label="Remove photo"
-                    onClick={() => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
-                    sx={{ position: "absolute", top: 2, right: 2, bgcolor: "background.paper" }}
-                  >
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-            {!readOnly && (
-              <>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  hidden
-                  id="xennote-photo-input"
-                  onChange={(e) => addPhotos(e.target.files)}
-                />
-                <Button
-                  startIcon={<AddPhotoAlternateOutlinedIcon />}
-                  onClick={() => fileInput.current?.click()}
-                  disabled={actions.addImages.isPending}
-                  sx={{ mt: 1 }}
-                >
-                  {actions.addImages.isPending ? "Uploading..." : "Add photos"}
-                </Button>
-              </>
-            )}
-          </Box>
-        )}
-
-        {!readOnly && (
-          <>
-            <Autocomplete
-              multiple
-              freeSolo
-              options={labelSuggestions}
-              value={draft.labels}
-              onChange={(_, v) => set({ labels: v as string[] })}
-              renderTags={(value, getTagProps) =>
-                value.map((label, index) => (
-                  <Chip variant="outlined" size="small" label={label} {...getTagProps({ index })} key={label} />
-                ))
-              }
-              renderInput={(params) => <TextField {...params} label="Labels" placeholder="Add a label" />}
-            />
-
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                Colour
-              </Typography>
-              <Box sx={{ display: "flex", gap: 1, mt: 0.5, flexWrap: "wrap" }}>
-                {NOTE_COLORS.map((c) => {
-                  const main = swatchColor(theme, c);
-                  return (
-                    <Tooltip key={c} title={NOTE_COLOR_LABELS[c]}>
-                      <IconButton
-                        aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
-                        aria-pressed={draft.color === c}
-                        onClick={() => set({ color: c })}
-                        size="small"
-                        sx={{
-                          width: 28,
-                          height: 28,
-                          bgcolor: main ?? "background.paper",
-                          border: 2,
-                          borderColor: draft.color === c ? "text.primary" : "divider",
-                        }}
-                      />
-                    </Tooltip>
-                  );
-                })}
-              </Box>
-            </Box>
-
-            <TextField
-              select
-              label="Notebook"
-              value={draft.notebook_id ?? ""}
-              onChange={(e) => set({ notebook_id: e.target.value || null })}
-              helperText={
-                draft.notebook_id ? "Everyone in the notebook can see this note" : "Private: only you can see this note"
-              }
-              fullWidth
+            <IconButton
+              aria-label="Copy link"
+              onClick={() => {
+                navigator.clipboard.writeText(noteShareUrl(shareToken));
+                enqueueSnackbar("Link copied", { variant: "success" });
+              }}
             >
-              <MenuItem value="">Private (only me)</MenuItem>
-              {writableNotebooks.map((b) => (
-                <MenuItem key={b._id} value={b._id}>
-                  {b.name}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-              <Button
-                variant={draft.pinned ? "contained" : "outlined"}
-                startIcon={draft.pinned ? <PushPinIcon /> : <PushPinOutlinedIcon />}
-                onClick={() => set({ pinned: !draft.pinned })}
-              >
-                {draft.pinned ? "Pinned" : "Pin"}
-              </Button>
-              <Button
-                variant={draft.archived ? "contained" : "outlined"}
-                startIcon={<ArchiveOutlinedIcon />}
-                onClick={() => set({ archived: !draft.archived })}
-              >
-                {draft.archived ? "Archived" : "Archive"}
-              </Button>
-            </Box>
-
-            {live && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Public link
-                </Typography>
-                {shareToken ? (
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mt: 0.5 }}>
-                    <TextField
-                      size="small"
-                      value={noteShareUrl(shareToken)}
-                      slotProps={{ input: { readOnly: true } }}
-                      sx={{ flex: 1, minWidth: 200 }}
-                    />
-                    <IconButton
-                      aria-label="Copy link"
-                      onClick={() => {
-                        navigator.clipboard.writeText(noteShareUrl(shareToken));
-                        enqueueSnackbar("Link copied", { variant: "success" });
-                      }}
-                    >
-                      <ContentCopyIcon />
-                    </IconButton>
-                    <Button size="small" onClick={() => shareAction("rotate")}>
-                      New link
-                    </Button>
-                    <Button size="small" color="error" onClick={() => shareAction("disable")}>
-                      Stop sharing
-                    </Button>
-                  </Box>
-                ) : (
-                  <Box sx={{ mt: 0.5 }}>
-                    <Button size="small" variant="outlined" onClick={() => shareAction("enable")}>
-                      Create link
-                    </Button>
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                      Anyone with it can read this note
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            )}
-          </>
+              <ContentCopyIcon />
+            </IconButton>
+            <Button size="small" onClick={() => shareAction("rotate")}>
+              New link
+            </Button>
+            <Button size="small" color="error" onClick={() => shareAction("disable")}>
+              Stop sharing
+            </Button>
+          </Box>
+        ) : (
+          <Box>
+            <Button variant="outlined" onClick={() => shareAction("enable")}>
+              Create link
+            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Anyone with the link can read this note.
+            </Typography>
+          </Box>
         )}
-      </Stack>
-    </ResponsiveDialog>
+      </ResponsiveDialog>
+    </>
   );
 }

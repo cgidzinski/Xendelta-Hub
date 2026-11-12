@@ -132,3 +132,49 @@ export function checklistProgress(items: Array<{ text: string; done: boolean }>)
   const real = items.filter((i) => i.text.trim());
   return { done: real.filter((i) => i.done).length, total: real.length };
 }
+
+/** What the board's filter chips narrow to. Photos and links are not note types: they are found in the note. */
+export type NoteKind = "all" | "notes" | "lists" | "photos" | "links";
+
+const URL_IN_TEXT = /https?:\/\/\S+/i;
+
+export function matchesKind(
+  note: {
+    type: string;
+    body: string;
+    checklist: ReadonlyArray<{ text: string }>;
+    images: ReadonlyArray<unknown>;
+  },
+  kind: NoteKind,
+): boolean {
+  switch (kind) {
+    case "all":
+      return true;
+    case "lists":
+      return note.type === "checklist";
+    case "notes":
+      return note.type !== "checklist";
+    case "photos":
+      return note.images.length > 0;
+    case "links":
+      return (
+        note.type === "link" || URL_IN_TEXT.test(note.body) || note.checklist.some((i) => URL_IN_TEXT.test(i.text))
+      );
+  }
+}
+
+/** Split text into plain pieces and web addresses (trailing punctuation stays outside the address). */
+export function splitLinks(text: string): Array<{ text: string; url?: string }> {
+  const parts: Array<{ text: string; url?: string }> = [];
+  const re = /https?:\/\/[^\s<>"']+/gi;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const start = m.index ?? 0;
+    const url = m[0].replace(/[.,;:!?)\]]+$/, "");
+    if (start > last) parts.push({ text: text.slice(last, start) });
+    parts.push({ text: url, url });
+    last = start + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}

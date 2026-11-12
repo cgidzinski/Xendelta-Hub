@@ -7,7 +7,9 @@ import {
   hostOf,
   isDirty,
   isEmptyDraft,
+  matchesKind,
   moveItem,
+  splitLinks,
   toInput,
 } from "./noteDraft";
 import type { XenNote } from "../../../types/XenNote";
@@ -135,5 +137,30 @@ describe("checklistProgress", () => {
         { text: "  ", done: true },
       ]),
     ).toEqual({ done: 1, total: 2 });
+  });
+});
+
+describe("matchesKind / splitLinks", () => {
+  const base = {
+    type: "text",
+    body: "",
+    checklist: [],
+    images: [],
+    link: { url: "", title: "", description: "" },
+  } as const;
+  it("finds photos and links inside a note, not by type", () => {
+    expect(matchesKind({ ...base, images: [{ _id: "1", url: "u" }] }, "photos")).toBe(true);
+    expect(matchesKind({ ...base, body: "see https://example.com/a" }, "links")).toBe(true);
+    expect(matchesKind({ ...base, body: "no address" }, "links")).toBe(false);
+    expect(matchesKind({ ...base, type: "checklist" }, "lists")).toBe(true);
+    expect(matchesKind({ ...base, type: "checklist" }, "notes")).toBe(false);
+  });
+  it("splits text around web addresses and leaves trailing punctuation out", () => {
+    expect(splitLinks("go to https://a.com/x, then stop")).toEqual([
+      { text: "go to " },
+      { text: "https://a.com/x", url: "https://a.com/x" },
+      { text: ", then stop" },
+    ]);
+    expect(splitLinks("plain")).toEqual([{ text: "plain" }]);
   });
 });

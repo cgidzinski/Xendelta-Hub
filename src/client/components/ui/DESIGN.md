@@ -19,6 +19,7 @@ Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px borde
 `ResponsiveDialog` for dialogs (full screen on phones), `Banner` for fixed status strips.
 `useConfirm()` (`ConfirmProvider`) for every confirmation: never `window.confirm` or a hand-rolled dialog. `ImageLightbox` for viewing an image full-screen.
 Sign-in, sign-up and reset share `components/auth/AuthSplitLayout`.
+Sub-apps with a left sidebar (XenDrive, XenNote) spread `railPanelSx`, `railItemSx` and `railNewButtonSx` from `ui/railStyles.ts`, so the rails stay identical.
 
 ## Rules
 - Colours come from the theme (`primary.main`, `text.secondary`, `alpha(theme.palette.x, n)`). No hex or `rgba()`

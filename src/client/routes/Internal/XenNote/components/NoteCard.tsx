@@ -1,5 +1,5 @@
-import { useState } from "react";
 import {
+  Avatar,
   Box,
   Card,
   CardActionArea,
@@ -7,22 +7,20 @@ import {
   Chip,
   IconButton,
   LinearProgress,
-  Menu,
+  Link,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import { formatDistanceToNowStrict } from "date-fns";
+import { alpha } from "@mui/material/styles";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
-import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
-import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
-import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import LinkIcon from "@mui/icons-material/Link";
-import { NOTE_COLORS, type NoteColor } from "@shared/xennote/notes";
 import type { PublicXenNote, XenNote } from "../../../../types/XenNote";
-import { checklistProgress, hostOf } from "../noteDraft";
-import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
+import { checklistProgress, hostOf, splitLinks } from "../noteDraft";
+import { isSafeUrl } from "@shared/xennote/notes";
+import { noteSurfaceSx } from "../noteColors";
 
 interface NoteCardProps {
   note: XenNote | PublicXenNote;
@@ -30,8 +28,6 @@ interface NoteCardProps {
   /** Tick or untick checklist item `index` straight from the board. Omit for read-only. */
   onToggleItem?: (index: number) => void;
   onTogglePin?: () => void;
-  onToggleArchive?: () => void;
-  onColor?: (color: NoteColor) => void;
 }
 
 const MAX_LINES = 8;
@@ -80,12 +76,9 @@ function PhotoMosaic({ images }: { images: Array<{ url: string }> }) {
 }
 
 /** One note on the board: its content for its type, progress, labels, and quick actions. */
-export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin, onToggleArchive, onColor }: NoteCardProps) {
-  const theme = useTheme();
-  const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
+export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin }: NoteCardProps) {
   const full = "can_edit" in note ? note : null;
   const pinned = full?.pinned ?? false;
-  const archived = full?.archived ?? false;
   const editable = !!full?.can_edit;
   const items = note.checklist;
   const lines = note.body.split("\n");
@@ -95,7 +88,7 @@ export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin, onTo
   const content = (
     <Box>
       {hasPhotos && <PhotoMosaic images={note.images} />}
-      <Box sx={{ p: 2, pb: editable || full?.updated_by_name ? 1 : 2 }}>
+      <Box sx={{ p: 2, pb: 2 }}>
         {note.title && (
           <Typography sx={{ fontWeight: 600, mb: 0.5, wordBreak: "break-word", pr: editable ? 3 : 0 }}>
             {note.title}
@@ -170,7 +163,21 @@ export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin, onTo
           note.type !== "link" &&
           note.body && (
             <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {lines.slice(0, MAX_LINES).join("\n")}
+              {splitLinks(lines.slice(0, MAX_LINES).join("\n")).map((part, i) =>
+                part.url && isSafeUrl(part.url) ? (
+                  <Link
+                    key={i}
+                    href={part.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {part.text}
+                  </Link>
+                ) : (
+                  part.text
+                ),
+              )}
               {lines.length > MAX_LINES ? "…" : ""}
             </Typography>
           )
@@ -185,9 +192,24 @@ export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin, onTo
         )}
 
         {full?.updated_by_name && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-            Updated by {full.updated_by_name}
-          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              mt: 1.5,
+              pt: 1.25,
+              borderTop: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Avatar sx={{ width: 20, height: 20, fontSize: 10 }}>
+              {full.updated_by_name.slice(0, 1).toUpperCase()}
+            </Avatar>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {full.updated_by_name} edited {formatDistanceToNowStrict(new Date(full.updated_at), { addSuffix: true })}
+            </Typography>
+          </Box>
         )}
       </Box>
     </Box>
@@ -196,65 +218,29 @@ export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin, onTo
   return (
     <Card
       variant="outlined"
-      sx={[
-        {
-          position: "relative",
-          breakInside: "avoid",
-          mb: 2,
-          overflow: "hidden",
-          // The action row shows on hover or keyboard focus, and always on touch screens (no hover there).
-          "& .note-actions": { opacity: 0, transition: "opacity 120ms" },
-          "&:hover .note-actions, &:focus-within .note-actions": { opacity: 1 },
-          "@media (hover: none)": { "& .note-actions": { opacity: 1 } },
-        },
-        noteSurfaceSx(note.color),
-      ]}
+      sx={[{ position: "relative", breakInside: "avoid", mb: 2, overflow: "hidden" }, noteSurfaceSx(note.color)]}
     >
       {onOpen ? <CardActionArea onClick={onOpen}>{content}</CardActionArea> : content}
       {editable && (
-        <Box className="note-actions" sx={{ display: "flex", justifyContent: "flex-end", px: 0.5, pb: 0.5 }}>
-          <Tooltip title="Colour">
-            <IconButton size="small" aria-label="Colour" onClick={(e) => setColorAnchor(e.currentTarget)}>
-              <PaletteOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={pinned ? "Unpin" : "Pin"}>
-            <IconButton size="small" aria-label={pinned ? "Unpin" : "Pin"} onClick={onTogglePin}>
-              {pinned ? <PushPinIcon fontSize="small" color="primary" /> : <PushPinOutlinedIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={archived ? "Unarchive" : "Archive"}>
-            <IconButton size="small" aria-label={archived ? "Unarchive" : "Archive"} onClick={onToggleArchive}>
-              {archived ? <UnarchiveOutlinedIcon fontSize="small" /> : <ArchiveOutlinedIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        </Box>
+        <Tooltip title={pinned ? "Unpin" : "Pin"}>
+          <IconButton
+            size="small"
+            aria-label={pinned ? "Unpin" : "Pin"}
+            aria-pressed={pinned}
+            onClick={onTogglePin}
+            sx={{
+              position: "absolute",
+              top: 6,
+              right: 6,
+              zIndex: 1,
+              bgcolor: hasPhotos ? (t) => alpha(t.palette.background.paper, 0.75) : undefined,
+              color: pinned ? "primary.main" : "text.secondary",
+            }}
+          >
+            {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
       )}
-      <Menu anchorEl={colorAnchor} open={!!colorAnchor} onClose={() => setColorAnchor(null)}>
-        <Box sx={{ display: "flex", gap: 1, p: 1.5 }} role="group" aria-label="Note colour">
-          {NOTE_COLORS.map((c) => {
-            const main = swatchColor(theme, c);
-            return (
-              <IconButton
-                key={c}
-                size="small"
-                aria-label={NOTE_COLOR_LABELS[c]}
-                onClick={() => {
-                  onColor?.(c);
-                  setColorAnchor(null);
-                }}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  border: 2,
-                  borderColor: note.color === c ? "text.primary" : "divider",
-                  bgcolor: main ?? "background.paper",
-                }}
-              />
-            );
-          })}
-        </Box>
-      </Menu>
     </Card>
   );
 }
