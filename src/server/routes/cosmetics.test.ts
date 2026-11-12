@@ -11,7 +11,7 @@ import { cosmeticsOf, PUBLIC_USER_FIELDS } from "../utils/publicUser";
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./users.js"), () => import("./admin/users.js")]);
+  t = await startTestApp([() => import("./users.js"), () => import("./admin/index.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();

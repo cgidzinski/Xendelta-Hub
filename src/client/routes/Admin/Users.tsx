@@ -1,812 +1,193 @@
-import PageContainer from "../../components/ui/PageContainer";
-import { useConfirm } from "../../components/ui/ConfirmProvider";
-import { useState, useMemo } from "react";
-import {
-  Box,
-  Card,
-  Typography,
-  Avatar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  Alert,
-  TextField,
-  InputAdornment,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  Button,
-  MenuItem,
-  IconButton,
-  Tabs,
-  Tab,
-  Tooltip,
-  FormControlLabel,
-  Checkbox,
-  FormGroup,
-} from "@mui/material";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Avatar, Box, InputAdornment, LinearProgress, MenuItem, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import CloseIcon from "@mui/icons-material/Close";
-import DeleteIcon from "@mui/icons-material/Delete";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import StorageIcon from "@mui/icons-material/Storage";
-import InventoryIcon from "@mui/icons-material/Inventory2";
-import SettingsIcon from "@mui/icons-material/Settings";
-import PersonIcon from "@mui/icons-material/Person";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import SendIcon from "@mui/icons-material/Send";
-import { useSnackbar } from "notistack";
-import ListSkeleton from "../../components/ui/ListSkeleton";
-import { useTitle } from "../../hooks/useTitle";
-import { useUserProfile } from "../../hooks/user/useUserProfile";
-import { useAdminUsers, AdminUser, NotifyChannel } from "../../hooks/admin/useAdminUsers";
-import { formatFileSize } from "../../utils/fileUtils";
+import type { AdminUserRow, UserFilter, UserSort } from "@shared/admin";
+import PageHeader from "../../components/ui/PageHeader";
+import ErrorDisplay from "../../components/ErrorDisplay";
 import UserName from "../../components/user/UserName";
+import { useTitle } from "../../hooks/useTitle";
+import { useAdminUserList } from "../../hooks/admin/useAdminData";
+import { formatFileSize } from "../../utils/fileUtils";
+import DataTable, { Pager, type Column } from "./components/DataTable";
+import FilterChips from "./components/FilterChips";
+import StatusChip from "./components/StatusChip";
+import { shortDate, share } from "./adminFormat";
 
-const AVAILABLE_ROLES = ["admin", "user"];
-
-const ITEM_OPTIONS = [
-  { value: "1gb-xendrive-voucher", label: "1GB XenDrive Voucher" },
-  { value: "golden-badge", label: "Golden Badge" },
+const FILTERS: Array<{ value: UserFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "admins", label: "Admins" },
+  { value: "near_quota", label: "Near storage limit" },
+  { value: "buyers", label: "Has bought gems" },
+  { value: "new", label: "Joined this week" },
+];
+const SORTS: Array<{ value: UserSort; label: string }> = [
+  { value: "newest", label: "Newest" },
+  { value: "name", label: "Name" },
+  { value: "storage", label: "Most storage used" },
 ];
 
+/** The people list: search, filter, sort and page on the server; a row opens that person's page. */
 export default function Users() {
   useTitle("Users");
-  const { enqueueSnackbar } = useSnackbar();
-  const { profile, refetch: refetchProfile } = useUserProfile();
-  const {
-    users,
-    isLoading,
-    updateUser,
-    isUpdatingUser,
-    deleteUser,
-    isDeletingUser,
-    resetAvatar,
-    isResettingAvatar,
-    giveItem,
-    isGivingItem,
-    removeItem,
-    isRemovingItem,
-    sendUserNotification,
-    isSendingNotification,
-    refetch,
-  } = useAdminUsers();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [userModalOpen, setUserModalOpen] = useState(false);
-  const [editingRoles, setEditingRoles] = useState<string[]>([]);
-  const [editingQuota, setEditingQuota] = useState<string>("");
-  const confirm = useConfirm();
-  const [selectedGiftItem, setSelectedGiftItem] = useState<string>("");
-  const [activeTab, setActiveTab] = useState(0);
-  const [notifyTitle, setNotifyTitle] = useState("");
-  const [notifyMessage, setNotifyMessage] = useState("");
-  const [notifyLink, setNotifyLink] = useState("");
-  const [notifyChannels, setNotifyChannels] = useState<NotifyChannel[]>(["inapp", "socket", "email", "push"]);
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const [text, setText] = useState(params.get("q") ?? "");
+  const [q, setQ] = useState(text);
+  const filter = (params.get("filter") as UserFilter) || "all";
+  const sort = (params.get("sort") as UserSort) || "newest";
+  const page = Number(params.get("page")) || 1;
 
-  const filteredUsers = useMemo(() => {
-    if (searchQuery.trim() === "") {
-      return users;
+  // Typing waits a moment before it searches.
+  useEffect(() => {
+    const timer = setTimeout(() => setQ(text), 300);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  const set = (change: Record<string, string>) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(change)) {
+      if (v && v !== "all" && v !== "newest" && v !== "1") next.set(k, v);
+      else next.delete(k);
     }
-    const query = searchQuery.toLowerCase();
-    return users.filter(
-      (user) =>
-        user.username.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query) ||
-        user.roles?.some((role) => role.toLowerCase().includes(query)),
-    );
-  }, [searchQuery, users]);
-
-  const getRoleColor = (role: string) => {
-    const lowerRole = role.toLowerCase();
-    switch (lowerRole) {
-      case "admin":
-        return "error";
-      default:
-        return "default";
-    }
+    setParams(next, { replace: true });
   };
+  useEffect(() => {
+    if (q !== (params.get("q") ?? "")) set({ q, page: "1" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
-  const handleUserClick = (user: AdminUser) => {
-    setSelectedUser(user);
-    setEditingRoles(user.roles || []);
-    setEditingQuota(user.xendrive?.spaceAllowed ? formatFileSize(user.xendrive.spaceAllowed) : "");
-    setNotifyTitle("");
-    setNotifyMessage("");
-    setNotifyLink("");
-    setNotifyChannels(["inapp", "socket", "email", "push"]);
-    setUserModalOpen(true);
-  };
+  const { data, isLoading, isError, error, refetch } = useAdminUserList({ q, filter, sort, page });
 
-  const toggleNotifyChannel = (channel: NotifyChannel) => {
-    setNotifyChannels((prev) => (prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]));
-  };
-
-  const handleSendNotification = async () => {
-    if (!selectedUser || !notifyTitle.trim() || !notifyMessage.trim() || notifyChannels.length === 0) return;
-
-    try {
-      const result = await sendUserNotification(selectedUser._id, {
-        title: notifyTitle.trim(),
-        message: notifyMessage.trim(),
-        link: notifyLink.trim() || undefined,
-        channels: notifyChannels,
-      });
-
-      const parts: string[] = [];
-      if (notifyChannels.includes("inapp")) parts.push(`In-app: ${result.inapp ? "sent" : "failed"}`);
-      if (notifyChannels.includes("socket")) parts.push(`Socket: ${result.socket ? "sent" : "failed"}`);
-      if (notifyChannels.includes("email")) parts.push(`Email: ${result.email ? "sent" : "skipped"}`);
-      if (notifyChannels.includes("push")) {
-        parts.push(`Push: ${result.push.sent} sent${result.push.pruned ? `, ${result.push.pruned} pruned` : ""}`);
-      }
-
-      enqueueSnackbar(parts.join(" \u00b7 "), { variant: "info" });
-      setNotifyTitle("");
-      setNotifyMessage("");
-      setNotifyLink("");
-    } catch (error: any) {
-      enqueueSnackbar(error?.response?.data?.message || "Failed to send notification", { variant: "error" });
-    }
-  };
-
-  const handleCloseModal = () => {
-    setUserModalOpen(false);
-    setSelectedUser(null);
-    setEditingRoles([]);
-    setEditingQuota("");
-    setActiveTab(0);
-  };
-
-  const handleSaveRoles = async () => {
-    if (!selectedUser) return;
-    updateUser(selectedUser._id, { roles: editingRoles })
-      .then(() => {
-        enqueueSnackbar("Roles updated successfully", { variant: "success" });
-        // Keep the open dialog in step with what was just saved.
-        setSelectedUser({ ...selectedUser, roles: editingRoles });
-        // Changing your own roles changes what the sidebar offers.
-        if (selectedUser._id === profile?._id) refetchProfile();
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to update roles", { variant: "error" });
-      });
-  };
-
-  const parseQuotaInput = (input: string): number | null => {
-    const trimmed = input.trim().toUpperCase();
-    if (!trimmed) return null;
-
-    // Parse format like "5 GB", "1024 MB", etc.
-    const match = trimmed.match(/^([\d.]+)\s*(B|KB|MB|GB|TB)?$/);
-    if (!match) return null;
-
-    const value = parseFloat(match[1]);
-    if (isNaN(value) || value < 0) return null;
-
-    const unit = match[2] || "B";
-    const multipliers: { [key: string]: number } = {
-      B: 1,
-      KB: 1024,
-      MB: 1024 * 1024,
-      GB: 1024 * 1024 * 1024,
-      TB: 1024 * 1024 * 1024 * 1024,
-    };
-
-    return Math.floor(value * (multipliers[unit] || 1));
-  };
-
-  const handleSaveQuota = async () => {
-    if (!selectedUser) return;
-
-    const quotaBytes = parseQuotaInput(editingQuota);
-    if (quotaBytes === null && editingQuota.trim() !== "") {
-      enqueueSnackbar("Invalid quota format. Use format like '5 GB' or '1024 MB'", { variant: "error" });
-      return;
-    }
-
-    updateUser(selectedUser._id, { xendriveQuota: quotaBytes || 0 })
-      .then(async () => {
-        enqueueSnackbar("Quota updated successfully", { variant: "success" });
-        // Refetch users list
-        const { data: updatedUsers } = await refetch();
-        if (updatedUsers) {
-          // Update selected user after refetch
-          const updatedUser = updatedUsers.find((u) => u._id === selectedUser._id);
-          if (updatedUser) {
-            setSelectedUser(updatedUser);
-            setEditingQuota(
-              updatedUser.xendrive?.spaceAllowed ? formatFileSize(updatedUser.xendrive.spaceAllowed) : "",
-            );
-          }
-        }
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to update quota", { variant: "error" });
-      });
-  };
-
-  const confirmDeleteUser = async () => {
-    const ok = await confirm({
-      title: "Delete user?",
-      message: (
-        <>
-          Are you sure you want to delete user{" "}
-          <strong>
-            <UserName user={selectedUser} />
-          </strong>
-          ? This action cannot be undone.
-        </>
-      ),
-      confirmLabel: "Delete",
-    });
-    if (ok) await handleDeleteUser();
-  };
-
-  const handleDeleteUser = async () => {
-    if (!selectedUser) return;
-    deleteUser(selectedUser._id)
-      .then(() => {
-        enqueueSnackbar("User deleted successfully", { variant: "success" });
-        handleCloseModal();
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to delete user", { variant: "error" });
-      });
-  };
-
-  const handleResetAvatar = async () => {
-    if (!selectedUser) return;
-    resetAvatar(selectedUser._id)
-      .then(() => {
-        enqueueSnackbar("Avatar reset successfully", { variant: "success" });
-        // Update selected user
-        const updatedUser = users.find((u) => u._id === selectedUser._id);
-        if (updatedUser) {
-          setSelectedUser({ ...updatedUser, avatar: undefined });
-        }
-        // If it's the current user, refetch profile to update sidebar
-        if (selectedUser._id === profile?._id) {
-          refetchProfile();
-        }
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to reset avatar", { variant: "error" });
-      });
-  };
-
-  const handleGiveGift = async () => {
-    if (!selectedUser || !selectedGiftItem) return;
-    giveItem(selectedUser._id, selectedGiftItem)
-      .then(() => {
-        enqueueSnackbar("Gift sent successfully", { variant: "success" });
-        setSelectedGiftItem("");
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to send gift", { variant: "error" });
-      });
-  };
-
-  const handleRemoveItem = async (userId: string, itemKey: string) => {
-    removeItem(userId, itemKey)
-      .then(() => {
-        enqueueSnackbar("Item removed", { variant: "success" });
-        // Update selected user inventory
-        if (selectedUser) {
-          setSelectedUser({
-            ...selectedUser,
-            inventory: selectedUser.inventory?.filter((i) => i.itemKey !== itemKey) || [],
-          });
-        }
-      })
-      .catch((error) => {
-        enqueueSnackbar(error.message || "Failed to remove item", { variant: "error" });
-      });
-  };
-
-  // You can edit anyone else's roles, but not your own: removing your own admin role would lock
-  // you out of this page mid-session.
-  const isCurrentUser = selectedUser?._id === profile?._id;
-
-  if (isLoading) {
-    return (
-      <PageContainer>
-        <Box sx={{ py: 4 }}>
-          <ListSkeleton rows={8} height={52} gap={1} />
+  const columns: Column<AdminUserRow>[] = [
+    {
+      key: "person",
+      header: "Person",
+      render: (u) => (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+          <Avatar src={u.avatar} sx={{ width: 36, height: 36 }}>
+            {u.username[0]?.toUpperCase()}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 500 }} noWrap>
+              <UserName user={u} />
+            </Typography>
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {u.email}
+            </Typography>
+          </Box>
         </Box>
-      </PageContainer>
-    );
-  }
+      ),
+    },
+    {
+      key: "role",
+      header: "Role",
+      width: 110,
+      render: (u) => (
+        <StatusChip
+          label={u.roles.includes("admin") ? "Admin" : "User"}
+          tone={u.roles.includes("admin") ? "error" : "default"}
+        />
+      ),
+    },
+    {
+      key: "storage",
+      header: "Storage",
+      width: 220,
+      render: (u) => {
+        const used = share(u.storage.used, u.storage.allowed);
+        return (
+          <Box sx={{ minWidth: 120 }}>
+            <LinearProgress
+              variant="determinate"
+              value={Math.min(100, used * 100)}
+              color={used >= 0.9 ? "warning" : "primary"}
+              sx={{ height: 6, borderRadius: 3 }}
+            />
+            <Typography variant="caption" color={used >= 0.9 ? "warning.main" : "text.secondary"}>
+              {formatFileSize(u.storage.used)} of {formatFileSize(u.storage.allowed)}
+            </Typography>
+          </Box>
+        );
+      },
+    },
+    { key: "gems", header: "Gems", width: 100, render: (u) => u.gems.toLocaleString() },
+    {
+      key: "joined",
+      header: "Joined",
+      width: 130,
+      render: (u) => (
+        <Typography variant="body2" color="text.secondary">
+          {shortDate(u.joinedAt)}
+        </Typography>
+      ),
+    },
+  ];
 
   return (
     <Box>
-      <PageContainer>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700, mb: 2 }}>
-            Users
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Manage and view all users in the system
-          </Typography>
+      <PageHeader
+        title="Users"
+        subtitle={
+          data ? `${data.total.toLocaleString()} ${data.total === 1 ? "person" : "people"}` : "Everyone with an account"
+        }
+      />
 
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+        <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
           <TextField
-            fullWidth
-            placeholder="Search users by username, email, or role..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ mb: 3, maxWidth: 600 }}
-          />
-        </Box>
-
-        {filteredUsers.length === 0 ? (
-          <Alert severity="info">No users found{searchQuery ? " matching your search" : ""}.</Alert>
-        ) : (
-          <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider" }}>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>User</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Roles</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user._id} hover onClick={() => handleUserClick(user)} sx={{ cursor: "pointer" }}>
-                      <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                          <Avatar src={user.avatar || undefined} sx={{ width: 40, height: 40, borderRadius: 1.5 }}>
-                            {user.username?.charAt(0).toUpperCase()}
-                          </Avatar>
-                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            <UserName user={user} />
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {user.email}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                          {user.roles && user.roles.length > 0 ? (
-                            user.roles.map((role, index) => (
-                              <Chip
-                                key={index}
-                                label={role}
-                                size="small"
-                                color={getRoleColor(role) as any}
-                                sx={{ fontWeight: 600 }}
-                              />
-                            ))
-                          ) : (
-                            <Chip label="User" size="small" color="default" sx={{ fontWeight: 600 }} />
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Card>
-        )}
-
-        <Box sx={{ mt: 3, textAlign: "center" }}>
-          <Typography variant="body2" color="text.secondary">
-            Showing {filteredUsers.length} of {users.length} users
-          </Typography>
-        </Box>
-
-        {/* User Details Modal */}
-        <Dialog
-          open={userModalOpen}
-          onClose={handleCloseModal}
-          PaperProps={{
-            sx: {
-              width: "80vw",
-              height: "80vh",
-              maxWidth: "none",
-              maxHeight: "none",
-            },
-          }}
-        >
-          <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 2, pb: 1 }}>
-            <Avatar src={selectedUser?.avatar || undefined} sx={{ width: 48, height: 48, fontSize: "1.25rem" }}>
-              {selectedUser?.username?.charAt(0).toUpperCase()}
-            </Avatar>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                <UserName user={selectedUser} />
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {selectedUser?.email}
-              </Typography>
-            </Box>
-            <IconButton onClick={handleCloseModal} size="small">
-              <CloseIcon />
-            </IconButton>
-          </DialogTitle>
-          <Tabs
-            value={activeTab}
-            onChange={(_e, v) => setActiveTab(v)}
-            sx={{
-              px: 2,
-              borderBottom: 1,
-              borderColor: "divider",
-              "& .MuiTab-root": {
-                textTransform: "none",
-                minHeight: 48,
+            size="small"
+            placeholder="Search name or email"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            sx={{ width: { xs: "100%", sm: 340 } }}
+            slotProps={{
+              htmlInput: { "aria-label": "Search people" },
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
               },
             }}
+          />
+          <TextField
+            select
+            size="small"
+            value={sort}
+            onChange={(e) => set({ sort: e.target.value, page: "1" })}
+            label="Sort"
+            sx={{ minWidth: 190 }}
           >
-            <Tab icon={<PersonIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Info" />
-            <Tab icon={<InventoryIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Inventory" />
-            <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Misc" />
-            <Tab icon={<NotificationsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Notify" />
-          </Tabs>
-          <DialogContent sx={{ p: 3 }}>
-            {activeTab === 0 && selectedUser && (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <Box sx={{ display: "flex", gap: 4 }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      Gems
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700, color: "primary.main" }}>
-                      {selectedUser.gems?.toLocaleString() || 0}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      Roles
-                    </Typography>
-                    <Box sx={{ display: "flex", gap: 0.5 }}>
-                      {selectedUser.roles?.map((role) => (
-                        <Chip
-                          key={role}
-                          label={role}
-                          size="small"
-                          color={getRoleColor(role) as any}
-                          sx={{ fontWeight: 600, textTransform: "capitalize" }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                </Box>
-                {selectedUser.xendrive && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      XenDrive
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {formatFileSize(selectedUser.xendrive.spaceUsed)} /{" "}
-                      {formatFileSize(selectedUser.xendrive.spaceAllowed)}
-                      <Typography component="span" variant="caption" color="text.secondary">
-                        {" "}
-                        ({selectedUser.xendrive.fileCount} files)
-                      </Typography>
-                    </Typography>
-                  </Box>
-                )}
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                    User ID
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-                    {selectedUser._id}
-                  </Typography>
-                </Box>
-              </Box>
-            )}
+            {SORTS.map((s) => (
+              <MenuItem key={s.value} value={s.value}>
+                {s.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+        <FilterChips label="Filter" options={FILTERS} value={filter} onChange={(v) => set({ filter: v, page: "1" })} />
+      </Box>
 
-            {activeTab === 1 && selectedUser && (
-              <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Give Item
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                    <TextField
-                      select
-                      size="small"
-                      value={selectedGiftItem}
-                      onChange={(e) => setSelectedGiftItem(e.target.value)}
-                      sx={{ flex: 1 }}
-                    >
-                      {ITEM_OPTIONS.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      size="small"
-                      onClick={handleGiveGift}
-                      disabled={isGivingItem || !selectedGiftItem}
-                    >
-                      {isGivingItem ? "Sending..." : "Give"}
-                    </Button>
-                  </Box>
-                </Box>
-
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                  Current Inventory ({selectedUser.inventory?.length || 0})
-                </Typography>
-                {!selectedUser.inventory || selectedUser.inventory.length === 0 ? (
-                  <Box sx={{ py: 4, textAlign: "center" }}>
-                    <InventoryIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
-                    <Typography color="text.secondary">No items in inventory</Typography>
-                  </Box>
-                ) : (
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, overflow: "auto", flex: 1 }}>
-                    {selectedUser.inventory.map((item, index) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 2,
-                          p: 1.5,
-                          border: "1px solid",
-                          borderColor: "divider",
-                          borderRadius: 1,
-                        }}
-                      >
-                        <Avatar src={item.image} sx={{ width: 40, height: 40 }} variant="rounded" />
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {item.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {item.description}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ textAlign: "right" }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                            Received
-                          </Typography>
-                          <Typography variant="caption">{new Date(item.purchasedAt).toLocaleDateString()}</Typography>
-                        </Box>
-                        {item.used && <Chip label="Used" size="small" color="default" />}
-                        {item.redeemable && !item.used && <Chip label="Redeemable" size="small" color="success" />}
-                        <Tooltip title="Remove from inventory">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => {
-                              handleRemoveItem(selectedUser._id, item.itemKey);
-                            }}
-                            disabled={isRemovingItem}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    ))}
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            {activeTab === 2 && selectedUser && (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Roles
-                  </Typography>
-                  <FormGroup row>
-                    {AVAILABLE_ROLES.map((role) => (
-                      <FormControlLabel
-                        key={role}
-                        label={
-                          <Typography variant="body2" sx={{ textTransform: "capitalize" }}>
-                            {role}
-                          </Typography>
-                        }
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={editingRoles.includes(role)}
-                            disabled={isCurrentUser || isUpdatingUser}
-                            onChange={(e) =>
-                              setEditingRoles((prev) =>
-                                e.target.checked ? [...prev, role] : prev.filter((r) => r !== role),
-                              )
-                            }
-                          />
-                        }
-                      />
-                    ))}
-                  </FormGroup>
-                  {isCurrentUser ? (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                      You can't change your own roles.
-                    </Typography>
-                  ) : (
-                    <Button
-                      variant="contained"
-                      size="small"
-                      sx={{ mt: 1 }}
-                      onClick={handleSaveRoles}
-                      disabled={
-                        isUpdatingUser ||
-                        [...editingRoles].sort().join() === [...(selectedUser.roles ?? [])].sort().join()
-                      }
-                    >
-                      {isUpdatingUser ? "Saving..." : "Update roles"}
-                    </Button>
-                  )}
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                    Extra XenDrive space (on top of the free 1 GB)
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <TextField
-                      placeholder="e.g., 5 GB"
-                      value={editingQuota}
-                      onChange={(e) => setEditingQuota(e.target.value)}
-                      size="small"
-                      sx={{ width: 200 }}
-                      InputProps={{
-                        startAdornment: <StorageIcon sx={{ fontSize: 18, mr: 1, color: "text.secondary" }} />,
-                      }}
-                    />
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={handleSaveQuota}
-                      disabled={
-                        isUpdatingUser ||
-                        editingQuota ===
-                          (selectedUser.xendrive?.spaceAllowed
-                            ? formatFileSize(selectedUser.xendrive.spaceAllowed)
-                            : "")
-                      }
-                    >
-                      {isUpdatingUser ? "Saving..." : "Update"}
-                    </Button>
-                  </Box>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                    Avatar
-                  </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{
-                        fontFamily: "monospace",
-                        fontSize: "0.75rem",
-                        flex: 1,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={selectedUser.avatar}
-                    >
-                      {selectedUser.avatar || "No avatar set"}
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      startIcon={<RestartAltIcon />}
-                      onClick={handleResetAvatar}
-                      disabled={isResettingAvatar || !selectedUser.avatar}
-                      color="warning"
-                    >
-                      Reset
-                    </Button>
-                  </Box>
-                </Box>
-
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                    Danger Zone
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    size="small"
-                    startIcon={<DeleteIcon />}
-                    onClick={confirmDeleteUser}
-                    disabled={isDeletingUser}
-                  >
-                    Delete User
-                  </Button>
-                </Box>
-              </Box>
-            )}
-
-            {activeTab === 3 && selectedUser && (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 480 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Send a one-off notification to <UserName user={selectedUser} /> on the channels below \u2014 useful
-                  for testing delivery (in-app row, live socket update, email, push).
-                </Typography>
-
-                <TextField
-                  label="Title"
-                  size="small"
-                  value={notifyTitle}
-                  onChange={(e) => setNotifyTitle(e.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="Message"
-                  size="small"
-                  value={notifyMessage}
-                  onChange={(e) => setNotifyMessage(e.target.value)}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                />
-                <TextField
-                  label="Link (optional)"
-                  size="small"
-                  placeholder="/internal/..."
-                  value={notifyLink}
-                  onChange={(e) => setNotifyLink(e.target.value)}
-                  fullWidth
-                />
-
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                    Channels
-                  </Typography>
-                  <FormGroup row>
-                    {(["inapp", "socket", "email", "push"] as NotifyChannel[]).map((channel) => (
-                      <FormControlLabel
-                        key={channel}
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={notifyChannels.includes(channel)}
-                            onChange={() => toggleNotifyChannel(channel)}
-                          />
-                        }
-                        label={{ inapp: "In-app", socket: "Socket", email: "Email", push: "Push" }[channel]}
-                      />
-                    ))}
-                  </FormGroup>
-                </Box>
-
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<SendIcon />}
-                  onClick={handleSendNotification}
-                  disabled={
-                    isSendingNotification || !notifyTitle.trim() || !notifyMessage.trim() || notifyChannels.length === 0
-                  }
-                  sx={{ alignSelf: "flex-start" }}
-                >
-                  {isSendingNotification ? "Sending..." : "Send"}
-                </Button>
-              </Box>
-            )}
-          </DialogContent>
-        </Dialog>
-      </PageContainer>
+      {isError ? (
+        <ErrorDisplay error={error ?? null} title="Couldn't load people" onRetry={() => refetch()} />
+      ) : (
+        <>
+          <DataTable
+            columns={columns}
+            rows={data?.items}
+            rowKey={(u) => u._id}
+            loading={isLoading}
+            onRowClick={(u) => navigate(`/admin/users/${u._id}`)}
+            emptyTitle="No one matches"
+            emptyDescription="Try a different search or filter."
+          />
+          {data && (
+            <Pager page={page} pageSize={data.pageSize} total={data.total} onPage={(p) => set({ page: String(p) })} />
+          )}
+        </>
+      )}
     </Box>
   );
 }

@@ -19,7 +19,6 @@ import ConfirmProvider from "./components/ui/ConfirmProvider";
 import ProtectedRoute from "./components/routeguards/ProtectedRoute";
 import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
 import AdminRoute from "./components/routeguards/AdminRoute";
-import AdminNavBar from "./components/navbars/AdminNavBar";
 
 // Contexts
 import { lazyPage } from "./utils/lazyPage";
@@ -71,8 +70,15 @@ const XenKitchenPublic = lazyPage(() => import("./routes/External/XenKitchenPubl
 const XenKitchenPublicBook = lazyPage(() => import("./routes/External/XenKitchenPublic/XenKitchenPublicBook"));
 // Routes - XenBudget
 // Routes - Admin
-const Admin = lazyPage(() => import("./routes/Admin/Admin"));
+const AdminLayout = lazyPage(() => import("./routes/Admin/AdminLayout"));
+const AdminOverview = lazyPage(() => import("./routes/Admin/Overview"));
 const Users = lazyPage(() => import("./routes/Admin/Users"));
+const UserDetail = lazyPage(() => import("./routes/Admin/UserDetail"));
+const AdminStorage = lazyPage(() => import("./routes/Admin/Storage"));
+const AdminMoney = lazyPage(() => import("./routes/Admin/Money"));
+const AdminMessaging = lazyPage(() => import("./routes/Admin/Messaging"));
+const AdminSystem = lazyPage(() => import("./routes/Admin/System"));
+const AdminAudit = lazyPage(() => import("./routes/Admin/Audit"));
 const AdminBlog = lazyPage(() => import("./routes/Admin/Blog"));
 const BlogPostForm = lazyPage(() => import("./routes/Admin/BlogPostForm"));
 const RecipaintPublic = lazyPage(() => import("./routes/External/RecipaintPublic/RecipaintPublic"));
@@ -185,18 +191,24 @@ const router = createBrowserRouter(
         {xenbudgetRoutes}
         {xennoteRoutes}
       </Route>
-      {/* Admin routes - require admin role and use AdminNavBar */}
+      {/* Admin routes - require the admin role; AdminLayout is the sidebar shell */}
       <Route
         path="/admin"
         element={
           <AdminRoute>
-            <AdminNavBar />
+            <AdminLayout />
           </AdminRoute>
         }
         errorElement={<ErrorPage />}
       >
-        <Route path="" element={<Admin />} />
+        <Route path="" element={<AdminOverview />} />
         <Route path="users" element={<Users />} />
+        <Route path="users/:userId" element={<UserDetail />} />
+        <Route path="storage" element={<AdminStorage />} />
+        <Route path="money" element={<AdminMoney />} />
+        <Route path="messaging" element={<AdminMessaging />} />
+        <Route path="system" element={<AdminSystem />} />
+        <Route path="audit" element={<AdminAudit />} />
         <Route path="blog" element={<AdminBlog />} />
         <Route path="blog/new" element={<BlogPostForm />} />
         <Route path="blog/:id/edit" element={<BlogPostForm />} />

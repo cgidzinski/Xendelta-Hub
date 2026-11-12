@@ -18,7 +18,7 @@ import { deleteFromGCS } from "../../utils/gcsUtils";
 import { AuthenticatedRequest } from "../../types";
 import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
-module.exports = function (app: express.Application) {
+export function registerAdminBlogRoutes(app: express.Application) {
   app.get(
     "/api/admin/blog",
     authenticateToken,
@@ -273,4 +273,4 @@ module.exports = function (app: express.Application) {
       });
     },
   );
-};
+}
