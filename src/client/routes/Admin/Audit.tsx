@@ -114,7 +114,7 @@ export default function Audit() {
               setDays(Number(e.target.value));
               setPage(1);
             }}
-            sx={{ minWidth: 160 }}
+            sx={{ minWidth: 160, width: { xs: "100%", sm: "auto" } }}
           >
             {RANGES.map((r) => (
               <MenuItem key={r.value} value={r.value}>

@@ -158,7 +158,7 @@ export default function Users() {
             value={sort}
             onChange={(e) => set({ sort: e.target.value, page: "1" })}
             label="Sort"
-            sx={{ minWidth: 190 }}
+            sx={{ minWidth: 190, width: { xs: "100%", sm: "auto" } }}
           >
             {SORTS.map((s) => (
               <MenuItem key={s.value} value={s.value}>
