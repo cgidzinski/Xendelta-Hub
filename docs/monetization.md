@@ -151,6 +151,23 @@ The dummy provider works for admins only on a production server, so players cann
   and hold gems, which changes how share links work today.
 - **Stripe Connect payouts** for sale earnings only, after a holding period.
 - **Cover images** for listings.
+- **Gems to keep files stored or shared (ongoing cost).** Storage and public links cost money every month, so
+  charge for them over time instead of only at purchase. Sketch: files you store beyond your free allowance, and
+  links you keep shared, cost gems on a schedule (for example per GB per month, accrued daily or hourly by a
+  background sweep). This is the "charge for what costs money" principle applied to the real cost, and it fits
+  with the per-download fee above. Questions to settle before building it:
+  - **What happens at zero gems.** Never delete anything. Likely order: warn well ahead, then pause uploads and
+    shared links, then read-only, with the owner always able to download or free space. A grace period before any of it.
+  - **What the free allowance covers.** The free 1 GB stays free. Plans (Plus and Pro) would include an allowance;
+    gems pay for what is beyond it.
+  - **What shared means.** Sharing a file or folder publicly costs extra, owned by whoever shares it. Links with an
+    expiry could cost less. A link inside a paid listing (selling files) is the seller's cost to cover.
+  - **The 1 GB vouchers.** Today they add space for good. Under rent, either they stay permanent (a one-off
+    purchase of capacity, with only usage beyond it rented) or they become a prepaid amount of storage-time.
+  - **A ledger first.** Metered spending is many small debits, so the crash-safe gem ledger above is a
+    prerequisite, along with a clear statement in the shop of what a month of storage will cost.
+  - **Consumer fairness.** Spending bought currency automatically over time needs a visible running cost, a way to
+    stop it, and a heads-up when the balance will run out.
 
 ## Other options considered
 
