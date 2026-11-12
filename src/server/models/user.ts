@@ -66,6 +66,10 @@ const userSchema = new Schema({
     currency: { type: String },
   },
   inventory: [inventoryItemSchema],
+  // What the person wears, per slot, as item keys (shared/cosmetics.ts). Sent with their public info.
+  cosmetics: {
+    badge: { type: String },
+  },
   notificationsLastCheckedAt: { type: Date },
   notificationPrefs: {
     // Opt-out: on by default, users turn it off in Profile settings. Push has no

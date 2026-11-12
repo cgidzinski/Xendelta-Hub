@@ -24,6 +24,7 @@ import {
 } from "../../../../utils/currencyUtils";
 import type { XenSplitExchange, XenSplitMember } from "../../../../hooks/xensplit/types";
 import { xsCardSx } from "./rowStyles";
+import UserName from "../../../../components/user/UserName";
 
 interface ExchangeListItemProps {
   exchange: XenSplitExchange;
@@ -120,7 +121,7 @@ export default function ExchangeListItem({
             sx={{ fontWeight: 600, ...(deleted && { textDecoration: "line-through" }) }}
             noWrap
           >
-            {partyA?.username ?? "?"} ↔ {partyB?.username ?? "?"}
+            <UserName user={partyA} fallback="?" /> ↔ <UserName user={partyB} fallback="?" />
           </Typography>
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
             {deleted ? "Deleted · " : ""}Exchange · {exchange.currency_a}/{exchange.currency_b}
@@ -200,7 +201,7 @@ export default function ExchangeListItem({
                   Party A owes Party B
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {partyA?.username ?? "?"}
+                  <UserName user={partyA} fallback="?" />
                 </Typography>
               </Box>
               <Typography variant="body2" sx={{ fontWeight: 700, color: "error.main", flexShrink: 0 }}>
@@ -220,7 +221,7 @@ export default function ExchangeListItem({
                   Party B owes Party A
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {partyB?.username ?? "?"}
+                  <UserName user={partyB} fallback="?" />
                 </Typography>
               </Box>
               <Typography variant="body2" sx={{ fontWeight: 700, color: "error.main", flexShrink: 0 }}>

@@ -57,10 +57,11 @@ export const emptyDraft = (overrides: Partial<ExpenseDraft> = {}): ExpenseDraft 
   ...overrides,
 });
 
-const asParticipant = (m: Pick<XenSplitMember, "user_id" | "username" | "avatar">): SearchedUser => ({
+const asParticipant = (m: Pick<XenSplitMember, "user_id" | "username" | "avatar" | "cosmetics">): SearchedUser => ({
   _id: m.user_id,
   username: m.username,
   avatar: m.avatar,
+  cosmetics: m.cosmetics,
 });
 
 /** Fill the edit dialog from a saved expense (and the recurring series it starts, if any). */

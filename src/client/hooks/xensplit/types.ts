@@ -1,4 +1,5 @@
 import type { EtransferInfo } from "@shared/etransfer";
+import type { Cosmetics } from "@shared/cosmetics";
 
 export type { EtransferInfo };
 
@@ -6,6 +7,7 @@ export interface XenSplitMember {
   user_id: string;
   username: string;
   avatar: string | null;
+  cosmetics?: Cosmetics;
   etransfer: EtransferInfo | null;
   joined_at: string;
 }
@@ -47,6 +49,7 @@ export interface XenSplitExpense {
     user_id: string;
     username: string;
     avatar: string | null;
+    cosmetics?: Cosmetics;
   } | null;
 }
 
@@ -130,6 +133,7 @@ export interface XenSplitBalance {
     _id: string;
     username: string;
     avatar: string | null;
+    cosmetics?: Cosmetics;
   };
   balances: {
     [currency: string]: number;
@@ -145,12 +149,14 @@ export interface XenSplitSettlementTransfer {
     _id: string;
     username: string;
     avatar: string | null;
+    cosmetics?: Cosmetics;
     etransfer: EtransferInfo | null;
   };
   toUser: {
     _id: string;
     username: string;
     avatar: string | null;
+    cosmetics?: Cosmetics;
     etransfer: EtransferInfo | null;
   };
 }

@@ -129,7 +129,7 @@ export default function CreateSettlementDialog({
             }}
           >
             {partyA ? (
-              <PersonStack avatar={partyA.avatar} name={partyA.username} />
+              <PersonStack avatar={partyA.avatar} name={partyA.username} cosmetics={partyA.cosmetics} />
             ) : (
               <Box
                 sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}
@@ -166,7 +166,7 @@ export default function CreateSettlementDialog({
               </IconButton>
             </Tooltip>
             {partyB ? (
-              <PersonStack avatar={partyB.avatar} name={partyB.username} />
+              <PersonStack avatar={partyB.avatar} name={partyB.username} cosmetics={partyB.cosmetics} />
             ) : (
               <Box
                 sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Autocomplete, TextField, Avatar, Box, Typography, CircularProgress } from "@mui/material";
 import { useUserSearch, SearchedUser } from "../hooks/useUserSearch";
 import { useAuth } from "../contexts/AuthContext";
+import UserName from "./user/UserName";
 
 interface UserSelectProps {
   value: SearchedUser[];
@@ -52,7 +53,9 @@ export function UserSelect({
           <Avatar src={option.avatar || undefined} sx={{ width: 32, height: 32 }}>
             {option.username[0]?.toUpperCase()}
           </Avatar>
-          <Typography variant="body2">{option.username}</Typography>
+          <Typography variant="body2">
+            <UserName user={option} />
+          </Typography>
         </Box>
       )}
       renderInput={(params) => (
@@ -90,7 +93,9 @@ export function UserSelect({
             <Avatar src={option.avatar || undefined} sx={{ width: 20, height: 20, fontSize: 10 }}>
               {option.username[0]?.toUpperCase()}
             </Avatar>
-            <Typography variant="caption">{option.username}</Typography>
+            <Typography variant="caption">
+              <UserName user={option} />
+            </Typography>
           </Box>
         ))
       }

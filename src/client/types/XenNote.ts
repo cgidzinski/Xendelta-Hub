@@ -1,4 +1,5 @@
 import type { ChecklistItem, NoteColor, NoteType } from "@shared/xennote/notes";
+import type { Cosmetics } from "@shared/cosmetics";
 
 export type NoteRole = "owner" | "editor" | "viewer";
 
@@ -57,6 +58,7 @@ export interface XenNotebookMember {
   role: NoteRole;
   username: string;
   avatar: string | null;
+  cosmetics?: Cosmetics;
 }
 
 export interface XenNotebook {

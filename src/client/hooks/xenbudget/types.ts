@@ -2,10 +2,13 @@
 // in src/client/types, and kept manually in sync with the mongoose schema in
 // src/server/models/xenBudget.js and the zod schemas in src/server/utils/validation.ts.
 
+import type { Cosmetics } from "@shared/cosmetics";
+
 export interface XenBudgetMember {
   user_id: string;
   username: string;
   avatar: string | null;
+  cosmetics?: Cosmetics;
 }
 
 /**
@@ -574,6 +577,7 @@ export interface SummaryPerson {
   user_id: string;
   username: string;
   avatar: string | null;
+  cosmetics?: Cosmetics;
   /** Each person's share of the book's expenses for the period. */
   total: number;
   /** Each person's share of the book's income for the period. */

@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { RecipeSummary } from "../../../../types/Recipe";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import { thumbUrlFor } from "@shared/recipaint/assetUrls";
+import UserName from "../../../../components/user/UserName";
 
 interface RecipeCardProps {
   recipe: RecipeSummary;
@@ -90,7 +91,7 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
                   {author.username.charAt(0).toUpperCase()}
                 </Avatar>
                 <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ minWidth: 0 }}>
-                  {author.username}
+                  <UserName user={author} />
                 </Typography>
               </>
             )}

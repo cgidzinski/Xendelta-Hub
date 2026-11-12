@@ -85,6 +85,15 @@ before real money is involved.
 
 ### Cosmetics everywhere
 
+**Built so far: the Golden Badge.** Wear or Take off from Inventory (`POST /api/user/inventory/:id/equip` and
+`/unequip`); the choice is stored as `users.cosmetics.badge` (an item key). Every query that loads a person for
+someone else's screen selects `PUBLIC_USER_FIELDS` (`server/utils/publicUser.ts`, which includes `cosmetics`), and the
+serializers pass it on, so the badge arrives wherever a member or participant does. The client draws it with
+`UserName` (`components/user/UserName.tsx`) next to the name. Trashing or admin-removing the last copy takes it off
+(`utils/cosmetics.ts`). Names in plain strings (tooltips, aria-labels, joined lists, chart labels inside SVG) stay
+text. Frames and name colours are not built; they need the shared avatar component below.
+
+
 - Badges, avatar frames and name colours, sold in the Shop for gems (about 1,500 to 6,000) and equipped from
   Inventory. Values are theme token names, never colour literals.
 - They only mean something if they show wherever a person is drawn. Today there is no shared avatar component: about

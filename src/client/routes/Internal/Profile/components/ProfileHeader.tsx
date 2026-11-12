@@ -1,5 +1,6 @@
 import { Box, Avatar, Typography } from "@mui/material";
 import { UserProfile } from "../../../../hooks/user/useUserProfile";
+import UserName from "../../../../components/user/UserName";
 
 interface ProfileHeaderProps {
   profile: UserProfile | undefined;
@@ -28,7 +29,7 @@ export default function ProfileHeader({ profile, avatarUrl, avatarKey }: Profile
       </Avatar>
 
       <Typography variant="h4" component="h1" gutterBottom>
-        {profile?.username}
+        <UserName user={profile} />
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         {profile?.email}

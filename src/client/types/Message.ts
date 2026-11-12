@@ -1,6 +1,8 @@
 /**
  * Message interface
  */
+import type { Cosmetics } from "@shared/cosmetics";
+
 export interface Message {
   _id: string;
   from: string;
@@ -8,5 +10,6 @@ export interface Message {
   time: string;
   parentMessageId?: string;
   senderUsername?: string;
+  senderCosmetics?: Cosmetics;
   isSystemMessage?: boolean;
 }

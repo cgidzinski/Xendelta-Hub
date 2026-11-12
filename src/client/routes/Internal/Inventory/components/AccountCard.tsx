@@ -7,6 +7,7 @@ import { cardSx } from "../../../../components/ui/surfaceStyles";
 import type { InventoryItem } from "../../../../hooks/user/useInventory";
 import type { UserProfile } from "../../../../hooks/user/useUserProfile";
 import { formatFileSize } from "../../../../utils/fileUtils";
+import UserName from "../../../../components/user/UserName";
 
 interface AccountCardProps {
   profile: UserProfile | undefined;
@@ -43,7 +44,7 @@ export default function AccountCard({ profile, inventory }: AccountCardProps) {
         <Avatar src={profile?.avatar} alt={profile?.username} sx={{ width: 64, height: 64 }} />
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
-            {profile?.username}
+            <UserName user={profile} />
           </Typography>
           <Typography variant="body2" color="text.secondary" noWrap>
             {profile?.email}

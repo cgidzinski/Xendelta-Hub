@@ -9,6 +9,7 @@ import { withDerivedUncategorised } from "../../utils/xenBudgetRules";
 
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
 import { broadcastBook, callerId, ensureSystemLabels, loadBookForCreator, loadBookForMember, mongoose } from "./shared";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 // Subdocument _ids from another book would collide on restore, so they're dropped and
 // mongoose assigns fresh ones.
@@ -234,7 +235,7 @@ export function registerBackupRoutes(app: any) {
       try {
         const book = await loadBookForMember(req, res);
         if (!book) return;
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
 
         const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
         res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -316,7 +317,7 @@ export function registerBackupRoutes(app: any) {
       await book.save();
 
       const inserted = await insertRestoredItems(book, payload.items, idMap, userId, "merge");
-      await book.populate("members", "username avatar");
+      await book.populate("members", PUBLIC_USER_FIELDS);
       SocketManager.getInstance().notifyXenBudgetBooksUpdated(members.map(String));
 
       res.json({
@@ -363,7 +364,7 @@ export function registerBackupRoutes(app: any) {
           inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "merge");
         }
 
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
 
         const message =

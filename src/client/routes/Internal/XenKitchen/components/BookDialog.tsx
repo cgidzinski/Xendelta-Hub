@@ -47,6 +47,7 @@ import {
   type KitchenBook,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { AppearancePicker } from "./CategoryDialog";
+import UserName from "../../../../components/user/UserName";
 
 export const ROLE_LABELS: Record<BookRole, { label: string; help: string }> = {
   owner: { label: "Owner", help: "Manages people, the public link, and can delete the book" },
@@ -366,7 +367,14 @@ function PeopleTab({ book, onGone }: { book: KitchenBook; onGone: () => void }) 
                   {m.username[0]?.toUpperCase()}
                 </Avatar>
               </ListItemAvatar>
-              <ListItemText primary={self ? `${m.username} (you)` : m.username} />
+              <ListItemText
+                primary={
+                  <>
+                    <UserName user={m} />
+                    {self && " (you)"}
+                  </>
+                }
+              />
             </ListItem>
           );
         })}

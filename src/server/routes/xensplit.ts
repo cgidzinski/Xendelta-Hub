@@ -1,3 +1,4 @@
+import type { Cosmetics } from "@shared/cosmetics";
 import { Request, Response } from "express";
 import { accessOf, canManage, canView } from "../utils/membership";
 import { roundMoneyExact } from "@shared/money";
@@ -45,6 +46,7 @@ import { diffFields, collectLogUserIds, EXPENSE_LOG_FIELDS, GROUP_LOG_FIELDS } f
 const mongoose = require("mongoose");
 import { ScheduledTask } from "../models/scheduledTask";
 import { XenSplitLog } from "../models/xenSplitLog";
+import { cosmeticsOf } from "../utils/publicUser";
 
 function sanitizeSecondaryCurrencies(primary: string, secondaries: string[]): string[] {
   return Array.from(new Set(secondaries.filter((c: string) => c !== primary)));
@@ -1246,6 +1248,7 @@ module.exports = function (app: any) {
             _id: m._id,
             username: m.username,
             avatar: m.avatar || null,
+            cosmetics: cosmeticsOf(m),
             etransfer: serializeEtransfer(m.etransfer),
           };
         };
@@ -1573,9 +1576,9 @@ module.exports = function (app: any) {
         const users = await User.find({ _id: { $in: userIds } })
           .select(MEMBER_FIELDS)
           .lean();
-        const userMap: Record<string, { username: string; avatar: string | null }> = {};
+        const userMap: Record<string, { username: string; avatar: string | null; cosmetics?: Cosmetics }> = {};
         for (const u of users as any[]) {
-          userMap[u._id.toString()] = { username: u.username, avatar: u.avatar || null };
+          userMap[u._id.toString()] = { username: u.username, avatar: u.avatar || null, cosmetics: cosmeticsOf(u) };
         }
 
         const entries = page.map((row: any) => ({

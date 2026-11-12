@@ -38,6 +38,7 @@ import {
   STABLE_CURRENCY_MENU_PROPS,
 } from "../../../../utils/currencyUtils";
 import { MemberSelect } from "./MemberSelect";
+import UserName from "../../../../components/user/UserName";
 
 interface CreateExchangeDialogProps {
   open: boolean;
@@ -438,7 +439,7 @@ export default function CreateExchangeDialog({
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                  {partyA?.username}
+                  <UserName user={partyA} />
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Gives {currencyA}
@@ -486,7 +487,7 @@ export default function CreateExchangeDialog({
               </Avatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                  {partyB?.username}
+                  <UserName user={partyB} />
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Gives {currencyB}
@@ -530,7 +531,7 @@ export default function CreateExchangeDialog({
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {partyA?.username}
+                    <UserName user={partyA} />
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Party A
@@ -562,7 +563,7 @@ export default function CreateExchangeDialog({
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {partyB?.username}
+                    <UserName user={partyB} />
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Party B
@@ -586,14 +587,26 @@ export default function CreateExchangeDialog({
               </Typography>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
                 <Typography variant="caption" color="text.secondary">
-                  <strong>{partyA?.username}</strong> owes <strong>{partyB?.username}</strong>{" "}
+                  <strong>
+                    <UserName user={partyA} />
+                  </strong>{" "}
+                  owes{" "}
+                  <strong>
+                    <UserName user={partyB} />
+                  </strong>{" "}
                   <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
                     {formatCurrency(amountANum, currencyA)}
                   </Box>
                 </Typography>
                 {amountBNum > 0 && (
                   <Typography variant="caption" color="text.secondary">
-                    <strong>{partyB?.username}</strong> owes <strong>{partyA?.username}</strong>{" "}
+                    <strong>
+                      <UserName user={partyB} />
+                    </strong>{" "}
+                    owes{" "}
+                    <strong>
+                      <UserName user={partyA} />
+                    </strong>{" "}
                     <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
                       {formatCurrency(amountBNum, currencyB)}
                     </Box>

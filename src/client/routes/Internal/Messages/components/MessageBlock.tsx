@@ -4,6 +4,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { format } from "date-fns";
 import DOMPurify from "dompurify";
 import { Message } from "../../../../types/Message";
+import UserName from "../../../../components/user/UserName";
 
 interface MessageBlockProps {
   message: Message;
@@ -55,7 +56,7 @@ export default function MessageBlock({
         <Box sx={{ flex: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
             <Typography variant="subtitle2" color={isMyMessage ? "primary" : "text.secondary"} fontWeight={600}>
-              {getMessageSenderName(message)}
+              <UserName user={{ username: getMessageSenderName(message), cosmetics: message.senderCosmetics }} />
             </Typography>
             {showTimestamp && (
               <Typography variant="caption" color="text.secondary">

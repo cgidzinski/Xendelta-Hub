@@ -31,6 +31,7 @@ import { UserSelect } from "../../../../components/UserSelect";
 import type { SearchedUser } from "../../../../hooks/useUserSearch";
 import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
+import UserName from "../../../../components/user/UserName";
 
 export default function GeneralSection() {
   const {
@@ -153,7 +154,10 @@ export default function GeneralSection() {
                     {m.username[0]?.toUpperCase()}
                   </Avatar>
                 </ListItemAvatar>
-                <ListItemText primary={m.username} secondary={m.user_id === book.created_by ? "Owner" : undefined} />
+                <ListItemText
+                  primary={<UserName user={m} />}
+                  secondary={m.user_id === book.created_by ? "Owner" : undefined}
+                />
               </ListItem>
             ))}
           </List>

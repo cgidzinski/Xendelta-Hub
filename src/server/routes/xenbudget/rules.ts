@@ -21,6 +21,7 @@ import {
 } from "../../utils/xenBudgetRules";
 
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 import {
   broadcastBook,
   buildRuleShares,
@@ -101,7 +102,7 @@ export function registerRuleRoutes(app: any) {
           req.body.priority ?? (book.rules.length ? Math.max(...book.rules.map((r: any) => r.priority ?? 0)) + 1 : 0);
         book.rules.push({ ...req.body, priority });
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Rule created", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -125,7 +126,7 @@ export function registerRuleRoutes(app: any) {
         if (error) return res.status(400).json({ status: false, message: error });
         Object.assign(rule, req.body);
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: "Rule updated", data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -211,7 +212,7 @@ export function registerRuleRoutes(app: any) {
         if (!rule) return res.status(404).json({ status: false, message: "Rule not found" });
         book.rules.pull({ _id: rule._id });
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         // Deleting a rule doesn't undo what it already did — that takes a re-apply sweep,
         // which the client offers next. Say so rather than implying it's been reversed.

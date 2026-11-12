@@ -13,6 +13,7 @@ import { STARTER_CATEGORIES } from "../../constants";
 
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
 import { broadcastBook, callerId, ensureSystemLabels, loadBookForMember } from "./shared";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 /**
  * The category half of ensureSystemLabels: re-adds any starter category the book is
@@ -137,7 +138,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
           ...(kind === "categories" ? { need_want: req.body.need_want ?? "none" } : {}),
         });
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: `${singular} created`, data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -213,7 +214,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
           await book.save();
         }
 
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({ status: true, message: `${singular} updated`, data: serializeBookFor(book, callerId(req)) });
       } catch (error) {
@@ -263,7 +264,7 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
       await book.save();
       await removeFromItems(book._id, name);
 
-      await book.populate("members", "username avatar");
+      await book.populate("members", PUBLIC_USER_FIELDS);
       broadcastBook(book);
       res.json({ status: true, message: `${singular} deleted`, data: serializeBookFor(book, callerId(req)) });
     } catch (error) {
@@ -325,7 +326,7 @@ export function registerLabelSectionRoutes(app: any) {
         const categoriesChanged = ensureStarterCategories(book);
         const flagsChanged = ensureSystemLabels(book);
         if (!categoriesChanged && !flagsChanged) {
-          await book.populate("members", "username avatar");
+          await book.populate("members", PUBLIC_USER_FIELDS);
           return res.json({
             status: true,
             message: "Nothing to re-seed — the starter categories and flags are already all there",
@@ -333,7 +334,7 @@ export function registerLabelSectionRoutes(app: any) {
           });
         }
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         res.json({
           status: true,

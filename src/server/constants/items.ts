@@ -44,8 +44,9 @@ export const ITEMS: Record<string, Item> = {
   "golden-badge": {
     key: "golden-badge",
     name: "Golden Badge",
-    description: "A prestigious badge to display on your profile",
+    description: "A prestigious badge shown next to your name wherever people see it",
     image: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
     redeemable: false,
+    cosmetic: { slot: "badge" },
   },
 };

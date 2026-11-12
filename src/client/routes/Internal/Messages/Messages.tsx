@@ -37,6 +37,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getParticipantDisplay } from "../../../utils/conversationUtils";
 import StackedAvatars from "./components/StackedAvatars";
 import { useSnackbar } from "notistack";
+import UserName from "../../../components/user/UserName";
 
 export default function Messages() {
   useTitle("Messages");
@@ -317,7 +318,7 @@ export default function Messages() {
                           {user.username.charAt(0).toUpperCase()}
                         </Avatar>
                         <Typography variant="body2" sx={{ textAlign: "center", fontWeight: isSelected ? 600 : 400 }}>
-                          {user.username}
+                          <UserName user={user} />
                         </Typography>
                       </Box>
                     );

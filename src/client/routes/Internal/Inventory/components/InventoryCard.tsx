@@ -2,20 +2,29 @@ import { formatDistance } from "date-fns";
 import { Box, Button, Card, IconButton, Typography } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/DeleteOutline";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
+import { BADGES } from "@shared/cosmetics";
 import type { InventoryItem } from "../../../../hooks/user/useInventory";
+
+/** Cosmetics are worn rather than redeemed. */
+export const isWearable = (itemKey: string) => itemKey in BADGES;
 
 interface InventoryCardProps {
   item: InventoryItem;
   onRedeem: (item: InventoryItem) => void;
   onTrash: (item: InventoryItem) => void;
+  /** Wear (true) or take off (false) a cosmetic. */
+  onWear: (item: InventoryItem, wear: boolean) => void;
+  /** True when this cosmetic is what the person is wearing now. */
+  worn: boolean;
   busy: boolean;
 }
 
 const ago = (date: string) => formatDistance(new Date(date), new Date(), { addSuffix: true });
 
 /** One owned item. The action is on the card, so nothing needs a dialog. */
-export default function InventoryCard({ item, onRedeem, onTrash, busy }: InventoryCardProps) {
+export default function InventoryCard({ item, onRedeem, onTrash, onWear, worn, busy }: InventoryCardProps) {
   const redeemed = item.used;
+  const wearable = isWearable(item.itemKey);
   return (
     <Card variant="outlined" sx={{ ...cardSx, height: "100%", display: "flex", flexDirection: "column" }}>
       <Box
@@ -63,9 +72,24 @@ export default function InventoryCard({ item, onRedeem, onTrash, busy }: Invento
         <Typography variant="body2" color="text.secondary">
           {redeemed && item.usedAt ? `Redeemed ${ago(item.usedAt)}` : `Bought ${ago(item.purchasedAt)}`}
         </Typography>
+        {worn && (
+          <Typography variant="body2" color="success.main" sx={{ fontWeight: 700 }}>
+            Wearing now
+          </Typography>
+        )}
       </Box>
       <Box sx={{ px: 2, pb: 2 }}>
-        {redeemed ? (
+        {wearable ? (
+          <Button
+            fullWidth
+            variant={worn ? "outlined" : "contained"}
+            loading={busy}
+            onClick={() => onWear(item, !worn)}
+            sx={{ minHeight: 44 }}
+          >
+            {worn ? "Take off" : "Wear"}
+          </Button>
+        ) : redeemed ? (
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", lineHeight: "44px" }}>
             Redeemed
           </Typography>

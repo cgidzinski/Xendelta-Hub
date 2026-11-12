@@ -1,3 +1,4 @@
+import type { Cosmetics } from "@shared/cosmetics";
 import { formatMoney } from "@shared/money";
 import UploadProgress from "../../../../components/ui/UploadProgress";
 import React, { useEffect, useRef } from "react";
@@ -32,6 +33,7 @@ import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from ".
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
+import UserName from "../../../../components/user/UserName";
 
 const MAX_IMAGES = 10;
 
@@ -56,7 +58,7 @@ interface ExpenseFormProps {
   onExactSplitsChange: (v: { [userId: string]: string }) => void;
   percentSplits: { [userId: string]: string };
   onPercentSplitsChange: (v: { [userId: string]: string }) => void;
-  members: Array<{ user_id: string; username: string; avatar?: string | null }>;
+  members: Array<{ user_id: string; username: string; avatar?: string | null; cosmetics?: Cosmetics }>;
   currencyOptions: string[];
   onSubmit: () => void;
   submitDisabled?: boolean;
@@ -389,6 +391,7 @@ export default function ExpenseForm({
                       _id: member.user_id,
                       username: member.username,
                       avatar: member.avatar ?? null,
+                      cosmetics: member.cosmetics,
                     });
                   }}
                   sx={{
@@ -409,7 +412,9 @@ export default function ExpenseForm({
                   <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
                     {member.username[0]?.toUpperCase()}
                   </Avatar>
-                  <Typography variant="caption">{member.username}</Typography>
+                  <Typography variant="caption">
+                    <UserName user={member} />
+                  </Typography>
                 </Box>
               ))}
             </Box>
@@ -443,7 +448,12 @@ export default function ExpenseForm({
                   selectedParticipants.length === members.length
                     ? onParticipantsChange([])
                     : onParticipantsChange(
-                        members.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar ?? null })),
+                        members.map((m) => ({
+                          _id: m.user_id,
+                          username: m.username,
+                          avatar: m.avatar ?? null,
+                          cosmetics: m.cosmetics,
+                        })),
                       )
                 }
               >
@@ -462,7 +472,12 @@ export default function ExpenseForm({
                       } else {
                         onParticipantsChange([
                           ...selectedParticipants,
-                          { _id: member.user_id, username: member.username, avatar: member.avatar ?? null },
+                          {
+                            _id: member.user_id,
+                            username: member.username,
+                            avatar: member.avatar ?? null,
+                            cosmetics: member.cosmetics,
+                          },
                         ]);
                       }
                     }}
@@ -484,7 +499,9 @@ export default function ExpenseForm({
                     <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
                       {member.username[0]?.toUpperCase()}
                     </Avatar>
-                    <Typography variant="caption">{member.username}</Typography>
+                    <Typography variant="caption">
+                      <UserName user={member} />
+                    </Typography>
                   </Box>
                 );
               })}
@@ -549,7 +566,7 @@ export default function ExpenseForm({
                       {p.username[0]?.toUpperCase()}
                     </Avatar>
                     <Typography variant="body2" noWrap>
-                      {p.username}
+                      <UserName user={p} />
                     </Typography>
                     {splitType === "percent" ? (
                       <TextField

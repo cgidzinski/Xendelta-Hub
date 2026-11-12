@@ -18,6 +18,7 @@ import { STARTER_CATEGORIES, FLAG_NEEDS_REVIEW, FLAG_OFF_BUDGET } from "../../co
 
 import { serializeBookFor, serializeBooksFor } from "../../utils/xenBudgetSerializer";
 import { notify } from "../../utils/notificationUtils";
+import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 import {
   baseItemMatch,
   broadcastBook,
@@ -38,7 +39,7 @@ export function registerBookRoutes(app: any) {
     try {
       const userId = callerId(req);
       const books = await XenBudgetBook.find({ members: userId })
-        .populate("members", "username avatar")
+        .populate("members", PUBLIC_USER_FIELDS)
         .sort({ created_at: -1 });
 
       // One grouped count (and last activity date) for the whole list rather than a
@@ -96,7 +97,7 @@ export function registerBookRoutes(app: any) {
       });
       ensureSystemLabels(book);
       await book.save();
-      await book.populate("members", "username avatar");
+      await book.populate("members", PUBLIC_USER_FIELDS);
 
       SocketManager.getInstance().notifyXenBudgetBooksUpdated(members);
       for (const uid of members) {
@@ -127,7 +128,7 @@ export function registerBookRoutes(app: any) {
         // Self-healing: a book that predates a newly added built-in gets it here rather
         // than needing a migration.
         if (ensureSystemLabels(book)) await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         const count = await XenBudgetItem.countDocuments({ book_id: book._id, flags: { $nin: [FLAG_OFF_BUDGET] } });
         // Reuses the review-queue filter so the count always matches what the modal shows.
         const reviewCount = await XenBudgetItem.countDocuments(baseItemMatch(book._id, { review: "true" }));
@@ -161,7 +162,7 @@ export function registerBookRoutes(app: any) {
         if (default_currency !== undefined) book.default_currency = default_currency;
         if (archived !== undefined) book.archived = archived;
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(memberIds(book));
         res.json({ status: true, message: "Book updated", data: serializeBookFor(book, callerId(req)) });
@@ -221,7 +222,7 @@ export function registerBookRoutes(app: any) {
           return res.status(400).json({ status: false, message: "Those users are already members" });
         }
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
 
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(memberIds(book));
         broadcastBook(book);
@@ -268,7 +269,7 @@ export function registerBookRoutes(app: any) {
         const notifyIds = memberIds(book);
         book.members = book.members.filter((m: any) => m.toString() !== target);
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(notifyIds);
         broadcastBook(book);
         res.json({ status: true, message: "Member removed", data: serializeBookFor(book, userId) });
@@ -294,7 +295,7 @@ export function registerBookRoutes(app: any) {
         }
         book.created_by = target;
         await book.save();
-        await book.populate("members", "username avatar");
+        await book.populate("members", PUBLIC_USER_FIELDS);
         broadcastBook(book);
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(memberIds(book));
         notify(target, {

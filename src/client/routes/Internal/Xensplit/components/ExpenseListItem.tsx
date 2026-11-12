@@ -6,6 +6,7 @@ import type { XenSplitExpense, XenSplitRecurringSeries } from "../../../../hooks
 import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsCardSx, xsBadgeSx } from "./rowStyles";
+import UserName from "../../../../components/user/UserName";
 
 export const FREQUENCY_LABELS: Record<XenSplitRecurringSeries["frequency"], string> = {
   daily: "Daily",
@@ -119,7 +120,7 @@ export default function ExpenseListItem({
         </Typography>
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
           <Box component="span" sx={{ textTransform: "capitalize" }}>
-            {expense.payer?.username ?? "?"}
+            <UserName user={expense.payer} fallback="?" />
           </Box>
           {" paid · "}
           <Box component="span" sx={{ textTransform: "capitalize" }}>

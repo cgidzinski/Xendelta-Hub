@@ -45,6 +45,7 @@ import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useAdminUsers, AdminUser, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
+import UserName from "../../components/user/UserName";
 
 const AVAILABLE_ROLES = ["admin", "user"];
 
@@ -234,7 +235,11 @@ export default function Users() {
       title: "Delete user?",
       message: (
         <>
-          Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be undone.
+          Are you sure you want to delete user{" "}
+          <strong>
+            <UserName user={selectedUser} />
+          </strong>
+          ? This action cannot be undone.
         </>
       ),
       confirmLabel: "Delete",
@@ -366,7 +371,7 @@ export default function Users() {
                             {user.username?.charAt(0).toUpperCase()}
                           </Avatar>
                           <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                            {user.username}
+                            <UserName user={user} />
                           </Typography>
                         </Box>
                       </TableCell>
@@ -425,7 +430,7 @@ export default function Users() {
             </Avatar>
             <Box sx={{ flex: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                {selectedUser?.username}
+                <UserName user={selectedUser} />
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {selectedUser?.email}
@@ -735,8 +740,8 @@ export default function Users() {
             {activeTab === 3 && selectedUser && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 480 }}>
                 <Typography variant="body2" color="text.secondary">
-                  Send a one-off notification to {selectedUser.username} on the channels below \u2014 useful for testing
-                  delivery (in-app row, live socket update, email, push).
+                  Send a one-off notification to <UserName user={selectedUser} /> on the channels below \u2014 useful
+                  for testing delivery (in-app row, live socket update, email, push).
                 </Typography>
 
                 <TextField

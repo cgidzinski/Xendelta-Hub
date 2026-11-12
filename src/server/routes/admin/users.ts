@@ -14,6 +14,7 @@ import { requireAdmin } from "../../middleware/admin";
 import { AuthenticatedRequest } from "../../types";
 
 import { ITEMS } from "../../constants/items";
+import { unequipIfNotOwned } from "../../utils/cosmetics";
 import { Notification } from "../../models/notification";
 import { SocketManager } from "../../infrastructure/SocketManager";
 
@@ -289,6 +290,7 @@ module.exports = function (app: express.Application) {
 
       user.inventory.splice(itemIndex, 1);
       await user.save();
+      await unequipIfNotOwned(user._id, itemKey);
 
       return res.json({
         status: true,

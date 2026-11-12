@@ -28,6 +28,7 @@ import SettlementDetailDialog, { PendingSettlementDialog } from "./components/Se
 import CreateSettlementDialog from "./components/CreateSettlementDialog";
 import { calculateBalances, calculateMinimumTransfers } from "@shared/xensplit/balances";
 import { rewindBefore, excludedSettlementIds, settlementsNewestFirst } from "@shared/xensplit/rewind";
+import UserName from "../../../components/user/UserName";
 
 const listGridSx = {
   display: "grid",
@@ -104,7 +105,7 @@ export default function GroupSettlements() {
     const asUser = (userId: string) => {
       const m = group.members.find((mem) => mem.user_id === userId);
       return m
-        ? { _id: m.user_id, username: m.username, avatar: m.avatar, etransfer: m.etransfer }
+        ? { _id: m.user_id, username: m.username, avatar: m.avatar, cosmetics: m.cosmetics, etransfer: m.etransfer }
         : { _id: userId, username: "Unknown", avatar: null, etransfer: null };
     };
     const balances = calculateBalances(rewindBefore(calcDoc, rewindTo));
@@ -260,8 +261,8 @@ export default function GroupSettlements() {
           }}
         >
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            Showing the list as it stood before {getMember(rewoundSettlement.from)?.username ?? "someone"} paid{" "}
-            {getMember(rewoundSettlement.to)?.username ?? "someone"}{" "}
+            Showing the list as it stood before <UserName user={getMember(rewoundSettlement.from)} fallback="someone" />{" "}
+            paid <UserName user={getMember(rewoundSettlement.to)} fallback="someone" />{" "}
             {formatCurrency(rewoundSettlement.amount, rewoundSettlement.currency)} on{" "}
             {settledOnLabel(rewoundSettlement.settled_at)}.
           </Typography>
@@ -325,11 +326,11 @@ export default function GroupSettlements() {
                     </Avatar>
                     {/* row 2: names + arrow */}
                     <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>
-                      {s.fromUser.username}
+                      <UserName user={s.fromUser} />
                     </Typography>
                     <EastIcon sx={{ fontSize: 16, color: arrowColor, justifySelf: "center", alignSelf: "center" }} />
                     <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>
-                      {s.toUser.username}
+                      <UserName user={s.toUser} />
                     </Typography>
                   </Box>
                 );
@@ -431,7 +432,7 @@ export default function GroupSettlements() {
                             noWrap
                             sx={{ textTransform: "capitalize", color: "text.secondary" }}
                           >
-                            {fromMember?.username ?? "?"}
+                            <UserName user={fromMember} fallback="?" />
                           </Typography>
                           <EastIcon
                             sx={{ fontSize: 16, color: "text.disabled", justifySelf: "center", alignSelf: "center" }}
@@ -441,7 +442,7 @@ export default function GroupSettlements() {
                             noWrap
                             sx={{ textTransform: "capitalize", color: "text.secondary" }}
                           >
-                            {toMember?.username ?? "?"}
+                            <UserName user={toMember} fallback="?" />
                           </Typography>
                           {/* row 3: rewind toggle — the date is on the day header */}
                           <Box

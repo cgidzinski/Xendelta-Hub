@@ -17,6 +17,7 @@ import {
 } from "../utils/validation";
 import { UserConversationMetadata, ConversationDocument } from "../types";
 import { getLastMessageInfo, generateDefaultConversationName } from "../utils/conversationUtils";
+import { cosmeticsOf, publicUserFields } from "../utils/publicUser";
 
 module.exports = function (app: express.Application) {
   // Get all conversations for the authenticated user
@@ -49,14 +50,16 @@ module.exports = function (app: express.Application) {
                 _id: user._id.toString(),
                 username: user.username,
                 avatar: user.avatar || "/avatars/default-avatar.png",
+                cosmetics: cosmeticsOf(user),
               };
             }
-            const participantUser = await User.findOne({ _id: p }).select("username _id avatar").exec();
+            const participantUser = await User.findOne({ _id: p }).select(publicUserFields("_id")).exec();
             return participantUser
               ? {
                   _id: participantUser._id.toString(),
                   username: participantUser.username,
                   avatar: participantUser.avatar || "/avatars/default-avatar.png",
+                  cosmetics: cosmeticsOf(participantUser),
                 }
               : { _id: p, username: "Unknown", avatar: "/avatars/default-avatar.png" };
           }),
@@ -124,14 +127,16 @@ module.exports = function (app: express.Application) {
               _id: user._id.toString(),
               username: user.username,
               avatar: user.avatar || "/avatars/default-avatar.png",
+              cosmetics: cosmeticsOf(user),
             };
           }
-          const participantUser = await User.findOne({ _id: p }).select("username _id avatar").exec();
+          const participantUser = await User.findOne({ _id: p }).select(publicUserFields("_id")).exec();
           return participantUser
             ? {
                 _id: participantUser._id.toString(),
                 username: participantUser.username,
                 avatar: participantUser.avatar || "/avatars/default-avatar.png",
+                cosmetics: cosmeticsOf(participantUser),
               }
             : { _id: p, username: "Unknown", avatar: "/avatars/default-avatar.png" };
         }),
@@ -144,12 +149,14 @@ module.exports = function (app: express.Application) {
             return {
               ...(msg.toObject ? msg.toObject() : msg),
               senderUsername: user.username,
+              senderCosmetics: cosmeticsOf(user),
             };
           }
-          const senderUser = await User.findOne({ _id: msg.from }).select("username").exec();
+          const senderUser = await User.findOne({ _id: msg.from }).select(publicUserFields()).exec();
           return {
             ...(msg.toObject ? msg.toObject() : msg),
             senderUsername: senderUser ? senderUser.username : "Unknown",
+            senderCosmetics: cosmeticsOf(senderUser),
           };
         }),
       );

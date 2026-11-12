@@ -25,6 +25,7 @@ import type { SearchedUser } from "../../../../hooks/useUserSearch";
 import { notebookShareUrl, useXenNoteActions } from "../../../../hooks/xennote/useXenNote";
 import type { NoteRole, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, swatchColor } from "../noteColors";
+import UserName from "../../../../components/user/UserName";
 
 interface NotebookDialogProps {
   /** The notebook to manage; null starts a new one. */
@@ -297,7 +298,7 @@ export default function NotebookDialog({
                     {m.username.charAt(0).toUpperCase()}
                   </Avatar>
                   <Typography sx={{ flex: 1 }} noWrap>
-                    {m.username}
+                    <UserName user={m} />
                     {self ? " (you)" : ""}
                   </Typography>
                   {owner && m.role !== "owner" ? (
