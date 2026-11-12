@@ -40,10 +40,9 @@ folder. The pieces:
 - **Uploading** uses the ordinary chunked flow. `POST /api/xendrive/initiate` takes an optional `source`; it is checked with
   `assertDriveSource` and refused together with a folder. The quota check runs only if the source says its files count. The upload session
   carries the tag to the finished file. On the client, `uploadOne({ file, source })`.
-- **The drive's own lists.** `driveOnly` is merged into My Drive and folder contents, search, recent, shared, and the overview.
-  It filters out tagged files when `SHOW_APP_FILES_IN_DRIVE` is false and is empty while it is true (see Visibility below). A
-  tagged file can't be renamed or given a public link from XenDrive (`assertNotAppFile`); it can be deleted, which deletes the
-  stored bytes.
+- **The drive's own lists.** `driveOnly` is merged into My Drive and folder contents, search, recent, shared, and the overview,
+  so tagged files stay out of them. A tagged file can't be renamed or given a public link from XenDrive (`assertNotAppFile`);
+  it can be deleted, which deletes the stored bytes.
 - **XenDrive > From apps** (`GET /api/xendrive/app-files`) lists them grouped by app and then by `ref`, with sizes, download,
   delete and "Delete all" per group, so people can free the space. The sidebar entry appears once there is anything to show
   (`appFiles` in `GET /api/xendrive/recent`). Index `{ owner_id, "source.app", createdAt }`.
@@ -75,9 +74,11 @@ XenSplit, XenBudget, XenNote and XenKitchen store photos as tagged files through
 - The ref is the thing the photo is on, so "Delete all" in From apps means something: the group for XenSplit and the book for
   XenBudget; the note for XenNote and the item for XenKitchen, because those can move between notebooks and books.
 
-**Visibility.** While `SHOW_APP_FILES_IN_DRIVE` is true (`utils/driveSources.ts`), tagged files show in My Drive, recent and
-search as well as under From apps, marked "From <app>" and "Doesn't count toward storage". Set it to false to hide them
-from the drive's own lists again; nothing else changes. They can't be renamed, moved or given a public link from XenDrive.
+**Visibility.** Tagged files are hidden from My Drive, folders, search and recent, so a person sees only what they uploaded to
+XenDrive. They are listed under From apps, and a hidden "More filters" control on My Drive reveals them in the drive's lists:
+`GET /api/xendrive/browse?source=` takes `all` (everything), `uncounted` (files outside the quota) or one app's key
+(`driveListFilter` in `utils/driveSources.ts`). The control only appears once the person has any app files. Revealed files are
+marked "From <app>" and, for the photo apps, "Doesn't count toward storage".
 
 **The migration** tags every existing photo for its owner (the group, book or note owner; XenKitchen's item creator): nobody
 recorded who uploaded a photo. Records are `counted: false`, so nobody's usage changes. XenSplit, XenBudget and XenNote photos

@@ -43,6 +43,11 @@ export const xenDriveBrowseQuerySchema = z.object({
   view: z.enum(["shared", "recent"]).optional(),
   // Also return a picture link for each image (the grid view shows them).
   thumbs: z.enum(["true"]).optional(),
+  // Files apps stored for the person are hidden unless asked for: "all", "uncounted", or one app's key.
+  source: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,29}$/)
+    .optional(),
 });
 // XenDrive > From apps: every app's files, or one app's.
 export const xenDriveAppFilesQuerySchema = z.object({

@@ -2,7 +2,8 @@ import { AppError } from "./http";
 
 // Files that an app stores in XenDrive on a person's behalf (chat attachments, photos on an expense or a note) carry
 // `source: { app, ref }`. They are real XenDrive files: owned by the uploader and deleted like any file. They are listed
-// under XenDrive > From apps (and, while SHOW_APP_FILES_IN_DRIVE is on, in the drive's own lists too). Whether they count
+// under XenDrive > From apps, and are kept out of the drive's own lists unless the person asks for them (see
+// `driveListFilter`). Whether they count
 // against the person's quota is the app's call (`counts`): chat attachments do, the photo apps' files don't yet. docs/storage.md has the whole picture.
 //
 // An app registers itself once with `registerDriveSource`; XenDrive never learns what a chat (or a note) is.
@@ -47,13 +48,19 @@ export async function assertDriveSource(userId: string, source: DriveSource): Pr
   if (!(await definition.verify(userId, source.ref))) throw new AppError(404, "Not found");
 }
 
-/**
- * Show app-stored files in the drive's own lists (My Drive, recent, search) as well as in From apps. On while the
- * files are exempt from the quota so people can see and delete them. Set to false to hide them from those lists.
- */
-export const SHOW_APP_FILES_IN_DRIVE = true;
-
 /** The filter that keeps app-stored files out of the drive's own lists. Merge it into every drive listing query. */
-export const driveOnly: { "source.app"?: { $exists: false } } = SHOW_APP_FILES_IN_DRIVE
-  ? {}
-  : { "source.app": { $exists: false } };
+export const driveOnly = { "source.app": { $exists: false } } as const;
+
+/**
+ * Which files a drive listing shows. By default only what the person uploaded to XenDrive itself: files an app stored for
+ * them (photos, chat attachments) stay out of the way. They ask for them with a source:
+ *   "all"        everything, app files included
+ *   "uncounted"  only files that don't use their storage
+ *   "<app>"      only that app's files ("xensplit", "chat", ...)
+ */
+export function driveListFilter(source?: string): Record<string, unknown> {
+  if (!source) return driveOnly;
+  if (source === "all") return {};
+  if (source === "uncounted") return { counted: false };
+  return { "source.app": source };
+}

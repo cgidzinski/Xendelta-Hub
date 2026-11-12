@@ -91,11 +91,19 @@ describe("XenSplit photos in XenDrive", () => {
     expect(res.apps[0].groups[0].files.every((f: any) => f.counted === false)).toBe(true);
   });
 
-  it("shows the files in My Drive while they are shown there", async () => {
+  it("keeps the files out of My Drive unless asked for, by app or as outside the quota", async () => {
     const { owner, photos } = await setup();
     await photos(1);
-    const root = await request(t.app).get("/api/xendrive/browse").set(auth(owner.token));
-    expect(root.body.data.files.map((f: any) => f.name)).toEqual(["r0.png"]);
+    const browse = async (query: string) =>
+      (await request(t.app).get(`/api/xendrive/browse${query}`).set(auth(owner.token))).body.data.files.map(
+        (f: any) => f.name,
+      );
+    expect(await browse("")).toEqual([]);
+    expect(await browse("?search=r0")).toEqual([]);
+    expect(await browse("?source=all")).toEqual(["r0.png"]);
+    expect(await browse("?source=xensplit")).toEqual(["r0.png"]);
+    expect(await browse("?source=uncounted")).toEqual(["r0.png"]);
+    expect(await browse("?source=chat")).toEqual([]);
   });
 
   it("deleting a photo removes its file and bytes", async () => {
