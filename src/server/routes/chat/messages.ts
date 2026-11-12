@@ -2,6 +2,7 @@ import type { Application, Request, Response } from "express";
 import { Message } from "../../models/message";
 import { Conversation } from "../../models/conversation";
 import { XenDriveFile } from "../../models/xendriveFile";
+import { generateSignedUrl } from "../../utils/gcsUtils";
 import { authenticateToken } from "../../middleware/auth";
 import { canDeleteMessage, canEditMessage } from "../../chat/policy";
 import {
@@ -19,6 +20,7 @@ import {
   validate,
   validateParams,
   validateQuery,
+  chatAttachmentParamSchema,
   chatConversationParamSchema,
   chatMessageParamSchema,
   chatMessagesQuerySchema,
@@ -96,6 +98,26 @@ export function registerMessageRoutes(app: Application) {
       const message = await appendMessage(chat, { from: me, body, replyTo, attachments, clientId });
       await publishMessage(chat, message, user.username ?? "Someone");
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
+    },
+  );
+
+  // A link to download an attachment, for any member of the chat. The file stays private in the sender's XenDrive (no
+  // public link is made); this checks that the caller is in the chat and the file is on that message, then signs one.
+  app.get(
+    "/api/chat/conversations/:conversationId/messages/:seq/attachments/:fileId",
+    authenticateToken,
+    validateParams(chatAttachmentParamSchema),
+    async (req: Request, res: Response) => {
+      const chat = await loadChat(req.params.conversationId as string, callerId(req));
+      const message = await loadMessage(chat._id, req.params.seq as string);
+      const fileId = req.params.fileId as string;
+      if (message.deletedAt || !message.attachments.some((a) => String(a.fileId) === fileId)) {
+        throw new AppError(404, "Attachment not found");
+      }
+      const file = await XenDriveFile.findById(fileId).exec();
+      if (!file) throw new AppError(404, "This file was removed from XenDrive");
+      const url = await generateSignedUrl(file.storage_path, 15, { downloadName: file.name });
+      res.json({ status: true, message: "", data: { url } });
     },
   );
 

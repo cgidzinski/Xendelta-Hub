@@ -6,9 +6,11 @@ import { XenDriveFile } from "../models/xendriveFile";
 import { AppError } from "../utils/http";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { realtime } from "../realtime";
+import { registerDriveSource } from "../utils/driveSources";
 import { sendPushToUser } from "../utils/pushUtils";
 import {
   CHAT_PREVIEW_MAX,
+  chatTitle,
   rosterKeyOf,
   type ChatConversation,
   type ChatMessage,
@@ -249,6 +251,25 @@ export async function publishMessage(chat: ConversationDocument, message: Messag
     }).catch(() => undefined);
   }
 }
+
+// ---------- files ----------
+
+// Attachments uploaded in a chat are XenDrive files tagged `source: { app: "chat", ref: <conversation id> }`: they count
+// toward the sender's storage, stay out of My Drive, and show under XenDrive > From apps > Chat (utils/driveSources.ts).
+registerDriveSource("chat", {
+  label: "Chat",
+  verify: async (userId, ref) =>
+    Types.ObjectId.isValid(ref) && !!(await Conversation.exists({ _id: ref, "members.user_id": userId })),
+  describe: async (userId, refs) => {
+    const valid = refs.filter((r) => Types.ObjectId.isValid(r));
+    const chats =
+      valid.length > 0 ? await Conversation.find({ _id: { $in: valid }, "members.user_id": userId }).exec() : [];
+    const people = await loadPeople(chats.flatMap(memberIdsOf));
+    const names = new Map(chats.map((c) => [String(c._id), chatTitle(serializeChat(c, userId, people), userId)]));
+    // A chat the person has left (or that was deleted) keeps its files until they delete them.
+    return new Map(refs.map((ref) => [ref, names.get(ref) ?? "A chat you're no longer in"]));
+  },
+});
 
 // ---------- ending ----------
 

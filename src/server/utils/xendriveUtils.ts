@@ -53,6 +53,7 @@ export async function initiateChunkedUpload(
   name: string,
   totalChunks: number,
   folderId: string | null = null,
+  source?: { app: string; ref: string },
 ): Promise<string> {
   await assertOwnFolder(userId, folderId);
   const uploadId = `xendrive-${Date.now()}-${randomToken(9)}`;
@@ -72,6 +73,7 @@ export async function initiateChunkedUpload(
     filename: storedName,
     name,
     folder_id: folderId,
+    ...(source ? { source_app: source.app, source_ref: source.ref } : {}),
     total_chunks: totalChunks,
     resumable_uri: resumableUri,
   });
@@ -185,6 +187,7 @@ export async function finalizeChunkedUpload(
     storage_path: storagePath,
     mimeType: contentType,
     size: fileSize,
+    ...(session.source_app ? { source: { app: session.source_app, ref: session.source_ref } } : {}),
   }).save();
 
   await XenDriveUploadSession.deleteOne({ upload_id: uploadId });

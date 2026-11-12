@@ -80,3 +80,25 @@ export interface PublicFolderView {
     previewUrl: string | null;
   }>;
 }
+
+/** What apps have stored in the drive on the person's behalf (XenDrive > From apps). */
+export interface AppFilesResult {
+  count: number;
+  size: number;
+  apps: Array<{
+    app: string;
+    /** "Chat" */
+    label: string;
+    count: number;
+    size: number;
+    groups: Array<{
+      /** Where the files came from (a conversation id for chat). */
+      ref: string;
+      /** "Weekend trip" */
+      label: string;
+      count: number;
+      size: number;
+      files: XenDriveFile[];
+    }>;
+  }>;
+}

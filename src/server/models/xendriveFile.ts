@@ -18,9 +18,17 @@ const xendriveFileSchema = new Schema({
   shareToken: { type: String, unique: true, sparse: true }, // Unique token for the file's own link
   // The link only works while this is on. New files start private; turning it on is one switch.
   shareEnabled: { type: Boolean, default: false },
+  // Set when an app stored the file on the person's behalf (utils/driveSources.ts). Such files have no folder and are
+  // kept out of the drive's own lists; they still count toward the quota.
+  source: {
+    app: { type: String },
+    ref: { type: String },
+  },
 });
 
 xendriveFileSchema.index({ owner_id: 1, folder_id: 1 });
+// XenDrive > From apps: one app's files for one person, newest first.
+xendriveFileSchema.index({ owner_id: 1, "source.app": 1, createdAt: -1 });
 
 // Every file has a share token ready, so turning its link on is instant. It does nothing until shareEnabled.
 xendriveFileSchema.pre("save", function (next) {

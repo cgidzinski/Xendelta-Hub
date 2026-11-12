@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UPLOAD_TIMEOUT_MS, api } from "../../config/api";
 import type {
+  AppFilesResult,
   BrowseResult,
   BrowseView,
   FileDetailResult,
@@ -51,10 +52,12 @@ export class UploadCancelled extends Error {
 export async function uploadOne(params: {
   file: File;
   folderId?: string | null;
+  /** An app uploading for the person (a chat attachment): tagged with where it came from, kept out of My Drive. */
+  source?: { app: string; ref: string };
   signal?: UploadSignal;
   onProgress?: (percent: number) => void;
 }): Promise<XenDriveUploaded> {
-  const { file, folderId, signal, onProgress } = params;
+  const { file, folderId, source, signal, onProgress } = params;
   const chunkCount = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
 
   const { uploadId } = await api.post<{ uploadId: string }>("/api/xendrive/initiate", {
@@ -62,6 +65,7 @@ export async function uploadOne(params: {
     totalChunks: chunkCount,
     fileSize: Math.max(1, file.size),
     folderId: folderId ?? null,
+    ...(source ? { source } : {}),
   });
 
   try {
@@ -122,9 +126,21 @@ export const useXendriveRecent = () =>
   useQuery({
     queryKey: xendriveKeys.recent(),
     queryFn: () =>
-      api.get<{ files: XenDriveFile[]; fileCount: number; spaceUsed: number; sharedCount: number }>(
-        "/api/xendrive/recent",
-      ),
+      api.get<{
+        files: XenDriveFile[];
+        fileCount: number;
+        spaceUsed: number;
+        sharedCount: number;
+        /** What apps have stored in the drive; counted in `spaceUsed` but not shown in My Drive. */
+        appFiles: { count: number; size: number };
+      }>("/api/xendrive/recent"),
+  });
+
+/** Everything apps have stored on the person's behalf, grouped by app and by where it came from. */
+export const useXendriveAppFiles = () =>
+  useQuery({
+    queryKey: xendriveKeys.appFiles(),
+    queryFn: () => api.get<AppFilesResult>("/api/xendrive/app-files"),
   });
 
 /** What deleting or sharing a folder involves. Only fetched while `folderId` is set. */

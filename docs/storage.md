@@ -18,17 +18,27 @@ count for nobody.
 | Blog assets (admin) | `mediaUtils.uploadBlogAsset` | public | `MAX_BLOG_ASSET_SIZE` |
 | **XenDrive** | `routes/xendrive.ts`, chunked sessions | private | **counts: `checkQuota`** |
 
-## Direction: tag the file with where it came from
-Chat attachments (#175) are the first upload to follow the rule below. A chat upload is a real `XenDriveFile`
-owned by the sender with `source: { app: "chat", ref: <conversationId> }` and no folder.
+## How an app stores files in XenDrive (built for chat attachments, #175)
+A chat upload is a real `XenDriveFile` owned by the sender with `source: { app: "chat", ref: <conversationId> }` and no
+folder. The pieces:
 
-- **Tagged files are hidden from XenDrive's normal lists** (My Drive, folders, recent, shared, counts). A helper
-  `driveOnly = { "source.app": { $exists: false } }` in `xendriveUtils.ts` is merged into each listing query.
-- **They are listed under XenDrive › From apps › <App>**, grouped by `ref`, with sizes and bulk delete, so people can
-  free up space. Index `{ owner_id: 1, "source.app": 1, createdAt: -1 }`.
-- **They count toward the quota** (`usageFor` and `checkQuota` don't filter on `source`).
-- Deleting a `XenDriveFile` through a query already deletes its bytes (the model's `deleteOne` hook).
-- Choosing an existing XenDrive file in an app attaches it by id: no copy, no extra storage, and no tag.
+- **`utils/driveSources.ts`** is the registry. An app calls `registerDriveSource(app, { label, verify, describe })` once
+  (chat does it in `chat/service.ts`): `verify` says whether a person may store files for a `ref` (chat: they are a
+  member), `describe` names each `ref` for the person ("Weekend trip"). XenDrive never learns what a chat is.
+- **Uploading** uses the ordinary chunked flow. `POST /api/xendrive/initiate` takes an optional `source`; it is checked with
+  `assertDriveSource`, refused together with a folder, and checked against the quota like any upload. The upload session
+  carries the tag to the finished file. On the client, `uploadOne({ file, source })`.
+- **Hidden from the drive's own lists.** `driveOnly = { "source.app": { $exists: false } }` is merged into My Drive and folder
+  contents, search, recent, shared, and the overview. A tagged file also can't be renamed or given a public link from XenDrive
+  (`assertNotAppFile`); it can be deleted, which deletes the stored bytes.
+- **XenDrive > From apps** (`GET /api/xendrive/app-files`) lists them grouped by app and then by `ref`, with sizes, download,
+  delete and "Delete all" per group, so people can free the space. The sidebar entry appears once there is anything to show
+  (`appFiles` in `GET /api/xendrive/recent`). Index `{ owner_id, "source.app", createdAt }`.
+- **They count toward the quota.** `usageFor` and `checkQuota` don't filter on `source`.
+- **Choosing an existing XenDrive file** in an app attaches it by id: no copy, no extra storage, no tag.
+- **Access for others.** The file stays private in the uploader's drive. Chat members download an attachment through
+  `GET /api/chat/conversations/:id/messages/:seq/attachments/:fileId`, which checks membership and that the file is on that
+  message, then signs a short-lived link.
 
 ## Fix later: make the other apps follow the rule
 Store XenSplit, XenBudget, XenNote and XenKitchen photos as tagged `XenDriveFile`s (`source.app` = the app key),

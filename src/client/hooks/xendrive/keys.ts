@@ -13,6 +13,8 @@ export const xendriveKeys = {
   file: (fileId: string | undefined) => [...xendriveKeys.all, "file", fileId] as const,
   folderStats: (folderId: string) => [...xendriveKeys.all, "folder-stats", folderId] as const,
   recent: () => [...xendriveKeys.all, "recent"] as const,
+  /** What apps have stored in the drive (XenDrive > From apps). */
+  appFiles: () => [...xendriveKeys.all, "app-files"] as const,
   publicFolder: (token: string, folderId?: string | null) =>
     [...xendriveKeys.all, "public-folder", token, folderId ?? null] as const,
 };

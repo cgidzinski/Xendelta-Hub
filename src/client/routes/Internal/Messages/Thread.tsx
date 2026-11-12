@@ -20,6 +20,7 @@ import {
   useSendMessage,
 } from "../../../hooks/chat/useChat";
 import { useTypingUsers } from "../../../hooks/chat/useTyping";
+import { useChatAttachments } from "../../../hooks/chat/useChatAttachments";
 import { chronological, peopleInHistory, type LocalMessage } from "../../../utils/chatCache";
 import EmptyState from "../../../components/ui/EmptyState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
@@ -27,6 +28,9 @@ import ChatAvatar from "./components/ChatAvatar";
 import Composer from "./components/Composer";
 import DetailsPanel from "./components/DetailsPanel";
 import AddPeopleDialog from "./components/AddPeopleDialog";
+import AttachButton from "./components/AttachButton";
+import AttachmentTray from "./components/AttachmentTray";
+import DriveFilePicker from "./components/DriveFilePicker";
 import MessageList from "./components/MessageList";
 import { usePeopleLookup } from "./chatUi";
 
@@ -56,6 +60,8 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
   const [editing, setEditing] = useState<LocalMessage | undefined>();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const files = useChatAttachments(conversationId);
 
   const conversation = conversationQuery.data;
   const messages = useMemo(() => chronological(messagesQuery.data), [messagesQuery.data]);
@@ -86,10 +92,17 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
 
   const sendText = useCallback(
     (body: string) => {
-      send.mutate({ clientId: newClientId(), body, replyTo: replyTo?.seq });
+      send.mutate({
+        clientId: newClientId(),
+        body,
+        replyTo: replyTo?.seq,
+        attachmentIds: files.attachments.map((a) => a.fileId),
+        attachments: files.attachments,
+      });
       setReplyTo(undefined);
+      files.clear();
     },
-    [send, replyTo],
+    [send, replyTo, files],
   );
 
   const actions = {
@@ -281,7 +294,10 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
             setReplyTo(undefined);
             setEditing(undefined);
           }}
-          hasAttachments={false}
+          hasAttachments={files.attachments.length > 0}
+          busy={files.busy}
+          attach={<AttachButton onFiles={files.addFiles} onChooseFromDrive={() => setPickerOpen(true)} />}
+          tray={<AttachmentTray items={files.items} onRemove={files.remove} />}
           onSend={sendText}
           onSaveEdit={async (body) => {
             const target = editing;
@@ -318,6 +334,12 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
         </Drawer>
       )}
 
+      <DriveFilePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={files.addDriveFiles}
+        excludeIds={files.items.map((i) => i.fileId ?? "")}
+      />
       <AddPeopleDialog open={addOpen} onClose={() => setAddOpen(false)} conversation={conversation} />
     </Box>
   );
