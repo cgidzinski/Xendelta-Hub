@@ -1,3 +1,4 @@
+import { xensplitKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import type { XenSplitBalancesData, SettleDebtInput } from "./types";
@@ -6,7 +7,7 @@ export function useXenSplitBalances(groupId: string) {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["xensplit", "balances", groupId],
+    queryKey: xensplitKeys.balances(groupId),
     queryFn: async () => {
       return api.get<XenSplitBalancesData>(`/api/xensplit/groups/${groupId}/balances`);
     },
@@ -23,8 +24,8 @@ export function useXenSplitBalances(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
     },
   });
 
@@ -34,8 +35,8 @@ export function useXenSplitBalances(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
     },
   });
 
@@ -46,8 +47,8 @@ export function useXenSplitBalances(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 

@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSocketEvent, useSocketInvalidate } from "../useSocketEvent";
 import { invalidateItemDerived } from "./invalidate";
@@ -15,5 +16,5 @@ export function useXenBudgetSocket(bookId: string) {
 }
 
 export function useXenBudgetBooksSocket() {
-  useSocketInvalidate("xenbudget:books_updated", [["xenbudget", "books"]]);
+  useSocketInvalidate("xenbudget:books_updated", [xenbudgetKeys.books()]);
 }

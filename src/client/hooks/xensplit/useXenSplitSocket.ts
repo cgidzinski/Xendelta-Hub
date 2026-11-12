@@ -1,16 +1,14 @@
+import { xensplitKeys } from "./keys";
 import { useSocketInvalidate } from "../useSocketEvent";
 
 export function useXenSplitSocket(groupId: string) {
   useSocketInvalidate<{ groupId: string }>(
     "xensplit:group_update",
-    [
-      ["xensplit", "group", groupId],
-      ["xensplit", "balances", groupId],
-    ],
+    [xensplitKeys.group(groupId), xensplitKeys.balances(groupId)],
     (data) => data.groupId === groupId,
   );
 }
 
 export function useXenSplitGroupsSocket() {
-  useSocketInvalidate("xensplit:groups_updated", [["xensplit", "groups"]]);
+  useSocketInvalidate("xensplit:groups_updated", [xensplitKeys.groups()]);
 }

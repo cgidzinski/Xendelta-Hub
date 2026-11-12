@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../config/api";
 import type { XenBudgetRecurring, XenBudgetMerchants } from "./types";
@@ -17,7 +18,7 @@ export interface RecurringParams {
  */
 export function useXenBudgetRecurring(bookId: string, params: RecurringParams = {}) {
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["xenbudget", "recurring", bookId, params],
+    queryKey: xenbudgetKeys.recurring(bookId, params),
     queryFn: async () => {
       return api.get<XenBudgetRecurring>(`/api/xenbudget/books/${bookId}/recurring`, {
         params: {
@@ -46,7 +47,7 @@ export interface MerchantParams {
 /** Where the money went, grouped by the same merchant normalisation the detector uses. */
 export function useXenBudgetMerchants(bookId: string, params: MerchantParams = {}) {
   const { data, isLoading, isError, error, isFetching } = useQuery({
-    queryKey: ["xenbudget", "merchants", bookId, params],
+    queryKey: xenbudgetKeys.merchants(bookId, params),
     queryFn: async () => {
       return api.get<XenBudgetMerchants>(`/api/xenbudget/books/${bookId}/merchants`, {
         params: {

@@ -1,3 +1,4 @@
+import { xenbudgetKeys } from "./keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
@@ -30,7 +31,7 @@ export function useXenBudgetRules(bookId: string) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
   };
 
   // A sweep rewrites categories, flags and exclusions across the book, so everything

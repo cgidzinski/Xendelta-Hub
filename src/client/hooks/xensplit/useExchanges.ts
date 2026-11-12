@@ -1,3 +1,4 @@
+import { xensplitKeys } from "./keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, api } from "../../config/api";
 import type { CreateExchangeInput } from "./types";
@@ -11,8 +12,8 @@ export function useXenSplitExchanges(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -22,8 +23,8 @@ export function useXenSplitExchanges(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -40,8 +41,8 @@ export function useXenSplitExchanges(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -61,7 +62,7 @@ export function useXenSplitExchanges(groupId: string) {
 // few-hours cache, so this just avoids redundant client-side refetches on every remount.
 export function useLiveRateQuery(from: string, to: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["xensplit", "rate", from, to],
+    queryKey: xensplitKeys.rate(from, to),
     queryFn: async () => {
       return api.get<{ rate: number; fetchedAt: number }>(`/api/xensplit/exchange-rate`, { params: { from, to } });
     },
