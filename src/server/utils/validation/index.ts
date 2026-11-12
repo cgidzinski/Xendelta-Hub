@@ -10,3 +10,4 @@ export * from "./account";
 export * from "./xenbox";
 export * from "./recipaint";
 export * from "./admin";
+export * from "./xennote";

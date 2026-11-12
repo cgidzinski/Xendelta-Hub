@@ -18,9 +18,12 @@ export class AppError extends Error {
   }
 }
 
-/** The authenticated caller's id. Only valid behind `authenticateToken`. */
+/**
+ * The authenticated caller's id, as a string. Only valid behind `authenticateToken`. The user's `_id` is an
+ * ObjectId at runtime, so it is converted here: comparing it to a stored string id with `===` is always false.
+ */
 export function callerId(req: Request): string {
-  return (req as AuthenticatedRequest).user!._id;
+  return String((req as AuthenticatedRequest).user!._id);
 }
 
 /** The authenticated caller's full user document, or a 401 if the account no longer exists. */

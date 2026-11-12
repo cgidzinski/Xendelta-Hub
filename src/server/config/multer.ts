@@ -13,6 +13,7 @@ import {
   MAX_XENSPLIT_IMAGE_SIZE,
   MAX_XENBUDGET_IMAGE_SIZE,
   MAX_XENKITCHEN_IMAGE_SIZE,
+  MAX_XENNOTE_IMAGE_SIZE,
   ALLOWED_IMAGE_MIMES,
 } from "../constants";
 
@@ -79,6 +80,13 @@ export const uploadXenBudgetImages = multer({
 
 // Configured multer instance for xenkitchen photos (memory storage) - accepts images only.
 // Photos are resized server-side before storage, so the limit is generous for phone cameras.
+// Memory-storage multer for XenNote photos: images only, resized server-side before storage.
+export const uploadXenNoteImages = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_XENNOTE_IMAGE_SIZE },
+  fileFilter: (req, file, cb) => (file.mimetype === "image/webp" ? cb(null, true) : imageFileFilter(req, file, cb)),
+});
+
 export const uploadXenKitchenImages = multer({
   storage: multer.memoryStorage(),
   limits: {

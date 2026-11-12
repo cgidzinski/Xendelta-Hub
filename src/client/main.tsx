@@ -30,6 +30,7 @@ import { xensplitRoutes } from "./routes/Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./routes/Internal/XenRoutine/routes";
 import { xenkitchenRoutes } from "./routes/Internal/XenKitchen/routes";
 import { xenbudgetRoutes } from "./routes/Internal/XenBudget/routes";
+import { xennoteRoutes } from "./routes/Internal/XenNote/routes";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SocketProvider } from "./contexts/SocketContext";
@@ -43,6 +44,12 @@ const Login = lazyPage(() => import("./routes/External/Auth/Login"));
 const Signup = lazyPage(() => import("./routes/External/Auth/Signup"));
 const Reset = lazyPage(() => import("./routes/External/Auth/Reset"));
 const AuthCallback = lazyPage(() => import("./routes/External/Auth/AuthCallback"));
+const XenNotePublicNote = lazyPage<object>(() =>
+  import("./routes/External/XenNotePublic/XenNotePublic").then((m) => ({ default: m.XenNotePublicNote })),
+);
+const XenNotePublicNotebook = lazyPage<object>(() =>
+  import("./routes/External/XenNotePublic/XenNotePublic").then((m) => ({ default: m.XenNotePublicNotebook })),
+);
 const XenBoxDownload = lazyPage(() => import("./routes/External/XenBoxDownload/XenBoxDownload"));
 
 // Routes - Internal
@@ -140,6 +147,8 @@ const router = createBrowserRouter(
         errorElement={<ErrorPage />}
       />
       <Route path="/xenbox/:shareToken" element={<XenBoxDownload />} errorElement={<ErrorPage />} />
+      <Route path="/n/:token" element={<XenNotePublicNote />} errorElement={<ErrorPage />} />
+      <Route path="/n/b/:token" element={<XenNotePublicNotebook />} errorElement={<ErrorPage />} />
       <Route path="/x/:slug" element={<XenLinkRedirect />} errorElement={<ErrorPage />} />
       <Route path="/recipaint/:id" element={<RecipaintPublic />} errorElement={<ErrorPage />} />
       <Route path="/k/:token" element={<XenKitchenPublic />} errorElement={<ErrorPage />} />
@@ -171,6 +180,7 @@ const router = createBrowserRouter(
         {xenroutineRoutes}
         {xenkitchenRoutes}
         {xenbudgetRoutes}
+        {xennoteRoutes}
       </Route>
       {/* Admin routes - require admin role and use AdminNavBar */}
       <Route

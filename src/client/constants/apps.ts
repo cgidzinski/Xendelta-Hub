@@ -5,6 +5,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import StickyNote2Icon from "@mui/icons-material/StickyNote2";
 
 export interface AppRegistryItem {
   key: string;
@@ -68,5 +69,12 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: RestaurantMenuIcon,
     path: "/internal/xenkitchen",
     description: "Save recipes and the cooking instructions off the box",
+  },
+  {
+    key: "xennote",
+    label: "XenNote",
+    icon: StickyNote2Icon,
+    path: "/internal/xennote",
+    description: "Quick notes, lists, photos and links, in notebooks you can share",
   },
 ];

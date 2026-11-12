@@ -18,6 +18,12 @@ const PARAMS_EXEMPT: Record<string, string> = {};
 /** "METHOD /path" routes that read a body but are deliberately not validated, and why. */
 const BODY_EXEMPT: Record<string, string> = {
   "POST /api/user/link-google": "no body: authenticated trigger for an OAuth redirect flow",
+  "POST /api/xennote/notes/:id/images": "multipart upload handled by multer, not JSON",
+  "POST /api/xennote/notes/:id/share": "no body: turns on the note's public link (path names the note)",
+  "POST /api/xennote/notes/:id/share/rotate": "no body: replaces the note's public link (path names the note)",
+  "POST /api/xennote/notebooks/:id/share": "no body: turns on the notebook's public link (path names the notebook)",
+  "POST /api/xennote/notebooks/:id/share/rotate":
+    "no body: replaces the notebook's public link (path names the notebook)",
   "POST /api/user/link-github": "no body: authenticated trigger for an OAuth redirect flow",
   "POST /api/user/link-discord": "no body: authenticated trigger for an OAuth redirect flow",
   "POST /api/user/avatar": "multipart upload handled by multer, not JSON",

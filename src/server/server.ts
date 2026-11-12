@@ -174,6 +174,7 @@ require("./routes/xensplit")(app);
 require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
+require("./routes/xennote")(app);
 
 // vite-express appends its static handler at listen() time - after this module has
 // finished running - so today it lands after every route registered above.
