@@ -18,8 +18,8 @@ export const RADIUS = { sm: 1, md: 1.5, lg: 2, xl: 2.5, pill: 999 } as const;
 /** Page widths. `lg` is the default; `md` suits single-column forms, settings and detail pages. */
 export const PAGE_MAX_WIDTH = { default: "lg", narrow: "md", wide: "xl" } as const;
 
-/** Gold used for the points currency icon. */
-export const POINTS_GOLD = "#FFD700";
+/** Cyan used for the gem currency icon. */
+export const GEM_COLOR = "#26C6DA";
 
 /**
  * The one blue the app is built around. Dark surfaces want the brighter shade and light

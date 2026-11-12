@@ -1,227 +1,226 @@
-import { pageTitleSx } from "../../../components/ui/surfaceStyles";
-import PageContainer from "../../../components/ui/PageContainer";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { formatDistance } from "date-fns";
 import {
   Box,
-  Typography,
   Button,
   Card,
   CardActionArea,
-  CardMedia,
-  CardContent,
-  Grid,
   Chip,
-  Dialog,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Switch,
   FormControlLabel,
+  Grid,
+  IconButton,
+  Skeleton,
+  Switch,
+  Typography,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import { useInventory, InventoryItem } from "../../../hooks/user/useInventory";
-import LoadingSpinner from "../../../components/LoadingSpinner";
-import { formatDistance } from "date-fns";
-import { useState } from "react";
+import DeleteIcon from "@mui/icons-material/DeleteOutline";
+import Inventory2Icon from "@mui/icons-material/Inventory2Outlined";
+import PageContainer from "../../../components/ui/PageContainer";
+import PageHeader from "../../../components/ui/PageHeader";
+import EmptyState from "../../../components/ui/EmptyState";
+import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
+import { cardSx } from "../../../components/ui/surfaceStyles";
+import ErrorDisplay from "../../../components/ErrorDisplay";
+import { useTitle } from "../../../hooks/useTitle";
+import { InventoryItem, useInventory } from "../../../hooks/user/useInventory";
 
-export default function Inventory() {
-  const { inventory, isLoading, redeemItem, trashItem, isUsing, isTrashing } = useInventory();
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-  const [showUsed, setShowUsed] = useState(false);
+const ago = (date: string) => formatDistance(new Date(date), new Date(), { addSuffix: true });
 
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  const visibleItems = showUsed ? inventory : inventory.filter((item) => !item.used);
-
+function ItemCard({ item, onSelect }: { item: InventoryItem; onSelect: (item: InventoryItem) => void }) {
   return (
-    <Box>
-      <PageContainer>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 4 }}>
-          <Box>
-            <Typography variant="h5" component="h1" sx={pageTitleSx}>
-              Inventory
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Your purchased items
-            </Typography>
-          </Box>
-          {inventory.some((item) => item.used) && (
-            <FormControlLabel
-              control={<Switch checked={showUsed} onChange={(e) => setShowUsed(e.target.checked)} color="warning" />}
-              label="Show Used"
-              labelPlacement="start"
-              sx={{ mr: 0 }}
+    <Card
+      variant="outlined"
+      sx={{
+        ...cardSx,
+        height: "100%",
+        opacity: item.used ? 0.7 : 1,
+        "&:hover": { borderColor: "primary.main" },
+      }}
+    >
+      <CardActionArea
+        onClick={() => onSelect(item)}
+        sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "stretch" }}
+      >
+        <Box
+          sx={{
+            position: "relative",
+            height: 120,
+            bgcolor: "action.hover",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            p: 2,
+          }}
+        >
+          <Box
+            component="img"
+            src={item.image}
+            alt={item.name}
+            sx={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              filter: item.used ? "grayscale(1)" : "none",
+            }}
+          />
+          {item.used && (
+            <Chip
+              size="small"
+              label="Redeemed"
+              color="success"
+              icon={<CheckCircleIcon />}
+              sx={{ position: "absolute", top: 8, left: 8 }}
             />
           )}
         </Box>
+        <Box sx={{ p: 1.75 }}>
+          <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600 }}>
+            {item.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {item.used && item.usedAt ? `Redeemed ${ago(item.usedAt)}` : `Bought ${ago(item.purchasedAt)}`}
+          </Typography>
+        </Box>
+      </CardActionArea>
+    </Card>
+  );
+}
 
-        {visibleItems.length === 0 ? (
-          <Box sx={{ textAlign: "center", py: 8 }}>
-            <Typography variant="h6" color="text.secondary">
-              {showUsed ? "No items" : "No active items"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {showUsed ? "You haven't purchased any items yet" : "Purchase items from the Shop to see them here"}
-            </Typography>
-          </Box>
-        ) : (
-          <Grid container spacing={3}>
-            {visibleItems.map((item) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item._id}>
-                <Card
-                  sx={{
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    position: "relative",
-                    border: item.used ? "2px solid" : "none",
-                    borderColor: "success.main",
-                    opacity: item.used ? 0.8 : 1,
-                    transition: "opacity 0.2s, transform 0.2s, box-shadow 0.2s, border-color 0.2s",
-                    "&:hover": item.used
-                      ? {
-                          borderColor: "success.light",
-                        }
-                      : {
-                          transform: "translateY(-4px)",
-                          boxShadow: 6,
-                        },
-                  }}
-                >
-                  {item.used && (
-                    <Chip
-                      size="small"
-                      label="Redeemed"
-                      color="success"
-                      icon={<CheckCircleIcon />}
-                      sx={{
-                        position: "absolute",
-                        top: 8,
-                        left: 8,
-                        zIndex: 1,
-                      }}
-                    />
-                  )}
-                  <CardActionArea
-                    onClick={() => setSelectedItem(item)}
-                    sx={{ flexGrow: 1, display: "flex", flexDirection: "column", alignItems: "flex-start" }}
-                  >
-                    <CardMedia
-                      component="img"
-                      height="160"
-                      image={item.image}
-                      alt={item.name}
-                      sx={{ objectFit: "cover", width: "100%", filter: item.used ? "grayscale(40%)" : "none" }}
-                    />
-                    <CardContent sx={{ flexGrow: 1, width: "100%" }}>
-                      <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
-                        {item.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Purchased {formatDistance(new Date(item.purchasedAt), new Date(), { addSuffix: true })}
-                      </Typography>
-                      {item.used && item.usedAt && (
-                        <Typography variant="body2" color="success.main" sx={{ mt: 0.5 }}>
-                          Redeemed {formatDistance(new Date(item.usedAt), new Date(), { addSuffix: true })}
-                        </Typography>
-                      )}
-                    </CardContent>
-                  </CardActionArea>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        )}
-      </PageContainer>
+export default function Inventory() {
+  useTitle("Inventory");
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { inventory, isLoading, isError, error, refetch, redeemItem, trashItem, isUsing, isTrashing } = useInventory();
+  const [selected, setSelected] = useState<InventoryItem | null>(null);
+  const [showUsed, setShowUsed] = useState(false);
 
-      {/* Item Detail Modal */}
-      <Dialog
-        open={Boolean(selectedItem)}
-        onClose={() => setSelectedItem(null)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: { borderRadius: 2 },
-        }}
-      >
-        {selectedItem && (
-          <>
-            <Box sx={{ position: "relative" }}>
-              <CardMedia
-                component="img"
-                height="240"
-                image={selectedItem.image}
-                alt={selectedItem.name}
-                sx={{
-                  borderTopLeftRadius: 8,
-                  borderTopRightRadius: 8,
-                  filter: selectedItem.used ? "grayscale(40%)" : "none",
-                }}
-              />
-              <IconButton
-                onClick={() => setSelectedItem(null)}
-                sx={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  bgcolor: "rgba(0,0,0,0.5)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(0,0,0,0.7)" },
-                }}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <DialogContent sx={{ pt: 3 }}>
-              <Typography variant="h5" component="h2" sx={{ fontWeight: 700, mb: 1 }}>
-                {selectedItem.name}
-              </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                {selectedItem.description}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Purchased {formatDistance(new Date(selectedItem.purchasedAt), new Date(), { addSuffix: true })}
-              </Typography>
-              {selectedItem.used && selectedItem.usedAt && (
-                <Typography variant="body2" color="success.main" sx={{ mt: 1 }}>
-                  Redeemed {formatDistance(new Date(selectedItem.usedAt), new Date(), { addSuffix: true })}
-                </Typography>
-              )}
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+  if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
+
+  const hasUsed = inventory.some((item) => item.used);
+  const visible = showUsed ? inventory : inventory.filter((item) => !item.used);
+
+  const handleRedeem = async (item: InventoryItem) => {
+    setSelected(null);
+    await redeemItem(item._id);
+  };
+
+  const handleTrash = async (item: InventoryItem) => {
+    const ok = await confirm({
+      title: "Trash this item?",
+      message: item.used
+        ? `${item.name} will be removed from your inventory.`
+        : `${item.name} has not been redeemed. If you trash it you lose it, and the gems you paid are not refunded.`,
+      confirmLabel: "Trash",
+    });
+    if (!ok) return;
+    setSelected(null);
+    await trashItem(item._id);
+  };
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title="Inventory"
+        subtitle="Items you have bought or been given"
+        actions={
+          hasUsed && (
+            <FormControlLabel
+              control={<Switch checked={showUsed} onChange={(e) => setShowUsed(e.target.checked)} />}
+              label="Show redeemed"
+              sx={{ mr: 0 }}
+            />
+          )
+        }
+      />
+
+      {isLoading ? (
+        <Grid container spacing={2}>
+          {[0, 1, 2].map((i) => (
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={i}>
+              <Skeleton variant="rectangular" height={190} sx={{ borderRadius: 2 }} />
+            </Grid>
+          ))}
+        </Grid>
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={<Inventory2Icon />}
+          title={inventory.length === 0 ? "Nothing here yet" : "No active items"}
+          description="Items you buy in the Shop show up here."
+          action={
+            <Button variant="outlined" onClick={() => navigate("/internal/shop")}>
+              Browse the Shop
+            </Button>
+          }
+        />
+      ) : (
+        <Grid container spacing={2}>
+          {visible.map((item) => (
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item._id}>
+              <ItemCard item={item} onSelect={setSelected} />
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      <ResponsiveDialog
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        maxWidth="xs"
+        title={selected?.name}
+        actions={
+          selected && (
+            <>
               <IconButton
                 color="error"
+                aria-label="Trash item"
                 disabled={isTrashing}
-                onClick={() => {
-                  trashItem(selectedItem._id);
-                  setSelectedItem(null);
-                }}
+                onClick={() => handleTrash(selected)}
+                sx={{ mr: "auto" }}
               >
                 <DeleteIcon />
               </IconButton>
-              {!selectedItem.used && selectedItem.redeemable && (
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckCircleIcon />}
-                  disabled={isUsing}
-                  onClick={() => {
-                    redeemItem(selectedItem._id);
-                    setSelectedItem(null);
-                  }}
-                  sx={{ flexGrow: 1 }}
-                >
-                  {isUsing ? "Redeeming..." : "Redeem"}
-                </Button>
+              {selected.used ? (
+                <Chip label="Redeemed" color="success" icon={<CheckCircleIcon />} />
+              ) : (
+                selected.redeemable && (
+                  <Button
+                    variant="contained"
+                    startIcon={<CheckCircleIcon />}
+                    loading={isUsing}
+                    onClick={() => handleRedeem(selected)}
+                  >
+                    Redeem
+                  </Button>
+                )
               )}
-              {selectedItem.used && <Chip label="Redeemed" color="success" icon={<CheckCircleIcon />} />}
-            </DialogActions>
-          </>
+            </>
+          )
+        }
+      >
+        {selected && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2, display: "flex", justifyContent: "center" }}>
+              <Box
+                component="img"
+                src={selected.image}
+                alt=""
+                sx={{ height: 120, objectFit: "contain", filter: selected.used ? "grayscale(1)" : "none" }}
+              />
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {selected.description}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Bought {ago(selected.purchasedAt)}
+              {selected.used && selected.usedAt ? ` · Redeemed ${ago(selected.usedAt)}` : ""}
+              {!selected.used && !selected.redeemable ? " · Nothing to redeem: this item is just yours to keep." : ""}
+            </Typography>
+          </Box>
         )}
-      </Dialog>
-    </Box>
+      </ResponsiveDialog>
+    </PageContainer>
   );
 }

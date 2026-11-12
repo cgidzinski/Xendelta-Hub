@@ -9,7 +9,7 @@ export interface AdminUser {
   email: string;
   roles?: string[];
   avatar?: string;
-  points?: number;
+  gems?: number;
   inventory?: Array<{
     itemKey: string;
     name: string;

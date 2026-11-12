@@ -23,7 +23,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     requireAdmin,
     async function (_req: express.Request, res: express.Response) {
-      const users = await User.find({}, "username email _id roles avatar xendrive points inventory").exec();
+      const users = await User.find({}, "username email _id roles avatar xendrive gems inventory").exec();
       const usage = await usageForAll();
 
       return res.json({
@@ -39,7 +39,7 @@ module.exports = function (app: express.Application) {
               email: user.email,
               roles: (user.roles || []).map((role: string) => role.toLowerCase()),
               avatar: user.avatar,
-              points: user.points || 0,
+              gems: user.gems || 0,
               inventory: user.inventory || [],
               xendrive: {
                 fileCount,
@@ -207,7 +207,9 @@ module.exports = function (app: express.Application) {
 
       const item = ITEMS[itemKey];
 
-      if (!item) {
+      // A gift only lands in the inventory; the person redeems it themselves. Applying the effect here as
+      // well used to leave the item redeemable, so a gifted voucher paid out twice.
+      if (!item || item.legacy) {
         return res.status(404).json({
           status: false,
           message: "Item not found",
@@ -234,11 +236,6 @@ module.exports = function (app: express.Application) {
       });
 
       await user.save();
-
-      // Apply item effects if it has an apply function (for immediate effects like points)
-      if (item.apply) {
-        await item.apply(user);
-      }
 
       // Create notification for the user
       const notification = new Notification({

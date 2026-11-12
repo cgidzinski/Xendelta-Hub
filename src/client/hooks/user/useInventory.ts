@@ -5,6 +5,10 @@ import { ApiResponse } from "../../types/api";
 import { useSnackbar } from "notistack";
 import { userProfileKeys } from "./useUserProfile";
 
+export const inventoryKeys = {
+  all: ["inventory"] as const,
+};
+
 export interface InventoryItem {
   _id: string;
   itemKey: string;
@@ -59,7 +63,7 @@ export const useInventory = (): UseInventoryReturn => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["inventory"],
+    queryKey: inventoryKeys.all,
     queryFn: fetchInventory,
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
@@ -76,7 +80,7 @@ export const useInventory = (): UseInventoryReturn => {
     onSuccess: (data) => {
       if (data) {
         queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
-        queryClient.invalidateQueries({ queryKey: ["inventory"] });
+        queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
         enqueueSnackbar("Item used successfully", { variant: "success" });
       } else {
         enqueueSnackbar("Failed to use item", { variant: "error" });
@@ -88,7 +92,7 @@ export const useInventory = (): UseInventoryReturn => {
     mutationFn: trashItem,
     onSuccess: (data) => {
       if (data) {
-        queryClient.invalidateQueries({ queryKey: ["inventory"] });
+        queryClient.invalidateQueries({ queryKey: inventoryKeys.all });
         enqueueSnackbar("Item trashed", { variant: "success" });
       } else {
         enqueueSnackbar("Failed to trash item", { variant: "error" });

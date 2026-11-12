@@ -32,7 +32,7 @@ import { formatDistance } from "date-fns";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useRef } from "react";
 import ProfileListItem from "../ProfileListItem";
-import ShopListItem from "../ShopListItem";
+import GemBalance from "../GemBalance";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications, Notification } from "../../hooks/user/useUserNotifications";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
@@ -67,7 +67,7 @@ interface BaseNavBarProps {
   drawerHeaderPath?: string;
   drawerHeaderText?: string;
   showProfile?: boolean;
-  showPoints?: boolean;
+  showGems?: boolean;
   children?: React.ReactNode;
 }
 
@@ -100,7 +100,7 @@ export default function BaseNavBar({
   drawerHeaderPath = "/internal",
   drawerHeaderText = "XenDelta Hub",
   showProfile = true,
-  showPoints = true,
+  showGems = true,
   children,
 }: BaseNavBarProps) {
   const navigate = useNavigate();
@@ -265,7 +265,7 @@ export default function BaseNavBar({
             </Typography>
           </Box>
 
-          {(showPoints || showProfile) && (
+          {(showGems || showProfile) && (
             <Box sx={{ flexShrink: 0 }}>
               <List sx={{ py: 0 }}>
                 {showProfile && (
@@ -280,9 +280,9 @@ export default function BaseNavBar({
                     }}
                   />
                 )}
-                {showPoints && (
-                  <ShopListItem
-                    points={profile?.points}
+                {showGems && (
+                  <GemBalance
+                    gems={profile?.gems}
                     onNavigate={() => {
                       if (isMobile && isNavBarOpen) {
                         onToggleNavBar();

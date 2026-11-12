@@ -1,5 +1,6 @@
 import { Box, Avatar, Typography, Skeleton } from "@mui/material";
-import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
+import { GemIcon } from "../../../../components/icons/GemIcon";
+import { GEM_COLOR } from "../../../../theme";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
@@ -58,8 +59,8 @@ export default function CompactHomeHeader() {
       {/* Stats */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, pl: { xs: "52px", sm: 2 } }}>
         <StatItem
-          icon={<EmojiEventsOutlinedIcon sx={{ fontSize: 16, color: "warning.main" }} />}
-          value={profile?.points ?? 0}
+          icon={<GemIcon sx={{ fontSize: 16, color: GEM_COLOR }} />}
+          value={profile?.gems ?? 0}
           active={false}
         />
         <StatItem

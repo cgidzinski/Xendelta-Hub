@@ -27,8 +27,6 @@ const ALLOWED: Record<string, string> = {
 };
 // Photos need a scrim regardless of theme; these overlay buttons/gradients sit on imagery.
 const ON_IMAGE_OVERLAY = [
-  "routes/Internal/Inventory/Inventory.tsx",
-  "routes/Internal/Shop/Shop.tsx",
   "routes/Internal/Recipaint/components/ImageGallery.tsx",
   "routes/Internal/Recipaint/components/ImageUploader.tsx",
   "routes/Internal/XenLink/components/LinkList.tsx",

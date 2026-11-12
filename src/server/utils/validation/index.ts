@@ -7,6 +7,7 @@ export * from "./core";
 export * from "./links";
 export * from "./paints";
 export * from "./account";
+export * from "./gems";
 export * from "./xendrive";
 export * from "./recipaint";
 export * from "./admin";

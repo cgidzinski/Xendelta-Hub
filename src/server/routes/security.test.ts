@@ -19,7 +19,7 @@ vi.mock("../utils/emailUtils.js", async (importOriginal) => ({
 let t: TestApp;
 
 beforeAll(async () => {
-  t = await startTestApp([() => import("./auth.js"), () => import("./users.js"), () => import("./points.js")]);
+  t = await startTestApp([() => import("./auth.js"), () => import("./users.js"), () => import("./gems.js")]);
 }, 180_000);
 
 afterAll(async () => {
@@ -94,14 +94,14 @@ describe("user directory", () => {
   });
 });
 
-describe("points shop", () => {
+describe("gem shop", () => {
   it("cannot be overspent by simultaneous purchases", async () => {
-    // Item "3" costs 5000. With exactly 5000 points only one of ten parallel requests may win.
-    const { user, token } = await createUser({ points: 5000 });
+    // Item "3" costs 5000. With exactly 5000 gems only one of ten parallel requests may win.
+    const { user, token } = await createUser({ gems: 5000 });
 
     const results = await Promise.all(
       Array.from({ length: 10 }, () =>
-        request(t.app).post("/api/points/redeemItem").set("Authorization", `Bearer ${token}`).send({ itemId: "3" }),
+        request(t.app).post("/api/gems/shop/buy").set("Authorization", `Bearer ${token}`).send({ itemId: "3" }),
       ),
     );
 
@@ -109,18 +109,18 @@ describe("points shop", () => {
     expect(wins).toBe(1);
 
     const fresh: any = await mongoose.model("User").findById(user._id);
-    expect(fresh.points).toBe(0);
+    expect(fresh.gems).toBe(0);
     expect(fresh.inventory).toHaveLength(1);
   });
 
   it("refuses a purchase the balance cannot cover", async () => {
-    const { user, token } = await createUser({ points: 100 });
+    const { user, token } = await createUser({ gems: 100 });
     const res = await request(t.app)
-      .post("/api/points/redeemItem")
+      .post("/api/gems/shop/buy")
       .set("Authorization", `Bearer ${token}`)
       .send({ itemId: "3" });
     expect(res.body.status).toBe(false);
-    expect(((await mongoose.model("User").findById(user._id)) as any).points).toBe(100);
+    expect(((await mongoose.model("User").findById(user._id)) as any).gems).toBe(100);
   });
 });
 

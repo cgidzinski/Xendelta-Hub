@@ -49,7 +49,6 @@ import { formatFileSize } from "../../utils/fileUtils";
 const AVAILABLE_ROLES = ["admin", "user"];
 
 const ITEM_OPTIONS = [
-  { value: "1000-point-voucher", label: "1000 Point Voucher" },
   { value: "1gb-xendrive-voucher", label: "1GB XenDrive Voucher" },
   { value: "golden-badge", label: "Golden Badge" },
 ];
@@ -460,10 +459,10 @@ export default function Users() {
                 <Box sx={{ display: "flex", gap: 4 }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      Points
+                      Gems
                     </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 700, color: "primary.main" }}>
-                      {selectedUser.points?.toLocaleString() || 0}
+                      {selectedUser.gems?.toLocaleString() || 0}
                     </Typography>
                   </Box>
                   <Box>
@@ -652,7 +651,7 @@ export default function Users() {
 
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                    XenDrive Quota
+                    Extra XenDrive space (on top of the free 1 GB)
                   </Typography>
                   <Box sx={{ display: "flex", gap: 1 }}>
                     <TextField

@@ -1,5 +1,5 @@
 import express = require("express");
-import { usageFor } from "../utils/xendriveUtils";
+import { totalSpaceAllowed, usageFor } from "../utils/xendriveUtils";
 import { loadCaller, AppError } from "../utils/http";
 import { User } from "../models/user";
 import { Notification } from "../models/notification";
@@ -71,7 +71,7 @@ module.exports = function (app: express.Application) {
           email: user.email,
           avatar: user.avatar || "/avatars/default-avatar.png",
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
-          points: user.points || 0,
+          gems: user.gems || 0,
           unread_messages: hasUnreadMessages,
           unread_notifications: hasUnreadNotifications,
           has_new_notifications: !!hasNewNotifications,
@@ -83,7 +83,7 @@ module.exports = function (app: express.Application) {
           xendrive: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
-            spaceAllowed: user.xendrive?.spaceAllowed || 0,
+            spaceAllowed: totalSpaceAllowed(user.xendrive?.spaceAllowed),
           },
         },
       },
@@ -604,33 +604,38 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const userId = (req as AuthenticatedRequest).user!._id;
       const { inventoryItemId } = req.params;
-      const user = await User.findById(userId).exec();
-      if (!user) throw new AppError(404, "User not found");
+      // Claim the item first with one conditional update: of two simultaneous redeems only one matches
+      // `used: false`, so the effect below can't be applied twice.
+      const claimed = await User.findOneAndUpdate(
+        { _id: userId, inventory: { $elemMatch: { _id: inventoryItemId, used: false } } },
+        { $set: { "inventory.$.used": true, "inventory.$.usedAt": new Date() } },
+        { new: false, projection: { inventory: { $elemMatch: { _id: inventoryItemId } } } },
+      ).exec();
 
-      const item = user.inventory.id(inventoryItemId);
-      if (!item) {
-        return res.status(404).json({
-          status: false,
-          message: "Item not found in inventory",
-        });
+      if (!claimed) {
+        const owner = await User.findOne(
+          { _id: userId },
+          { inventory: { $elemMatch: { _id: inventoryItemId } } },
+        ).exec();
+        if (!owner) throw new AppError(404, "User not found");
+        if (!owner.inventory?.length) throw new AppError(404, "Item not found in inventory");
+        throw new AppError(400, "Item already used");
       }
 
-      if (item.used) {
-        return res.status(400).json({
-          status: false,
-          message: "Item already used",
-        });
-      }
-
-      const itemDef = ITEMS[item.itemKey as keyof typeof ITEMS];
+      const itemDef = ITEMS[claimed.inventory[0].itemKey as keyof typeof ITEMS];
       // Not every item has an effect to apply (apply is optional on the item definition).
       if (itemDef?.apply) {
-        await itemDef.apply(user);
+        try {
+          await itemDef.apply(String(userId));
+        } catch (e) {
+          // Hand the item back rather than consume it for nothing.
+          await User.updateOne(
+            { _id: userId, "inventory._id": inventoryItemId },
+            { $set: { "inventory.$.used": false }, $unset: { "inventory.$.usedAt": "" } },
+          ).exec();
+          throw e;
+        }
       }
-
-      item.used = true;
-      item.usedAt = new Date();
-      await user.save();
 
       return res.json({
         status: true,
