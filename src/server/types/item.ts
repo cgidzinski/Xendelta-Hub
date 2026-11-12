@@ -6,5 +6,11 @@ export interface Item {
   description: string;
   image: string;
   redeemable: boolean;
-  apply?: (user: any) => Promise<void>;
+  /**
+   * Retired items are no longer sold or gifted but can still be redeemed by people who already hold one,
+   * so nobody loses what they paid for.
+   */
+  legacy?: boolean;
+  /** The effect of redeeming. Must change the user with a single atomic update, never read-modify-save. */
+  apply?: (userId: string) => Promise<void>;
 }

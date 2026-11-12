@@ -1,5 +1,6 @@
 import { alpha } from "@mui/material/styles";
 import HomeIcon from "@mui/icons-material/Home";
+import InventoryIcon from "@mui/icons-material/Inventory2Outlined";
 import SecurityIcon from "@mui/icons-material/Security";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
@@ -87,13 +88,13 @@ export default function Root() {
     //   path: "/internal/blog",
     //   isSelected: (pathname) => pathname.startsWith("/internal/blog"),
     // },
-    // {
-    //   key: "inventory",
-    //   label: "Inventory",
-    //   icon: <InventoryIcon />,
-    //   path: "/internal/inventory",
-    //   isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
-    // },
+    {
+      key: "inventory",
+      label: "Inventory",
+      icon: <InventoryIcon />,
+      path: "/internal/inventory",
+      isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
+    },
     ...(pinnedNavItems.length > 0 || allAppNavItems.length > 0
       ? [
           {
@@ -135,7 +136,7 @@ export default function Root() {
       footerNavItems={footerNavItems}
       showNotifications={true}
       showMessages={false}
-      showPoints={true}
+      showGems={true}
     >
       {isAdmin && (
         <Link to="/admin" style={{ color: "inherit", display: "flex", marginLeft: 4 }}>

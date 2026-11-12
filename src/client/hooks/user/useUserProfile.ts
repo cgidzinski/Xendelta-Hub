@@ -13,7 +13,7 @@ export interface UserProfile {
   email: string;
   avatar: string;
   roles?: string[];
-  points: number;
+  gems: number;
   unread_messages: boolean;
   unread_notifications: boolean;
   has_new_notifications: boolean;
@@ -104,7 +104,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
     onSuccess: () => {
       // Refetch rather than writing the response into the cache: the update endpoint
       // returns only the handful of fields it touches, so seeding the cache with it
-      // would drop pinnedApps, points and the xendrive quota until the next reload.
+      // would drop pinnedApps, gems and the xendrive quota until the next reload.
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
     onError: () => {

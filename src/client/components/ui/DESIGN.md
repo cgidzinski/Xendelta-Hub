@@ -9,7 +9,7 @@ Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px borde
 | `PAGE_MAX_WIDTH` | `theme/index.ts` | via `<PageContainer width=...>` |
 | `brandGradient(theme)` | `theme/index.ts` | wordmarks, brand accents |
 | `NEON`, `secondary` | `theme/index.ts` | public-page accent only, one gradient per page |
-| `POINTS_GOLD` | `theme/index.ts` | points currency icon |
+| `GEM_COLOR` | `theme/index.ts` | gem currency icon |
 | `cardSx`, `sectionLabelSx`, `pageTitleSx`, `overlayButtonSx` | `ui/surfaceStyles.ts` | outlined surface, label, title, buttons over images |
 | `CHART_COLORS` etc. | `ui/chartColors.ts` | every chart and label chip |
 

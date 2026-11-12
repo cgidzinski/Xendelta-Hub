@@ -2,8 +2,6 @@ import { z } from "zod";
 import { objectIdSchema } from "./core";
 import { VALIDATION_LIMITS } from "../../constants";
 
-export const redeemItemSchema = z.object({ itemId: z.string().min(1, "itemId is required").max(64) });
-
 export const notificationIdParamSchema = z.object({ notificationId: objectIdSchema });
 export const userIdParamSchema = z.object({ userId: objectIdSchema });
 export const inventoryItemIdParamSchema = z.object({ inventoryItemId: objectIdSchema });

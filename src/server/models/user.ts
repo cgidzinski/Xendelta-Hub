@@ -37,7 +37,8 @@ const userSchema = new Schema({
   avatar: { type: String, default: "/avatars/default-avatar.png" }, // Direct GCS public URL or local default
   roles: [{ type: String }],
   password: { type: String }, // For local authentication
-  points: { type: Number, default: 1000 },
+  // Premium currency, bought in the shop (docs/monetization.md). New accounts start with none.
+  gems: { type: Number, default: 0 },
   authProviders: [authProviderSchema], // Multiple authentication methods
   conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
   resetPassword: {
@@ -45,7 +46,8 @@ const userSchema = new Schema({
     expires: { type: Date },
   },
   xendrive: {
-    spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 0 }, // 0GB
+    // Extra bytes on top of the free tier (FREE_STORAGE_BYTES): admin grants and redeemed vouchers.
+    spaceAllowed: { type: Number, default: 0 },
   },
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
   pinnedApps: [{ type: String }],

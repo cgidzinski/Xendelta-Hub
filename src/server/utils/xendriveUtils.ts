@@ -13,6 +13,7 @@ import { XenDriveFile } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
+import { FREE_STORAGE_BYTES } from "@shared/monetization";
 
 const gcsFileFor = (storagePath: string) => privateBucket.file(storagePath);
 
@@ -252,6 +253,11 @@ export async function usageForAll(): Promise<Map<string, { fileCount: number; sp
   return new Map(rows.map((r) => [r._id.toString(), { fileCount: r.fileCount, spaceUsed: r.spaceUsed }]));
 }
 
+/** Everything a person may store: the free tier plus whatever they were granted or redeemed. */
+export function totalSpaceAllowed(granted: number | null | undefined): number {
+  return FREE_STORAGE_BYTES + (granted || 0);
+}
+
 /** Check whether a person has room for `fileSize` more bytes. */
 export async function checkQuota(userId: string, fileSize: number): Promise<{ canUpload: boolean; message?: string }> {
   const user = await User.findById(userId).exec();
@@ -259,7 +265,7 @@ export async function checkQuota(userId: string, fileSize: number): Promise<{ ca
     return { canUpload: false, message: "User not found" };
   }
 
-  const spaceAllowed = user.xendrive?.spaceAllowed || 0;
+  const spaceAllowed = totalSpaceAllowed(user.xendrive?.spaceAllowed);
   const { spaceUsed } = await usageFor(userId);
 
   if (spaceUsed + fileSize > spaceAllowed) {

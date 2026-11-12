@@ -46,7 +46,7 @@ export default function AdminNavBar() {
       footerNavItems={footerNavItems}
       showNotifications={false}
       showMessages={false}
-      showPoints={false}
+      showGems={false}
       showProfile={false}
     >
       <Link to="/internal" style={{ color: "inherit", display: "flex" }}>
