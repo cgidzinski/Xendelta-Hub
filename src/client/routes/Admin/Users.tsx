@@ -1,4 +1,5 @@
 import PageContainer from "../../components/ui/PageContainer";
+import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { useState, useMemo } from "react";
 import {
   Box,
@@ -18,7 +19,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Button,
   MenuItem,
   IconButton,
@@ -80,7 +80,7 @@ export default function Users() {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingRoles, setEditingRoles] = useState<string[]>([]);
   const [editingQuota, setEditingQuota] = useState<string>("");
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const confirm = useConfirm();
   const [selectedGiftItem, setSelectedGiftItem] = useState<string>("");
   const [activeTab, setActiveTab] = useState(0);
   const [notifyTitle, setNotifyTitle] = useState("");
@@ -228,12 +228,24 @@ export default function Users() {
       });
   };
 
+  const confirmDeleteUser = async () => {
+    const ok = await confirm({
+      title: "Delete user?",
+      message: (
+        <>
+          Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be undone.
+        </>
+      ),
+      confirmLabel: "Delete",
+    });
+    if (ok) await handleDeleteUser();
+  };
+
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
     deleteUser(selectedUser._id)
       .then(() => {
         enqueueSnackbar("User deleted successfully", { variant: "success" });
-        setDeleteConfirmOpen(false);
         handleCloseModal();
       })
       .catch((error) => {
@@ -708,7 +720,7 @@ export default function Users() {
                     color="error"
                     size="small"
                     startIcon={<DeleteIcon />}
-                    onClick={() => setDeleteConfirmOpen(true)}
+                    onClick={confirmDeleteUser}
                     disabled={isDeletingUser}
                   >
                     Delete User
@@ -785,25 +797,6 @@ export default function Users() {
               </Box>
             )}
           </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-          <DialogTitle>Delete User</DialogTitle>
-          <DialogContent>
-            <Typography>
-              Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be
-              undone.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteConfirmOpen(false)} disabled={isDeletingUser}>
-              Cancel
-            </Button>
-            <Button onClick={handleDeleteUser} color="error" variant="contained" disabled={isDeletingUser}>
-              {isDeletingUser ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogActions>
         </Dialog>
       </PageContainer>
     </Box>

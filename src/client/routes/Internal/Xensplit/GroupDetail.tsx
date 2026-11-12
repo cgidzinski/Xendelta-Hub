@@ -1,5 +1,6 @@
 import { xensplitKeys } from "../../../hooks/xensplit/keys";
 import { useUploadProgress } from "../../../hooks/useUploadProgress";
+import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import DetailHeader from "../../../components/ui/DetailHeader";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -203,11 +204,11 @@ export default function GroupDetail() {
   // Owned here rather than in each tab so toggling it on the Settings tab takes effect
   // immediately, instead of waiting for a sibling route to remount.
   const showDeletedKey = `xensplit_showDeleted_${groupId}`;
-  const [showDeleted, setShowDeleted] = useState(() => localStorage.getItem(showDeletedKey) === "true");
-  const handleShowDeletedChange = (next: boolean) => {
-    setShowDeleted(next);
-    localStorage.setItem(showDeletedKey, String(next));
-  };
+  const [showDeleted, handleShowDeletedChange] = useLocalStorageState(
+    showDeletedKey,
+    false,
+    (v): v is boolean => typeof v === "boolean",
+  );
 
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<XenSplitExpense | null>(null);

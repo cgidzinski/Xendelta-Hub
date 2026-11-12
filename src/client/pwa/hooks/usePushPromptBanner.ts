@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getRawStored, setRawStored } from "../../hooks/useLocalStorageState";
 import { usePushNotifications } from "./usePushNotifications";
 
 // Drives the "Turn on notifications" banner shown to authenticated users who haven't
@@ -13,7 +14,7 @@ const DISMISS_KEY = "push-prompt-dismissed";
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function checkDismissed(): boolean {
-  const raw = localStorage.getItem(DISMISS_KEY);
+  const raw = getRawStored(DISMISS_KEY);
   if (!raw) return false;
   const ts = new Date(raw).getTime();
   return !isNaN(ts) && Date.now() - ts < DISMISS_TTL_MS;
@@ -24,7 +25,7 @@ export function usePushPromptBanner() {
   const [isDismissed, setIsDismissed] = useState(() => checkDismissed());
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, new Date().toISOString());
+    setRawStored(DISMISS_KEY, new Date().toISOString());
     setIsDismissed(true);
   };
 
