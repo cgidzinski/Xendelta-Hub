@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import { useTitle } from "../../../hooks/useTitle";
+import { useVisualViewport } from "../../../hooks/useVisualViewport";
 import EmptyState from "../../../components/ui/EmptyState";
 import ConversationList from "./components/ConversationList";
 import NewChatDialog from "./components/NewChatDialog";
 import Thread from "./Thread";
+import { chatShellStyle } from "./chatLayout";
 
 /**
  * Messages: the conversation list and one open conversation. On a wide screen they sit side by side; on a phone one
@@ -20,6 +22,21 @@ export default function Messages() {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("md"));
   const [newOpen, setNewOpen] = useState(false);
+  const viewport = useVisualViewport();
+  const landscape = useMediaQuery("(orientation: landscape)");
+
+  // On a phone the screen is pinned to the visible area (see chatLayout.ts), so the page behind it must not scroll.
+  useEffect(() => {
+    if (!phone) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const before = [html.style.overflow, body.style.overflow];
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      [html.style.overflow, body.style.overflow] = before;
+    };
+  }, [phone]);
 
   const open = (id: string) => navigate(`/internal/messages/${id}`);
   const showList = !phone || !conversationId;
@@ -29,9 +46,7 @@ export default function Messages() {
     <Box
       sx={{
         display: "flex",
-        height: { xs: "calc(100dvh - 56px)", sm: "calc(100dvh - 64px)" },
-        borderTop: { md: 0 },
-        overflow: "hidden",
+        ...chatShellStyle({ phone, inThread: !!conversationId, viewport, landscape, zIndex: theme.zIndex.modal - 10 }),
       }}
     >
       {showList && (
