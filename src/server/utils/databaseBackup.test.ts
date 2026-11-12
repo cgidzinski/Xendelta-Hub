@@ -163,4 +163,24 @@ describe("databaseBackup", () => {
     // JS numbers) - correct behavior for a real insertMany, so unwrap with valueOf() here.
     expect(targetDb.collection("bulk").docs.map((d) => Number(d.seq))).toEqual(docs.map((d) => d.seq));
   });
+
+  it("fails, instead of finishing quietly, when the dump is cut short or unreadable", async () => {
+    const sourceDb = new FakeDb();
+    for (let i = 0; i < 2000; i++)
+      sourceDb.collection("bulk").docs.push({ _id: new ObjectId(), seq: i, pad: "x".repeat(50) });
+    const dest = new PassThrough();
+    const collected = collectStream(dest);
+    await streamExport(sourceDb as unknown as Db, dest, { exportedBy: "tester" });
+    const dump = await collected;
+
+    const truncated = new FakeDb();
+    await expect(
+      restoreFromGzipStream(truncated as unknown as Db, Readable.from([dump.subarray(0, Math.floor(dump.length / 2))])),
+    ).rejects.toThrow();
+
+    const notGzip = new FakeDb();
+    await expect(
+      restoreFromGzipStream(notGzip as unknown as Db, Readable.from([Buffer.from("plain text")])),
+    ).rejects.toThrow();
+  });
 });

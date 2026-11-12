@@ -88,3 +88,7 @@ private one; the public original is deleted only after the item points at the co
 
 It ties to the ongoing-cost plan in `docs/monetization.md` ("Gems to keep files stored or shared"): once counting is on, the
 quota is what gems extend.
+
+## Database backups
+Admin-made database backups live in the private bucket under `db-backups/` (`docs/admin.md`). They are not XenDrive files and don't
+count toward anyone's quota. There is no retention yet: delete old ones from the System page.

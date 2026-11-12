@@ -26,6 +26,28 @@
 - The people list is searched, filtered and paged in memory on the server; fine while the directory is thousands of
   people, and the filters that need storage or purchases are exact. Move it to an aggregation if that stops being true.
 
+## Database backups and restore (System page)
+`routes/admin/backups.ts`, with the bucket and job logic in `utils/gcsBackups.ts`. The dump format and the wipe-and-replace
+restore are `utils/databaseBackup.ts`, the same code `npm run db:export` / `db:import` use (the CLI stays the way to rehearse
+a migration on a scratch database).
+
+- **Where:** the private bucket under `db-backups/`. `xendelta-hub-backup-<time>.ndjson.gz` are backups; `pre-restore-<time>…`
+  are the safety copies a restore takes first. The routes only accept names matching `BACKUP_NAME_PATTERN`
+  (`src/shared/admin.ts`), so a caller can't point them at another object.
+- **Background jobs:** backup and restore return 202 and run on the server, one at a time (a second start is a 409). The page
+  polls `GET /api/admin/backups/job`. Job state is in memory, not in Mongo: a restore replaces every collection. A server
+  restart forgets it.
+- **A restore** is `POST /api/admin/backups/restore { name, confirm: "RESTORE" }`. It checks the whole file first (valid gzip to
+  the end, backup header) and refuses a bad one before touching anything; then saves a safety copy; then wipes and replaces.
+  If it still fails midway, the safety copy is the way back (restore from it, or `npm run db:import`).
+- **The app pauses during a restore.** `middleware/restoreMaintenance.ts` answers every `/api` request with a 503 while it
+  runs. Without it, requests would meet an empty `users` collection, get a 401, and the client would sign people out. Only
+  `/api/health` and the job status stay open.
+- **Audit:** backup, restore and delete are logged. The restore row is written when the restore ends, because the restore
+  replaces the audit log too (so it is the only entry from before that moment that is guaranteed to be there).
+- People who signed up after the backup was taken don't exist after a restore. Their uploaded files stay in the bucket.
+- Not built yet: scheduled automatic backups and retention.
+
 ## Adding a page
 1. A route file in `src/server/routes/admin/` exporting `registerAdmin<Area>Routes(app)`, registered in `index.ts`. Writes call `recordAudit`.
 2. Wire types in `src/shared/admin.ts`; a hook in `hooks/admin/useAdminData.ts` with a key in `hooks/admin/keys.ts`.

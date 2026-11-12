@@ -12,6 +12,7 @@ import { formatFileSize } from "../../utils/fileUtils";
 import DataTable, { type Column } from "./components/DataTable";
 import StatCard from "./components/StatCard";
 import TypedConfirmDialog from "./components/TypedConfirmDialog";
+import BackupsCard from "./components/BackupsCard";
 import { shortDate, timeAgo } from "./adminFormat";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.25 } as const;
@@ -242,6 +243,8 @@ export default function System() {
                     </Box>
                   ))}
               </Box>
+
+              <BackupsCard />
 
               <Box sx={card}>
                 <Typography sx={{ fontWeight: 600, mb: 0.5 }}>Error monitoring</Typography>
