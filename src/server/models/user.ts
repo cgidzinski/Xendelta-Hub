@@ -43,6 +43,12 @@ const userSchema = new Schema({
   },
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
   pinnedApps: [{ type: String }],
+  // What Home's feed hides for this person: whole apps, single spaces ("<app>:<id>") and single events.
+  feedPrefs: {
+    mutedApps: { type: [String], default: [] },
+    mutedSpaces: { type: [String], default: [] },
+  },
+  hiddenActivityIds: { type: [String], default: [] },
   // Preferred IANA timezone. Empty/absent means "follow my browser" — the default, and
   // a thing only the client can resolve, so the effective zone is sent with each request
   // that buckets by time rather than inferred here.

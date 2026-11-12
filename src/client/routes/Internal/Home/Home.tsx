@@ -2,23 +2,18 @@ import PageContainer from "../../../components/ui/PageContainer";
 import { Box, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
 import CompactHomeHeader from "./components/CompactHomeHeader";
-import PinnedAppsSection from "./components/PinnedAppsSection";
-import RecipaintCardBody from "./components/RecipaintCardBody";
-import XenDriveCardBody from "./components/XenDriveCardBody";
-import XenLinkCardBody from "./components/XenLinkCardBody";
-import XenSplitCardBody from "./components/XenSplitCardBody";
-import XenBudgetCardBody from "./components/XenBudgetCardBody";
-import XenRoutineCardBody from "./components/XenRoutineCardBody";
-import XenKitchenCardBody from "./components/XenKitchenCardBody";
-import XenNoteCardBody from "./components/XenNoteCardBody";
+import QuickPanel from "./components/QuickPanel";
+import AttentionStrip from "./components/AttentionStrip";
+import ActivityFeed from "./components/ActivityFeed";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
-import { usePinnedApps } from "../../../hooks/user/usePinnedApps";
+import { useAttention } from "../../../hooks/feed/useFeed";
 import { resolvePinnedApps } from "../../../constants/apps";
 
+/** Home is a feed: pinned apps to jump into, what needs the person now, then what happened in their spaces. */
 export default function Home() {
   useTitle("Home");
   const { profile, isLoading, isError } = useUserProfile();
-  const { togglePinnedApp: _togglePinnedApp, isUpdating: _isUpdating } = usePinnedApps();
+  const attention = useAttention();
 
   if (isLoading) {
     return <Typography sx={{ mt: 8, textAlign: "center" }}>Loading...</Typography>;
@@ -27,23 +22,14 @@ export default function Home() {
     return <Typography sx={{ mt: 8, textAlign: "center", color: "error.main" }}>Failed to load profile.</Typography>;
   }
 
-  const appDetails: Record<string, React.ReactNode> = {
-    recipaint: <RecipaintCardBody />,
-    xendrive: <XenDriveCardBody />,
-    xenlink: <XenLinkCardBody />,
-    xensplit: <XenSplitCardBody />,
-    xenbudget: <XenBudgetCardBody />,
-    xenroutine: <XenRoutineCardBody />,
-    xenkitchen: <XenKitchenCardBody />,
-    xennote: <XenNoteCardBody />,
-  };
-
   return (
-    <Box>
-      <PageContainer width="wide">
-        <CompactHomeHeader />
-        <PinnedAppsSection pinnedApps={resolvePinnedApps(profile.pinnedApps)} appDetails={appDetails} />
-      </PageContainer>
-    </Box>
+    <PageContainer width="default">
+      <CompactHomeHeader />
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <QuickPanel pinnedApps={resolvePinnedApps(profile.pinnedApps)} counts={attention.data?.counts ?? {}} />
+        <AttentionStrip cards={attention.data?.cards ?? []} />
+        <ActivityFeed />
+      </Box>
+    </PageContainer>
   );
 }

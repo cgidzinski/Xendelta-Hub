@@ -110,6 +110,17 @@ Put data hooks in `src/client/hooks/<app>/`.
 - **Uploads:** a `FormData` body gets the long upload timeout automatically; pass `useUploadProgress()`'s
   `onUploadProgress` and render `<UploadProgress percent={percent} />`.
 
+## 4b. Show up on Home (the feed)
+Home is a feed with two sources. Add one or both when the app has something worth surfacing:
+
+- **Activity** (what other people did in a space I share): add the verb to `ACTIVITY` in `src/shared/activity.ts`
+  (`link`, `summary`, optional `aggregate` wording), register the app's space in `server/activity/spaces.ts`
+  (`membersOf`), and call `recordActivity({ actor, verb, object, space, audience: "space" })` after the change is
+  saved. It never throws and skips the actor. Only changes another person would care about; not edits or renames.
+- **Needs attention** (live, nothing stored): add an `AttentionProvider` in `server/feed/providers/` and list it in
+  `server/feed/attention.ts`. Only things with a clear action and a cost for ignoring them. Its `count`s become the
+  app's badge on the pinned-app buttons, so use the app's key from `constants/apps.ts` as `app`.
+
 ## 5. UI
 
 Follow `components/ui/DESIGN.md`. In short: theme tokens, not hex or `rgba()`; the shared components

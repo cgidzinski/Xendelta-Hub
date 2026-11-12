@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { recordActivity } from "../../activity";
 import { Types } from "mongoose";
 import {
   validate,
@@ -140,6 +141,15 @@ export function registerNoteRoutes(app: any) {
     applyFields(note, req.body);
     await note.save();
     notifyChange(book, uid);
+    if (book) {
+      await recordActivity({
+        actor: uid,
+        verb: "xennote.note_created",
+        object: { type: "note", id: note.id, label: note.title || undefined },
+        space: { app: "xennote", id: book.id, label: book.name },
+        audience: "space",
+      });
+    }
     res.json({
       status: true,
       message: "Note saved",
