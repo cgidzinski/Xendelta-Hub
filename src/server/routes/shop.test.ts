@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { GEM_PACKS, FREE_STORAGE_BYTES } from "@shared/monetization";
+import { GEM_PACKS, FREE_STORAGE_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
 import { SHOP_ITEMS } from "../constants/shopItems";
 import { ITEMS } from "../constants/items";
 
@@ -10,7 +10,7 @@ import { ITEMS } from "../constants/items";
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./gems.js"), () => import("./users.js"), () => import("./admin/users.js")]);
+  t = await startTestApp([() => import("./shop.js"), () => import("./users.js"), () => import("./admin/users.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -30,17 +30,36 @@ afterEach(() => {
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 const User = () => mongoose.model("User") as any;
 const reload = async (id: unknown) => (await User().findById(id)) as any;
-const checkout = (token: string, body: object = { packId: GEM_PACKS[0].id }) =>
-  request(t.app).post("/api/gems/checkout").set(auth(token)).send(body);
+const buyItem = (token: string, body: object = { itemId: GEM_PACKS[0].id }) =>
+  request(t.app).post("/api/shop/buy").set(auth(token)).send(body);
 
 describe("catalogue", () => {
-  it("only sells things for a positive whole number of gems that exist", () => {
+  it("sells every item for exactly one positive whole-number price, and the items exist", () => {
     for (const s of SHOP_ITEMS) {
-      expect(Number.isInteger(s.price) && s.price > 0, `${s.itemKey} price`).toBe(true);
+      const prices = [s.price, s.priceCents].filter((p) => p !== undefined);
+      expect(prices, `${s.id} has one price`).toHaveLength(1);
+      expect(Number.isInteger(prices[0]) && prices[0]! > 0, `${s.id} price`).toBe(true);
+      if (s.priceCents !== undefined) {
+        expect(s.currency, `${s.id} currency`).toBeTruthy();
+        expect(s.grantsGems! > 0, `${s.id} grants gems`).toBe(true);
+      }
       expect(ITEMS[s.itemKey], `${s.itemKey} exists`).toBeDefined();
       expect(ITEMS[s.itemKey].legacy, `${s.itemKey} is not retired`).toBeFalsy();
     }
     expect(new Set(SHOP_ITEMS.map((s) => s.id)).size).toBe(SHOP_ITEMS.length);
+  });
+
+  it("lists every gem pack in the shop under Gems", () => {
+    for (const pack of GEM_PACKS) {
+      const item = SHOP_ITEMS.find((s) => s.id === pack.id);
+      expect(item).toMatchObject({ category: "Gems", priceCents: pack.priceCents, grantsGems: pack.gems });
+    }
+  });
+
+  it("lists the storage voucher under Storage, which the Shop shows as its own section", () => {
+    const voucher = SHOP_ITEMS.find((s) => s.itemKey === STORAGE_VOUCHER_KEY);
+    expect(voucher?.category).toBe("Storage");
+    expect(ITEMS[STORAGE_VOUCHER_KEY].key).toBe(STORAGE_VOUCHER_KEY);
   });
 
   it("has sane gem packs", () => {
@@ -74,10 +93,10 @@ describe("buying gems", () => {
     const { user, token } = await createUser();
     const pack = GEM_PACKS[1];
 
-    const packs = await request(t.app).get("/api/gems/packs").set(auth(token));
-    expect(packs.body.data).toMatchObject({ available: true, testMode: true });
+    const shop = await request(t.app).get("/api/shop").set(auth(token));
+    expect(shop.body.data.payments).toMatchObject({ available: true, testMode: true });
 
-    const res = await checkout(token, { packId: pack.id });
+    const res = await buyItem(token, { itemId: pack.id });
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ result: "completed", gems: pack.gems });
     expect((await reload(user._id)).gems).toBe(pack.gems);
@@ -91,7 +110,7 @@ describe("buying gems", () => {
     const { user } = await createUser();
     const purchase: any = await mongoose.model("GemPurchase").create({
       user: user._id,
-      packId: "gems-1000",
+      itemId: "gems-1000",
       gems: 1000,
       amountCents: 500,
       currency: "USD",
@@ -105,8 +124,8 @@ describe("buying gems", () => {
   it("is switched off when no provider is configured", async () => {
     process.env.PAYMENTS_PROVIDER = "none";
     const { user, token } = await createUser();
-    expect((await request(t.app).get("/api/gems/packs").set(auth(token))).body.data.available).toBe(false);
-    expect((await checkout(token)).status).toBe(503);
+    expect((await request(t.app).get("/api/shop").set(auth(token))).body.data.payments.available).toBe(false);
+    expect((await buyItem(token)).status).toBe(503);
     expect((await reload(user._id)).gems).toBe(0);
   });
 
@@ -114,20 +133,28 @@ describe("buying gems", () => {
     process.env.NODE_ENV = "production";
     delete process.env.PAYMENTS_PROVIDER;
     const player = await createUser();
-    expect((await checkout(player.token)).status).toBe(503);
+    expect((await buyItem(player.token)).status).toBe(503);
 
     process.env.PAYMENTS_PROVIDER = "dummy";
-    expect((await checkout(player.token)).status).toBe(503);
+    expect((await buyItem(player.token)).status).toBe(503);
     const admin = await createUser({ roles: ["admin"] });
-    expect((await checkout(admin.token)).status).toBe(200);
+    expect((await buyItem(admin.token)).status).toBe(200);
     expect((await reload(player.user._id)).gems).toBe(0);
   });
 
-  it("rejects an unknown or malformed pack", async () => {
+  it("rejects an unknown item and a malformed id", async () => {
     const { token } = await createUser();
-    for (const packId of ["gems-999999", { $gt: "" }, undefined]) {
-      expect((await checkout(token, { packId })).status).toBe(400);
+    expect((await buyItem(token, { itemId: "gems-999999" })).status).toBe(404);
+    for (const itemId of [{ $gt: "" }, undefined]) {
+      expect((await buyItem(token, { itemId })).status).toBe(400);
     }
+  });
+
+  it("does not put a gem pack in the inventory", async () => {
+    delete process.env.PAYMENTS_PROVIDER;
+    const { user, token } = await createUser();
+    expect((await buyItem(token)).status).toBe(200);
+    expect((await reload(user._id)).inventory).toHaveLength(0);
   });
 });
 
@@ -177,7 +204,7 @@ describe("redeeming", () => {
 describe("buying from the shop", () => {
   it("takes the gems and puts the item in the inventory", async () => {
     const { user, token } = await createUser({ gems: 1500 });
-    const res = await request(t.app).post("/api/gems/shop/buy").set(auth(token)).send({ itemId: "2" });
+    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
     expect(res.body).toMatchObject({ status: true });
     const fresh = await reload(user._id);
     expect(fresh.gems).toBe(500);
@@ -186,7 +213,7 @@ describe("buying from the shop", () => {
 
   it("no longer sells the point voucher that used to pay the buyer", async () => {
     const { user, token } = await createUser({ gems: 0 });
-    const res = await request(t.app).post("/api/gems/shop/buy").set(auth(token)).send({ itemId: "1" });
+    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "1" });
     expect(res.status).toBe(404);
     expect((await reload(user._id)).gems).toBe(0);
   });

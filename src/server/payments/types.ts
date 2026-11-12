@@ -1,10 +1,10 @@
-import type { GemPack } from "@shared/monetization";
-
 /** What a provider is asked to charge for. */
 export interface CheckoutOrder {
   purchaseId: string;
   userId: string;
-  pack: GemPack;
+  itemId: string;
+  amountCents: number;
+  currency: string;
 }
 
 /**

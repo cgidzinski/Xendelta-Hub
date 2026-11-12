@@ -13,7 +13,7 @@ let adminToken: string;
 beforeAll(async () => {
   t = await startTestApp([
     () => import("./xenlink.js"),
-    () => import("./gems.js"),
+    () => import("./shop.js"),
     () => import("./users.js"),
     () => import("./xendrive.js"),
     () => import("./recipaint.js"),
@@ -68,11 +68,11 @@ describe("request bodies", () => {
 
   it("redeeming a shop item needs a string itemId", async () => {
     const bad = await request(t.app)
-      .post("/api/gems/shop/buy")
+      .post("/api/shop/buy")
       .set(as(token))
       .send({ itemId: { $gt: "" } });
     expect(bad.status).toBe(400);
-    const missing = await request(t.app).post("/api/gems/shop/buy").set(as(token)).send({});
+    const missing = await request(t.app).post("/api/shop/buy").set(as(token)).send({});
     expect(missing.status).toBe(400);
   });
 
