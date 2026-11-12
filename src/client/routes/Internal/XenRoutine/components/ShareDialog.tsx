@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { UserSelect } from "../../../../components/UserSelect";
-import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import type { Routine } from "../../../../hooks/xenroutine/useRoutines";
 import UserName from "../../../../components/user/UserName";
 

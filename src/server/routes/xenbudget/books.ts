@@ -19,6 +19,7 @@ import { STARTER_CATEGORIES, FLAG_NEEDS_REVIEW, FLAG_OFF_BUDGET } from "../../co
 import { serializeBookFor, serializeBooksFor } from "../../utils/xenBudgetSerializer";
 import { notify } from "../../utils/notificationUtils";
 import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
+import { addRefused } from "../../social/policy";
 import {
   baseItemMatch,
   broadcastBook,
@@ -73,6 +74,7 @@ export function registerBookRoutes(app: any) {
     try {
       const userId = callerId(req);
       const { name, memberIds: requestedMemberIds, default_currency } = req.body;
+      if (addRefused(res, userId, requestedMemberIds ?? [])) return;
 
       const members: string[] = [userId];
       if (requestedMemberIds && requestedMemberIds.length > 0) {
@@ -204,6 +206,7 @@ export function registerBookRoutes(app: any) {
       try {
         const book = await loadBookForCreator(req, res);
         if (!book) return;
+        if (addRefused(res, callerId(req), req.body.memberIds)) return;
         const existing = memberIds(book);
         const objectIds = req.body.memberIds.map((id: string) => new mongoose.Types.ObjectId(id));
         const users = await User.find({ _id: { $in: objectIds } })

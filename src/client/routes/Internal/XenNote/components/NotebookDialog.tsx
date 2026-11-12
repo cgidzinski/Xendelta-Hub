@@ -21,7 +21,7 @@ import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { UserSelect } from "../../../../components/UserSelect";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useAuth } from "../../../../contexts/AuthContext";
-import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { notebookShareUrl, useXenNoteActions } from "../../../../hooks/xennote/useXenNote";
 import type { NoteRole, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, swatchColor } from "../noteColors";

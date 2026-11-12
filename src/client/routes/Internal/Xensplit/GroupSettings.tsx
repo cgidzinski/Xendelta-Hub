@@ -28,7 +28,7 @@ import {
   STABLE_CURRENCY_MENU_PROPS,
 } from "../../../utils/currencyUtils";
 import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
-import UserName from "../../../components/user/UserName";
+import PersonLink from "../../../components/user/PersonLink";
 
 export default function GroupSettings() {
   const {
@@ -265,7 +265,7 @@ export default function GroupSettings() {
                 </Avatar>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                    <UserName user={member} />
+                    <PersonLink user={member} />
                   </Typography>
                   {member.user_id === group.created_by && (
                     <Typography variant="caption" color="text.secondary">

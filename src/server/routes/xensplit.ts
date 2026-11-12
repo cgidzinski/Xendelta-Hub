@@ -47,6 +47,7 @@ const mongoose = require("mongoose");
 import { ScheduledTask } from "../models/scheduledTask";
 import { XenSplitLog } from "../models/xenSplitLog";
 import { cosmeticsOf } from "../utils/publicUser";
+import { addRefused } from "../social/policy";
 
 function sanitizeSecondaryCurrencies(primary: string, secondaries: string[]): string[] {
   return Array.from(new Set(secondaries.filter((c: string) => c !== primary)));
@@ -93,6 +94,7 @@ module.exports = function (app: any) {
     try {
       const userId = (req.user as any)._id.toString();
       const { name, memberIds, default_currency, secondary_currencies } = req.body;
+      if (addRefused(res, userId, memberIds ?? [])) return;
 
       const members: string[] = [userId];
       if (memberIds && memberIds.length > 0) {
@@ -375,6 +377,7 @@ module.exports = function (app: any) {
         const userId = (req.user as any)._id.toString();
         const { groupId } = req.params;
         const { memberIds } = req.body;
+        if (addRefused(res, userId, memberIds)) return;
 
         const group = await XenSplit.findById(groupId);
         if (!group) {

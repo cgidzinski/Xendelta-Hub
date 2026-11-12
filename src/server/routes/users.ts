@@ -4,7 +4,6 @@ import { loadCaller, AppError } from "../utils/http";
 import { User } from "../models/user";
 import { Notification } from "../models/notification";
 import { ITEMS } from "../constants/items";
-import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { unequipIfNotOwned } from "../utils/cosmetics";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
@@ -17,10 +16,8 @@ import {
   pinnedAppsSchema,
   unlinkProviderSchema,
   updateProfileSchema,
-  userSearchQuerySchema,
   validate,
   validateParams,
-  validateQuery,
 } from "../utils/validation";
 import { upload } from "../config/multer";
 import { AuthenticatedRequest } from "../types";
@@ -503,58 +500,6 @@ module.exports = function (app: express.Application) {
           message: "Failed to add password",
         });
       }
-    },
-  );
-
-  // Directory for the message participant picker. Deliberately just the public profile
-  // (id, username, avatar): emails and roles are admin-only (see /api/admin/users).
-  app.get("/api/users", authenticateToken, async function (_req: express.Request, res: express.Response) {
-    const users = await User.find({}, PUBLIC_USER_FIELDS).exec();
-
-    return res.json({
-      status: true,
-      message: "",
-      data: {
-        users: users.map((user: any) => ({
-          _id: user._id,
-          username: user.username,
-          avatar: user.avatar || "/avatars/default-avatar.png",
-          cosmetics: cosmeticsOf(user),
-        })),
-      },
-    });
-  });
-
-  // Search users by username (for UserSelect autocomplete)
-  app.get(
-    "/api/users/search",
-    authenticateToken,
-    validateQuery(userSearchQuerySchema),
-    async function (req: express.Request, res: express.Response) {
-      const { q } = req.query;
-      const currentUserId = (req as AuthenticatedRequest).user!._id;
-
-      const query: any = {};
-      if (q && typeof q === "string") {
-        query.username = { $regex: q, $options: "i" };
-      }
-
-      const users = await User.find(query, PUBLIC_USER_FIELDS).limit(20).exec();
-
-      return res.json({
-        status: true,
-        message: "",
-        data: {
-          users: users
-            .filter((u: any) => u._id.toString() !== currentUserId.toString())
-            .map((user: any) => ({
-              _id: user._id,
-              username: user.username,
-              avatar: user.avatar || "/avatars/default-avatar.png",
-              cosmetics: cosmeticsOf(user),
-            })),
-        },
-      });
     },
   );
 

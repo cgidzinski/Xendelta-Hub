@@ -146,4 +146,4 @@ export async function serializeNotebook(book: NotebookDoc, uid: string, noteCoun
   };
 }
 
-export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export { escapeRegex } from "@shared/regex";

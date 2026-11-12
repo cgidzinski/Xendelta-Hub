@@ -28,10 +28,10 @@ import type { BookDetailContext } from "../BookDetail";
 import SectionCard from "../../../../components/ui/SectionCard";
 import BookBackupSection from "../components/BookBackupSection";
 import { UserSelect } from "../../../../components/UserSelect";
-import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
-import UserName from "../../../../components/user/UserName";
+import PersonLink from "../../../../components/user/PersonLink";
 
 export default function GeneralSection() {
   const {
@@ -155,7 +155,7 @@ export default function GeneralSection() {
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
-                  primary={<UserName user={m} />}
+                  primary={<PersonLink user={m} />}
                   secondary={m.user_id === book.created_by ? "Owner" : undefined}
                 />
               </ListItem>

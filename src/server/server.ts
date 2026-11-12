@@ -171,6 +171,7 @@ app.get("/api/health", (_req: any, res: any) => {
 
 require("./routes/auth.ts")(app);
 require("./routes/users.ts")(app);
+require("./routes/people.ts")(app);
 require("./routes/apiKeys.ts")(app);
 require("./routes/shop.ts")(app);
 require("./routes/notifications.ts")(app);

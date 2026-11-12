@@ -4,7 +4,7 @@ import { useSnackbar } from "notistack";
 import type { ChatConversation } from "@shared/chat";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import PeoplePicker from "../../../../components/PeoplePicker";
-import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { useChatActions } from "../../../../hooks/chat/useChat";
 
 interface AddPeopleDialogProps {

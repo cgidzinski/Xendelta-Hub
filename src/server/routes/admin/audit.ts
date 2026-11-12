@@ -1,4 +1,5 @@
 import express = require("express");
+import { escapeRegex } from "@shared/regex";
 import { AdminAudit } from "../../models/adminAudit";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
@@ -7,7 +8,6 @@ import { serializeAudit } from "../../utils/adminAudit";
 import { DAY_MS } from "../../utils/adminStats";
 
 const admin = [authenticateToken, requireAdmin];
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export function registerAdminAuditRoutes(app: express.Application) {
   // The audit log. Read-only: there is deliberately no route that edits or deletes an entry.

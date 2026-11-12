@@ -9,6 +9,7 @@
 //
 // Members use the standard shape of utils/membership.ts (`user_id`, `role`) with two roles, owner and member.
 import type { ChatRole } from "@shared/chat";
+import { can } from "../social/policy";
 
 export interface ChatMemberLike {
   user_id: string;
@@ -26,12 +27,9 @@ export const roleInChat = (chat: HasChatMembers, userId: string): ChatRole | nul
 export const isChatMember = (chat: HasChatMembers, userId: string) => roleInChat(chat, userId) !== null;
 export const isChatOwner = (chat: HasChatMembers, userId: string) => roleInChat(chat, userId) === "owner";
 
-/**
- * Whether `actor` may start a chat with, or add, `target`. Everyone may until the friend system (#174) exists; it will
- * answer from the person's privacy setting (friends only, or everyone) and blocks, with no change to the routes.
- */
-export function canMessage(_actor: string, _target: string): boolean {
-  return true;
+/** Whether `actor` may start a chat with, or add, `target`. The rule itself lives in social/policy.ts. */
+export function canMessage(actor: string, target: string): boolean {
+  return can(actor, target, "message");
 }
 
 export const canEditMessage = (message: { from?: string | null; deletedAt?: Date | null }, userId: string) =>

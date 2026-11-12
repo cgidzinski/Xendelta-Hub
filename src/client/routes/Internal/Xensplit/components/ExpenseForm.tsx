@@ -27,7 +27,7 @@ import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import CloseIcon from "@mui/icons-material/Close";
-import { SearchedUser } from "../../../../hooks/useUserSearch";
+import { SearchedUser } from "../../../../hooks/people/usePeople";
 import type { XenSplitExpenseImage, RecurringFrequency } from "../../../../hooks/xensplit/types";
 import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";

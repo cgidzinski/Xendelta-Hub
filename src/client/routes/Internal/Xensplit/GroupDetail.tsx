@@ -55,7 +55,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
-import { SearchedUser } from "../../../hooks/useUserSearch";
+import { SearchedUser } from "../../../hooks/people/usePeople";
 import { canSubmit, draftFromExpense, emptyDraft, expenseFormProps, splitsFor, useExpenseDraft } from "./expenseDraft";
 import ExpenseForm from "./components/ExpenseForm";
 import { recurringSeriesCaption, computeFinalExpenseIds, isSeriesEnded } from "./components/ExpenseListItem";

@@ -33,7 +33,7 @@ import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import { UserSelect } from "../../../../components/UserSelect";
-import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
   bookShareUrlFor,
