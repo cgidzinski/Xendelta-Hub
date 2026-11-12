@@ -62,11 +62,19 @@ export function getGcsPath(folder: string, filename: string): string {
  * @param expiryMinutes - Number of minutes until the URL expires (default: 15)
  * @returns Signed URL string
  */
-export async function generateSignedUrl(filePath: string, expiryMinutes: number = 15): Promise<string> {
+export async function generateSignedUrl(
+  filePath: string,
+  expiryMinutes: number = 15,
+  options: { downloadName?: string } = {},
+): Promise<string> {
   const file = privateBucket.file(filePath);
   const [url] = await file.getSignedUrl({
     action: "read",
     expires: Date.now() + expiryMinutes * 60 * 1000,
+    // With a name, the browser saves the file under it instead of showing it
+    ...(options.downloadName
+      ? { responseDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(options.downloadName)}` }
+      : {}),
   });
   return url;
 }

@@ -19,7 +19,10 @@ vi.mock("../config/gcs", () => ({
 vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
   deleteFromGCS: vi.fn(async (path: string) => void removed.push(path)),
-  generateSignedUrl: vi.fn(async () => "https://example.test/signed"),
+  generateSignedUrl: vi.fn(
+    async (path: string, _minutes?: number, opts?: { downloadName?: string }) =>
+      `https://example.test/signed/${path}${opts?.downloadName ? `?download=${encodeURIComponent(opts.downloadName)}` : ""}`,
+  ),
 }));
 
 let t: TestApp;
@@ -153,7 +156,11 @@ describe("a file's own settings and link", () => {
   it("renames a file, sets a password, and a public download needs it", async () => {
     const me = await createUser();
     const file = await addFile(me, "plan.txt", null);
-    const set = await api(me).put(`/files/${file.id}/settings`, { name: "plan v2.txt", password: "hunter2" });
+    const set = await api(me).put(`/files/${file.id}/settings`, {
+      name: "plan v2.txt",
+      password: "hunter2",
+      shareEnabled: true,
+    });
     expect(set.status, JSON.stringify(set.body)).toBe(200);
     expect(set.body.data.name).toBe("plan v2.txt");
 
@@ -253,5 +260,141 @@ describe("usage", () => {
     const { usageFor, usageForAll } = await import("../utils/xendriveUtils.js");
     expect(await usageFor(String(me.user._id))).toEqual({ fileCount: 2, spaceUsed: 20 });
     expect((await usageForAll()).get(String(me.user._id))).toEqual({ fileCount: 2, spaceUsed: 20 });
+  });
+});
+
+describe("a file's link is opt-in", () => {
+  it("a new file is private: its token does nothing until the link is turned on, and turning it off stops it", async () => {
+    const me = await createUser();
+    const file = await addFile(me, "private.txt", null);
+    const token = (await api(me).get(`/files/${file.id}`)).body.data.file.shareToken;
+    expect((await api(me).get(`/files/${file.id}`)).body.data.file.shared).toBe(false);
+
+    expect((await request(t.app).get(`/api/xendrive/info/${token}`)).status).toBe(404);
+    expect((await request(t.app).get(`/api/xendrive/download/${token}`)).status).toBe(404);
+
+    const on = await api(me).put(`/files/${file.id}/settings`, { shareEnabled: true });
+    expect(on.body.data.shared).toBe(true);
+    expect((await request(t.app).get(`/api/xendrive/download/${token}`)).status).toBe(200);
+
+    await api(me).put(`/files/${file.id}/settings`, { shareEnabled: false });
+    expect((await request(t.app).get(`/api/xendrive/info/${token}`)).status).toBe(404);
+  });
+
+  it("makes a new link that kills the old one, and only for the owner", async () => {
+    const [me, other] = await Promise.all([createUser(), createUser()]);
+    const file = await addFile(me, "x.txt", null, { shareEnabled: true });
+    const old = (await api(me).get(`/files/${file.id}`)).body.data.file.shareToken;
+
+    expect((await api(other).post(`/files/${file.id}/share/rotate`)).status).toBe(404);
+    const fresh = (await api(me).post(`/files/${file.id}/share/rotate`)).body.data.file.shareToken;
+    expect(fresh).not.toBe(old);
+    expect((await request(t.app).get(`/api/xendrive/info/${old}`)).status).toBe(404);
+    expect((await request(t.app).get(`/api/xendrive/info/${fresh}`)).status).toBe(200);
+  });
+});
+
+describe("views of the drive", () => {
+  it("counts what is inside each folder, files and folders together", async () => {
+    const me = await createUser();
+    const top = await folder(me, "Top");
+    await folder(me, "Sub", top._id);
+    await addFile(me, "a.txt", top._id);
+    await addFile(me, "b.txt", top._id);
+    await folder(me, "Empty");
+
+    const listing = (await api(me).get("/browse")).body.data;
+    const counts = Object.fromEntries(listing.folders.map((f: any) => [f.name, f.itemCount]));
+    expect(counts).toEqual({ Empty: 0, Top: 3 });
+    expect(listing.view).toBe("folder");
+  });
+
+  it("the shared view lists everything with a public link, across folders, and counts it", async () => {
+    const me = await createUser();
+    const docs = await folder(me, "Docs");
+    await addFile(me, "private.txt", null);
+    await addFile(me, "shared-root.txt", null, { shareEnabled: true });
+    await addFile(me, "shared-deep.txt", docs._id, { shareEnabled: true });
+    const sharedFolder = await folder(me, "Public stuff");
+    await api(me).post(`/folders/${sharedFolder._id}/share`);
+
+    const view = (await api(me).get("/browse?view=shared")).body.data;
+    expect(view.view).toBe("shared");
+    expect(view.files.map((f: any) => f.name).sort()).toEqual(["shared-deep.txt", "shared-root.txt"]);
+    expect(view.folders.map((f: any) => f.name)).toEqual(["Public stuff"]);
+
+    expect((await api(me).get("/recent")).body.data.sharedCount).toBe(3);
+  });
+
+  it("the recent view is the newest files from anywhere, newest first, and only mine", async () => {
+    const [me, other] = await Promise.all([createUser(), createUser()]);
+    const docs = await folder(me, "Docs");
+    await addFile(me, "old.txt", null, { createdAt: new Date("2026-01-01") });
+    await addFile(me, "newer.txt", docs._id, { createdAt: new Date("2026-06-01") });
+    await addFile(other, "theirs.txt", null);
+
+    const view = (await api(me).get("/browse?view=recent")).body.data;
+    expect(view.files.map((f: any) => f.name)).toEqual(["newer.txt", "old.txt"]);
+  });
+
+  it("gives picture links for images when asked, and not otherwise", async () => {
+    const me = await createUser();
+    await addFile(me, "photo.png", null, { mimeType: "image/png" });
+    await addFile(me, "notes.txt", null);
+
+    const plain = (await api(me).get("/browse")).body.data.files;
+    expect(plain.every((f: any) => f.previewUrl === null)).toBe(true);
+
+    const withThumbs = (await api(me).get("/browse?thumbs=true")).body.data.files;
+    const byName = Object.fromEntries(withThumbs.map((f: any) => [f.name, f.previewUrl]));
+    expect(byName["photo.png"]).toMatch(/^https:\/\/example\.test\/signed\//);
+    expect(byName["notes.txt"]).toBeNull();
+  });
+});
+
+describe("a file's page", () => {
+  it("knows its place among the folder's files, for previous and next", async () => {
+    const me = await createUser();
+    const a = await addFile(me, "a.txt", null, { createdAt: new Date("2026-03-01") });
+    const b = await addFile(me, "b.txt", null, { createdAt: new Date("2026-02-01") });
+    const c = await addFile(me, "c.txt", null, { createdAt: new Date("2026-01-01") });
+
+    const mid = (await api(me).get(`/files/${b.id}`)).body.data;
+    expect(mid.neighbors).toMatchObject({ index: 2, total: 3, prev: { _id: a.id }, next: { _id: c.id } });
+    const first = (await api(me).get(`/files/${a.id}`)).body.data.neighbors;
+    expect(first).toMatchObject({ index: 1, prev: null, next: { _id: b.id } });
+    const last = (await api(me).get(`/files/${c.id}`)).body.data.neighbors;
+    expect(last).toMatchObject({ index: 3, next: null });
+  });
+
+  it("only offers a preview for things a browser can show", async () => {
+    const me = await createUser();
+    const image = await addFile(me, "p.png", null, { mimeType: "image/png" });
+    const pdf = await addFile(me, "d.pdf", null, { mimeType: "application/pdf" });
+    const zip = await addFile(me, "z.zip", null, { mimeType: "application/zip" });
+    expect((await api(me).get(`/files/${image.id}`)).body.data.previewUrl).toBeTruthy();
+    expect((await api(me).get(`/files/${pdf.id}`)).body.data.previewUrl).toBeTruthy();
+    expect((await api(me).get(`/files/${zip.id}`)).body.data.previewUrl).toBeNull();
+  });
+
+  it("a download link forces a download under the real file name", async () => {
+    const me = await createUser();
+    const file = await addFile(me, "my report.pdf", null);
+    const viewing = (await api(me).get(`/files/${file.id}/url`)).body.data.url;
+    const saving = (await api(me).get(`/files/${file.id}/url?download=1`)).body.data.url;
+    expect(viewing).not.toContain("download=");
+    expect(saving).toContain("download=my%20report.pdf");
+  });
+
+  it("a shared folder's listing gives picture links for images", async () => {
+    const me = await createUser();
+    const shared = await folder(me, "Gallery");
+    await addFile(me, "a.png", shared._id, { mimeType: "image/png" });
+    await addFile(me, "b.txt", shared._id);
+    const token = (await api(me).post(`/folders/${shared._id}/share`)).body.data.folder.shareToken;
+    const files = (await request(t.app).get(`/api/xendrive/public/folder/${token}`)).body.data.files;
+    const byName = Object.fromEntries(files.map((f: any) => [f.name, f.previewUrl]));
+    expect(byName["a.png"]).toBeTruthy();
+    expect(byName["b.txt"]).toBeNull();
   });
 });

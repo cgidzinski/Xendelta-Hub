@@ -32,6 +32,7 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/recipaint/:id/clone": "no body: clones the recipe named by the path",
   "POST /api/admin/users/:userId/avatar/reset": "no body: resets the avatar of the user named by the path",
   "POST /api/xendrive/folders/:folderId/share": "no body: turns on the folder's public link (path names the folder)",
+  "POST /api/xendrive/files/:fileId/share/rotate": "no body: replaces the file's link (path names the file)",
   "POST /api/xendrive/folders/:folderId/share/rotate":
     "no body: replaces the folder's public link (path names the folder)",
   "POST /api/admin/debug/trigger-error": "no body: throws on purpose to test error reporting",
