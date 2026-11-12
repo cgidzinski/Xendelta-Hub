@@ -89,31 +89,6 @@ export const updateProfileSchema = z.object({
     .optional(),
 });
 
-// Message validation schemas
-export const sendMessageSchema = z.object({
-  message: z.string().min(1, "Message cannot be empty").max(10000, "Message too long (max 10000 characters)"),
-  parentMessageId: objectIdSchema.optional(),
-});
-
-export const createConversationSchema = z.object({
-  participants: z
-    .array(objectIdSchema)
-    .min(1, "At least one participant is required")
-    .max(100, "Too many participants"),
-  message: z.string().max(10000, "Message too long (max 10000 characters)").optional(),
-});
-
-export const updateConversationNameSchema = z.object({
-  name: z.string().min(1, "Conversation name cannot be empty").max(100, "Conversation name too long").optional(),
-});
-
-export const addParticipantsSchema = z.object({
-  participantIds: z
-    .array(objectIdSchema)
-    .min(1, "At least one participant is required")
-    .max(100, "Too many participants"),
-});
-
 // Notification validation schemas
 export const createNotificationSchema = z.object({
   title: z.string().min(1, "Title cannot be empty").max(200, "Title too long"),
@@ -207,23 +182,6 @@ export const validateQuery = (schema: z.ZodSchema) => {
     });
   };
 };
-
-// Schema for conversationId param
-export const conversationIdParamSchema = z.object({
-  conversationId: objectIdSchema,
-});
-
-// Schema for messageId param
-export const messageIdParamSchema = z.object({
-  conversationId: objectIdSchema,
-  messageId: objectIdSchema,
-});
-
-// Schema for participantId param
-export const participantIdParamSchema = z.object({
-  conversationId: objectIdSchema,
-  participantId: objectIdSchema,
-});
 
 // Blog validation schemas
 export const createBlogPostSchema = z.object({

@@ -4,6 +4,7 @@ import {
   validate,
   validateParams,
   validateQuery,
+  xenDriveAppFilesQuerySchema,
   xenDriveBrowseQuerySchema,
   xenDriveChunkSchema,
   xenDriveDownloadQuerySchema,
@@ -23,6 +24,7 @@ import {
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
+import { assertDriveSource, driveOnly, driveSourceApp } from "../utils/driveSources";
 import {
   initiateChunkedUpload,
   uploadChunk,
@@ -117,6 +119,12 @@ async function ownFile(fileId: string, userId: string) {
   return file;
 }
 
+/** A file an app stored on the person's behalf (a chat attachment) stays private: no renaming or public link from here. */
+function assertNotAppFile(file: { source?: { app?: string | null } | null }) {
+  if (file.source?.app)
+    throw new AppError(400, "This file belongs to another app, so it can't be shared or renamed here");
+}
+
 async function ownFolder(folderId: string, userId: string) {
   const folder = await XenDriveFolder.findOne({ _id: folderId, owner_id: userId }).exec();
   if (!folder) throw new AppError(404, "Folder not found");
@@ -153,8 +161,10 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(xenDriveInitiateSchema),
     async function (req: express.Request, res: express.Response) {
-      const { filename, totalChunks, fileSize, folderId } = req.body;
+      const { filename, totalChunks, fileSize, folderId, source } = req.body;
       const userId = callerId(req);
+      // An app uploading for the person (a chat attachment): they must be allowed to store files for that source.
+      if (source) await assertDriveSource(userId, source);
 
       try {
         await assertOwnFolder(userId, folderId);
@@ -165,7 +175,7 @@ module.exports = function (app: express.Application) {
       const quotaCheck = await checkQuota(userId, fileSize);
       if (!quotaCheck.canUpload) throw new AppError(403, quotaCheck.message || "Quota exceeded");
 
-      const uploadId = await initiateChunkedUpload(userId, filename, totalChunks, folderId ?? null);
+      const uploadId = await initiateChunkedUpload(userId, filename, totalChunks, folderId ?? null, source);
       return res.json({ status: true, message: "Upload session initiated", data: { uploadId } });
     },
   );
@@ -262,6 +272,7 @@ module.exports = function (app: express.Application) {
       if (search) {
         const files = await XenDriveFile.find({
           owner_id: userId,
+          ...driveOnly,
           name: { $regex: escapeRegex(search), $options: "i" },
         })
           .sort({ createdAt: -1 })
@@ -273,20 +284,28 @@ module.exports = function (app: express.Application) {
       if (view === "shared") {
         const [folders, files] = await Promise.all([
           XenDriveFolder.find({ owner_id: userId, "share.enabled": true }).sort({ name: 1 }).exec(),
-          XenDriveFile.find({ owner_id: userId, shareEnabled: true }).sort({ createdAt: -1 }).limit(500).exec(),
+          XenDriveFile.find({ owner_id: userId, ...driveOnly, shareEnabled: true })
+            .sort({ createdAt: -1 })
+            .limit(500)
+            .exec(),
         ]);
         return send(folders, files, { folder: null, breadcrumb: [], searching: false, view: "shared" });
       }
 
       if (view === "recent") {
-        const files = await XenDriveFile.find({ owner_id: userId }).sort({ createdAt: -1 }).limit(50).exec();
+        const files = await XenDriveFile.find({ owner_id: userId, ...driveOnly })
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .exec();
         return send([], files, { folder: null, breadcrumb: [], searching: false, view: "recent" });
       }
 
       const folder = folderId ? await ownFolder(folderId, userId) : null;
       const [folders, files, breadcrumb] = await Promise.all([
         XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec(),
-        XenDriveFile.find({ owner_id: userId, folder_id: folderId }).sort({ createdAt: -1 }).exec(),
+        XenDriveFile.find({ owner_id: userId, ...driveOnly, folder_id: folderId })
+          .sort({ createdAt: -1 })
+          .exec(),
         folderId ? breadcrumbOf(folderId, userId) : Promise.resolve([]),
       ]);
       return send(folders, files, {
@@ -302,17 +321,73 @@ module.exports = function (app: express.Application) {
   // (the home screen card and the sidebar)
   app.get("/api/xendrive/recent", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = callerId(req);
-    const [files, usage, sharedFiles, sharedFolders] = await Promise.all([
-      XenDriveFile.find({ owner_id: userId }).sort({ createdAt: -1 }).limit(3).exec(),
+    const [files, usage, sharedFiles, sharedFolders, [apps]] = await Promise.all([
+      XenDriveFile.find({ owner_id: userId, ...driveOnly })
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .exec(),
       usageFor(userId),
-      XenDriveFile.countDocuments({ owner_id: userId, shareEnabled: true }),
+      XenDriveFile.countDocuments({ owner_id: userId, ...driveOnly, shareEnabled: true }),
       XenDriveFolder.countDocuments({ owner_id: userId, "share.enabled": true }),
+      // What apps have stored for the person (XenDrive > From apps): it still counts toward their quota.
+      XenDriveFile.aggregate<{ count: number; size: number }>([
+        { $match: { owner_id: new Types.ObjectId(userId), "source.app": { $exists: true } } },
+        { $group: { _id: null, count: { $sum: 1 }, size: { $sum: { $ifNull: ["$size", 0] } } } },
+      ]),
     ]);
     return res.json({
       status: true,
-      data: { files: files.map(serializeFile), ...usage, sharedCount: sharedFiles + sharedFolders },
+      data: {
+        files: files.map(serializeFile),
+        ...usage,
+        sharedCount: sharedFiles + sharedFolders,
+        appFiles: { count: apps?.count ?? 0, size: apps?.size ?? 0 },
+      },
     });
   });
+
+  // What apps have stored in the person's drive (chat attachments, ...), grouped by app and then by where it came from
+  // ("Weekend trip"), so they can see it and free the space.
+  app.get(
+    "/api/xendrive/app-files",
+    authenticateToken,
+    validateQuery(xenDriveAppFilesQuerySchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = callerId(req);
+      const only = req.query.app as string | undefined;
+      const files = await XenDriveFile.find({ owner_id: userId, "source.app": only ?? { $exists: true } })
+        .sort({ createdAt: -1 })
+        .limit(2000)
+        .exec();
+
+      const byApp = new Map<string, Map<string, XenDriveFileDocument[]>>();
+      for (const f of files) {
+        const appKey = f.source!.app!;
+        const ref = f.source!.ref ?? "";
+        const refs = byApp.get(appKey) ?? new Map<string, XenDriveFileDocument[]>();
+        refs.set(ref, [...(refs.get(ref) ?? []), f]);
+        byApp.set(appKey, refs);
+      }
+
+      const sum = (list: XenDriveFileDocument[]) => list.reduce((n, f) => n + (f.size ?? 0), 0);
+      const apps = await Promise.all(
+        [...byApp.entries()].map(async ([appKey, refs]) => {
+          const definition = driveSourceApp(appKey);
+          const names = definition ? await definition.describe(userId, [...refs.keys()]) : new Map<string, string>();
+          const groups = [...refs.entries()].map(([ref, list]) => ({
+            ref,
+            label: names.get(ref) ?? "Unavailable",
+            count: list.length,
+            size: sum(list),
+            files: list.map(serializeFile),
+          }));
+          const all = [...refs.values()].flat();
+          return { app: appKey, label: definition?.label ?? appKey, count: all.length, size: sum(all), groups };
+        }),
+      );
+      return res.json({ status: true, data: { apps, count: files.length, size: sum(files) } });
+    },
+  );
 
   // ---------------------------------------------------------------------------------------------
   // Folders
@@ -421,7 +496,15 @@ module.exports = function (app: express.Application) {
       const [breadcrumb, siblings, previewUrl] = await Promise.all([
         file.folder_id ? breadcrumbOf(file.folder_id.toString(), userId) : Promise.resolve([]),
         // the same order the folder lists them in, for previous / next
-        XenDriveFile.find({ owner_id: userId, folder_id: file.folder_id }, "name")
+        // previous / next stay within the same kind: the drive's own files, or the same app's
+        XenDriveFile.find(
+          {
+            owner_id: userId,
+            folder_id: file.folder_id,
+            ...(file.source?.app ? { "source.app": file.source.app } : driveOnly),
+          },
+          "name",
+        )
           .sort({ createdAt: -1 })
           .limit(500)
           .lean(),
@@ -470,6 +553,7 @@ module.exports = function (app: express.Application) {
     validate(xenDriveSettingsSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
+      assertNotAppFile(file);
       const { password, expiry, name, shareEnabled } = req.body;
 
       if (name !== undefined) file.name = name;
@@ -501,6 +585,7 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
+      assertNotAppFile(file);
       file.shareToken = randomToken(16);
       await file.save();
       return res.json({ status: true, message: "New link made", data: { file: serializeFile(file) } });

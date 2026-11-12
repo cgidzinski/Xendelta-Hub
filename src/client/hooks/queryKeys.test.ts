@@ -5,6 +5,7 @@ import { xensplitKeys } from "./xensplit/keys";
 import { xenbudgetKeys } from "./xenbudget/keys";
 import { xendriveKeys } from "./xendrive/keys";
 import { xennoteKeys } from "./xennote/keys";
+import { chatKeys } from "./chat/keys";
 
 describe("query keys", () => {
   it("XenSplit keys are the arrays the screens always used", () => {
@@ -59,6 +60,14 @@ describe("query keys", () => {
     expect(xennoteKeys.publicNote("t")).toEqual(["xennote", "public-note", "t"]);
   });
 
+  it("chat keys nest under one root, so one invalidation reaches all of them", () => {
+    expect(chatKeys.conversations()).toEqual(["chat", "conversations"]);
+    expect(chatKeys.messages("c1")).toEqual(["chat", "messages", "c1"]);
+    for (const key of [chatKeys.conversation("c1"), chatKeys.messages("c1"), chatKeys.unread()]) {
+      expect(key.slice(0, 1)).toEqual([...chatKeys.all]);
+    }
+  });
+
   it("no screen spells these keys out by hand again", () => {
     const root = join(__dirname, "..");
     const bad: string[] = [];
@@ -69,7 +78,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xendrive|xennote)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendrive|xennote|chat)"[,\]]/.test(readFileSync(full, "utf8"))
         )
           bad.push(relative(root, full));
       }

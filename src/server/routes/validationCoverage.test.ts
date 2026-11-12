@@ -56,8 +56,8 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/xensplit/groups/:groupId/settlements/:settlementId/restore":
     "no body: restores the soft-deleted settlement",
   "POST /api/xensplit/groups/:groupId/exchanges/:exchangeId/restore": "no body: restores the soft-deleted exchange",
-  "PUT /api/user/messages/:conversationId/mark-read": "no body: path identifies the conversation",
-  "POST /api/user/messages/:conversationId/leave": "no body: path identifies the conversation",
+  "PUT /api/chat/conversations/:conversationId/messages/:seq/reactions/:emoji":
+    "no body: the path names the message and the emoji",
   "POST /api/user/inventory/:inventoryItemId/use": "no body: path identifies the item",
   "POST /api/user/inventory/:inventoryItemId/equip": "no body: path identifies the item",
   "POST /api/user/inventory/:inventoryItemId/unequip": "no body: path identifies the item",

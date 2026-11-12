@@ -10,6 +10,9 @@ const xendriveUploadSessionSchema = new Schema({
   filename: { type: String, required: true }, // the generated storage name
   name: { type: String, required: true }, // the original file name, shown to people
   folder_id: { type: String, default: null },
+  // Set when an app is uploading on the person's behalf (utils/driveSources.ts); the finished file carries it.
+  source_app: { type: String },
+  source_ref: { type: String },
   total_chunks: { type: Number, required: true },
   received_chunks: { type: [Number], default: [] },
   resumable_uri: { type: String, required: true },

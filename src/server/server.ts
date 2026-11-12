@@ -175,7 +175,7 @@ require("./routes/apiKeys.ts")(app);
 require("./routes/shop.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/push.ts")(app);
-require("./routes/messages.ts")(app);
+require("./routes/chat")(app);
 require("./routes/blog.ts")(app);
 require("./routes/admin/blog.ts")(app);
 require("./routes/admin/users.ts")(app);

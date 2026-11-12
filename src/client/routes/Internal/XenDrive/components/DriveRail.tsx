@@ -5,6 +5,7 @@ import AddIcon from "@mui/icons-material/Add";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import ScheduleIcon from "@mui/icons-material/Schedule";
+import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import { Link as RouterLink } from "react-router-dom";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import { useXendriveRecent } from "../../../../hooks/xendrive/useXendrive";
@@ -51,6 +52,15 @@ export default function DriveRail() {
         <ScheduleIcon fontSize="small" />
         Recent
       </Box>
+      {!!recent?.appFiles?.count && (
+        <Box component={NavLink} to={`${XENDRIVE_ROOT}/apps`} sx={railItemSx}>
+          <AppsOutlinedIcon fontSize="small" />
+          From apps
+          <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+            {recent.appFiles.count}
+          </Typography>
+        </Box>
+      )}
 
       <Box sx={{ flex: 1 }} />
 

@@ -9,6 +9,7 @@ import { unequipIfNotOwned } from "../utils/cosmetics";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
+import { unreadConversationCount } from "../chat/service";
 import { deleteFromGCS } from "../utils/gcsUtils";
 import {
   addPasswordSchema,
@@ -46,11 +47,8 @@ module.exports = function (app: express.Application) {
     const user = await User.findOne({ _id: userId }).exec();
     if (!user) throw new AppError(404, "User not found");
 
-    // Check if user has any unread messages in any conversation
-    // user.conversations now contains metadata with unread flag
-    const hasUnreadMessages = (user.conversations || []).some((convMetadata: any) => {
-      return convMetadata.unread === true;
-    });
+    // Does the user have anything unread in any conversation?
+    const hasUnreadMessages = (await unreadConversationCount(userId)) > 0;
 
     // Check for unread notifications in separate collection
     const unreadNotificationsCount = await Notification.countDocuments({ userId, unread: true });

@@ -13,3 +13,4 @@ export * from "./recipaint";
 export * from "./admin";
 export * from "./xennote";
 export * from "./apiKeys";
+export * from "./chat";
