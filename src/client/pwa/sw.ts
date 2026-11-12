@@ -46,6 +46,7 @@ interface PushPayload {
   body?: string;
   url?: string;
   notificationId?: string;
+  tag?: string;
 }
 
 self.addEventListener("push", (event) => {
@@ -67,7 +68,7 @@ self.addEventListener("push", (event) => {
       body: payload.body || "",
       icon: "/android-chrome-192x192.png",
       badge: "/favicon-32x32.png",
-      tag: payload.notificationId,
+      tag: payload.tag ?? payload.notificationId,
       data: { url: payload.url || "/internal/notifications" },
     }),
   );

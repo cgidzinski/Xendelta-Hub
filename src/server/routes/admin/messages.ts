@@ -1,9 +1,9 @@
 import express = require("express");
-import { User } from "../../models/user";
 import { Conversation } from "../../models/conversation";
+import { Message } from "../../models/message";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
-import { SocketManager } from "../../infrastructure/SocketManager";
+import { realtime } from "../../realtime";
 
 module.exports = function (app: express.Application) {
   // Admin broadcast messages functionality removed - system user no longer exists
@@ -13,40 +13,24 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     requireAdmin,
     async function (_req: express.Request, res: express.Response) {
-      const allConversations = await Conversation.find({}).exec();
-      let totalMessagesDeleted = 0;
-
-      // Count total messages before deletion
-      for (const conversation of allConversations) {
-        if (conversation.messages && conversation.messages.length > 0) {
-          totalMessagesDeleted += conversation.messages.length;
-        }
-      }
-
-      // Delete all conversations
+      const allConversations = await Conversation.find({}, "members.user_id").lean().exec();
+      const messagesDeleted = (await Message.deleteMany({}).exec()).deletedCount;
       await Conversation.deleteMany({}).exec();
 
-      const socketManager = SocketManager.getInstance();
+      // Tell everyone who was in a conversation that it is gone.
       for (const conversation of allConversations) {
-        socketManager.notifyConversationUpdate(conversation._id.toString(), { deleted: true });
-      }
-
-      // Remove conversation references from all users
-      const allUsers = await User.find({}).exec();
-      for (const user of allUsers) {
-        if (user.conversations && user.conversations.length > 0) {
-          // Remove all conversation metadata
-          user.set("conversations", []);
-          user.markModified("conversations");
-          await user.save();
-        }
+        realtime.toUsers(
+          conversation.members.map((m) => m.user_id),
+          "chat:conversation",
+          { conversationId: String(conversation._id), removed: true },
+        );
       }
 
       return res.json({
         status: true,
-        message: `Deleted ${totalMessagesDeleted} messages and ${allConversations.length} conversations`,
+        message: `Deleted ${messagesDeleted} messages and ${allConversations.length} conversations`,
         data: {
-          messagesDeleted: totalMessagesDeleted,
+          messagesDeleted,
           conversationsDeleted: allConversations.length,
         },
       });

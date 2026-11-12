@@ -1,13 +1,6 @@
 import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
 import bcrypt from "bcryptjs";
 
-// User-specific conversation metadata (references Conversation collection)
-const userConversationMetadataSchema = new Schema({
-  conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
-  unread: { type: Boolean, default: true }, // true if user has unread messages in this conversation
-  lastReadAt: { type: Date }, // timestamp of last read
-});
-
 // AUTHENTICATION PROVIDER SCHEMA
 const authProviderSchema = new Schema({
   provider: { type: String, required: true }, // 'local', 'google', 'facebook', etc.
@@ -40,7 +33,6 @@ const userSchema = new Schema({
   // Premium currency, bought in the shop (docs/monetization.md). New accounts start with none.
   gems: { type: Number, default: 0 },
   authProviders: [authProviderSchema], // Multiple authentication methods
-  conversations: [userConversationMetadataSchema], // References to conversations with user-specific metadata
   resetPassword: {
     token: { type: String },
     expires: { type: Date },
@@ -79,7 +71,6 @@ const userSchema = new Schema({
   },
 });
 export type UserAttrs = InferSchemaType<typeof userSchema>;
-export type UserConversationMetadata = UserAttrs["conversations"][number];
 type AuthProviderEntry = UserAttrs["authProviders"][number];
 export type UserDocument = HydratedDocument<UserAttrs, UserMethods>;
 

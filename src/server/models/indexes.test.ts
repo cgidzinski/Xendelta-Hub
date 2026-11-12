@@ -24,8 +24,8 @@ describe("model indexes", () => {
     expect(await indexKeys("XenSplit")).toContain("members");
   });
 
-  it("conversations are indexed by participant", async () => {
+  it("conversations are indexed by member", async () => {
     await import("./conversation.js");
-    expect(await indexKeys("Conversation")).toContain("participants");
+    expect(await indexKeys("Conversation")).toContain("members.user_id,lastMessage.at");
   });
 });

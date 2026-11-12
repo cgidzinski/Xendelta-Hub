@@ -1,8 +1,9 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user";
+import { Conversation } from "../models/conversation";
 import { getJwtSecret } from "../config/env";
-import { Message } from "../types/Message";
+import type { ClientEvents, RealtimeEvent, RealtimeEvents } from "@shared/realtime";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -16,16 +17,6 @@ interface JWTPayload {
   avatar?: string;
   iat?: number;
   exp?: number;
-}
-
-interface ConversationSummary {
-  _id: string;
-  participants: string[];
-  name?: string;
-  lastMessage?: string;
-  lastMessageTime?: string;
-  unread?: boolean;
-  updatedAt?: Date;
 }
 
 // What goes over the socket: a notification record (a Mongoose document or a plain object).
@@ -42,8 +33,9 @@ interface Notification {
 export class SocketManager {
   private static instance: SocketManager;
   private io!: SocketIOServer;
-  private connectedUsers: Map<string, string> = new Map(); // userId -> socketId
   private isInitialized: boolean = false;
+  /** When each socket last announced it was typing, so a client can't flood a conversation with typing events. */
+  private lastTyping = new Map<string, number>();
 
   static getInstance(): SocketManager {
     if (!SocketManager.instance) {
@@ -92,178 +84,95 @@ export class SocketManager {
         return;
       }
 
-      // Check if user already has an active connection
-      const existingSocketId = this.connectedUsers.get(socket.userId);
-      if (existingSocketId && existingSocketId !== socket.id) {
-        // Disconnect the old socket if it still exists
-        const existingSocket = this.io.sockets.sockets.get(existingSocketId);
-        if (existingSocket) {
-          console.log(`User ${socket.username} (${socket.userId}) reconnecting - disconnecting old socket`);
-          existingSocket.disconnect();
-        }
-      }
-
-      console.log(`User ${socket.username} (${socket.userId}) connected`);
-      this.connectedUsers.set(socket.userId, socket.id);
-
-      // Join user's personal room for direct notifications
+      // A person's own room. Every event is sent here, and a person may have several tabs and devices open: each
+      // joins it, and none disconnects another. Clients cannot join any other room.
       socket.join(`user:${socket.userId}`);
 
-      // Emit online status to other users
-      socket.broadcast.emit("user:online", {
-        userId: socket.userId,
-        username: socket.username,
-      });
+      socket.on("chat:typing", async (data: ClientEvents["chat:typing"]) => {
+        const conversationId = typeof data?.conversationId === "string" ? data.conversationId : "";
+        if (!/^[a-f0-9]{24}$/i.test(conversationId)) return;
+        const typing = !!data.typing;
 
-      // Join conversation rooms
-      socket.on("join:conversation", async (conversationId: string) => {
-        socket.join(`conversation:${conversationId}`);
-        console.log(`User ${socket.userId} joined conversation ${conversationId}`);
-      });
-
-      // Leave conversation room
-      socket.on("leave:conversation", (conversationId: string) => {
-        socket.leave(`conversation:${conversationId}`);
-        console.log(`User ${socket.userId} left conversation ${conversationId}`);
-      });
-
-      // Typing indicator
-      socket.on("typing:start", (data: { conversationId: string }) => {
-        socket.to(`conversation:${data.conversationId}`).emit("typing:start", {
-          userId: socket.userId,
-          username: socket.username,
-          conversationId: data.conversationId,
-        });
-      });
-
-      socket.on("typing:stop", (data: { conversationId: string }) => {
-        socket.to(`conversation:${data.conversationId}`).emit("typing:stop", {
-          userId: socket.userId,
-          username: socket.username,
-          conversationId: data.conversationId,
-        });
-      });
-
-      // Disconnection handler
-      socket.on("disconnect", () => {
-        // Only remove from map if this is the current active socket for this user
-        const currentSocketId = this.connectedUsers.get(socket.userId!);
-        if (currentSocketId === socket.id) {
-          console.log(`User ${socket.username} (${socket.userId}) disconnected`);
-          this.connectedUsers.delete(socket.userId!);
-
-          // Emit offline status
-          socket.broadcast.emit("user:offline", {
-            userId: socket.userId,
-            username: socket.username,
-          });
+        // Starting to type is announced at most once a second per tab; stopping is always passed on.
+        if (typing) {
+          const now = Date.now();
+          if (now - (this.lastTyping.get(socket.id) ?? 0) < 1000) return;
+          this.lastTyping.set(socket.id, now);
         }
+
+        // Only members of the conversation hear it, and only members can say it.
+        const conversation = await Conversation.findOne(
+          { _id: conversationId, "members.user_id": socket.userId },
+          "members.user_id",
+        )
+          .lean()
+          .exec();
+        if (!conversation) return;
+        const others = conversation.members.map((m) => m.user_id).filter((id) => id !== socket.userId);
+        this.emitToUsers(others, "chat:typing", {
+          conversationId,
+          userId: socket.userId!,
+          username: socket.username ?? "",
+          typing,
+        });
+      });
+
+      socket.on("disconnect", () => {
+        this.lastTyping.delete(socket.id);
       });
     });
   }
 
-  // Send new message to conversation participants
-  sendNewMessage(
-    conversationId: string,
-    message: Message & { senderUsername?: string | null },
-    participants: string[],
-  ) {
-    const conversationRoom = `conversation:${conversationId}`;
-    const roomSockets = this.io.sockets.adapter.rooms.get(conversationRoom);
-
-    // Send to conversation room (users actively viewing)
-    this.io.to(conversationRoom).emit("message:new", {
-      conversationId,
-      message,
-    });
-
-    // Also notify participants who aren't in the conversation room
-    participants.forEach((participantId) => {
-      const userSocketId = this.connectedUsers.get(participantId);
-      // Only send to user room if they're not actively viewing the conversation
-      if (!userSocketId || !roomSockets?.has(userSocketId)) {
-        this.io.to(`user:${participantId}`).emit("message:new", {
-          conversationId,
-          message,
-        });
-      }
-    });
+  /** Send an event to each person's own room. Prefer `realtime.toUsers` (server/realtime), which types the payload. */
+  emitToUsers(userIds: Iterable<string>, event: RealtimeEvent, payload?: unknown): void {
+    if (!this.io) return;
+    for (const userId of new Set(userIds)) {
+      this.io.to(`user:${userId}`).emit(event, payload);
+    }
   }
 
-  // Notify user about new conversation
-  notifyNewConversation(userId: string, conversation: ConversationSummary) {
-    this.io.to(`user:${userId}`).emit("conversation:new", {
-      conversation,
-    });
+  /** Whether the person has at least one tab connected. */
+  isOnline(userId: string): boolean {
+    return (this.io?.sockets?.adapter?.rooms?.get(`user:${userId}`)?.size ?? 0) > 0;
   }
 
-  // Notify conversation participants about message deletion
-  notifyMessageDeleted(conversationId: string, messageId: string) {
-    this.io.to(`conversation:${conversationId}`).emit("message:deleted", {
-      conversationId,
-      messageId,
-    });
-  }
-
-  // Notify participants about conversation update (e.g., new participant)
-  notifyConversationUpdate(
-    conversationId: string,
-    update: { participants?: string[]; name?: string | null; deleted?: boolean },
-  ) {
-    this.io.to(`conversation:${conversationId}`).emit("conversation:update", {
-      conversationId,
-      update,
-    });
+  private emit<E extends RealtimeEvent>(userIds: Iterable<string>, event: E, payload?: RealtimeEvents[E]) {
+    this.emitToUsers(userIds, event, payload);
   }
 
   // Send new notification to specific user
   sendNotification(userId: string, notification: Notification) {
-    this.io.to(`user:${userId}`).emit("notification:new", {
-      notification,
-    });
+    this.emit([userId], "notification:new", { notification });
   }
 
   // Notify user about notification update (e.g., marked as read, or deleted)
   notifyNotificationUpdate(userId: string, notificationId: string, update: { unread?: boolean; deleted?: boolean }) {
-    this.io.to(`user:${userId}`).emit("notification:update", {
-      notificationId,
-      update,
-    });
+    this.emit([userId], "notification:update", { notificationId, update });
   }
 
   // Notify group members that a XenSplit group has been updated
   notifyXenSplitGroupUpdate(groupId: string, memberIds: string[]) {
-    memberIds.forEach((userId) => {
-      this.io.to(`user:${userId}`).emit("xensplit:group_update", { groupId });
-    });
+    this.emit(memberIds, "xensplit:group_update", { groupId });
   }
 
   // Notify users that their groups list has changed (e.g. added to a new group)
   notifyXenSplitGroupsUpdated(memberIds: string[]) {
-    memberIds.forEach((userId) => {
-      this.io.to(`user:${userId}`).emit("xensplit:groups_updated");
-    });
+    this.emit(memberIds, "xensplit:groups_updated");
   }
 
   // Notify book members that a XenBudget book changed. This is what keeps the monthly
   // tally live: every member's open Overview re-fetches its summary on receipt.
   notifyXenBudgetBookUpdate(bookId: string, memberIds: string[]) {
-    memberIds.forEach((userId) => {
-      this.io.to(`user:${userId}`).emit("xenbudget:book_update", { bookId });
-    });
+    this.emit(memberIds, "xenbudget:book_update", { bookId });
   }
 
   // Notify users that their books list has changed (e.g. added to a new book)
   notifyXenBudgetBooksUpdated(memberIds: string[]) {
-    memberIds.forEach((userId) => {
-      this.io.to(`user:${userId}`).emit("xenbudget:books_updated");
-    });
+    this.emit(memberIds, "xenbudget:books_updated");
   }
 
   // Tell people a note or notebook they can see changed, so their open board refreshes
   notifyXenNoteUpdate(userIds: string[]) {
-    new Set(userIds).forEach((userId) => {
-      this.io.to(`user:${userId}`).emit("xennote:update");
-    });
+    this.emit(userIds, "xennote:update");
   }
 }

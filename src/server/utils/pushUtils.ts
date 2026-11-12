@@ -11,6 +11,8 @@ export interface PushPayload {
   body: string;
   url?: string;
   notificationId?: string;
+  /** A notification with the same tag replaces the one already showing (one per conversation for chat). */
+  tag?: string;
 }
 
 export interface PushResult {
@@ -75,6 +77,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     body: truncate(payload.body, MAX_BODY_LENGTH),
     url: payload.url,
     notificationId: payload.notificationId,
+    tag: payload.tag,
   });
 
   let sent = 0;
