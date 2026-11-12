@@ -55,6 +55,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import UserSelect from "../../../components/UserSelect";
 import { SearchedUser } from "../../../hooks/useUserSearch";
+import { canSubmit, draftFromExpense, emptyDraft, expenseFormProps, splitsFor, useExpenseDraft } from "./expenseDraft";
 import ExpenseForm from "./components/ExpenseForm";
 import { recurringSeriesCaption, computeFinalExpenseIds, isSeriesEnded } from "./components/ExpenseListItem";
 import GroupAvatar from "./components/GroupAvatar";
@@ -68,7 +69,6 @@ import type {
   XenSplitExpense,
   SettleDebtInput,
   CreateExchangeInput,
-  RecurringFrequency,
   UpdateExpenseInput,
 } from "../../../hooks/xensplit/types";
 
@@ -211,47 +211,15 @@ export default function GroupDetail() {
 
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<XenSplitExpense | null>(null);
-  const [addTitle, setAddTitle] = useState("");
-  const [addNotes, setAddNotes] = useState("");
-  const [addAmount, setAddAmount] = useState("");
-  const [addCurrency, setAddCurrency] = useState("CAD");
-  const [addPaidBy, setAddPaidBy] = useState("");
-  const [addPaidByUser, setAddPaidByUser] = useState<SearchedUser | null>(null);
-  const [addSplitType, setAddSplitType] = useState<"equal" | "exact" | "percent">("equal");
-  const [addSelectedParticipants, setAddSelectedParticipants] = useState<SearchedUser[]>([]);
-  const [addExactSplits, setAddExactSplits] = useState<{ [userId: string]: string }>({});
-  const [addPercentSplits, setAddPercentSplits] = useState<{ [userId: string]: string }>({});
-  const [addDate, setAddDate] = useState<Date>(new Date());
-  const [addCategory, setAddCategory] = useState("");
-  const [addOnHold, setAddOnHold] = useState(false);
-  const [addIsRecurring, setAddIsRecurring] = useState(false);
-  const [addFrequency, setAddFrequency] = useState<RecurringFrequency>("monthly");
-  const [addRecurringEndDate, setAddRecurringEndDate] = useState<Date | null>(null);
-  const [addMaxOccurrences, setAddMaxOccurrences] = useState("");
-  const [editTitle, setEditTitle] = useState("");
-  const [editNotes, setEditNotes] = useState("");
-  const [editAmount, setEditAmount] = useState("");
-  const [editCurrency, setEditCurrency] = useState("CAD");
-  const [editPaidBy, setEditPaidBy] = useState("");
-  const [editPaidByUser, setEditPaidByUser] = useState<SearchedUser | null>(null);
-  const [editSplitType, setEditSplitType] = useState<"equal" | "exact" | "percent">("equal");
-  const [editSelectedParticipants, setEditSelectedParticipants] = useState<SearchedUser[]>([]);
-  const [editExactSplits, setEditExactSplits] = useState<{ [userId: string]: string }>({});
-  const [editPercentSplits, setEditPercentSplits] = useState<{ [userId: string]: string }>({});
-  const [editDate, setEditDate] = useState<Date>(new Date());
-  const [editCategory, setEditCategory] = useState("");
-  const [editOnHold, setEditOnHold] = useState(false);
-  const [editIsRecurring, setEditIsRecurring] = useState(false);
-  const [editFrequency, setEditFrequency] = useState<RecurringFrequency>("monthly");
-  const [editRecurringEndDate, setEditRecurringEndDate] = useState<Date | null>(null);
-  const [editMaxOccurrences, setEditMaxOccurrences] = useState("");
-  const [editSeriesActive, setEditSeriesActive] = useState(true);
+  const add = useExpenseDraft();
+
+  const edit = useExpenseDraft();
+
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showAddExchangeModal, setShowAddExchangeModal] = useState(false);
   const { percent: uploadPercent, onUploadProgress, reset: resetUploadProgress } = useUploadProgress();
-  const [addImages, setAddImages] = useState<File[]>([]);
-  const [editImages, setEditImages] = useState<File[]>([]);
+
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const { data: viewImageUrls = [] } = useExpenseImageUrls(
@@ -269,32 +237,6 @@ export default function GroupDetail() {
     () => computeFinalExpenseIds(group?.expenses ?? [], group?.recurring_expenses),
     [group?.expenses, group?.recurring_expenses],
   );
-
-  // Check if exact splits total matches amount
-  const isExactValid =
-    addSplitType !== "exact" ||
-    addSelectedParticipants.length === 0 ||
-    Math.abs(
-      Object.values(addExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(addAmount) || 0),
-    ) < 0.01;
-
-  // Check if percent splits total equals 100
-  const isPercentValid =
-    addSplitType !== "percent" ||
-    addSelectedParticipants.length === 0 ||
-    Math.abs(Object.values(addPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
-
-  // Same for edit
-  const isEditExactValid =
-    editSplitType !== "exact" ||
-    editSelectedParticipants.length === 0 ||
-    Math.abs(
-      Object.values(editExactSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - (parseFloat(editAmount) || 0),
-    ) < 0.01;
-  const isEditPercentValid =
-    editSplitType !== "percent" ||
-    editSelectedParticipants.length === 0 ||
-    Math.abs(Object.values(editPercentSplits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0) - 100) < 0.01;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
@@ -381,54 +323,38 @@ export default function GroupDetail() {
   };
 
   const handleAddExpense = async () => {
-    if (!addTitle.trim() || !addAmount || !addPaidBy) return;
+    if (!add.values.title.trim() || !add.values.amount || !add.values.paidBy) return;
 
-    const numAmount = parseFloat(addAmount);
-    let splits = undefined;
-
-    if (addSplitType === "equal") {
-      splits = addSelectedParticipants.map((p) => ({
-        user_id: p._id,
-      }));
-    } else if (addSplitType === "exact") {
-      splits = addSelectedParticipants.map((p) => ({
-        user_id: p._id,
-        amount_owed: parseFloat(addExactSplits[p._id] || "0"),
-      }));
-    } else if (addSplitType === "percent") {
-      splits = addSelectedParticipants.map((p) => ({
-        user_id: p._id,
-        percentage: parseFloat(addPercentSplits[p._id] || "0"),
-      }));
-    }
+    const numAmount = parseFloat(add.values.amount);
+    const splits = splitsFor(add.values);
 
     await new Promise<void>((resolve) => {
       addExpense(
         {
-          paid_by: addPaidBy,
+          paid_by: add.values.paidBy,
           amount: numAmount,
-          currency: addCurrency,
-          title: addTitle,
-          notes: addNotes.trim() || undefined,
-          category: addCategory || undefined,
-          date: addDate.toISOString(),
-          split_type: addSplitType,
+          currency: add.values.currency,
+          title: add.values.title,
+          notes: add.values.notes.trim() || undefined,
+          category: add.values.category || undefined,
+          date: add.values.date.toISOString(),
+          split_type: add.values.splitType,
           splits,
-          on_hold: addOnHold,
-          recurring: addIsRecurring
+          on_hold: add.values.onHold,
+          recurring: add.values.isRecurring
             ? {
-                frequency: addFrequency,
-                end_date: addRecurringEndDate ? addRecurringEndDate.toISOString() : undefined,
-                max_occurrences: addMaxOccurrences ? parseInt(addMaxOccurrences, 10) : undefined,
+                frequency: add.values.frequency,
+                end_date: add.values.recurringEndDate ? add.values.recurringEndDate.toISOString() : undefined,
+                max_occurrences: add.values.maxOccurrences ? parseInt(add.values.maxOccurrences, 10) : undefined,
               }
             : undefined,
         },
         {
           onSuccess: async (result) => {
             const newExpenseId = result?.data?.newExpenseId;
-            if (addImages.length > 0 && newExpenseId) {
+            if (add.values.images.length > 0 && newExpenseId) {
               try {
-                await uploadExpenseImages({ expenseId: newExpenseId, files: addImages, onUploadProgress });
+                await uploadExpenseImages({ expenseId: newExpenseId, files: add.values.images, onUploadProgress });
               } catch (error) {
                 // Say why, and keep it in the console: a bare "failed to upload" hid the cause of
                 // this for a long time. The expense itself was saved; only the photos are missing.
@@ -441,27 +367,11 @@ export default function GroupDetail() {
                 resetUploadProgress();
               }
             }
-            enqueueSnackbar(addIsRecurring && !newExpenseId ? "Recurring expense scheduled" : "Expense added", {
+            enqueueSnackbar(add.values.isRecurring && !newExpenseId ? "Recurring expense scheduled" : "Expense added", {
               variant: "success",
             });
             setShowAddExpenseModal(false);
-            setAddTitle("");
-            setAddNotes("");
-            setAddAmount("");
-            setAddCurrency(group.default_currency || "CAD");
-            setAddPaidBy("");
-            setAddPaidByUser(null);
-            setAddSplitType("equal");
-            setAddSelectedParticipants([]);
-            setAddExactSplits({});
-            setAddPercentSplits({});
-            setAddCategory("");
-            setAddOnHold(false);
-            setAddIsRecurring(false);
-            setAddFrequency("monthly");
-            setAddRecurringEndDate(null);
-            setAddMaxOccurrences("");
-            setAddImages([]);
+            add.reset(emptyDraft({ currency: group.default_currency || "CAD" }));
             resolve();
           },
           onError: (error: Error) => {
@@ -474,34 +384,18 @@ export default function GroupDetail() {
   };
 
   const handleEditExpense = async () => {
-    if (!selectedExpense || !editTitle.trim() || !editAmount || !editPaidBy) return;
+    if (!selectedExpense || !edit.values.title.trim() || !edit.values.amount || !edit.values.paidBy) return;
 
-    const numAmount = parseFloat(editAmount);
-    let splits = undefined;
-
-    if (editSplitType === "equal") {
-      splits = editSelectedParticipants.map((p) => ({
-        user_id: p._id,
-      }));
-    } else if (editSplitType === "exact") {
-      splits = editSelectedParticipants.map((p) => ({
-        user_id: p._id,
-        amount_owed: parseFloat(editExactSplits[p._id] || "0"),
-      }));
-    } else if (editSplitType === "percent") {
-      splits = editSelectedParticipants.map((p) => ({
-        user_id: p._id,
-        percentage: parseFloat(editPercentSplits[p._id] || "0"),
-      }));
-    }
+    const numAmount = parseFloat(edit.values.amount);
+    const splits = splitsFor(edit.values);
 
     let recurring: UpdateExpenseInput["recurring"] = undefined;
     if (selectedExpenseSeries) {
-      recurring = editIsRecurring
+      recurring = edit.values.isRecurring
         ? {
-            end_date: editRecurringEndDate ? editRecurringEndDate.toISOString() : null,
-            max_occurrences: editMaxOccurrences ? parseInt(editMaxOccurrences, 10) : null,
-            active: editSeriesActive,
+            end_date: edit.values.recurringEndDate ? edit.values.recurringEndDate.toISOString() : null,
+            max_occurrences: edit.values.maxOccurrences ? parseInt(edit.values.maxOccurrences, 10) : null,
+            active: edit.values.seriesActive,
           }
         : { cancel: true };
     }
@@ -511,24 +405,28 @@ export default function GroupDetail() {
         {
           expenseId: selectedExpense._id,
           updates: {
-            paid_by: editPaidBy,
+            paid_by: edit.values.paidBy,
             amount: numAmount,
-            currency: editCurrency,
-            title: editTitle,
-            notes: editNotes.trim() || undefined,
-            category: editCategory || undefined,
-            date: editDate.toISOString(),
-            split_type: editSplitType,
+            currency: edit.values.currency,
+            title: edit.values.title,
+            notes: edit.values.notes.trim() || undefined,
+            category: edit.values.category || undefined,
+            date: edit.values.date.toISOString(),
+            split_type: edit.values.splitType,
             splits,
-            on_hold: editOnHold,
+            on_hold: edit.values.onHold,
             recurring,
           },
         },
         {
           onSuccess: async () => {
-            if (editImages.length > 0) {
+            if (edit.values.images.length > 0) {
               try {
-                await uploadExpenseImages({ expenseId: selectedExpense._id, files: editImages, onUploadProgress });
+                await uploadExpenseImages({
+                  expenseId: selectedExpense._id,
+                  files: edit.values.images,
+                  onUploadProgress,
+                });
               } catch (error) {
                 console.error("Photo upload after editing an expense failed:", error);
                 enqueueSnackbar(
@@ -541,7 +439,7 @@ export default function GroupDetail() {
             }
             enqueueSnackbar("Expense updated", { variant: "success" });
             setShowEditExpenseModal(false);
-            setEditImages([]);
+            edit.setters.images([]);
             resolve();
           },
           onError: (error: Error) => {
@@ -559,68 +457,18 @@ export default function GroupDetail() {
       return;
     }
     setSelectedExpense(expense);
-    setEditTitle(expense.title || "");
-    setEditNotes(expense.notes || "");
-    setEditAmount(expense.amount.toString());
-    setEditCurrency(expense.currency);
-    setEditPaidBy(expense.paid_by);
-    const payerMember = group.members.find((m) => m.user_id === expense.paid_by);
-    setEditPaidByUser(
-      payerMember ? { _id: payerMember.user_id, username: payerMember.username, avatar: payerMember.avatar } : null,
-    );
-    setEditSplitType(expense.split_type as "equal" | "exact" | "percent");
-    if (expense.splits && expense.splits.length > 0) {
-      const participants = expense.splits
-        .map((s) => {
-          const member = group.members.find((m) => m.user_id === s.user_id);
-          return member ? { _id: member.user_id, username: member.username, avatar: member.avatar } : null;
-        })
-        .filter(Boolean) as SearchedUser[];
-      setEditSelectedParticipants(participants);
-      const exactMap: { [key: string]: string } = {};
-      const percentMap: { [key: string]: string } = {};
-      expense.splits.forEach((s) => {
-        if (expense.split_type === "exact" && s.amount_owed !== undefined) {
-          exactMap[s.user_id] = s.amount_owed.toString();
-        } else if (expense.split_type === "percent" && s.percentage !== undefined) {
-          percentMap[s.user_id] = s.percentage.toString();
-        }
-      });
-      setEditExactSplits(exactMap);
-      setEditPercentSplits(percentMap);
-    }
-    setEditDate(expense.date ? new Date(expense.date) : new Date());
-    setEditCategory(expense.category || "");
-    const series = findSeriesForGenesis(expense._id);
-    // Hold isn't available while recurring — saving a genesis clears any stale hold
-    setEditOnHold(series ? false : (expense.on_hold ?? false));
-    setEditIsRecurring(!!series);
-    setEditFrequency(series?.frequency ?? "monthly");
-    setEditRecurringEndDate(series?.end_date ? new Date(series.end_date) : null);
-    setEditMaxOccurrences(series?.max_occurrences ? series.max_occurrences.toString() : "");
-    setEditSeriesActive(series?.active ?? true);
+    edit.reset(draftFromExpense(expense, group.members, findSeriesForGenesis(expense._id)));
     setShowEditExpenseModal(true);
   };
 
   const openAddExpenseModal = () => {
-    setAddTitle("");
-    setAddNotes("");
-    setAddAmount("");
-    setAddCurrency(group.default_currency || "CAD");
-    setAddPaidBy(user?.id || "");
-    setAddPaidByUser(user ? { _id: user.id, username: user.username, avatar: user.avatar } : null);
-    setAddSplitType("equal");
-    setAddSelectedParticipants([]);
-    setAddExactSplits({});
-    setAddPercentSplits({});
-    setAddCategory("");
-    setAddOnHold(false);
-    setAddIsRecurring(false);
-    setAddFrequency("monthly");
-    setAddRecurringEndDate(null);
-    setAddMaxOccurrences("");
-    setAddImages([]);
-    setAddDate(new Date());
+    add.reset(
+      emptyDraft({
+        currency: group.default_currency || "CAD",
+        paidBy: user?.id || "",
+        paidByUser: user ? { _id: user.id, username: user.username, avatar: user.avatar } : null,
+      }),
+    );
     setShowAddExpenseModal(true);
   };
 
@@ -912,7 +760,7 @@ export default function GroupDetail() {
         onClose={(_, reason) => {
           if (reason !== "backdropClick") {
             setShowAddExpenseModal(false);
-            setAddImages([]);
+            add.setters.images([]);
           }
         }}
       >
@@ -924,50 +772,19 @@ export default function GroupDetail() {
         </Box>
         <DialogContent sx={{ pt: 2 }}>
           <ExpenseForm
-            title={addTitle}
-            onTitleChange={setAddTitle}
-            notes={addNotes}
-            onNotesChange={setAddNotes}
-            amount={addAmount}
-            onAmountChange={setAddAmount}
-            currency={addCurrency}
-            onCurrencyChange={setAddCurrency}
-            paidBy={addPaidBy}
-            onPaidByChange={setAddPaidBy}
-            paidByUser={addPaidByUser}
-            onPaidByUserChange={setAddPaidByUser}
-            splitType={addSplitType}
-            onSplitTypeChange={setAddSplitType}
-            selectedParticipants={addSelectedParticipants}
-            onParticipantsChange={setAddSelectedParticipants}
-            exactSplits={addExactSplits}
-            onExactSplitsChange={setAddExactSplits}
-            percentSplits={addPercentSplits}
-            onPercentSplitsChange={setAddPercentSplits}
+            {...expenseFormProps(add)}
             members={group.members}
-            currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies, addCurrency)}
+            currencyOptions={getGroupCurrencies(
+              group.default_currency,
+              group.secondary_currencies,
+              add.values.currency,
+            )}
             onSubmit={handleAddExpense}
-            submitDisabled={!addTitle.trim() || !addAmount || !addPaidBy || !isExactValid || !isPercentValid}
+            submitDisabled={!canSubmit(add.values)}
             loading={isAddingExpense || isUploadingImages}
             uploadPercent={uploadPercent}
-            images={addImages}
-            onImagesChange={setAddImages}
-            date={addDate}
-            onDateChange={setAddDate}
-            category={addCategory}
-            onCategoryChange={setAddCategory}
-            onHold={addOnHold}
-            onOnHoldChange={setAddOnHold}
             holdMode="free"
             recurringMode="create"
-            isRecurring={addIsRecurring}
-            onIsRecurringChange={setAddIsRecurring}
-            frequency={addFrequency}
-            onFrequencyChange={setAddFrequency}
-            recurringEndDate={addRecurringEndDate}
-            onRecurringEndDateChange={setAddRecurringEndDate}
-            maxOccurrences={addMaxOccurrences}
-            onMaxOccurrencesChange={setAddMaxOccurrences}
           />
         </DialogContent>
       </Dialog>
@@ -979,7 +796,7 @@ export default function GroupDetail() {
         open={showEditExpenseModal}
         onClose={() => {
           setShowEditExpenseModal(false);
-          setEditImages([]);
+          edit.setters.images([]);
         }}
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 3, pt: 2 }}>
@@ -1024,60 +841,27 @@ export default function GroupDetail() {
         </Box>
         <DialogContent sx={{ pt: 2 }}>
           <ExpenseForm
-            title={editTitle}
-            onTitleChange={setEditTitle}
-            notes={editNotes}
-            onNotesChange={setEditNotes}
-            amount={editAmount}
-            onAmountChange={setEditAmount}
-            currency={editCurrency}
-            onCurrencyChange={setEditCurrency}
-            paidBy={editPaidBy}
-            onPaidByChange={setEditPaidBy}
-            paidByUser={editPaidByUser}
-            onPaidByUserChange={setEditPaidByUser}
-            splitType={editSplitType}
-            onSplitTypeChange={setEditSplitType}
-            selectedParticipants={editSelectedParticipants}
-            onParticipantsChange={setEditSelectedParticipants}
-            exactSplits={editExactSplits}
-            onExactSplitsChange={setEditExactSplits}
-            percentSplits={editPercentSplits}
-            onPercentSplitsChange={setEditPercentSplits}
+            {...expenseFormProps(edit)}
             members={group.members}
-            currencyOptions={getGroupCurrencies(group.default_currency, group.secondary_currencies, editCurrency)}
+            currencyOptions={getGroupCurrencies(
+              group.default_currency,
+              group.secondary_currencies,
+              edit.values.currency,
+            )}
             onSubmit={handleEditExpense}
-            submitDisabled={!editTitle.trim() || !editAmount || !editPaidBy || !isEditExactValid || !isEditPercentValid}
+            submitDisabled={!canSubmit(edit.values)}
             submitLabel="Save Changes"
             loading={isUpdatingExpense || isUploadingImages}
             uploadPercent={uploadPercent}
-            images={editImages}
-            onImagesChange={setEditImages}
             existingImages={selectedExpense?.images}
             existingImageUrls={editImageUrls}
             onDeleteExistingImage={(imageId) => deleteExpenseImage({ expenseId: selectedExpense!._id, imageId })}
             isDeletingImage={isDeletingExpenseImage}
             isEditing
-            date={editDate}
-            onDateChange={setEditDate}
-            category={editCategory}
-            onCategoryChange={setEditCategory}
-            onHold={editOnHold}
-            onOnHoldChange={setEditOnHold}
             holdMode={
               group.created_by === user.id ? "free" : selectedExpense?.created_by === user.id ? "oneWay" : "hidden"
             }
             recurringMode={selectedExpenseSeries ? "editSeries" : "off"}
-            isRecurring={editIsRecurring}
-            onIsRecurringChange={setEditIsRecurring}
-            frequency={editFrequency}
-            onFrequencyChange={setEditFrequency}
-            recurringEndDate={editRecurringEndDate}
-            onRecurringEndDateChange={setEditRecurringEndDate}
-            maxOccurrences={editMaxOccurrences}
-            onMaxOccurrencesChange={setEditMaxOccurrences}
-            seriesActive={editSeriesActive}
-            onSeriesActiveChange={setEditSeriesActive}
             seriesEnded={selectedExpenseSeries ? isSeriesEnded(selectedExpenseSeries) : false}
             seriesWasInactive={selectedExpenseSeries ? !selectedExpenseSeries.active : false}
           />
