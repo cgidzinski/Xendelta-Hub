@@ -211,7 +211,9 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
             alignItems: "center",
             gap: 1.5,
             px: { xs: 1, md: 2.5 },
-            height: 68,
+            // The chat covers the whole screen on a phone, so its header clears the status bar in an installed app.
+            pt: "env(safe-area-inset-top)",
+            minHeight: 68,
             flexShrink: 0,
             borderBottom: 1,
             borderColor: "divider",

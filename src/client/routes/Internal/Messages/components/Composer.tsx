@@ -65,7 +65,14 @@ export default function Composer({
   };
 
   return (
-    <Box sx={{ px: { xs: 1, md: 3 }, pb: { xs: 1.5, md: 2.5 }, pt: 1, flexShrink: 0 }}>
+    <Box
+      sx={{
+        px: { xs: 1, md: 3 },
+        pb: { xs: "calc(12px + env(safe-area-inset-bottom))", md: 2.5 },
+        pt: 1,
+        flexShrink: 0,
+      }}
+    >
       {(replyTo || editing) && (
         <Box
           sx={{

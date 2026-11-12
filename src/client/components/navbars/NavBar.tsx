@@ -135,7 +135,7 @@ export default function Root() {
       scrollableNavItems={allAppNavItems}
       footerNavItems={footerNavItems}
       showNotifications={true}
-      showMessages={false}
+      showMessages={true}
       showGems={true}
     >
       {isAdmin && (
