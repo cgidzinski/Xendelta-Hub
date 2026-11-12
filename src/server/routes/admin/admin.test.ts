@@ -164,10 +164,16 @@ describe("users", () => {
 
   it("deletes a person only when their username is typed, and logs it", async () => {
     const u = await createUser({ username: "doomed" });
+    const links = mongoose.model("XenLink");
+    await links.create({ name: "Theirs", url: "https://t.example", slug: "doomed-link", owner_id: id(u) });
+    await links.create({ name: "Kept", url: "https://k.example", slug: "kept-link", owner_id: id(adminUser) });
     expect((await send("delete", `/users/${id(u)}`, { confirm: "nope" })).status).toBe(400);
     expect(await mongoose.model("User").countDocuments({ _id: u.user._id })).toBe(1);
     expect((await send("delete", `/users/${id(u)}`, { confirm: "doomed" })).status).toBe(200);
     expect(await mongoose.model("User").countDocuments({ _id: u.user._id })).toBe(0);
+    // Their links go with them; other people's stay.
+    expect(await links.countDocuments({ slug: "doomed-link" })).toBe(0);
+    expect(await links.countDocuments({ slug: "kept-link" })).toBe(1);
     expect((await audit({ action: "user_delete" }))[0]).toMatchObject({
       category: "Danger",
       target: { label: "doomed" },

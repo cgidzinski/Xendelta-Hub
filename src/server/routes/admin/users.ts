@@ -16,6 +16,7 @@ import {
 import { User } from "../../models/user";
 import { GemPurchase } from "../../models/gemPurchase";
 import { XenDriveFile } from "../../models/xendriveFile";
+import { XenLink } from "../../models/xenlink";
 import { Notification } from "../../models/notification";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
@@ -223,6 +224,7 @@ export function registerAdminUserRoutes(app: express.Application) {
       }
       const files = (await usageFor(String(user._id))).fileCount;
       await User.deleteOne({ _id: user._id }).exec();
+      await XenLink.deleteMany({ owner_id: String(user._id) }).exec();
       await recordAudit(req, {
         action: "user_delete",
         target: { type: "user", id: String(user._id), label: user.username ?? "" },

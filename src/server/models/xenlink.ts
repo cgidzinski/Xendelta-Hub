@@ -5,6 +5,8 @@ const xenlinkSchema = new Schema({
   name: { type: String, required: true },
   url: { type: String, required: true },
   slug: { type: String, unique: true, index: true },
+  // The person who owns the link (a user id). Links used to be listed in `users.xenlink` instead.
+  owner_id: { type: String, index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
