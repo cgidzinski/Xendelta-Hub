@@ -7,7 +7,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     id: "2",
     itemKey: "1gb-xendrive-voucher",
     price: 1000,
-    category: "Items",
+    category: "Storage",
   },
   {
     id: "3",

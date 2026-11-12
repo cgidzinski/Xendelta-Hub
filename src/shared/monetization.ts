@@ -36,3 +36,7 @@ export function packBonusPercent(pack: GemPack): number {
   const base = (pack.priceCents / 100) * BASE_GEMS_PER_DOLLAR;
   return Math.max(0, Math.round((pack.gems / base - 1) * 100));
 }
+
+/** The XenDrive voucher: its inventory/shop key and the space it adds when redeemed. */
+export const STORAGE_VOUCHER_KEY = "1gb-xendrive-voucher";
+export const STORAGE_VOUCHER_BYTES = 1024 * 1024 * 1024; // 1 GB

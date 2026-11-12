@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { GEM_PACKS, FREE_STORAGE_BYTES } from "@shared/monetization";
+import { GEM_PACKS, FREE_STORAGE_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
 import { SHOP_ITEMS } from "../constants/shopItems";
 import { ITEMS } from "../constants/items";
 
@@ -41,6 +41,12 @@ describe("catalogue", () => {
       expect(ITEMS[s.itemKey].legacy, `${s.itemKey} is not retired`).toBeFalsy();
     }
     expect(new Set(SHOP_ITEMS.map((s) => s.id)).size).toBe(SHOP_ITEMS.length);
+  });
+
+  it("lists the storage voucher under Storage, which the Shop shows as its own section", () => {
+    const voucher = SHOP_ITEMS.find((s) => s.itemKey === STORAGE_VOUCHER_KEY);
+    expect(voucher?.category).toBe("Storage");
+    expect(ITEMS[STORAGE_VOUCHER_KEY].key).toBe(STORAGE_VOUCHER_KEY);
   });
 
   it("has sane gem packs", () => {
