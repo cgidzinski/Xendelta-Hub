@@ -10,6 +10,7 @@ import { useFolderDrop } from "../lib/useFileDrop";
 import type { ActionTarget } from "./ItemActions";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
+import SourceChips from "./SourceChips";
 
 /** What the list and the grid both need from the page: opening, the menu, selecting, and drops. */
 export interface DriveListHandlers {
@@ -177,6 +178,11 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
               <LinkChips file={file} />
             </Box>
           )}
+          {file.source && (
+            <Box sx={{ mt: 0.5 }}>
+              <SourceChips file={file} />
+            </Box>
+          )}
         </Box>
       </Box>
       <Typography className="c-mod" variant="body2" color="text.secondary">
@@ -186,7 +192,7 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
         {formatFileSize(file.size)}
       </Typography>
       <Box className="c-link">
-        {file.shared || file.hasPassword || file.expiry ? <LinkChips file={file} /> : <NoLink />}
+        {file.source ? null : file.shared || file.hasPassword || file.expiry ? <LinkChips file={file} /> : <NoLink />}
       </Box>
       <IconButton
         aria-label={`Actions for ${file.name}`}

@@ -65,6 +65,11 @@ const serializeFile = (file: XenDriveFileDocument | any) => ({
   hasPassword: !!file.password,
   password: file.password || null, // returned to the owner in plain text, as it always has been
   expiry: file.expiry ? file.expiry.toISOString() : null,
+  // Set when an app stored the file for the person; `counted: false` means it doesn't use their storage.
+  source: file.source?.app
+    ? { app: file.source.app as string, label: driveSourceApp(file.source.app)?.label ?? file.source.app }
+    : null,
+  counted: file.counted !== false,
 });
 
 const serializeFolder = (folder: any, itemCount = 0) => ({
@@ -171,8 +176,12 @@ module.exports = function (app: express.Application) {
         throw new AppError(404, "Folder not found");
       }
 
-      const quotaCheck = await checkQuota(userId, fileSize);
-      if (!quotaCheck.canUpload) throw new AppError(403, quotaCheck.message || "Quota exceeded");
+      // Only a file that counts toward the person's storage needs room for it (an app's files are exempt for now).
+      const counts = source ? ((await driveSourceApp(source.app)?.counts(source.ref)) ?? true) : true;
+      if (counts) {
+        const quotaCheck = await checkQuota(userId, fileSize);
+        if (!quotaCheck.canUpload) throw new AppError(403, quotaCheck.message || "Quota exceeded");
+      }
 
       const uploadId = await initiateChunkedUpload(userId, filename, totalChunks, folderId ?? null, source);
       return res.json({ status: true, message: "Upload session initiated", data: { uploadId } });
@@ -599,6 +608,10 @@ module.exports = function (app: express.Application) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
       // The pre-delete hook removes the stored bytes too
       await XenDriveFile.findByIdAndDelete(file.id);
+      // An app that stored the file lets go of it (a photo on an expense), so it doesn't show a broken image.
+      if (file.source?.app) {
+        await driveSourceApp(file.source.app)?.onRemoved?.(file.source.ref ?? "", [file.id]);
+      }
       return res.json({ status: true, message: "File deleted successfully" });
     },
   );

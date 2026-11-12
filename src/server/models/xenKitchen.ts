@@ -45,9 +45,14 @@ const categorySchema = new Schema({
 
 categorySchema.index({ book_id: 1, order: 1 });
 
+// Each photo is a XenDriveFile owned by whoever uploaded it (source `xenkitchen`, ref = the item), kept private and
+// shown through short-lived signed links. `gcs_path` and `url` belong to a photo from before that, stored in the
+// public bucket; the migration moves it and they go away.
 const imageSchema = new Schema({
-  gcs_path: { type: String, required: true },
-  url: { type: String, required: true },
+  file_id: { type: Schema.Types.ObjectId, ref: "XenDriveFile" },
+  uploaded_by: { type: String },
+  gcs_path: { type: String },
+  url: { type: String },
 });
 
 const ingredientSchema = new Schema({

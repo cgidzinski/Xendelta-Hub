@@ -17,6 +17,7 @@ import { downloadFile, useXendriveActions, useXendriveFile } from "../../../hook
 import { formatFileSize } from "../../../utils/fileUtils";
 import DriveBreadcrumbs from "./components/DriveBreadcrumbs";
 import FileSharePanel from "./components/FileSharePanel";
+import SourceChips from "./components/SourceChips";
 import FileTypeIcon from "./components/FileTypeIcon";
 import FolderDialog from "./components/FolderDialog";
 import { KIND_LABEL, fileKindOf } from "./lib/fileKind";
@@ -219,7 +220,8 @@ export default function FileDetail() {
 
         <Box component="aside" sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <Box sx={{ border: 1, borderColor: "divider", borderRadius: 3, p: 2, bgcolor: "background.paper" }}>
-            <FileSharePanel file={file} />
+            {/* A file an app stored stays private: no public link from here. */}
+            {file.source ? <SourceChips file={file} /> : <FileSharePanel file={file} />}
           </Box>
           <Box sx={{ border: 1, borderColor: "divider", borderRadius: 3, p: 2, bgcolor: "background.paper" }}>
             <SectionLabel>Details</SectionLabel>
@@ -233,9 +235,11 @@ export default function FileDetail() {
                 </Typography>
               </Box>
             ))}
-            <Button sx={{ mt: 1 }} onClick={() => setRenaming(true)}>
-              Rename
-            </Button>
+            {!file.source && (
+              <Button sx={{ mt: 1 }} onClick={() => setRenaming(true)}>
+                Rename
+              </Button>
+            )}
           </Box>
         </Box>
       </Box>

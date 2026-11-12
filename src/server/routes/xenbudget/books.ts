@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { accessOf, canManage } from "../../utils/membership";
 import { XenBudgetBook, XenBudgetItem } from "../../models/xenBudget";
+import { removeItemPhotos } from "../../utils/xenBudgetFiles";
 import { User } from "../../models/user";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import {
@@ -184,8 +185,13 @@ export function registerBookRoutes(app: any) {
         const book = await loadBookForCreator(req, res);
         if (!book) return;
         const notifyIds = memberIds(book);
+        const withPhotos = await XenBudgetItem.find(
+          { book_id: book._id, "images.0": { $exists: true } },
+          "images",
+        ).lean();
         await XenBudgetItem.deleteMany({ book_id: book._id });
         await XenBudgetBook.deleteOne({ _id: book._id });
+        await removeItemPhotos(withPhotos.flatMap((i) => i.images ?? []));
         SocketManager.getInstance().notifyXenBudgetBooksUpdated(notifyIds);
         res.json({ status: true, message: "Book deleted" });
       } catch (error) {

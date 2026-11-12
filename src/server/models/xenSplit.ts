@@ -12,7 +12,11 @@ const splitSchema = new Schema(
 
 const expenseImageSchema = new Schema(
   {
-    gcs_path: { type: String, required: true },
+    // The photo is a XenDriveFile owned by whoever uploaded it (source `xensplit`, ref = the group id).
+    file_id: { type: Schema.Types.ObjectId, ref: "XenDriveFile" },
+    uploaded_by: { type: String },
+    // Photos from before they became XenDrive files; the migration fills `file_id` and these go away.
+    gcs_path: { type: String },
   },
   { _id: true },
 );

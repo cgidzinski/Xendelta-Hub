@@ -13,7 +13,7 @@ import {
 import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
-import { deleteFromGCS } from "../../utils/gcsUtils";
+import { removeNotePhotos } from "../../utils/xenNoteFiles";
 import { roleOf } from "../../utils/membership";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
 import {
@@ -209,7 +209,7 @@ export function registerNoteRoutes(app: any) {
 
   app.delete("/api/xennote/notes/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
     const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
-    await Promise.all(note.images.map((img) => deleteFromGCS(img.gcs_path, true).catch(() => undefined)));
+    await removeNotePhotos(note.images);
     const owner = note.owner_id;
     await note.deleteOne();
     notifyChange(notebook, owner);

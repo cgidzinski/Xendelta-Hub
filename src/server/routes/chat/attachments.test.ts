@@ -74,7 +74,7 @@ async function uploadForChat(me: U, conversationId: string, name = "plan.pdf") {
 }
 
 describe("chat uploads", () => {
-  it("stores a tagged XenDrive file that counts toward the quota but stays out of the drive's lists", async () => {
+  it("stores a tagged XenDrive file that doesn't count toward the quota and shows in the drive for now", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
@@ -82,22 +82,20 @@ describe("chat uploads", () => {
     const stored = await mongoose.model("XenDriveFile").findById(fileId).lean<any>();
     expect(stored.source).toEqual({ app: "chat", ref: chatId });
     expect(stored.folder_id).toBeNull();
+    expect(stored.counted).toBe(false);
 
-    // Not in My Drive, search, recent or shared...
+    // While SHOW_APP_FILES_IN_DRIVE is on it is in My Drive, search and recent too (marked as an app's file)...
     const root = await request(t.app).get("/api/xendrive/browse").set(as(a.token));
-    expect(root.body.data.files).toHaveLength(0);
+    expect(root.body.data.files).toHaveLength(1);
+    expect(root.body.data.files[0]).toMatchObject({ _id: fileId, counted: false, source: { app: "chat" } });
     expect(
       (await request(t.app).get("/api/xendrive/browse?search=plan").set(as(a.token))).body.data.files,
-    ).toHaveLength(0);
-    expect(
-      (await request(t.app).get("/api/xendrive/browse?view=recent").set(as(a.token))).body.data.files,
-    ).toHaveLength(0);
+    ).toHaveLength(1);
 
-    // ...but it counts toward their storage, and the overview says how much apps hold.
+    // ...but it doesn't use their storage, and the overview says how much apps hold.
     const overview = (await request(t.app).get("/api/xendrive/recent").set(as(a.token))).body.data;
-    expect(overview.files).toHaveLength(0);
-    expect(overview.fileCount).toBe(1);
-    expect(overview.spaceUsed).toBe(6);
+    expect(overview.fileCount).toBe(0);
+    expect(overview.spaceUsed).toBe(0);
     expect(overview.appFiles).toEqual({ count: 1, size: 6 });
 
     // And it is listed under From apps, grouped by chat, named for the reader.
@@ -109,6 +107,21 @@ describe("chat uploads", () => {
 
     // Only the uploader sees it.
     expect((await request(t.app).get("/api/xendrive/app-files").set(as(b.token))).body.data.count).toBe(0);
+  });
+
+  it("lets a chat attachment start even when it is bigger than the person's whole storage, because it doesn't count", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chatId = await openChat(a, [b]);
+    const huge = 5 * 1024 * 1024 * 1024;
+    const body = { filename: "big.bin", totalChunks: 1, fileSize: huge };
+    const asChat = await request(t.app)
+      .post("/api/xendrive/initiate")
+      .set(as(a.token))
+      .send({ ...body, source: { app: "chat", ref: chatId } });
+    expect(asChat.status, JSON.stringify(asChat.body)).toBe(200);
+    // an ordinary upload of the same size is still refused
+    const plain = await request(t.app).post("/api/xendrive/initiate").set(as(a.token)).send(body);
+    expect(plain.status).toBe(403);
   });
 
   it("only lets a member of the chat upload for it, and never into a folder", async () => {
@@ -130,16 +143,6 @@ describe("chat uploads", () => {
       .set(as(a.token))
       .send({ ...body, folderId: String(new mongoose.Types.ObjectId()), source: { app: "chat", ref: chatId } });
     expect(withFolder.status).toBe(400);
-  });
-
-  it("refuses an upload that doesn't fit the sender's storage", async () => {
-    const [a, b] = [await createUser(), await createUser()];
-    const chatId = await openChat(a, [b]);
-    const tooBig = await request(t.app)
-      .post("/api/xendrive/initiate")
-      .set(as(a.token))
-      .send({ filename: "huge.zip", totalChunks: 1, fileSize: 2 * 1024 ** 3, source: { app: "chat", ref: chatId } });
-    expect(tooBig.status).toBe(403);
   });
 
   it("keeps a tagged file private: no renaming or public link from XenDrive, but it can be deleted", async () => {

@@ -20,7 +20,7 @@ export interface XenSplitExpenseSplit {
 
 export interface XenSplitExpenseImage {
   _id: string;
-  gcs_path: string;
+  file_id?: string;
 }
 
 export interface XenSplitExpense {

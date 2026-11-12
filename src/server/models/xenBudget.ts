@@ -316,11 +316,14 @@ const itemCategorySchema = new Schema(
   { _id: false },
 );
 
-// Receipt photos. Like XenSplit's expense images: only the GCS path is stored, and the
+// Receipt photos. Each is a XenDriveFile owned by whoever uploaded it (source `xenbudget`, ref = the book id); the
 // client resolves display URLs on demand via short-lived signed URLs.
 const itemImageSchema = new Schema(
   {
-    gcs_path: { type: String, required: true },
+    file_id: { type: Schema.Types.ObjectId, ref: "XenDriveFile" },
+    uploaded_by: { type: String },
+    // Photos from before they became XenDrive files; the migration fills `file_id` and these go away.
+    gcs_path: { type: String },
   },
   { _id: true },
 );

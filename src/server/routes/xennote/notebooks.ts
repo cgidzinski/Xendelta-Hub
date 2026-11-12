@@ -16,7 +16,7 @@ import { XenNote, XenNotebook } from "../../models/xenNote";
 import { User } from "../../models/user";
 import { notify } from "../../utils/notificationUtils";
 import { randomToken } from "../../utils/tokens";
-import { deleteFromGCS } from "../../utils/gcsUtils";
+import { removeNotePhotos } from "../../utils/xenNoteFiles";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { changeRole, removeMember } from "../../utils/membership";
 import { MAX_NOTEBOOKS_OWNED, MAX_NOTEBOOK_PEOPLE } from "../../../shared/xennote/notes";
@@ -79,9 +79,7 @@ export function registerNotebookRoutes(app: any) {
     async (req: Request, res: Response) => {
       const book = await loadNotebook(req, req.params.id as string, "manage");
       const notes = await XenNote.find({ notebook_id: book._id }, "images").lean();
-      await Promise.all(
-        notes.flatMap((n) => n.images.map((img) => deleteFromGCS(img.gcs_path, true).catch(() => undefined))),
-      );
+      await removeNotePhotos(notes.flatMap((n) => n.images));
       await XenNote.deleteMany({ notebook_id: book._id });
       const people = book.members.map((m) => m.user_id);
       await book.deleteOne();
