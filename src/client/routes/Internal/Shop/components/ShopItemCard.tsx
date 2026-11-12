@@ -1,7 +1,7 @@
 import { Box, Card, CardActionArea, Chip, Typography } from "@mui/material";
 import GemAmount from "../../../../components/GemAmount";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import type { ShopItem } from "../../../../hooks/user/useGems";
+import type { ShopItem } from "../../../../hooks/user/useShop";
 
 interface ShopItemCardProps {
   item: ShopItem;
@@ -55,7 +55,7 @@ export default function ShopItemCard({ item, onSelect }: ShopItemCardProps) {
             {item.item.description}
           </Typography>
           <Box sx={{ mt: 1 }}>
-            <GemAmount amount={item.price} />
+            <GemAmount amount={item.price ?? 0} />
           </Box>
         </Box>
       </CardActionArea>

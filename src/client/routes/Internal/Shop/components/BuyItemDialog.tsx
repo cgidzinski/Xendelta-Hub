@@ -2,7 +2,7 @@ import { Box, Button, Divider, Typography } from "@mui/material";
 import GemAmount from "../../../../components/GemAmount";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import type { ShopItem } from "../../../../hooks/user/useGems";
+import type { ShopItem } from "../../../../hooks/user/useShop";
 
 interface BuyItemDialogProps {
   item: ShopItem | null;

@@ -19,6 +19,11 @@ thinking is not lost. Only the "built" section exists in code today.
 
 - `users.points` became `users.gems` (migration `1794530000000-points-to-gems`). Balances carried over one for one.
   Held `1000-point-voucher` items became `1000-gem-voucher` and still redeem.
+- **Gem packs are ordinary Shop items.** There are no gem-specific endpoints: `GET /api/shop` lists everything,
+  `POST /api/shop/buy` buys anything. An item has either a gem `price` or a money `priceCents` (with `currency`). The
+  packs are items in the `Gems` category with `grantsGems` and `addToInventory: false`, so buying one adds the gems
+  and puts nothing in the inventory. Money-priced items go through the payment provider; gem-priced ones are paid from
+  the balance.
 - **Buying gems.** `src/shared/monetization.ts` lists the packs (1,000 / 2,200 / 6,000 / 13,000 gems for $5 / $10 /
   $25 / $50, so 200 gems to the dollar plus a bonus on the bigger packs). Checkout goes through a payment
   provider interface (`src/server/payments/`). Only a **dummy provider** exists: it takes no money and credits the
@@ -39,7 +44,8 @@ thinking is not lost. Only the "built" section exists in code today.
 ### Adding Stripe
 
 1. Implement `startCheckout` in a new provider so it creates a Checkout Session and returns
-   `{ kind: "redirect", url }`. The client already follows redirects.
+   `{ kind: "redirect", url }`. The client already follows redirects. Any future money-priced item (a plan, say)
+   uses the same path: give it `priceCents`, and say what it grants.
 2. Add a webhook route that verifies the signature and calls `fulfilGemPurchase(purchaseId)`. It is idempotent: only
    the call that moves the purchase from `pending` to `completed` credits the gems.
 3. Return the new provider from `getPaymentProvider()` and set `PAYMENTS_PROVIDER=stripe`.

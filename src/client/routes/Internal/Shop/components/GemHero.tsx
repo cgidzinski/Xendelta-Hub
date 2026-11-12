@@ -1,22 +1,24 @@
 import { useState } from "react";
-import { Alert, Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, ButtonBase, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { formatMoney } from "@shared/money";
-import { packBonusPercent, type GemPack } from "@shared/monetization";
+import { gemBonusPercent } from "@shared/monetization";
 import GemAmount from "../../../../components/GemAmount";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import { useGemCheckout, useGemPacks } from "../../../../hooks/user/useGems";
+import type { ShopItem, ShopPayments } from "../../../../hooks/user/useShop";
 
-const price = (pack: GemPack) => formatMoney(pack.priceCents / 100, pack.currency, { symbol: "narrow" });
+const cost = (pack: ShopItem) =>
+  formatMoney((pack.priceCents ?? 0) / 100, pack.currency ?? "USD", { symbol: "narrow" });
+const bonusOf = (pack: ShopItem) => gemBonusPercent(pack.grantsGems ?? 0, pack.priceCents ?? 1);
 
 interface PackButtonProps {
-  pack: GemPack;
+  pack: ShopItem;
   selected: boolean;
   onSelect: (id: string) => void;
 }
 
 function PackButton({ pack, selected, onSelect }: PackButtonProps) {
-  const bonus = packBonusPercent(pack);
+  const bonus = bonusOf(pack);
   return (
     <ButtonBase
       onClick={() => onSelect(pack.id)}
@@ -36,7 +38,7 @@ function PackButton({ pack, selected, onSelect }: PackButtonProps) {
       }}
     >
       <Typography component="span" variant="body1" sx={{ fontWeight: selected ? 700 : 500 }}>
-        {pack.gems.toLocaleString()} gems
+        {(pack.grantsGems ?? 0).toLocaleString()} gems
         {bonus > 0 && (
           <Typography component="span" variant="caption" color="success.main" sx={{ ml: 0.75, fontWeight: 700 }}>
             +{bonus}%
@@ -44,22 +46,26 @@ function PackButton({ pack, selected, onSelect }: PackButtonProps) {
         )}
       </Typography>
       <Typography component="span" variant="body2" color={selected ? "text.primary" : "text.secondary"}>
-        {price(pack)}
+        {cost(pack)}
       </Typography>
     </ButtonBase>
   );
 }
 
+interface GemHeroProps {
+  /** The Shop's items in the Gems category: ordinary items priced in money that add gems. */
+  packs: ShopItem[];
+  payments: ShopPayments | undefined;
+  balance: number;
+  onBuy: (item: ShopItem) => void;
+  isBuying: boolean;
+}
+
 /** The top of the Shop: pick a gem pack on the left, see what you would have and pay on the right. */
-export default function GemHero({ balance }: { balance: number }) {
-  const { info, isLoading } = useGemPacks();
-  const { checkout, isPending } = useGemCheckout();
+export default function GemHero({ packs, payments, balance, onBuy, isBuying }: GemHeroProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  if (isLoading) return <Skeleton variant="rectangular" height={230} sx={{ borderRadius: 2 }} />;
-
-  const packs = info?.packs ?? [];
-  if (!info?.available || packs.length === 0) {
+  if (!payments?.available || packs.length === 0) {
     return (
       <Box sx={{ ...cardSx, p: 3 }}>
         <Typography variant="overline" color="text.secondary">
@@ -73,7 +79,8 @@ export default function GemHero({ balance }: { balance: number }) {
   }
 
   const selected = packs.find((p) => p.id === selectedId) ?? packs.find((p) => p.badge === "Popular") ?? packs[0];
-  const bonus = packBonusPercent(selected);
+  const bonus = bonusOf(selected);
+  const gems = selected.grantsGems ?? 0;
 
   return (
     <Box sx={{ ...cardSx, display: "flex", flexDirection: { xs: "column", md: "row" }, overflow: "hidden" }}>
@@ -110,19 +117,19 @@ export default function GemHero({ balance }: { balance: number }) {
         }}
       >
         <Box>
-          <GemAmount amount={selected.gems} variant="h4" iconSize={40} />
+          <GemAmount amount={gems} variant="h4" iconSize={40} />
           <Typography variant="body2" color="text.secondary">
-            {price(selected)}
+            {cost(selected)}
             {bonus > 0 && ` · ${bonus}% bonus`}
           </Typography>
         </Box>
         <Typography variant="body2" color="text.secondary">
-          You would have {(balance + selected.gems).toLocaleString()} gems.
+          You would have {(balance + gems).toLocaleString()} gems.
         </Typography>
-        <Button variant="contained" size="large" loading={isPending} onClick={() => checkout(selected.id)}>
-          Pay {price(selected)}
+        <Button variant="contained" size="large" loading={isBuying} onClick={() => onBuy(selected)}>
+          Pay {cost(selected)}
         </Button>
-        {info.testMode && (
+        {payments.testMode && (
           <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
             Test mode: no card is charged.
           </Alert>

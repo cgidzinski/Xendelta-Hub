@@ -19,7 +19,7 @@ vi.mock("../utils/emailUtils.js", async (importOriginal) => ({
 let t: TestApp;
 
 beforeAll(async () => {
-  t = await startTestApp([() => import("./auth.js"), () => import("./users.js"), () => import("./gems.js")]);
+  t = await startTestApp([() => import("./auth.js"), () => import("./users.js"), () => import("./shop.js")]);
 }, 180_000);
 
 afterAll(async () => {
@@ -101,7 +101,7 @@ describe("gem shop", () => {
 
     const results = await Promise.all(
       Array.from({ length: 10 }, () =>
-        request(t.app).post("/api/gems/shop/buy").set("Authorization", `Bearer ${token}`).send({ itemId: "3" }),
+        request(t.app).post("/api/shop/buy").set("Authorization", `Bearer ${token}`).send({ itemId: "3" }),
       ),
     );
 
@@ -116,7 +116,7 @@ describe("gem shop", () => {
   it("refuses a purchase the balance cannot cover", async () => {
     const { user, token } = await createUser({ gems: 100 });
     const res = await request(t.app)
-      .post("/api/gems/shop/buy")
+      .post("/api/shop/buy")
       .set("Authorization", `Bearer ${token}`)
       .send({ itemId: "3" });
     expect(res.body.status).toBe(false);

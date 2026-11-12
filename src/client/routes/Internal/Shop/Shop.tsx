@@ -11,12 +11,14 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import GemAmount from "../../../components/GemAmount";
 import { useTitle } from "../../../hooks/useTitle";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
-import { useBuyShopItem, useGemShop, type ShopItem } from "../../../hooks/user/useGems";
+import { isGemPriced, useBuy, useShop, type ShopItem } from "../../../hooks/user/useShop";
 import BuyItemDialog from "./components/BuyItemDialog";
 import GemHero from "./components/GemHero";
 import ShopItemCard from "./components/ShopItemCard";
 import ShopItemRow from "./components/ShopItemRow";
 
+/** Gem packs are items in this category; the hero at the top sells them. */
+const GEMS = "Gems";
 /** Items in this category get their own compact section under the gems; everything else is "Other items". */
 const STORAGE = "Storage";
 
@@ -24,14 +26,17 @@ export default function Shop() {
   useTitle("Shop");
   const navigate = useNavigate();
   const { profile } = useUserProfile();
-  const { items, isLoading, isError, error, refetch } = useGemShop();
-  const { buy, isBuying } = useBuyShopItem();
+  const { items, payments, isLoading, isError, error, refetch } = useShop();
+  const { buy, isBuying } = useBuy();
   const [selected, setSelected] = useState<ShopItem | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
   const balance = profile?.gems ?? 0;
-  const storage = items.filter((item) => item.category === STORAGE);
-  const other = items.filter((item) => item.category !== STORAGE);
+  const packs = items.filter((item) => item.category === GEMS);
+  // Everything below is bought with gems; money-priced items are only sold in the hero.
+  const forGems = items.filter((item) => item.category !== GEMS && isGemPriced(item));
+  const storage = forGems.filter((item) => item.category === STORAGE);
+  const other = forGems.filter((item) => item.category !== STORAGE);
 
   const handleBuy = async (item: ShopItem) => {
     if (await buy(item)) setSelected(null);
@@ -62,7 +67,7 @@ export default function Shop() {
 
       <Stack spacing={3.5}>
         <Box ref={heroRef} sx={{ scrollMarginTop: 16 }}>
-          <GemHero balance={balance} />
+          <GemHero packs={packs} payments={payments} balance={balance} onBuy={buy} isBuying={isBuying} />
         </Box>
 
         {isLoading ? (
@@ -73,7 +78,7 @@ export default function Shop() {
               </Grid>
             ))}
           </Grid>
-        ) : items.length === 0 ? (
+        ) : forGems.length === 0 ? (
           <EmptyState
             icon={<StorefrontIcon />}
             title="Nothing here yet"

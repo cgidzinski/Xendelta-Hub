@@ -3,6 +3,10 @@
 //
 // Prices are whole cents. The base rate is 200 gems to the dollar, and larger packs add a bonus.
 
+/**
+ * The gem packs on sale. They are listed in the Shop like any other item (see server/constants/shopItems.ts):
+ * an item priced in money that grants gems when it is paid for.
+ */
 export interface GemPack {
   id: string;
   gems: number;
@@ -19,12 +23,6 @@ export const GEM_PACKS: readonly GemPack[] = [
   { id: "gems-13000", gems: 13_000, priceCents: 5_000, currency: "USD", badge: "Best value" },
 ];
 
-export const GEM_PACK_IDS = GEM_PACKS.map((p) => p.id) as [string, ...string[]];
-
-export function findGemPack(id: string): GemPack | undefined {
-  return GEM_PACKS.find((p) => p.id === id);
-}
-
 /** XenDrive space every account has before buying anything. */
 export const FREE_STORAGE_BYTES = 1024 * 1024 * 1024; // 1 GB
 
@@ -32,9 +30,9 @@ export const FREE_STORAGE_BYTES = 1024 * 1024 * 1024; // 1 GB
 export const BASE_GEMS_PER_DOLLAR = 200;
 
 /** How many percent more gems a pack gives than the base rate would (0 for the smallest). */
-export function packBonusPercent(pack: GemPack): number {
-  const base = (pack.priceCents / 100) * BASE_GEMS_PER_DOLLAR;
-  return Math.max(0, Math.round((pack.gems / base - 1) * 100));
+export function gemBonusPercent(gems: number, priceCents: number): number {
+  const base = (priceCents / 100) * BASE_GEMS_PER_DOLLAR;
+  return Math.max(0, Math.round((gems / base - 1) * 100));
 }
 
 /** The XenDrive voucher: its inventory/shop key and the space it adds when redeemed. */

@@ -1,8 +1,24 @@
 import { User } from "../models/user";
 import { Item } from "../types/item";
-import { STORAGE_VOUCHER_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
+import { GEM_PACKS, STORAGE_VOUCHER_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
+
+// Gem packs are items too. They never reach an inventory (the Shop adds them with addToInventory: false); the
+// definition is what the Shop shows. The picture is drawn by the client, which knows the gem icon.
+const GEM_PACK_ITEMS: Record<string, Item> = Object.fromEntries(
+  GEM_PACKS.map((pack) => [
+    pack.id,
+    {
+      key: pack.id,
+      name: `${pack.gems.toLocaleString("en-US")} gems`,
+      description: `Adds ${pack.gems.toLocaleString("en-US")} gems to your balance`,
+      image: "",
+      redeemable: false,
+    },
+  ]),
+);
 
 export const ITEMS: Record<string, Item> = {
+  ...GEM_PACK_ITEMS,
   // Retired when points became gems (#180); kept so vouchers people already hold still redeem.
   "1000-gem-voucher": {
     key: "1000-gem-voucher",
