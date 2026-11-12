@@ -148,6 +148,21 @@ app.use(
   }),
 );
 
+// API keys (Authorization: Bearer xd_...) get their own bucket per key, since many keys can share one IP (a Home
+// Assistant box, a CI runner). Session traffic is unaffected.
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 600,
+    skip: (req: any) => !String(req.headers.authorization || "").startsWith("Bearer xd_"),
+    keyGenerator: (req: any) => require("./utils/tokens").hashToken(String(req.headers.authorization)),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { status: false, message: "Too many requests. Slow down and try again shortly." },
+  }),
+);
+
 // Liveness/readiness for the process manager and uptime checks.
 app.get("/api/health", (_req: any, res: any) => {
   const connected = Mongo.getConnection().readyState === 1;
@@ -156,6 +171,7 @@ app.get("/api/health", (_req: any, res: any) => {
 
 require("./routes/auth.ts")(app);
 require("./routes/users.ts")(app);
+require("./routes/apiKeys.ts")(app);
 require("./routes/shop.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/push.ts")(app);

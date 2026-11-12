@@ -10,4 +10,6 @@ export interface AuthenticatedRequest extends Request {
     email: string;
     avatar: string;
   };
+  /** How the request signed in. Absent for an ordinary session JWT. */
+  auth?: { via: "apiKey"; keyId: string };
 }
