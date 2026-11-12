@@ -259,4 +259,11 @@ export class SocketManager {
       this.io.to(`user:${userId}`).emit("xenbudget:books_updated");
     });
   }
+
+  // Tell people a note or notebook they can see changed, so their open board refreshes
+  notifyXenNoteUpdate(userIds: string[]) {
+    new Set(userIds).forEach((userId) => {
+      this.io.to(`user:${userId}`).emit("xennote:update");
+    });
+  }
 }

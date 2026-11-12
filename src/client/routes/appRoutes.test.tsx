@@ -9,6 +9,7 @@ import { xensplitRoutes } from "./Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./Internal/XenRoutine/routes";
 import { xenkitchenRoutes } from "./Internal/XenKitchen/routes";
 import { xenbudgetRoutes } from "./Internal/XenBudget/routes";
+import { xennoteRoutes } from "./Internal/XenNote/routes";
 
 // Every app in the registry (nav bar, home screen, pinning) must have routes, and the route
 // groups must be the ones main.tsx mounts. Adding an app: add its registry entry, a routes.tsx,
@@ -21,6 +22,7 @@ const ROUTES: Record<string, ReactNode> = {
   xenroutine: xenroutineRoutes,
   xenkitchen: xenkitchenRoutes,
   xenbudget: xenbudgetRoutes,
+  xennote: xennoteRoutes,
 };
 
 // Top-level paths only: nested routes are relative to their parent.
@@ -71,6 +73,7 @@ describe("app routes", () => {
     expect(hit("/internal/recipaint/abc/paint")).toEqual(["/internal", "recipaint/:id/paint"]);
     expect(hit("/internal/xendrive/file/f1")).toEqual(["/internal", "xendrive/file/:fileId"]);
     expect(hit("/internal/xendrive/folder/d1")).toEqual(["/internal", "xendrive/folder/:folderId"]);
+    expect(hit("/internal/xennote")).toEqual(["/internal", "xennote"]);
     expect(hit("/internal/nowhere")).toBeUndefined();
   });
 });

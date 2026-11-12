@@ -4,6 +4,7 @@ import { join, relative } from "path";
 import { xensplitKeys } from "./xensplit/keys";
 import { xenbudgetKeys } from "./xenbudget/keys";
 import { xendriveKeys } from "./xendrive/keys";
+import { xennoteKeys } from "./xennote/keys";
 
 describe("query keys", () => {
   it("XenSplit keys are the arrays the screens always used", () => {
@@ -51,6 +52,13 @@ describe("query keys", () => {
     expect(xendriveKeys.publicFolder("t", "f")).toEqual(["xendrive", "public-folder", "t", "f"]);
   });
 
+  it("XenNote keys sit under [xennote], and the notes key is a prefix of every filtered variant", () => {
+    expect(xennoteKeys.all).toEqual(["xennote"]);
+    expect(xennoteKeys.notes({ label: "a" }).slice(0, 2)).toEqual([...xennoteKeys.notesAll()]);
+    expect(xennoteKeys.notebooks()).toEqual(["xennote", "notebooks"]);
+    expect(xennoteKeys.publicNote("t")).toEqual(["xennote", "public-note", "t"]);
+  });
+
   it("no screen spells these keys out by hand again", () => {
     const root = join(__dirname, "..");
     const bad: string[] = [];
@@ -61,7 +69,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xendrive)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendrive|xennote)"[,\]]/.test(readFileSync(full, "utf8"))
         )
           bad.push(relative(root, full));
       }
