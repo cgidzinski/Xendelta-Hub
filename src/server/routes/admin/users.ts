@@ -22,8 +22,8 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     requireAdmin,
     async function (_req: express.Request, res: express.Response) {
-      const users = await User.find({}, "username email _id roles avatar xenbox points inventory")
-        .populate("xenbox.files")
+      const users = await User.find({}, "username email _id roles avatar xendrive points inventory")
+        .populate("xendrive.files")
         .exec();
 
       return res.json({
@@ -32,9 +32,9 @@ module.exports = function (app: express.Application) {
         data: {
           users: users.map((user: any) => {
             // Calculate quota stats
-            const xenboxFiles = user.xenbox?.files || [];
-            const fileCount = xenboxFiles.length;
-            const spaceUsed = xenboxFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
+            const xendriveFiles = user.xendrive?.files || [];
+            const fileCount = xendriveFiles.length;
+            const spaceUsed = xendriveFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
 
             return {
               _id: user._id,
@@ -44,10 +44,10 @@ module.exports = function (app: express.Application) {
               avatar: user.avatar,
               points: user.points || 0,
               inventory: user.inventory || [],
-              xenbox: {
+              xendrive: {
                 fileCount,
                 spaceUsed,
-                spaceAllowed: user.xenbox?.spaceAllowed || 0,
+                spaceAllowed: user.xendrive?.spaceAllowed || 0,
               },
             };
           }),
@@ -64,7 +64,7 @@ module.exports = function (app: express.Application) {
     validate(adminUpdateUserSchema),
     async function (req: express.Request, res: express.Response) {
       const { userId } = req.params;
-      const { roles, xenboxQuota } = req.body;
+      const { roles, xendriveQuota } = req.body;
 
       const user = await User.findOne({ _id: userId }).exec();
       if (!user) {
@@ -85,27 +85,27 @@ module.exports = function (app: express.Application) {
         user.roles = roles.map((role: string) => role.toLowerCase());
       }
 
-      if (xenboxQuota !== undefined) {
-        if (typeof xenboxQuota !== "number" || xenboxQuota < 0) {
+      if (xendriveQuota !== undefined) {
+        if (typeof xendriveQuota !== "number" || xendriveQuota < 0) {
           return res.status(400).json({
             status: false,
-            message: "XenBox quota must be a non-negative number",
+            message: "XenDrive quota must be a non-negative number",
           });
         }
-        // Initialize xenbox if it doesn't exist
-        if (!user.xenbox) {
-          user.xenbox = { files: [], spaceAllowed: 0 };
+        // Initialize xendrive if it doesn't exist
+        if (!user.xendrive) {
+          user.xendrive = { files: [], spaceAllowed: 0 };
         }
-        user.xenbox.spaceAllowed = xenboxQuota;
+        user.xendrive.spaceAllowed = xendriveQuota;
       }
 
       await user.save();
 
       // Get updated quota stats
-      await user.populate("xenbox.files");
-      const xenboxFiles = user.xenbox?.files || [];
-      const fileCount = xenboxFiles.length;
-      const spaceUsed = xenboxFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
+      await user.populate("xendrive.files");
+      const xendriveFiles = user.xendrive?.files || [];
+      const fileCount = xendriveFiles.length;
+      const spaceUsed = xendriveFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
 
       return res.json({
         status: true,
@@ -116,10 +116,10 @@ module.exports = function (app: express.Application) {
             username: user.username,
             email: user.email,
             roles: user.roles,
-            xenbox: {
+            xendrive: {
               fileCount,
               spaceUsed,
-              spaceAllowed: user.xenbox?.spaceAllowed || 0,
+              spaceAllowed: user.xendrive?.spaceAllowed || 0,
             },
           },
         },

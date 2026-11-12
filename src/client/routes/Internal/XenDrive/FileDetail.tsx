@@ -25,7 +25,7 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import ClearIcon from "@mui/icons-material/Clear";
 import { useTitle } from "../../../hooks/useTitle";
 import { useSnackbar } from "notistack";
-import { useXenbox, useXenboxFileSettings, useXenboxFiles } from "../../../hooks/xenbox/useXenbox";
+import { useXendrive, useXendriveFileSettings, useXendriveFiles } from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import { format } from "date-fns";
 
@@ -51,9 +51,9 @@ export default function FileDetail() {
   const { fileId } = useParams<{ fileId: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { data: files, refetch } = useXenboxFiles();
-  const { deleteFile, isDeleting } = useXenbox();
-  const { mutateAsync: updateSettings, isPending: isUpdating } = useXenboxFileSettings();
+  const { data: files, refetch } = useXendriveFiles();
+  const { deleteFile, isDeleting } = useXendrive();
+  const { mutateAsync: updateSettings, isPending: isUpdating } = useXendriveFileSettings();
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -62,18 +62,18 @@ export default function FileDetail() {
 
   const file = files?.find((f) => f._id === fileId);
 
-  useTitle(file ? `XenBox - ${file.filename}` : "XenBox - File Detail");
+  useTitle(file ? `XenDrive - ${file.filename}` : "XenDrive - File Detail");
 
   useEffect(() => {
     if (!file && files && files.length > 0) {
       // File not found, redirect to list
-      navigate("/internal/xenbox");
+      navigate("/internal/xendrive");
     }
   }, [file, files, navigate]);
 
   const shareUrl = useMemo(() => {
     if (file?.shareToken) {
-      return `${window.location.origin}/xenbox/${file.shareToken}`;
+      return `${window.location.origin}/xendrive/${file.shareToken}`;
     }
     return null;
   }, [file?.shareToken]);
@@ -90,7 +90,7 @@ export default function FileDetail() {
       onSuccess: () => {
         setDeleteDialogOpen(false);
         enqueueSnackbar("File deleted successfully", { variant: "success" });
-        navigate("/internal/xenbox");
+        navigate("/internal/xendrive");
       },
       onError: (error: Error) => {
         enqueueSnackbar(error.message || "Failed to delete file", { variant: "error" });
@@ -165,7 +165,7 @@ export default function FileDetail() {
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 3 } }}>
       <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-        <IconButton onClick={() => navigate("/internal/xenbox")} sx={{ flexShrink: 0 }}>
+        <IconButton onClick={() => navigate("/internal/xendrive")} sx={{ flexShrink: 0 }}>
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexGrow: 1, minWidth: 0 }}>

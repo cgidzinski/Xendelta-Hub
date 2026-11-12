@@ -40,7 +40,7 @@ function etransferPayload(user: any) {
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id;
-    const user = await User.findOne({ _id: userId }).populate("xenbox.files").exec();
+    const user = await User.findOne({ _id: userId }).populate("xendrive.files").exec();
     if (!user) throw new AppError(404, "User not found");
 
     // Check if user has any unread messages in any conversation
@@ -59,10 +59,10 @@ module.exports = function (app: express.Application) {
       : new Date(0).toISOString();
     const hasNewNotifications = await Notification.exists({ userId, time: { $gt: lastChecked } });
 
-    // Calculate xenbox quota stats from populated files
-    const xenboxFiles = user.xenbox?.files || [];
-    const fileCount = xenboxFiles.length;
-    const spaceUsed = xenboxFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
+    // Calculate xendrive quota stats from populated files
+    const xendriveFiles = user.xendrive?.files || [];
+    const fileCount = xendriveFiles.length;
+    const spaceUsed = xendriveFiles.reduce((acc: number, file: any) => acc + (file?.size || 0), 0);
     return res.json({
       status: true,
       message: "",
@@ -82,10 +82,10 @@ module.exports = function (app: express.Application) {
           theme: user.theme || "",
           emailNotifications: user.notificationPrefs?.email !== false,
           etransfer: etransferPayload(user),
-          xenbox: {
+          xendrive: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
-            spaceAllowed: user.xenbox?.spaceAllowed || 0,
+            spaceAllowed: user.xendrive?.spaceAllowed || 0,
           },
         },
       },

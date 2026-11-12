@@ -1,13 +1,13 @@
-import { xenboxKeys } from "./keys";
+import { xendriveKeys } from "./keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient, UPLOAD_TIMEOUT_MS, api } from "../../config/api";
-import { XenBoxFile, XenBoxFileListResponse } from "../../types/XenBoxFile";
+import { XenDriveFile, XenDriveFileListResponse } from "../../types/XenDriveFile";
 
 // Chunk size constant (10MB)
 const CHUNK_SIZE = 10 * 1024 * 1024;
 
 // Types
-interface XenboxUploadResponse {
+interface XendriveUploadResponse {
   _id: string;
   url: string;
   filename: string;
@@ -79,7 +79,7 @@ const initiateUpload = async (
   totalChunks: number,
   fileSize: number,
 ): Promise<UploadSessionResponse> => {
-  return api.post<UploadSessionResponse>("/api/xenbox/initiate", {
+  return api.post<UploadSessionResponse>("/api/xendrive/initiate", {
     filename,
     totalChunks,
     fileSize,
@@ -93,7 +93,7 @@ const uploadChunkApi = async (
   chunkData: string,
 ): Promise<ChunkUploadResponse> => {
   return api.post<ChunkUploadResponse>(
-    "/api/xenbox/chunk",
+    "/api/xendrive/chunk",
     {
       uploadId,
       chunkIndex,
@@ -104,23 +104,23 @@ const uploadChunkApi = async (
   );
 };
 
-const finalizeUpload = async (uploadId: string): Promise<XenboxUploadResponse> => {
-  return api.post<XenboxUploadResponse>("/api/xenbox/finalize", {
+const finalizeUpload = async (uploadId: string): Promise<XendriveUploadResponse> => {
+  return api.post<XendriveUploadResponse>("/api/xendrive/finalize", {
     uploadId,
   });
 };
 
 const cancelUpload = async (uploadId: string): Promise<void> => {
-  await apiClient.delete(`/api/xenbox/${uploadId}`);
+  await apiClient.delete(`/api/xendrive/${uploadId}`);
 };
 
-const deleteXenboxFile = async (fileId: string): Promise<void> => {
-  await apiClient.delete(`/api/xenbox/files/${fileId}`);
+const deleteXendriveFile = async (fileId: string): Promise<void> => {
+  await apiClient.delete(`/api/xendrive/files/${fileId}`);
 };
 
-const fetchXenboxFiles = async (search?: string): Promise<XenBoxFile[]> => {
+const fetchXendriveFiles = async (search?: string): Promise<XenDriveFile[]> => {
   const params = search ? { search } : {};
-  return (await api.get<XenBoxFileListResponse>("/api/xenbox/files", { params })).files;
+  return (await api.get<XenDriveFileListResponse>("/api/xendrive/files", { params })).files;
 };
 
 const updateFileSettings = async (
@@ -128,7 +128,7 @@ const updateFileSettings = async (
   settings: { password?: string | null; expiry?: string | null },
 ): Promise<{ shareUrl: string; hasPassword: boolean; expiry: string | null }> => {
   return api.put<{ shareUrl: string; hasPassword: boolean; expiry: string | null }>(
-    `/api/xenbox/files/${fileId}/settings`,
+    `/api/xendrive/files/${fileId}/settings`,
     settings,
   );
 };
@@ -139,11 +139,11 @@ interface UploadFileParams {
   onProgress?: (progress: number) => void;
 }
 
-export const useXenboxUpload = () => {
+export const useXendriveUpload = () => {
   const queryClient = useQueryClient();
 
   const { mutateAsync: uploadFile, isPending: isUploading } = useMutation({
-    mutationFn: async ({ file, onProgress }: UploadFileParams): Promise<XenboxUploadResponse> => {
+    mutationFn: async ({ file, onProgress }: UploadFileParams): Promise<XendriveUploadResponse> => {
       const totalChunks = calculateTotalChunks(file.size);
 
       // Initiate upload session (includes quota check)
@@ -168,7 +168,7 @@ export const useXenboxUpload = () => {
       const result = await finalizeUpload(uploadId);
 
       // Invalidate queries to refresh file list and user profile
-      queryClient.invalidateQueries({ queryKey: xenboxKeys.files() });
+      queryClient.invalidateQueries({ queryKey: xendriveKeys.files() });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
 
       return result;
@@ -181,11 +181,11 @@ export const useXenboxUpload = () => {
   };
 };
 
-// Hook for listing xenbox files
-export const useXenboxFiles = (search?: string) => {
+// Hook for listing xendrive files
+export const useXendriveFiles = (search?: string) => {
   return useQuery({
-    queryKey: xenboxKeys.files(search),
-    queryFn: () => fetchXenboxFiles(search),
+    queryKey: xendriveKeys.files(search),
+    queryFn: () => fetchXendriveFiles(search),
     retry: 1, // Only retry once to avoid duplicate errors
     retryDelay: 1000,
     placeholderData: (previousData) => previousData,
@@ -193,7 +193,7 @@ export const useXenboxFiles = (search?: string) => {
 };
 
 // Hook for updating file settings
-export const useXenboxFileSettings = () => {
+export const useXendriveFileSettings = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -205,21 +205,21 @@ export const useXenboxFileSettings = () => {
       settings: { password?: string | null; expiry?: string | null };
     }) => updateFileSettings(fileId, settings),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: xenboxKeys.files() });
+      queryClient.invalidateQueries({ queryKey: xendriveKeys.files() });
     },
   });
 };
 
-// Hook for xenbox operations
-export const useXenbox = () => {
+// Hook for xendrive operations
+export const useXendrive = () => {
   const queryClient = useQueryClient();
 
-  // Mutation for deleting xenbox file
+  // Mutation for deleting xendrive file
   const deleteMutation = useMutation({
-    mutationFn: deleteXenboxFile,
+    mutationFn: deleteXendriveFile,
     onSuccess: () => {
       // Invalidate queries to refresh file list and user profile
-      queryClient.invalidateQueries({ queryKey: xenboxKeys.files() });
+      queryClient.invalidateQueries({ queryKey: xendriveKeys.files() });
       queryClient.invalidateQueries({ queryKey: ["userProfile"] });
     },
   });

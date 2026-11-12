@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative } from "path";
 import { xensplitKeys } from "./xensplit/keys";
 import { xenbudgetKeys } from "./xenbudget/keys";
-import { xenboxKeys } from "./xenbox/keys";
+import { xendriveKeys } from "./xendrive/keys";
 
 describe("query keys", () => {
   it("XenSplit keys are the arrays the screens always used", () => {
@@ -42,9 +42,9 @@ describe("query keys", () => {
     expect(xenbudgetKeys.summary("b1", { p: 1 }).slice(0, 3)).toEqual([...xenbudgetKeys.summary("b1")]);
   });
 
-  it("XenBox file keys", () => {
-    expect(xenboxKeys.files()).toEqual(["xenboxFiles"]);
-    expect(xenboxKeys.files("cat")).toEqual(["xenboxFiles", "cat"]);
+  it("XenDrive file keys", () => {
+    expect(xendriveKeys.files()).toEqual(["xendriveFiles"]);
+    expect(xendriveKeys.files("cat")).toEqual(["xendriveFiles", "cat"]);
   });
 
   it("no screen spells these keys out by hand again", () => {
@@ -57,7 +57,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xenboxFiles)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendriveFiles)"[,\]]/.test(readFileSync(full, "utf8"))
         )
           bad.push(relative(root, full));
       }

@@ -26,7 +26,7 @@ export interface UserProfile {
   emailNotifications: boolean;
   /** Where XenSplit tells others to send this user's settlements. Blank handle means unset. */
   etransfer: EtransferInfo;
-  xenbox: {
+  xendrive: {
     fileCount: number;
     spaceUsed: number;
     spaceAllowed: number;
@@ -104,7 +104,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
     onSuccess: () => {
       // Refetch rather than writing the response into the cache: the update endpoint
       // returns only the handful of fields it touches, so seeding the cache with it
-      // would drop pinnedApps, points and the xenbox quota until the next reload.
+      // would drop pinnedApps, points and the xendrive quota until the next reload.
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
     onError: () => {

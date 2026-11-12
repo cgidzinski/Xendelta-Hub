@@ -12,14 +12,14 @@ export const ITEMS: Record<string, Item> = {
       await user.save();
     },
   },
-  "1gb-xenbox-voucher": {
-    key: "1gb-xenbox-voucher",
-    name: "1GB XenBox Voucher",
-    description: "Redeem this voucher to get 1GB of XenBox space added to your account",
+  "1gb-xendrive-voucher": {
+    key: "1gb-xendrive-voucher",
+    name: "1GB XenDrive Voucher",
+    description: "Redeem this voucher to get 1GB of XenDrive space added to your account",
     image: "https://cdn-icons-png.flaticon.com/512/4008/4008946.png",
     redeemable: true,
     apply: async (user: any) => {
-      user.xenbox.spaceAllowed += 1024 * 1024 * 1024;
+      user.xendrive.spaceAllowed += 1024 * 1024 * 1024;
       await user.save();
     },
   },

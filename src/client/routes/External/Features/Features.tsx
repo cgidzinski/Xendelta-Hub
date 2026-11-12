@@ -16,7 +16,7 @@ export default function Features() {
     },
     {
       icon: <Speed sx={{ fontSize: 40 }} />,
-      title: "XenBox",
+      title: "XenDrive",
       caption: "File Sharing",
       description: "Share files with people through our secure and efficient file sharing system.",
     },

@@ -9,7 +9,7 @@ export const SHOP_ITEMS: ShopItem[] = [
   },
   {
     id: "2",
-    itemKey: "1gb-xenbox-voucher",
+    itemKey: "1gb-xendrive-voucher",
     price: 1000,
     category: "Items",
   },

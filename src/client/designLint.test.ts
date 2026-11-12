@@ -31,7 +31,7 @@ const ON_IMAGE_OVERLAY = [
   "routes/Internal/Shop/Shop.tsx",
   "routes/Internal/Recipaint/components/ImageGallery.tsx",
   "routes/Internal/Recipaint/components/ImageUploader.tsx",
-  "routes/Internal/XenBox/components/FileList.tsx",
+  "routes/Internal/XenDrive/components/FileList.tsx",
   "routes/Internal/XenLink/components/LinkList.tsx",
   "routes/Internal/XenBudget/components/ItemForm.tsx",
   "routes/Internal/XenKitchen/components/ItemCard.tsx",

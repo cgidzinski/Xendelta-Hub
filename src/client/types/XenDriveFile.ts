@@ -1,9 +1,9 @@
 /**
- * XenBox File interface (as returned from API)
+ * XenDrive File interface (as returned from API)
  */
-export interface XenBoxFile {
+export interface XenDriveFile {
   _id: string;
-  location: string; // Folder location (e.g., "xenbox")
+  location: string; // Folder location (e.g., "xendrive")
   filename: string; // Filename with extension
   mimeType: string; // MIME type (e.g., "image/jpeg", "application/pdf")
   size: number; // File size in bytes
@@ -18,6 +18,6 @@ export interface XenBoxFile {
 /**
  * File list response
  */
-export interface XenBoxFileListResponse {
-  files: XenBoxFile[];
+export interface XenDriveFileListResponse {
+  files: XenDriveFile[];
 }

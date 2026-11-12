@@ -1,6 +1,6 @@
 import EmptyState from "../../../../components/ui/EmptyState";
 import { Box, Typography, Skeleton } from "@mui/material";
-import { useXenboxFiles } from "../../../../hooks/xenbox/useXenbox";
+import { useXendriveFiles } from "../../../../hooks/xendrive/useXendrive";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -9,8 +9,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-export default function XenBoxCardBody() {
-  const { data: files, isLoading } = useXenboxFiles();
+export default function XenDriveCardBody() {
+  const { data: files, isLoading } = useXendriveFiles();
 
   if (isLoading) return <Skeleton variant="rectangular" height={72} sx={{ borderRadius: 2 }} />;
 

@@ -25,7 +25,7 @@ interface FileInfo {
   expiry: string | null;
 }
 
-export default function XenBoxDownload() {
+export default function XenDriveDownload() {
   const { shareToken } = useParams<{ shareToken: string }>();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export default function XenBoxDownload() {
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  useTitle("Download File - XenBox");
+  useTitle("Download File - XenDrive");
 
   useEffect(() => {
     if (!shareToken) {
@@ -53,7 +53,7 @@ export default function XenBoxDownload() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/xenbox/info/${shareToken}`);
+      const response = await fetch(`/api/xendrive/info/${shareToken}`);
       const data = await response.json();
 
       if (response.ok && data.status) {
@@ -93,7 +93,7 @@ export default function XenBoxDownload() {
     }
     setError(null);
 
-    const url = `/api/xenbox/download/${shareToken}${password ? `?password=${encodeURIComponent(password)}` : ""}`;
+    const url = `/api/xendrive/download/${shareToken}${password ? `?password=${encodeURIComponent(password)}` : ""}`;
 
     const response = await fetch(url, {
       method: "GET",

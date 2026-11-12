@@ -27,10 +27,10 @@ vi.mock("https", () => {
 });
 
 let t: TestApp;
-let utils: typeof import("./xenboxUtils.js");
+let utils: typeof import("./xendriveUtils.js");
 beforeAll(async () => {
-  t = await startTestApp([() => import("../routes/xenbox.js")]);
-  utils = await import("./xenboxUtils.js");
+  t = await startTestApp([() => import("../routes/xendrive.js")]);
+  utils = await import("./xendriveUtils.js");
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -39,7 +39,7 @@ beforeEach(() => {
   deleted.length = 0;
 });
 
-describe("XenBox upload sessions", () => {
+describe("XenDrive upload sessions", () => {
   it("tracks chunks in the database and finishes the upload", async () => {
     const { user } = await createUser();
     const id = await utils.initiateChunkedUpload(user._id.toString(), "notes.txt", 2);
@@ -84,7 +84,7 @@ describe("XenBox upload sessions", () => {
     const stale = await utils.initiateChunkedUpload(user._id.toString(), "old.txt", 1);
     const fresh = await utils.initiateChunkedUpload(user._id.toString(), "new.txt", 1);
     await mongoose.connection
-      .collection("xenboxuploadsessions")
+      .collection("xendriveuploadsessions")
       .updateOne({ upload_id: stale }, { $set: { created_at: new Date(Date.now() - 2 * 3600_000) } });
 
     await utils.cleanupOldSessions();

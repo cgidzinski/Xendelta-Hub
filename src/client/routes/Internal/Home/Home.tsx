@@ -4,7 +4,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import CompactHomeHeader from "./components/CompactHomeHeader";
 import PinnedAppsSection from "./components/PinnedAppsSection";
 import RecipaintCardBody from "./components/RecipaintCardBody";
-import XenBoxCardBody from "./components/XenBoxCardBody";
+import XenDriveCardBody from "./components/XenDriveCardBody";
 import XenLinkCardBody from "./components/XenLinkCardBody";
 import XenSplitCardBody from "./components/XenSplitCardBody";
 import XenBudgetCardBody from "./components/XenBudgetCardBody";
@@ -28,7 +28,7 @@ export default function Home() {
 
   const appDetails: Record<string, React.ReactNode> = {
     recipaint: <RecipaintCardBody />,
-    xenbox: <XenBoxCardBody />,
+    xendrive: <XenDriveCardBody />,
     xenlink: <XenLinkCardBody />,
     xensplit: <XenSplitCardBody />,
     xenbudget: <XenBudgetCardBody />,

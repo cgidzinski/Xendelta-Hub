@@ -43,14 +43,14 @@ export default function ProfileListItem({ profile, onNavigate, isSelected }: Pro
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <LinearProgress
               variant="determinate"
-              value={((profile?.xenbox?.spaceUsed || 0) / (profile?.xenbox?.spaceAllowed || 0)) * 100}
+              value={((profile?.xendrive?.spaceUsed || 0) / (profile?.xendrive?.spaceAllowed || 0)) * 100}
             />
             <Box sx={{ display: "flex", flexDirection: "row", gap: 1, justifyContent: "space-between" }}>
               <Typography variant="body2" color="text.secondary" textAlign="start">
-                {profile?.xenbox?.fileCount} Files
+                {profile?.xendrive?.fileCount} Files
               </Typography>
               <Typography variant="body2" color="text.secondary" textAlign="end">
-                {formatFileSize(profile?.xenbox?.spaceUsed || 0)} / {formatFileSize(profile?.xenbox?.spaceAllowed || 0)}
+                {formatFileSize(profile?.xendrive?.spaceUsed || 0)} / {formatFileSize(profile?.xendrive?.spaceAllowed || 0)}
               </Typography>
             </Box>
           </Box>

@@ -8,12 +8,12 @@ import LockIcon from "@mui/icons-material/Lock";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
-import { XenBoxFile } from "../../../../types/XenBoxFile";
+import { XenDriveFile } from "../../../../types/XenDriveFile";
 import { formatFileSize } from "../../../../utils/fileUtils";
 import { format, formatDistanceToNow } from "date-fns";
 
 interface FileListProps {
-  files: XenBoxFile[] | undefined;
+  files: XenDriveFile[] | undefined;
   isLoading: boolean;
   isError?: boolean;
   error?: Error | null;
@@ -25,14 +25,14 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
   const { enqueueSnackbar } = useSnackbar();
 
   const handleFileClick = (fileId: string) => {
-    navigate(`/internal/xenbox/${fileId}`);
+    navigate(`/internal/xendrive/${fileId}`);
   };
 
-  const handleCopyUrl = (e: React.MouseEvent, file: XenBoxFile) => {
+  const handleCopyUrl = (e: React.MouseEvent, file: XenDriveFile) => {
     e.stopPropagation(); // Prevent card click
     if (file.shareToken) {
       const baseUrl = window.location.origin;
-      const shareUrl = `${baseUrl}/xenbox/${file.shareToken}`;
+      const shareUrl = `${baseUrl}/xendrive/${file.shareToken}`;
       navigator.clipboard.writeText(shareUrl);
       enqueueSnackbar("URL copied to clipboard", { variant: "success" });
     }
@@ -48,18 +48,18 @@ export default function FileList({ files, isLoading, isError, error, onRetry }: 
     return "File";
   };
 
-  const isExpired = (file: XenBoxFile) => {
+  const isExpired = (file: XenDriveFile) => {
     if (!file.expiry) return false;
     return new Date(file.expiry) <= new Date();
   };
 
-  const getExpiryText = (file: XenBoxFile) => {
+  const getExpiryText = (file: XenDriveFile) => {
     if (!file.expiry) return "Timed";
     if (isExpired(file)) return "Expired";
     return `Expires in ${formatDistanceToNow(new Date(file.expiry), { addSuffix: false })}`;
   };
 
-  const getExpiryColor = (file: XenBoxFile): "info" | "error" | "default" => {
+  const getExpiryColor = (file: XenDriveFile): "info" | "error" | "default" => {
     if (!file.expiry) return "default"; // Untimed = grey
     if (isExpired(file)) return "error"; // Expired = red
     return "info"; // Timed but not expired = blue

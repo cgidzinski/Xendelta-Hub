@@ -31,11 +31,11 @@ const allowedOrigin = process.env.PUBLIC_URL ? process.env.PUBLIC_URL.replace(/\
 app.use(cors({ origin: allowedOrigin ?? (process.env.NODE_ENV === "production" ? false : true) }));
 
 // Body limits: 1MB for everything, with the big limit scoped to the routes that really
-// post large JSON (xenbox base64 chunks are ~13-14MB; XenBudget imports/backups and
+// post large JSON (xendrive base64 chunks are ~13-14MB; XenBudget imports/backups and
 // admin tools can be large). The scoped parsers run first and mark the body as parsed, so
 // the global 1MB parser skips those requests. File uploads go through multer, not here.
 const BIG_JSON = express.json({ limit: "100mb" });
-app.use("/api/xenbox/chunk", BIG_JSON);
+app.use("/api/xendrive/chunk", BIG_JSON);
 app.use("/api/xenbudget", BIG_JSON);
 app.use("/api/admin", BIG_JSON);
 app.use(express.json({ limit: "1mb" }));
@@ -82,7 +82,7 @@ mongoConnection.on("connected", async () => {
     const { Scheduler } = require("./infrastructure/Scheduler");
     const { runDueTasks, TICK_INTERVAL_MS } = require("./infrastructure/TaskDispatcher");
     const { registerXenSplitRecurringHandler } = require("./utils/xensplitRecurringHandler");
-    const { cleanupOldSessions } = require("./utils/xenboxUtils");
+    const { cleanupOldSessions } = require("./utils/xendriveUtils");
     const { runRoutineReminders } = require("./utils/xenRoutineReminders");
     const { runPendingMigrations } = require("./infrastructure/migrations");
 
@@ -100,7 +100,7 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: runDueTasks,
     });
-    scheduler.register({ name: "xenbox-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+    scheduler.register({ name: "xendrive-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
     scheduler.register({
       name: "xenroutine-reminders",
       everyMs: 60 * 60 * 1000,
@@ -168,7 +168,7 @@ require("./routes/admin/debug.ts")(app);
 require("./routes/recipaint.ts")(app);
 require("./routes/paints.ts")(app);
 require("./routes/paintCatalogue.ts")(app);
-require("./routes/xenbox.ts")(app);
+require("./routes/xendrive.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/xenbudget")(app);

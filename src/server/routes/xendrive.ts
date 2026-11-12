@@ -22,17 +22,17 @@ import {
   cleanupFailedUpload,
   getUploadSessionStatus,
   checkQuota,
-} from "../utils/xenboxUtils";
+} from "../utils/xendriveUtils";
 import { generateSignedUrl } from "../utils/gcsUtils";
 import { privateBucket } from "../config/gcs";
 import { AuthenticatedRequest } from "../types";
-import { XenBoxMedia } from "../models/xenboxMedia";
+import { XenDriveMedia } from "../models/xendriveMedia";
 import { User } from "../models/user";
 
 module.exports = function (app: express.Application) {
   // Initiate chunked upload
   app.post(
-    "/api/xenbox/initiate",
+    "/api/xendrive/initiate",
     authenticateToken,
     validate(xenBoxInitiateSchema),
     async function (req: express.Request, res: express.Response) {
@@ -81,7 +81,7 @@ module.exports = function (app: express.Application) {
 
   // Upload a chunk
   app.post(
-    "/api/xenbox/chunk",
+    "/api/xendrive/chunk",
     authenticateToken,
     validate(xenBoxChunkSchema),
     async function (req: express.Request, res: express.Response) {
@@ -135,7 +135,7 @@ module.exports = function (app: express.Application) {
 
   // Finalize chunked upload
   app.post(
-    "/api/xenbox/finalize",
+    "/api/xendrive/finalize",
     authenticateToken,
     validate(xenBoxFinalizeSchema),
     async function (req: express.Request, res: express.Response) {
@@ -160,7 +160,7 @@ module.exports = function (app: express.Application) {
 
   // Get upload session status
   app.get(
-    "/api/xenbox/status/:uploadId",
+    "/api/xendrive/status/:uploadId",
     authenticateToken,
     validateParams(xenBoxUploadIdParamSchema),
     async function (req: express.Request, res: express.Response) {
@@ -183,7 +183,7 @@ module.exports = function (app: express.Application) {
 
   // Cancel/cleanup failed upload
   app.delete(
-    "/api/xenbox/:uploadId",
+    "/api/xendrive/:uploadId",
     authenticateToken,
     validateParams(xenBoxUploadIdParamSchema),
     async function (req: express.Request, res: express.Response) {
@@ -198,9 +198,9 @@ module.exports = function (app: express.Application) {
     },
   );
 
-  // List user's xenbox files
+  // List user's xendrive files
   app.get(
-    "/api/xenbox/files",
+    "/api/xendrive/files",
     authenticateToken,
     validateQuery(xenBoxListQuerySchema),
     async function (req: express.Request, res: express.Response) {
@@ -208,7 +208,7 @@ module.exports = function (app: express.Application) {
       const search = req.query.search as string | undefined;
 
       // Build query - only files uploaded by this user
-      // Note: location check is redundant since we're querying XenBoxMedia collection
+      // Note: location check is redundant since we're querying XenDriveMedia collection
       const query: any = { uploadedBy: userId };
 
       // Add search filter if provided
@@ -216,7 +216,7 @@ module.exports = function (app: express.Application) {
         query.filename = { $regex: search.trim(), $options: "i" };
       }
 
-      const files = await XenBoxMedia.find(query)
+      const files = await XenDriveMedia.find(query)
         .sort({ createdAt: -1 })
         .select("_id location filename mimeType size uploadedBy createdAt shareToken password expiry")
         .exec();
@@ -243,9 +243,9 @@ module.exports = function (app: express.Application) {
     },
   );
 
-  // Get signed URL for xenbox file
+  // Get signed URL for xendrive file
   app.get(
-    "/api/xenbox/files/:fileId/url",
+    "/api/xendrive/files/:fileId/url",
     authenticateToken,
     validateParams(xenBoxFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
@@ -253,7 +253,7 @@ module.exports = function (app: express.Application) {
       const userId = (req as AuthenticatedRequest).user!._id.toString();
 
       // Find file and verify ownership
-      const file = await XenBoxMedia.findById(fileId).exec();
+      const file = await XenDriveMedia.findById(fileId).exec();
       if (!file) {
         return res.status(404).json({
           status: false,
@@ -269,7 +269,7 @@ module.exports = function (app: express.Application) {
       }
 
       // Generate signed URL
-      const gcsPath = `xenbox/${userId}/${file.filename}`;
+      const gcsPath = `xendrive/${userId}/${file.filename}`;
       const signedUrl = await generateSignedUrl(gcsPath, 15); // 15 minutes expiry
 
       return res.json({
@@ -281,7 +281,7 @@ module.exports = function (app: express.Application) {
 
   // Update file settings (password/expiry)
   app.put(
-    "/api/xenbox/files/:fileId/settings",
+    "/api/xendrive/files/:fileId/settings",
     authenticateToken,
     validateParams(xenBoxFileIdParamSchema),
     validate(xenBoxSettingsSchema),
@@ -291,7 +291,7 @@ module.exports = function (app: express.Application) {
       const { password, expiry } = req.body;
 
       // Find file and verify ownership
-      const file = await XenBoxMedia.findById(fileId).exec();
+      const file = await XenDriveMedia.findById(fileId).exec();
       if (!file) {
         return res.status(404).json({
           status: false,
@@ -337,7 +337,7 @@ module.exports = function (app: express.Application) {
           hasPassword: !!file.password,
           password: file.password || null, // Return plain text password
           expiry: file.expiry ? file.expiry.toISOString() : null,
-          shareUrl: `${req.protocol}://${req.get("host")}/xenbox/${file.shareToken}`,
+          shareUrl: `${req.protocol}://${req.get("host")}/xendrive/${file.shareToken}`,
         },
       });
     },
@@ -345,13 +345,13 @@ module.exports = function (app: express.Application) {
 
   // Public file info endpoint (no authentication required)
   app.get(
-    "/api/xenbox/info/:shareToken",
+    "/api/xendrive/info/:shareToken",
     validateParams(xenBoxShareTokenParamSchema),
     async function (req: express.Request, res: express.Response) {
       const shareToken = req.params.shareToken;
 
       // Find file by share token
-      const file = await XenBoxMedia.findOne({ shareToken }).exec();
+      const file = await XenDriveMedia.findOne({ shareToken }).exec();
       if (!file) {
         return res.status(404).json({
           status: false,
@@ -383,7 +383,7 @@ module.exports = function (app: express.Application) {
 
   // Public file download endpoint (no authentication required)
   app.get(
-    "/api/xenbox/download/:shareToken",
+    "/api/xendrive/download/:shareToken",
     validateParams(xenBoxShareTokenParamSchema),
     validateQuery(xenBoxDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
@@ -391,7 +391,7 @@ module.exports = function (app: express.Application) {
       const { password } = req.query;
 
       // Find file by share token
-      const file = await XenBoxMedia.findOne({ shareToken }).exec();
+      const file = await XenDriveMedia.findOne({ shareToken }).exec();
       if (!file) {
         return res.status(404).json({
           status: false,
@@ -433,7 +433,7 @@ module.exports = function (app: express.Application) {
       // File is valid, stream it from GCS
       if (!file.uploadedBy) throw new AppError(404, "File not found");
       const userId = file.uploadedBy.toString();
-      const gcsPath = `xenbox/${userId}/${file.filename}`;
+      const gcsPath = `xendrive/${userId}/${file.filename}`;
       const gcsFile = privateBucket.file(gcsPath);
 
       // Check if file exists
@@ -459,9 +459,9 @@ module.exports = function (app: express.Application) {
     },
   );
 
-  // Delete xenbox file
+  // Delete xendrive file
   app.delete(
-    "/api/xenbox/files/:fileId",
+    "/api/xendrive/files/:fileId",
     authenticateToken,
     validateParams(xenBoxFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
@@ -469,7 +469,7 @@ module.exports = function (app: express.Application) {
       const userId = (req as AuthenticatedRequest).user!._id.toString();
 
       // Find file and verify ownership
-      const file = await XenBoxMedia.findById(fileId).exec();
+      const file = await XenDriveMedia.findById(fileId).exec();
       if (!file) {
         return res.status(404).json({
           status: false,
@@ -485,11 +485,11 @@ module.exports = function (app: express.Application) {
       }
 
       // Delete from database (pre-delete hook will handle GCS deletion)
-      await XenBoxMedia.findByIdAndDelete(fileId);
+      await XenDriveMedia.findByIdAndDelete(fileId);
 
       // Remove from user's files array
       await User.findByIdAndUpdate(userId, {
-        $pull: { "xenbox.files": fileId },
+        $pull: { "xendrive.files": fileId },
       });
 
       return res.json({

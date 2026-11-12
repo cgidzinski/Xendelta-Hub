@@ -50,7 +50,7 @@ const AVAILABLE_ROLES = ["admin", "user"];
 
 const ITEM_OPTIONS = [
   { value: "1000-point-voucher", label: "1000 Point Voucher" },
-  { value: "1gb-xenbox-voucher", label: "1GB XenBox Voucher" },
+  { value: "1gb-xendrive-voucher", label: "1GB XenDrive Voucher" },
   { value: "golden-badge", label: "Golden Badge" },
 ];
 
@@ -114,7 +114,7 @@ export default function Users() {
   const handleUserClick = (user: AdminUser) => {
     setSelectedUser(user);
     setEditingRoles(user.roles || []);
-    setEditingQuota(user.xenbox?.spaceAllowed ? formatFileSize(user.xenbox.spaceAllowed) : "");
+    setEditingQuota(user.xendrive?.spaceAllowed ? formatFileSize(user.xendrive.spaceAllowed) : "");
     setNotifyTitle("");
     setNotifyMessage("");
     setNotifyLink("");
@@ -209,7 +209,7 @@ export default function Users() {
       return;
     }
 
-    updateUser(selectedUser._id, { xenboxQuota: quotaBytes || 0 })
+    updateUser(selectedUser._id, { xendriveQuota: quotaBytes || 0 })
       .then(async () => {
         enqueueSnackbar("Quota updated successfully", { variant: "success" });
         // Refetch users list
@@ -219,7 +219,7 @@ export default function Users() {
           const updatedUser = updatedUsers.find((u) => u._id === selectedUser._id);
           if (updatedUser) {
             setSelectedUser(updatedUser);
-            setEditingQuota(updatedUser.xenbox?.spaceAllowed ? formatFileSize(updatedUser.xenbox.spaceAllowed) : "");
+            setEditingQuota(updatedUser.xendrive?.spaceAllowed ? formatFileSize(updatedUser.xendrive.spaceAllowed) : "");
           }
         }
       })
@@ -481,17 +481,17 @@ export default function Users() {
                     </Box>
                   </Box>
                 </Box>
-                {selectedUser.xenbox && (
+                {selectedUser.xendrive && (
                   <Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      XenBox
+                      XenDrive
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {formatFileSize(selectedUser.xenbox.spaceUsed)} /{" "}
-                      {formatFileSize(selectedUser.xenbox.spaceAllowed)}
+                      {formatFileSize(selectedUser.xendrive.spaceUsed)} /{" "}
+                      {formatFileSize(selectedUser.xendrive.spaceAllowed)}
                       <Typography component="span" variant="caption" color="text.secondary">
                         {" "}
-                        ({selectedUser.xenbox.fileCount} files)
+                        ({selectedUser.xendrive.fileCount} files)
                       </Typography>
                     </Typography>
                   </Box>
@@ -650,7 +650,7 @@ export default function Users() {
 
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                    XenBox Quota
+                    XenDrive Quota
                   </Typography>
                   <Box sx={{ display: "flex", gap: 1 }}>
                     <TextField
@@ -670,7 +670,7 @@ export default function Users() {
                       disabled={
                         isUpdatingUser ||
                         editingQuota ===
-                          (selectedUser.xenbox?.spaceAllowed ? formatFileSize(selectedUser.xenbox.spaceAllowed) : "")
+                          (selectedUser.xendrive?.spaceAllowed ? formatFileSize(selectedUser.xendrive.spaceAllowed) : "")
                       }
                     >
                       {isUpdatingUser ? "Saving..." : "Update"}

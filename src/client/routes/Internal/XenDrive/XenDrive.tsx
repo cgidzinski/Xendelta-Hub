@@ -22,12 +22,12 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useSnackbar } from "notistack";
 import FileList from "./components/FileList";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { useXenboxUpload, useXenboxFiles } from "../../../hooks/xenbox/useXenbox";
+import { useXendriveUpload, useXendriveFiles } from "../../../hooks/xendrive/useXendrive";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { formatFileSize } from "../../../utils/fileUtils";
 
-export default function XenBox() {
-  useTitle("XenBox");
+export default function XenDrive() {
+  useTitle("XenDrive");
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { profile } = useUserProfile();
@@ -37,8 +37,8 @@ export default function XenBox() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: files, isLoading, isError, error, refetch } = useXenboxFiles(search || undefined);
-  const { uploadFile, isUploading } = useXenboxUpload();
+  const { data: files, isLoading, isError, error, refetch } = useXendriveFiles(search || undefined);
+  const { uploadFile, isUploading } = useXendriveUpload();
 
   const handleOpenUploadDialog = () => {
     setUploadDialogOpen(true);
@@ -66,8 +66,8 @@ export default function XenBox() {
     if (!selectedFile) return;
 
     // Check quota
-    const spaceUsed = profile?.xenbox?.spaceUsed || 0;
-    const spaceAllowed = profile?.xenbox?.spaceAllowed || 0;
+    const spaceUsed = profile?.xendrive?.spaceUsed || 0;
+    const spaceAllowed = profile?.xendrive?.spaceAllowed || 0;
     if (spaceUsed + selectedFile.size > spaceAllowed) {
       enqueueSnackbar("Quota exceeded. Please delete some files or upgrade your plan.", { variant: "error" });
       return;
@@ -82,7 +82,7 @@ export default function XenBox() {
       .then((newFile) => {
         handleCloseUploadDialog();
         enqueueSnackbar("File uploaded successfully", { variant: "success" });
-        navigate(`/internal/xenbox/${newFile._id}`);
+        navigate(`/internal/xendrive/${newFile._id}`);
       })
       .catch((error: Error) => {
         enqueueSnackbar(error.message || "Failed to upload file", { variant: "error" });
@@ -90,16 +90,16 @@ export default function XenBox() {
       });
   };
 
-  const quotaPercentage = profile?.xenbox ? (profile.xenbox.spaceUsed / profile.xenbox.spaceAllowed) * 100 : 0;
+  const quotaPercentage = profile?.xendrive ? (profile.xendrive.spaceUsed / profile.xendrive.spaceAllowed) * 100 : 0;
   const canUpload =
-    selectedFile && profile?.xenbox
-      ? profile.xenbox.spaceUsed + selectedFile.size <= profile.xenbox.spaceAllowed
+    selectedFile && profile?.xendrive
+      ? profile.xendrive.spaceUsed + selectedFile.size <= profile.xendrive.spaceAllowed
       : true;
 
   return (
     <PageContainer>
       <PageHeader
-        title="XenBox"
+        title="XenDrive"
         actions={
           <Button variant="contained" startIcon={<CloudUploadIcon />} onClick={handleOpenUploadDialog}>
             Upload
@@ -108,14 +108,14 @@ export default function XenBox() {
       />
 
       {/* Quota Display */}
-      {profile?.xenbox && (
+      {profile?.xendrive && (
         <Box sx={{ mb: 3 }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Storage: {formatFileSize(profile.xenbox.spaceUsed)} / {formatFileSize(profile.xenbox.spaceAllowed)}
+              Storage: {formatFileSize(profile.xendrive.spaceUsed)} / {formatFileSize(profile.xendrive.spaceAllowed)}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {profile.xenbox.fileCount} {profile.xenbox.fileCount === 1 ? "file" : "files"}
+              {profile.xendrive.fileCount} {profile.xendrive.fileCount === 1 ? "file" : "files"}
             </Typography>
           </Box>
           <LinearProgress
@@ -161,7 +161,7 @@ export default function XenBox() {
                 {!canUpload && (
                   <Alert severity="error" sx={{ mb: 2 }}>
                     File size exceeds available quota. Available:{" "}
-                    {formatFileSize((profile?.xenbox?.spaceAllowed || 0) - (profile?.xenbox?.spaceUsed || 0))}
+                    {formatFileSize((profile?.xendrive?.spaceAllowed || 0) - (profile?.xendrive?.spaceUsed || 0))}
                   </Alert>
                 )}
               </Box>
