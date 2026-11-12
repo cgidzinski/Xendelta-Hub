@@ -2,7 +2,7 @@ import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 
-module.exports = function (app: express.Application) {
+export function registerAdminDebugRoutes(app: express.Application) {
   // Deliberately throws so it flows through Bugsnag's Express errorHandler (and the
   // fallback handler in server.ts) — lets an admin confirm server-side error reporting
   // is wired up correctly without waiting for a real bug. The client's axios interceptor
@@ -15,4 +15,4 @@ module.exports = function (app: express.Application) {
       next(new Error("Test server error triggered from Admin panel"));
     },
   );
-};
+}

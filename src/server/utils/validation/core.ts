@@ -89,26 +89,6 @@ export const updateProfileSchema = z.object({
     .optional(),
 });
 
-// Notification validation schemas
-export const createNotificationSchema = z.object({
-  title: z.string().min(1, "Title cannot be empty").max(200, "Title too long"),
-  message: z.string().min(1, "Message cannot be empty").max(5000, "Message too long"),
-  icon: z.enum(["person", "security", "announcement", "mail", "lock"]).optional(),
-});
-
-// Admin validation schemas
-export const adminNotifyUserSchema = z.object({
-  title: z.string().min(1, "Title cannot be empty").max(200, "Title too long"),
-  message: z.string().min(1, "Message cannot be empty").max(5000, "Message too long"),
-  link: z.string().max(500, "Link too long").optional(),
-  channels: z.array(z.enum(["inapp", "socket", "email", "push"])).min(1, "Select at least one channel"),
-});
-
-export const adminBroadcastMessageSchema = z.object({
-  message: z.string().min(1, "Message cannot be empty").max(10000, "Message too long"),
-  conversationTitle: z.string().max(100, "Conversation title too long").optional(),
-});
-
 // Validation middleware
 export const validate = (schema: z.ZodSchema) => {
   return (req: any, res: any, next: any) => {

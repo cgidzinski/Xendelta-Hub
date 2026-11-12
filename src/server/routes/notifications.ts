@@ -2,17 +2,8 @@ import express = require("express");
 import { Notification } from "../models/notification";
 import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
-import { requireAdmin } from "../middleware/admin";
 import { SocketManager } from "../infrastructure/SocketManager";
-import {
-  adminNotifyUserSchema,
-  createNotificationSchema,
-  notificationIdParamSchema,
-  userIdParamSchema,
-  validate,
-  validateParams,
-} from "../utils/validation";
-import { notify } from "../utils/notificationUtils";
+import { notificationIdParamSchema, validateParams } from "../utils/validation";
 import { AuthenticatedRequest } from "../types";
 
 module.exports = function (app: express.Application) {
@@ -134,82 +125,6 @@ module.exports = function (app: express.Application) {
         status: true,
         message: "All notifications cleared",
         data: {},
-      });
-    },
-  );
-
-  // Admin: Send notification to all users
-  app.post(
-    "/api/admin/notifications/all",
-    authenticateToken,
-    requireAdmin,
-    validate(createNotificationSchema),
-    async function (req: express.Request, res: express.Response) {
-      const { title, message, icon } = req.body;
-
-      if (!title || !message) {
-        return res.status(400).json({
-          status: false,
-          message: "Title and message are required",
-        });
-      }
-
-      const allUsers = await User.find({}).select("_id").exec();
-      let successCount = 0;
-      let errorCount = 0;
-      let pushCount = 0;
-
-      for (const targetUser of allUsers) {
-        try {
-          const result = await notify(targetUser._id.toString(), {
-            title,
-            message,
-            icon: icon || "announcement",
-          });
-
-          if (result.inapp) successCount++;
-          else errorCount++;
-          pushCount += result.push.sent;
-        } catch (err) {
-          errorCount++;
-        }
-      }
-
-      return res.json({
-        status: true,
-        message: `Notification sent to ${successCount} users${pushCount > 0 ? ` (${pushCount} push)` : ""}${errorCount > 0 ? `, ${errorCount} errors` : ""}`,
-        data: {
-          successCount,
-          errorCount,
-          pushCount,
-        },
-      });
-    },
-  );
-
-  // Admin: Send a one-off notification to a single user on chosen channels — used by the
-  // "Notify" tab in the admin user panel to test/message a specific account.
-  app.post(
-    "/api/admin/notifications/user/:userId",
-    authenticateToken,
-    requireAdmin,
-    validateParams(userIdParamSchema),
-    validate(adminNotifyUserSchema),
-    async function (req: express.Request, res: express.Response) {
-      const { userId } = req.params;
-      const { title, message, link, channels } = req.body;
-
-      const targetUser = await User.findById(userId).select("_id").exec();
-      if (!targetUser) {
-        return res.status(404).json({ status: false, message: "User not found" });
-      }
-
-      const result = await notify(userId, { title, message, link, channels });
-
-      return res.json({
-        status: true,
-        message: "Notification sent",
-        data: { result },
       });
     },
   );
