@@ -27,6 +27,12 @@ plus `npm audit --omit=dev --audit-level=high`.
   `moneyConventions.test.ts` fails on a hand-written `Math.round(x * 100) / 100` or `new Intl.NumberFormat`.
 - Server integration tests use `src/server/testing/testApp.ts` (real routes and models, in-memory MongoDB).
 
+## Adding a sub-app
+Follow `docs/adding-a-sub-app.md` (server model and sharing, routes, the client registry and `routes.tsx`, data
+hooks and query keys, tests, migrations). The short version: register the app in `server.ts` and `constants/apps.ts`;
+use `memberSchema` and `utils/membership.ts` for sharing; `lazyPage` for every page; `api.*` and a `keys.ts` factory
+for data; and add a flow test next to `coreFlows.test.ts`.
+
 ## Server conventions
 - **Models are TypeScript** (`src/server/models/*.ts`): named exports (`import { User } from "../models/user"`),
   schema-inferred types (`UserAttrs`, `XenSplitAttrs`, ...), and `UserDocument` for hydrated documents. Don't
@@ -38,7 +44,7 @@ plus `npm audit --omit=dev --audit-level=high`.
   document or a 401, and `callerId(req)` their id.
 - **Every route validates its input.** Path params with `validateParams`, JSON bodies with `validate`, query
   strings with `validateQuery`, all from `utils/validation` (schemas live in one file per area under
-  `utils/validation/`; `idParams("x")` builds an ObjectId params schema). `validationCoverage.test.ts` fails if a
+  `utils/validation/`; an ObjectId path param is `z.object({ bookId: objectIdSchema })`, `objectIdSchema` from `utils/validation/core.ts`). `validationCoverage.test.ts` fails if a
   new route takes a path param or a body without it; a genuine exception goes in that test's exempt list with a
   reason.
 - **Route files stay small.** A big app gets a folder: `routes/xenbudget/` has `index.ts` (registers the sections
