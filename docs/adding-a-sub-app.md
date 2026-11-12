@@ -37,6 +37,10 @@ Use **XenKitchen** (`routes/xenkitchen.ts`, `Internal/XenKitchen/`) as the worke
   change things; viewers read. Do not write a fifth membership shape or a hand-rolled role check.
   (XenSplit and XenBudget still store `members: ObjectId[]` + `created_by` and mirror it into a `roster`; that is a
   migration in progress, not a pattern to copy.)
+- **Register the app's shared spaces in `src/server/social/spaces.ts`** (one entry: model, indexed member path such
+  as `"members.user_id"`, and a link). That is how "people you know" and a profile's "spaces you share" find the app's
+  members; nothing else needs a friend list. Call `addRefused(res, callerId(req), userIds)` from
+  `social/policy.ts` in the route that adds people, so a future privacy rule applies to your app too.
 - Share links and other secrets use `utils/tokens.ts` (`randomToken`, `hashToken`), never `Math.random`.
 - Money: amounts are decimal numbers rounded with `roundMoney` and shown with `formatMoney`
   (`src/shared/money.ts`). `moneyConventions.test.ts` fails on hand-written rounding or `Intl.NumberFormat`.

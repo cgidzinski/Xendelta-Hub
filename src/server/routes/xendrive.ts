@@ -1,4 +1,5 @@
 import express = require("express");
+import { escapeRegex } from "@shared/regex";
 import { Types } from "mongoose";
 import {
   validate,
@@ -130,8 +131,6 @@ async function ownFolder(folderId: string, userId: string) {
   if (!folder) throw new AppError(404, "Folder not found");
   return folder;
 }
-
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** No two folders with the same name side by side. */
 async function assertNameFree(userId: string, parentId: string | null, name: string, exceptId?: string) {

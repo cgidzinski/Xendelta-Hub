@@ -4,7 +4,7 @@ import { useSnackbar } from "notistack";
 import { rosterKeyOf } from "@shared/chat";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import PeoplePicker from "../../../../components/PeoplePicker";
-import type { SearchedUser } from "../../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { useChatActions, useConversations } from "../../../../hooks/chat/useChat";
 import { useAuth } from "../../../../contexts/AuthContext";
 

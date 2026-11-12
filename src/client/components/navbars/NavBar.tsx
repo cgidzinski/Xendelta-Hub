@@ -1,5 +1,6 @@
 import { alpha } from "@mui/material/styles";
 import HomeIcon from "@mui/icons-material/Home";
+import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import InventoryIcon from "@mui/icons-material/Inventory2Outlined";
 import SecurityIcon from "@mui/icons-material/Security";
 import PushPinIcon from "@mui/icons-material/PushPin";
@@ -80,6 +81,13 @@ export default function Root() {
       icon: <HomeIcon />,
       path: "/internal",
       isSelected: (pathname) => pathname === "/internal" || pathname === "/internal/",
+    },
+    {
+      key: "people",
+      label: "People",
+      icon: <PeopleOutlineIcon />,
+      path: "/internal/people",
+      isSelected: (pathname) => pathname.startsWith("/internal/people"),
     },
     // {
     //   key: "blog",

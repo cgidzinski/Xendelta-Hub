@@ -9,6 +9,7 @@ import { useChatActions } from "../../../../hooks/chat/useChat";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import SectionLabel from "../../../../components/ui/SectionLabel";
 import UserName from "../../../../components/user/UserName";
+import PersonLink from "../../../../components/user/PersonLink";
 
 interface DetailsPanelProps {
   conversation: ChatConversation;
@@ -115,7 +116,7 @@ export default function DetailsPanel({ conversation, meId, onAddPeople, onLeft }
                 {person?.username[0]?.toUpperCase()}
               </Avatar>
               <Typography noWrap sx={{ flex: 1, minWidth: 0 }}>
-                <UserName user={person} fallback="Former member" />
+                {person ? <PersonLink user={person} fallback="Former member" /> : <UserName fallback="Former member" />}
                 {you ? " (you)" : ""}
               </Typography>
               {m.role === "owner" && <Chip size="small" variant="outlined" label="Owner" />}

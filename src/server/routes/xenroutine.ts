@@ -31,6 +31,7 @@ import {
 } from "../utils/xenRoutine";
 import { sendActivityNotices } from "../utils/xenRoutineReminders";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
+import { addRefused } from "../social/policy";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 
@@ -324,6 +325,7 @@ module.exports = function (app: any) {
       try {
         const routine = await loadRoutine(req, res, "edit");
         if (!routine) return;
+        if (addRefused(res, callerId(req), req.body.userIds)) return;
         const existing = new Set(routine.members.map((m: any) => m.user_id));
         const users = await User.find({ _id: { $in: req.body.userIds } }, "_id")
           .lean()

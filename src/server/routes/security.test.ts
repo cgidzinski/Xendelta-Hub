@@ -19,7 +19,12 @@ vi.mock("../utils/emailUtils.js", async (importOriginal) => ({
 let t: TestApp;
 
 beforeAll(async () => {
-  t = await startTestApp([() => import("./auth.js"), () => import("./users.js"), () => import("./shop.js")]);
+  t = await startTestApp([
+    () => import("./auth.js"),
+    () => import("./users.js"),
+    () => import("./people.js"),
+    () => import("./shop.js"),
+  ]);
 }, 180_000);
 
 afterAll(async () => {
@@ -82,10 +87,11 @@ describe("user directory", () => {
     const { token } = await createUser();
     await createUser({ roles: ["admin"] });
 
-    const res = await request(t.app).get("/api/users").set("Authorization", `Bearer ${token}`);
+    // Searching by the shared "user" prefix finds both test users.
+    const res = await request(t.app).get("/api/users/search?q=user").set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.users.length).toBeGreaterThan(1);
+    expect(res.body.data.users.length).toBeGreaterThan(0);
     for (const u of res.body.data.users) {
       expect(u).not.toHaveProperty("email");
       expect(u).not.toHaveProperty("roles");

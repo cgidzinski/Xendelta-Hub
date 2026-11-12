@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { escapeRegex } from "@shared/regex";
 import { XenBudgetItem } from "../../models/xenBudget";
 import {
   validate,
@@ -35,12 +36,6 @@ import {
 } from "./shared";
 
 const MAX_ITEMS_PAGE = 200;
-
-// Search text goes into a $regex, so metacharacters in it must be literal - otherwise a
-// stray "(" is a 500 and ".*" is a full scan.
-function escapeRegex(input: string): string {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 // Allow-listed: `sort` is user-controlled and must never be interpolated into a Mongo
 // field name directly. `date_desc` is the default and the only mode the client omits.

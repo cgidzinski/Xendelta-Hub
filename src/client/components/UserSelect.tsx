@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Autocomplete, TextField, Avatar, Box, Typography, CircularProgress } from "@mui/material";
-import { useUserSearch, SearchedUser } from "../hooks/useUserSearch";
+import { usePeopleOptions, SearchedUser, SEARCH_MIN_LENGTH } from "../hooks/people/usePeople";
 import { useAuth } from "../contexts/AuthContext";
 import UserName from "./user/UserName";
 
@@ -26,21 +26,32 @@ export function UserSelect({
   const [inputValue, setInputValue] = useState("");
   const { user } = useAuth();
 
-  const { users, isLoading } = useUserSearch(inputValue);
+  const { known, others, isLoading } = usePeopleOptions(inputValue);
 
-  // Build options list, optionally including current user
-  let options = users.filter((u) => !excludeUserIds.includes(u._id));
+  // People you know first, then everyone else who matches the search. Options stay in group order, which
+  // Autocomplete's grouping requires.
+  const pickable = (u: SearchedUser) => !excludeUserIds.includes(u._id);
+  const groups = new Map<string, string>();
+  for (const u of known) groups.set(u._id, "People you know");
+  for (const u of others) groups.set(u._id, "Everyone else");
+  let options: SearchedUser[] = [...known, ...others].filter(pickable);
   if (includeSelf && user) {
     const selfAlreadyInList = options.some((u) => u._id === user.id);
     if (!selfAlreadyInList) {
       options = [{ _id: user.id, username: user.username, avatar: user.avatar }, ...options];
+      groups.set(user.id, "You");
     }
   }
+  const searchHint = inputValue.trim().length < SEARCH_MIN_LENGTH;
 
   return (
     <Autocomplete<SearchedUser, typeof multiple>
       multiple={multiple}
       options={options}
+      groupBy={(option) => groups.get(option._id) ?? "Everyone else"}
+      // The server already narrowed the options to what was typed.
+      filterOptions={(all) => all}
+      noOptionsText={searchHint ? "Type at least 2 letters to search everyone" : "No one found"}
       loading={isLoading}
       value={value}
       onChange={(_, newValue) => onChange(newValue as SearchedUser[])}

@@ -51,6 +51,7 @@ import {
 } from "../utils/xenKitchen";
 import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "@shared/xenkitchen/kitchen";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
+import { addRefused } from "../social/policy";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 const callerName = (req: Request) => (req as AuthenticatedRequest).user!.username;
@@ -458,6 +459,7 @@ module.exports = function (app: any) {
       const book = await loadBook(req, res, req.params.id, "manage");
       if (!book) return;
       const { userIds, role } = xenKitchenAddMembersSchema.parse(req.body);
+      if (addRefused(res, uid, userIds)) return;
       const found = await User.find({ _id: { $in: userIds } }, "_id")
         .lean()
         .exec();

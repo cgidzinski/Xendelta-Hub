@@ -21,6 +21,7 @@ import { SocketManager } from "../../infrastructure/SocketManager";
 import { changeRole, removeMember } from "../../utils/membership";
 import { MAX_NOTEBOOKS_OWNED, MAX_NOTEBOOK_PEOPLE } from "../../../shared/xennote/notes";
 import { loadNotebook, myNotebooks, serializeNotebook } from "./shared";
+import { addRefused } from "../../social/policy";
 
 /** How many un-archived notes each notebook holds. */
 async function noteCounts(ids: string[]): Promise<Map<string, number>> {
@@ -97,6 +98,7 @@ export function registerNotebookRoutes(app: any) {
     async (req: Request, res: Response) => {
       const book = await loadNotebook(req, req.params.id as string, "manage");
       const { userIds, role } = req.body as { userIds: string[]; role: "editor" | "viewer" };
+      if (addRefused(res, callerId(req), userIds)) return;
       const existing = new Set(book.members.map((m) => m.user_id));
       const users = await User.find({ _id: { $in: userIds } }, "_id").lean();
       const added = users.map((u) => String(u._id)).filter((id) => !existing.has(id));

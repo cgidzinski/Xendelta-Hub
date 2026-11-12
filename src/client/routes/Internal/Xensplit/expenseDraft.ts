@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import type { SearchedUser } from "../../../hooks/useUserSearch";
+import type { SearchedUser } from "../../../hooks/people/usePeople";
 import type {
   RecurringFrequency,
   XenSplitExpense,

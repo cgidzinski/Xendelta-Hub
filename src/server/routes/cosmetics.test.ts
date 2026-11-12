@@ -11,7 +11,7 @@ import { cosmeticsOf, PUBLIC_USER_FIELDS } from "../utils/publicUser";
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./users.js"), () => import("./admin/index.js")]);
+  t = await startTestApp([() => import("./users.js"), () => import("./people.js"), () => import("./admin/index.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -100,13 +100,13 @@ describe("wearing the Golden Badge", () => {
 });
 
 describe("what other people see", () => {
-  it("the user directory carries the worn badge but nothing private", async () => {
+  it("a profile carries the worn badge but nothing private", async () => {
     const wearer = await createUser();
     const viewer = await createUser();
     await equip(wearer.token, await give(wearer.user._id, "golden-badge"));
 
-    const res = await request(t.app).get("/api/users").set(auth(viewer.token));
-    const entry = res.body.data.users.find((u: any) => u._id === wearer.user._id.toString());
+    const res = await request(t.app).get(`/api/users/${wearer.user._id}`).set(auth(viewer.token));
+    const entry = res.body.data.user;
     expect(entry.cosmetics).toEqual({ badge: "golden-badge" });
     for (const key of ["email", "roles", "gems", "inventory", "password"]) expect(entry).not.toHaveProperty(key);
   });
