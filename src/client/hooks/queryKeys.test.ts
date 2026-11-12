@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative } from "path";
 import { xensplitKeys } from "./xensplit/keys";
 import { xenbudgetKeys } from "./xenbudget/keys";
-import { xenboxKeys } from "./xenbox/keys";
+import { xendriveKeys } from "./xendrive/keys";
 import { xennoteKeys } from "./xennote/keys";
 
 describe("query keys", () => {
@@ -43,9 +43,13 @@ describe("query keys", () => {
     expect(xenbudgetKeys.summary("b1", { p: 1 }).slice(0, 3)).toEqual([...xenbudgetKeys.summary("b1")]);
   });
 
-  it("XenBox file keys", () => {
-    expect(xenboxKeys.files()).toEqual(["xenboxFiles"]);
-    expect(xenboxKeys.files("cat")).toEqual(["xenboxFiles", "cat"]);
+  it("XenDrive keys: everything sits under [xendrive], and a folder key is a prefix of its search variants", () => {
+    expect(xendriveKeys.all).toEqual(["xendrive"]);
+    expect(xendriveKeys.browse()).toEqual(["xendrive", "browse", null, ""]);
+    expect(xendriveKeys.browse("f1", "tax")).toEqual(["xendrive", "browse", "f1", "tax"]);
+    expect(xendriveKeys.browse("f1").slice(0, 2)).toEqual([...xendriveKeys.browseAll()]);
+    expect(xendriveKeys.file("x")).toEqual(["xendrive", "file", "x"]);
+    expect(xendriveKeys.publicFolder("t", "f")).toEqual(["xendrive", "public-folder", "t", "f"]);
   });
 
   it("XenNote keys sit under [xennote], and the notes key is a prefix of every filtered variant", () => {
@@ -65,7 +69,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xenboxFiles|xennote)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendrive|xennote)"[,\]]/.test(readFileSync(full, "utf8"))
         )
           bad.push(relative(root, full));
       }

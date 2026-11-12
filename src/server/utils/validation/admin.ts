@@ -7,7 +7,7 @@ export const adminUserItemParamSchema = z.object({ userId: objectIdSchema, itemK
 export const adminUpdateUserSchema = z.object({
   roles: z.array(z.string().min(1).max(32)).max(20).optional(),
   // Bytes. Absent leaves the quota alone; 0 is a legitimate "no storage".
-  xenboxQuota: z.number().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  xendriveQuota: z.number().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
 });
 
 export const adminGrantItemSchema = z.object({ itemKey: z.string().min(1).max(100) });

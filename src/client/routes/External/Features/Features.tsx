@@ -16,9 +16,9 @@ export default function Features() {
     },
     {
       icon: <Speed sx={{ fontSize: 40 }} />,
-      title: "XenBox",
-      caption: "File Sharing",
-      description: "Share files with people through our secure and efficient file sharing system.",
+      title: "XenDrive",
+      caption: "Files and Folders",
+      description: "Keep your files in folders and share a file or a whole folder with a link.",
     },
     {
       icon: <Receipt sx={{ fontSize: 40 }} />,

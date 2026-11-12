@@ -17,7 +17,7 @@ export default function Landing() {
 
   const highlights = [
     "XenChat - Real-time messaging with end-to-end encryption",
-    "XenBox - File sharing with secure and efficient file sharing system",
+    "XenDrive - File sharing with secure and efficient file sharing system",
     "Recipaint - Miniature painting planner with step by step paint planner",
     "Xensplit - Split expenses with friends, track balances, settle up easily",
   ];

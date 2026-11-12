@@ -31,6 +31,9 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/admin/blog/upload-asset": "multipart upload handled by multer, not JSON",
   "POST /api/recipaint/:id/clone": "no body: clones the recipe named by the path",
   "POST /api/admin/users/:userId/avatar/reset": "no body: resets the avatar of the user named by the path",
+  "POST /api/xendrive/folders/:folderId/share": "no body: turns on the folder's public link (path names the folder)",
+  "POST /api/xendrive/folders/:folderId/share/rotate":
+    "no body: replaces the folder's public link (path names the folder)",
   "POST /api/admin/debug/trigger-error": "no body: throws on purpose to test error reporting",
   "POST /api/auth/verify": "no body: refreshes the token of the authenticated caller",
   "PUT /api/user/notifications/mark-read": "no body: marks the caller's notifications read",

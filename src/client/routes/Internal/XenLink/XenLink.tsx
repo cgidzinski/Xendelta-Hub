@@ -31,7 +31,7 @@ import { useSnackbar } from "notistack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
 
-export default function XenBox() {
+export default function XenDrive() {
   useTitle("XenLink");
   const { enqueueSnackbar } = useSnackbar();
   const [search, setSearch] = useState("");

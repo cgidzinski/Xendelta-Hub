@@ -44,8 +44,7 @@ const userSchema = new Schema({
     token: { type: String },
     expires: { type: Date },
   },
-  xenbox: {
-    files: [{ type: Schema.Types.ObjectId, ref: "XenBoxMedia" }],
+  xendrive: {
     spaceAllowed: { type: Number, default: 1024 * 1024 * 1024 * 0 }, // 0GB
   },
   xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
