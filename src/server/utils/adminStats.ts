@@ -30,10 +30,14 @@ export async function storageByApp(): Promise<StorageByApp[]> {
   }));
 }
 
-/** A readable name for a scheduled task ("XenSplit recurring"), from its type and, when it has one, its title. */
+/** A readable name for a scheduled task ("XenSplit recurring expense: Flat 4B"), from its type and, if it has one, its title. */
 export function taskLabel(task: { task_type: string; payload?: any }): string {
   const named = task.payload?.title ?? task.payload?.name ?? task.payload?.group_name;
-  const type = task.task_type.replace(/[:_-]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const [first, ...rest] = task.task_type.split(/[:_-]+/).filter(Boolean);
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+  // "xensplit" reads as "XenSplit": the app names are Xen + a word.
+  const app = /^xen[a-z]+$/i.test(first ?? "") ? `Xen${cap(first.slice(3).toLowerCase())}` : cap(first ?? "Task");
+  const type = [app, ...rest.map((w) => w.toLowerCase())].join(" ");
   return named ? `${type}: ${named}` : type;
 }
 

@@ -10,7 +10,7 @@ import { ITEMS } from "../constants/items";
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./shop.js"), () => import("./users.js"), () => import("./admin/users.js")]);
+  t = await startTestApp([() => import("./shop.js"), () => import("./users.js"), () => import("./admin/index.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();

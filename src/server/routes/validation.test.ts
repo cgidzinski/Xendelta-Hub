@@ -19,8 +19,7 @@ beforeAll(async () => {
     () => import("./recipaint.js"),
     () => import("./paints.js"),
     () => import("./blog.js"),
-    () => import("./admin/users.js"),
-    () => import("./admin/blog.js"),
+    () => import("./admin/index.js"),
   ]);
   token = (await createUser()).token;
   adminToken = (await createUser({ roles: ["admin"] })).token;

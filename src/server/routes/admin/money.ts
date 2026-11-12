@@ -6,12 +6,12 @@ import { adminPurchasesQuerySchema, validateQuery } from "../../utils/validation
 import { SHOP_ITEMS } from "../../constants/shopItems";
 import { ITEMS } from "../../constants/items";
 import { DAY_MS } from "../../utils/adminStats";
+import { formatMoney } from "@shared/money";
 import type { AdminMoneyReport, AdminPurchase } from "@shared/admin";
 
 const admin = [authenticateToken, requireAdmin];
 
-const money = (cents: number, currency = "USD") =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+const money = (cents: number, currency = "USD") => formatMoney(cents / 100, currency, { symbol: "narrow" });
 
 export function registerAdminMoneyRoutes(app: express.Application) {
   // Gem purchases (read-only) and what the shop sells. Money and refunds are handled at the payment provider.
