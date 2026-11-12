@@ -4,6 +4,12 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
 import { usageFor } from "../utils/xendriveUtils";
 
+// The model below loads storage config at import time, before the test app sets its environment.
+vi.hoisted(() => {
+  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
+  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
+});
+
 // Expense photos are XenDrive files tagged to the group: owned by the uploader, listed under From apps, exempt from the
 // quota for now, and removed with the photo, the group or the file. Only storage is faked.
 const stored = new Set<string>();

@@ -7,8 +7,8 @@
 //   - XenKitchen ref = the item        owner = the item's creator, else its book's owner
 // Nobody recorded who uploaded a photo, so the owner stands in for the uploader.
 //
-// Every record is `counted: false`: for now only files uploaded straight to XenDrive count toward storage, so nobody's
-// usage changes. Existing chat attachments are marked the same way.
+// Every record is `counted: false`: for now only files uploaded straight to XenDrive, and chat attachments, count toward
+// storage, so nobody's usage changes. Chat attachments need nothing here: they already count.
 //
 // XenKitchen photos lived in the PUBLIC bucket. Each is copied into the private bucket first; only once its record is
 // saved and the item points at it is the public original deleted, so a failed run loses nothing and can be re-run.
@@ -243,12 +243,6 @@ export async function up(connection: Connection): Promise<void> {
     }
   }
   console.log(`>>> app photos: XenKitchen: ${moved} moved to private storage, ${gone} missing (left as they were)`);
-
-  // Chat attachments follow the same rule: tagged, but not counted for now.
-  const chat = await connection
-    .collection("xendrivefiles")
-    .updateMany({ "source.app": "chat", counted: { $exists: false } }, { $set: { counted: false } });
-  console.log(`>>> app photos: ${chat.modifiedCount} chat attachments marked as not counted`);
 }
 
 export async function down(connection: Connection): Promise<void> {
@@ -307,6 +301,4 @@ export async function down(connection: Connection): Promise<void> {
       .catch(() => undefined);
     await files.deleteOne({ _id: id });
   }
-
-  await files.updateMany({ "source.app": "chat", counted: false }, { $unset: { counted: "" } });
 }
