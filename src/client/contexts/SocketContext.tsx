@@ -2,14 +2,13 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import { tokenStore } from "../config/tokenStore";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import type { ClientEvents } from "@shared/realtime";
 
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
-  joinConversation: (conversationId: string) => void;
-  leaveConversation: (conversationId: string) => void;
-  startTyping: (conversationId: string) => void;
-  stopTyping: (conversationId: string) => void;
+  /** Tell the other members you are (or have stopped) typing in a chat. */
+  sendTyping: (conversationId: string, typing: boolean) => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -77,37 +76,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     };
   }, [isAuthenticated]);
 
-  const joinConversation = (conversationId: string) => {
+  const sendTyping = (conversationId: string, typing: boolean) => {
     if (socketRef.current && isConnected) {
-      socketRef.current.emit("join:conversation", conversationId);
-    }
-  };
-
-  const leaveConversation = (conversationId: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("leave:conversation", conversationId);
-    }
-  };
-
-  const startTyping = (conversationId: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("typing:start", { conversationId });
-    }
-  };
-
-  const stopTyping = (conversationId: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit("typing:stop", { conversationId });
+      socketRef.current.emit("chat:typing", { conversationId, typing } satisfies ClientEvents["chat:typing"]);
     }
   };
 
   const value: SocketContextType = {
     socket,
     isConnected,
-    joinConversation,
-    leaveConversation,
-    startTyping,
-    stopTyping,
+    sendTyping,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
@@ -120,39 +98,3 @@ export const useSocket = (): SocketContextType => {
   }
   return context;
 };
-
-// Socket event types for use in components
-export interface SocketMessageNew {
-  conversationId: string;
-  message: {
-    _id: string;
-    from: string;
-    message: string;
-    time: string;
-    unread: boolean;
-    parentMessageId?: string;
-    isSystemMessage?: boolean;
-    senderUsername?: string;
-  };
-}
-
-export interface SocketConversationNew {
-  conversation: {
-    _id: string;
-    participants: string[];
-    lastMessage: string;
-    lastMessageTime: string;
-    unread: boolean;
-    updatedAt: string;
-  };
-}
-
-export interface SocketMessageDeleted {
-  conversationId: string;
-  messageId: string;
-}
-
-export interface SocketConversationUpdate {
-  conversationId: string;
-  update: any;
-}

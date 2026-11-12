@@ -57,7 +57,6 @@ const XenDriveFolderPublic = lazyPage(() => import("./routes/External/XenDriveFo
 const Home = lazyPage(() => import("./routes/Internal/Home/Home"));
 const Profile = lazyPage(() => import("./routes/Internal/Profile/Profile"));
 const Messages = lazyPage(() => import("./routes/Internal/Messages/Messages"));
-const ConversationDetail = lazyPage(() => import("./routes/Internal/Messages/ConversationDetail"));
 const Notifications = lazyPage(() => import("./routes/Internal/Notifications/Notifications"));
 const InternalBlog = lazyPage(() => import("./routes/Internal/Blog/InternalBlog"));
 const InternalBlogPostDetail = lazyPage(() => import("./routes/Internal/Blog/InternalBlogPostDetail"));
@@ -169,7 +168,7 @@ const router = createBrowserRouter(
         <Route index element={<Home />} />
         <Route path="profile" element={<Profile />} />
         <Route path="messages" element={<Messages />} />
-        <Route path="messages/:conversationId" element={<ConversationDetail />} />
+        <Route path="messages/:conversationId" element={<Messages />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />

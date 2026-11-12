@@ -62,7 +62,6 @@ interface BaseNavBarProps {
   footerNavItems?: NavItem[];
   showNotifications?: boolean;
   showMessages?: boolean;
-  showSystemMessageNotifications?: boolean;
   messagesPath?: string;
   drawerHeaderPath?: string;
   drawerHeaderText?: string;
@@ -95,7 +94,6 @@ export default function BaseNavBar({
   footerNavItems = [],
   showNotifications = false,
   showMessages = false,
-  showSystemMessageNotifications = false,
   messagesPath = "/internal/messages",
   drawerHeaderPath = "/internal",
   drawerHeaderText = "XenDelta Hub",
@@ -125,7 +123,6 @@ export default function BaseNavBar({
   const markedNotificationsRef = useRef<Set<string>>(new Set());
 
   useNavBarSocket({
-    showSystemMessageNotifications,
     onNewNotification: () => {
       if (notificationAnchorEl) {
         fetchNotifications();
