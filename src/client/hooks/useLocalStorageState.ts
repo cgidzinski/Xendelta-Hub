@@ -31,7 +31,7 @@ export function writeStored(storage: StorageLike | undefined, key: string, value
   }
 }
 
-function browserStorage(): Storage | undefined {
+export function browserStorage(): Storage | undefined {
   try {
     return typeof window === "undefined" ? undefined : window.localStorage;
   } catch {

@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
+import { browserStorage, readStored, writeStored } from "../hooks/useLocalStorageState";
+
+const isBoolean = (v: unknown): v is boolean => typeof v === "boolean";
 
 interface NavBarContextType {
   title: string;
@@ -19,20 +22,19 @@ const NavBarContext = createContext<NavBarContextType>({
 export const NavBarProvider = ({ children }: { children: React.ReactNode }) => {
   const [isNavBarOpen, setIsNavBarOpen] = useState(() => {
     if (window.innerWidth <= 600) return false;
-    return localStorage.getItem("isNavBarOpen") == "true";
+    return readStored(browserStorage(), "isNavBarOpen", isBoolean, false);
   });
   const [title, setTitle] = useState("");
   const toggleNavBar = () => {
     setIsNavBarOpen((prevState) => {
-      localStorage.setItem("isNavBarOpen", (!prevState).toString());
-
+      writeStored(browserStorage(), "isNavBarOpen", !prevState);
       return !prevState;
     });
   };
 
   const setNavBar = (value: boolean) => {
     setIsNavBarOpen(value);
-    localStorage.setItem("isNavBarOpen", value.toString());
+    writeStored(browserStorage(), "isNavBarOpen", value);
   };
 
   const value = {
