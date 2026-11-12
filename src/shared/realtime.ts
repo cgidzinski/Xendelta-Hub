@@ -24,6 +24,9 @@ export interface RealtimeEvents {
   "notification:new": { notification: unknown };
   "notification:update": { notificationId: string; update: { unread?: boolean; deleted?: boolean } };
 
+  // Home feed: something new was recorded for you. The client shows a "N new" pill, it does not refetch by itself.
+  "feed:new": { activityId: string; app: string };
+
   // Apps
   "xensplit:group_update": { groupId: string };
   "xensplit:groups_updated": undefined;

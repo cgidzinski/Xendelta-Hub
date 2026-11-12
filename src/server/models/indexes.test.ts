@@ -24,6 +24,14 @@ describe("model indexes", () => {
     expect(await indexKeys("XenSplit")).toContain("members");
   });
 
+  it("activity is indexed for the feed query and expires old events", async () => {
+    await import("./activity.js");
+    const keys = await indexKeys("Activity");
+    expect(keys).toContain("audienceIds,createdAt");
+    const ttl = (await mongoose.model("Activity").collection.indexes()).find((i) => i.expireAfterSeconds);
+    expect(ttl?.key).toEqual({ createdAt: 1 });
+  });
+
   it("conversations are indexed by member", async () => {
     await import("./conversation.js");
     expect(await indexKeys("Conversation")).toContain("members.user_id,lastMessage.at");

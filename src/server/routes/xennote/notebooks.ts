@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { recordActivity } from "../../activity";
 import { Types } from "mongoose";
 import {
   validate,
@@ -117,6 +118,15 @@ export function registerNotebookRoutes(app: any) {
         ),
       );
       SocketManager.getInstance().notifyXenNoteUpdate(book.members.map((m) => m.user_id));
+      if (added.length) {
+        await recordActivity({
+          actor: callerId(req),
+          verb: "xennote.notebook_shared",
+          object: { type: "notebook", id: book.id, label: book.name },
+          space: { app: "xennote", id: book.id, label: book.name },
+          audience: { users: added },
+        });
+      }
       const counts = await noteCounts([book.id]);
       res.json({
         status: true,
