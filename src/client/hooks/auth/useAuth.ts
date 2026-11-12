@@ -1,16 +1,12 @@
 import { useCallback, useEffect } from "react";
+import type { AuthUser } from "../../types/user";
+
+export type { AuthUser };
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { tokenStore } from "../../config/tokenStore";
 import { apiClient } from "../../config/api";
 
 // Types
-export interface AuthUser {
-  id: string;
-  username: string;
-  email: string;
-  avatar: string;
-}
-
 interface SignupData {
   username: string;
   email: string;
