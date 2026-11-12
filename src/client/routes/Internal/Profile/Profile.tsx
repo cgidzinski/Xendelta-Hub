@@ -28,6 +28,7 @@ import {
   Notifications,
   Palette,
   VolumeUp,
+  VpnKey,
 } from "@mui/icons-material";
 import { useTitle } from "../../../hooks/useTitle";
 import { useUserProfile, userProfileKeys, UserProfile } from "../../../hooks/user/useUserProfile";
@@ -42,6 +43,7 @@ import AvatarUploadSection from "./components/AvatarUploadSection";
 import TimezoneSection from "./components/TimezoneSection";
 import AppearanceSection from "./components/AppearanceSection";
 import ETransferSection from "./components/ETransferSection";
+import ApiKeysSection from "./components/ApiKeysSection";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import { usePushNotifications } from "../../../pwa/hooks/usePushNotifications";
 
@@ -313,6 +315,15 @@ export default function Profile() {
                 <CardContent sx={{ p: 3 }}>
                   <SectionHeader icon={<Security fontSize="small" />} label="Authentication Methods" />
                   <AuthProviderManager />
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12 }}>
+              <Card variant="outlined" sx={cardSx}>
+                <CardContent sx={{ p: 3 }}>
+                  <SectionHeader icon={<VpnKey fontSize="small" />} label="API Keys" />
+                  <ApiKeysSection />
                 </CardContent>
               </Card>
             </Grid>

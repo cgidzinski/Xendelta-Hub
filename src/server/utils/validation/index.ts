@@ -12,3 +12,4 @@ export * from "./xendrive";
 export * from "./recipaint";
 export * from "./admin";
 export * from "./xennote";
+export * from "./apiKeys";
