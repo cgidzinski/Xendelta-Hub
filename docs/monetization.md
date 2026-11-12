@@ -205,8 +205,8 @@ Each should become its own issue.
 - `MAX_XENDRIVE_SIZE` (5 GB) is defined but never enforced, and validation allows roughly 100 GB.
 - File-link passwords are stored and compared as plain text, and the owner's API returns them.
 - Folder share links have no password or expiry.
-- Uploads from other apps (XenSplit, XenBudget, XenNote, XenKitchen photos, chat attachments) are XenDrive files tagged
-  with their app but don't count toward a person's storage yet: see `docs/storage.md` for the rule to switch on.
+- Photos from other apps (XenSplit, XenBudget, XenNote, XenKitchen) are XenDrive files tagged with their app but don't
+  count toward a person's storage yet: see `docs/storage.md` for the rule to switch on. Chat attachments do count.
 
 ## Suggested order of follow-up issues
 

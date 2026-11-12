@@ -1,14 +1,14 @@
 # Where uploads live, and what counts toward storage
 
 Every file a person uploads is a `XenDriveFile` owned by them, in the private bucket. Files uploaded straight to XenDrive
-**count toward the person's storage**; files an app stores for them (photos, chat attachments) are tagged with where they
-came from and are **exempt from the quota for now** (`counted: false`). `usageFor` and `checkQuota`
+**count toward the person's storage**, and so do chat attachments. Files the other apps store for them (photos) are tagged
+with where they came from and are **exempt from the quota for now** (`counted: false`). `usageFor` and `checkQuota`
 (`src/server/utils/xendriveUtils.ts`) only add up files that count (`counted` not `false`).
 
 | Where | Stored as | Bucket | Limit today | Counts? |
 |---|---|---|---|---|
 | **XenDrive** uploads | `XenDriveFile`, `checkQuota` | private | the person's quota | **yes** |
-| Chat attachments | tagged file, `source: { app: "chat", ref: conversationId }` | private | quota check skipped | no |
+| Chat attachments | tagged file, `source: { app: "chat", ref: conversationId }` | private | the person's quota | **yes** |
 | XenSplit expense photos | tagged file, `ref` = group id | private | 10 MB each, 10 per expense | no |
 | XenBudget item photos | tagged file, `ref` = book id | private | 10 MB each, 10 per item | no |
 | XenNote photos | tagged file, `ref` = note id | private | 15 MB each (resized), 10 per note | no |
@@ -21,7 +21,7 @@ came from and are **exempt from the quota for now** (`counted: false`). `usageFo
 **Open item: Recipaint assets.** Any signed-in user can upload any number of 10 MB images to the public bucket, and they
 aren't resized. They stay outside XenDrive for now. Cap how many a recipe can hold, or resize them, before this grows.
 
-**The rule to switch on later.** Today every app's files are tagged but not counted. The intended rule once counting is
+**The rule to switch on later.** Today the photo apps' files are tagged but not counted. The intended rule once counting is
 switched on: files in a **shared space** (a XenSplit group, or a XenBudget book, XenNote notebook or XenKitchen book with
 more than one member) stay exempt, and files in a space only the owner uses count. It is one function per app:
 `DriveSourceApp.counts(ref)` in `utils/driveSources.ts`. Files already stored have their `counted` flag set when they are

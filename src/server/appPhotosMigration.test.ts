@@ -106,7 +106,8 @@ describe("app photos -> XenDrive files migration", () => {
     expect(
       await files.countDocuments({ "source.app": { $in: ["xensplit", "xenbudget", "xennote", "xenkitchen"] } }),
     ).toBe(4);
-    expect((await files.findOne({ _id: chatFile }))!.counted).toBe(false);
+    // chat attachments already count, and the migration leaves them alone
+    expect((await files.findOne({ _id: chatFile }))!.counted).toBeUndefined();
 
     const split = (await files.findOne({ "source.app": "xensplit" }))!;
     expect(split).toMatchObject({
@@ -145,7 +146,6 @@ describe("app photos -> XenDrive files migration", () => {
     expect(
       await files.countDocuments({ "source.app": { $in: ["xensplit", "xenbudget", "xennote", "xenkitchen"] } }),
     ).toBe(0);
-    expect((await files.findOne({ _id: chatFile }))!.counted).toBeUndefined();
     const back = await conn.collection("xensplits").findOne({ _id: groupId });
     expect(back!.expenses[0].images[0]).toMatchObject({ gcs_path: "xensplit-images/g/e/a.jpg" });
     expect(back!.expenses[0].images[0].file_id).toBeUndefined();

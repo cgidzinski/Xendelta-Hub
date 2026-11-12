@@ -6,6 +6,12 @@ import { storeAppFiles, removeAppFiles } from "./appFiles";
 import { usageFor } from "./xendriveUtils";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 
+// The model below loads storage config at import time, before the test app sets its environment.
+vi.hoisted(() => {
+  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
+  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
+});
+
 // What happens when an app's files DO count toward storage: the path every app will take once counting is switched on.
 const stored = new Set<string>();
 vi.mock("./gcsUtils.js", async (importOriginal) => ({

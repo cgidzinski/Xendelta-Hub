@@ -3,7 +3,7 @@ import { AppError } from "./http";
 // Files that an app stores in XenDrive on a person's behalf (chat attachments, photos on an expense or a note) carry
 // `source: { app, ref }`. They are real XenDrive files: owned by the uploader and deleted like any file. They are listed
 // under XenDrive > From apps (and, while SHOW_APP_FILES_IN_DRIVE is on, in the drive's own lists too). Whether they count
-// against the person's quota is the app's call (`counts`); for now none do. docs/storage.md has the whole picture.
+// against the person's quota is the app's call (`counts`): chat attachments do, the photo apps' files don't yet. docs/storage.md has the whole picture.
 //
 // An app registers itself once with `registerDriveSource`; XenDrive never learns what a chat (or a note) is.
 
@@ -20,8 +20,8 @@ export interface DriveSourceApp {
   /** A readable name per ref for this person ("Weekend trip"). Refs it cannot name are left out. */
   describe: (userId: string, refs: string[]) => Promise<Map<string, string>>;
   /**
-   * Do files stored for this `ref` count toward the owner's quota? Every app says no for now: only files uploaded
-   * straight to XenDrive count. The intended rule once it is switched on: files in a shared space stay exempt,
+   * Do files stored for this `ref` count toward the owner's quota? Chat says yes. The photo apps say no for now, so
+   * only files uploaded straight to XenDrive and chat attachments count. The intended rule for the photo apps once it is switched on: files in a shared space stay exempt,
    * files in a space only the owner uses count (docs/storage.md).
    */
   counts: (ref: string) => Promise<boolean>;
