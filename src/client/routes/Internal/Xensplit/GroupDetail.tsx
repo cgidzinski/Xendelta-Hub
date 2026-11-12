@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
+import ImageLightbox from "../../../components/ui/ImageLightbox";
 import { useParams, useNavigate, useLocation, Outlet } from "react-router-dom";
 import {
   Box,
@@ -39,7 +40,6 @@ import AnalyticsIcon from "@mui/icons-material/Analytics";
 import GridViewIcon from "@mui/icons-material/GridView";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import { useTitle } from "../../../hooks/useTitle";
@@ -119,6 +119,10 @@ export default function GroupDetail() {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
+  // Ask, then run the action only if the person confirms.
+  const confirmThen = async (options: Parameters<typeof confirm>[0], action: () => void | Promise<void>) => {
+    if (await confirm(options)) await action();
+  };
   const queryClient = useQueryClient();
   const {
     group,
@@ -244,14 +248,10 @@ export default function GroupDetail() {
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
   const [showAddExchangeModal, setShowAddExchangeModal] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [confirmDialogText, setConfirmDialogText] = useState("");
-  const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
   const { percent: uploadPercent, onUploadProgress, reset: resetUploadProgress } = useUploadProgress();
   const [addImages, setAddImages] = useState<File[]>([]);
   const [editImages, setEditImages] = useState<File[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const lightboxTouchStartY = useRef<number | null>(null);
 
   const { data: viewImageUrls = [] } = useExpenseImageUrls(
     groupId ?? "",
@@ -268,11 +268,6 @@ export default function GroupDetail() {
     () => computeFinalExpenseIds(group?.expenses ?? [], group?.recurring_expenses),
     [group?.expenses, group?.recurring_expenses],
   );
-
-  const handleConfirm = () => {
-    confirmAction();
-    setShowConfirmDialog(false);
-  };
 
   // Check if exact splits total matches amount
   const isExactValid =
@@ -663,18 +658,6 @@ export default function GroupDetail() {
     isCancellingRecurring,
   };
 
-  const handleLightboxTouchStart = (e: React.TouchEvent) => {
-    lightboxTouchStartY.current = e.touches[0].clientY;
-  };
-
-  const handleLightboxTouchEnd = (e: React.TouchEvent) => {
-    if (lightboxTouchStartY.current !== null) {
-      const delta = Math.abs(e.changedTouches[0].clientY - lightboxTouchStartY.current);
-      if (delta > 80) setLightboxUrl(null);
-      lightboxTouchStartY.current = null;
-    }
-  };
-
   return (
     <Box>
       <Container
@@ -832,9 +815,10 @@ export default function GroupDetail() {
             </MenuItem>
             <MenuItem
               onClick={() => {
-                setConfirmDialogText("Leave this group? You will no longer be a member.");
-                setConfirmAction(() => () => handleRemoveMember(menuMemberId));
-                setShowConfirmDialog(true);
+                void confirmThen(
+                  { title: "Leave this group?", message: "You will no longer be a member.", confirmLabel: "Leave" },
+                  () => handleRemoveMember(menuMemberId),
+                );
               }}
               sx={{ color: "error.main" }}
             >
@@ -843,9 +827,14 @@ export default function GroupDetail() {
             </MenuItem>
             <MenuItem
               onClick={() => {
-                setConfirmDialogText("Close this group? All expenses and data will be permanently deleted.");
-                setConfirmAction(() => handleCloseGroup);
-                setShowConfirmDialog(true);
+                void confirmThen(
+                  {
+                    title: "Close this group?",
+                    message: "All expenses and data will be permanently deleted.",
+                    confirmLabel: "Close group",
+                  },
+                  handleCloseGroup,
+                );
               }}
               sx={{ color: "error.main" }}
             >
@@ -856,9 +845,10 @@ export default function GroupDetail() {
         ) : menuMemberId && menuMemberId === user?.id ? (
           <MenuItem
             onClick={() => {
-              setConfirmDialogText("Leave this group? You will no longer be a member.");
-              setConfirmAction(() => () => handleRemoveMember(menuMemberId));
-              setShowConfirmDialog(true);
+              void confirmThen(
+                { title: "Leave this group?", message: "You will no longer be a member.", confirmLabel: "Leave" },
+                () => handleRemoveMember(menuMemberId),
+              );
             }}
             sx={{ color: "error.main" }}
           >
@@ -869,9 +859,14 @@ export default function GroupDetail() {
           <MenuItem
             onClick={() => {
               const memberName = group.members.find((m) => m.user_id === menuMemberId)?.username || "this member";
-              setConfirmDialogText(`Remove ${memberName} from this group?`);
-              setConfirmAction(() => () => handleRemoveMember(menuMemberId));
-              setShowConfirmDialog(true);
+              void confirmThen(
+                {
+                  title: `Remove ${memberName}?`,
+                  message: "They will no longer be in this group.",
+                  confirmLabel: "Remove",
+                },
+                () => handleRemoveMember(menuMemberId),
+              );
             }}
             sx={{ color: "error.main" }}
           >
@@ -904,21 +899,6 @@ export default function GroupDetail() {
             loading={isAddingMembers}
           >
             Add
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog fullWidth maxWidth="sm" open={showConfirmDialog} onClose={() => setShowConfirmDialog(false)}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Confirm</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography>{confirmDialogText}</Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button fullWidth variant="outlined" onClick={() => setShowConfirmDialog(false)}>
-            Cancel
-          </Button>
-          <Button fullWidth variant="contained" color="error" onClick={handleConfirm}>
-            Confirm
           </Button>
         </DialogActions>
       </Dialog>
@@ -1395,63 +1375,7 @@ export default function GroupDetail() {
 
       <EtransferPromptDialog open={showEtransferPrompt} onClose={() => setShowEtransferPrompt(false)} />
 
-      {/* Lightbox */}
-      <Dialog
-        open={!!lightboxUrl}
-        onClose={() => setLightboxUrl(null)}
-        fullScreen
-        PaperProps={{ sx: { bgcolor: "black", position: "relative" } }}
-      >
-        <Box
-          sx={{ width: "100%", height: "100vh", position: "relative" }}
-          onTouchStart={handleLightboxTouchStart}
-          onTouchEnd={handleLightboxTouchEnd}
-        >
-          {lightboxUrl && (
-            <IconButton
-              component="a"
-              href={lightboxUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              size="small"
-              sx={{
-                position: "absolute",
-                top: 8,
-                right: 48,
-                zIndex: 1,
-                bgcolor: "rgba(0,0,0,0.55)",
-                color: "white",
-                "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-              }}
-            >
-              <FileDownloadIcon />
-            </IconButton>
-          )}
-          <IconButton
-            onClick={() => setLightboxUrl(null)}
-            size="small"
-            sx={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 1,
-              bgcolor: "rgba(0,0,0,0.55)",
-              color: "white",
-              "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-          {lightboxUrl && (
-            <Box
-              component="img"
-              src={lightboxUrl}
-              sx={{ width: "100%", height: "100vh", objectFit: "contain", display: "block" }}
-            />
-          )}
-        </Box>
-      </Dialog>
+      <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </Box>
   );
 }
