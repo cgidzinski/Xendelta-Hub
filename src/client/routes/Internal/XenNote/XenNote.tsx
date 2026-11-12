@@ -183,10 +183,23 @@ export default function XenNote() {
           : (openBook?.name ?? "Notes");
 
   return (
-    <PageContainer width="wide">
-      <Box sx={{ display: "flex", gap: 3, alignItems: "flex-start" }}>
+    <>
+      <Box sx={{ display: "flex", alignItems: "flex-start", minHeight: "calc(100vh - 64px)" }}>
         {wide ? (
-          <Box sx={{ width: 240, flex: "none", position: "sticky", top: 16 }}>{rail}</Box>
+          <Box
+            sx={{
+              flex: "0 0 256px",
+              p: 2,
+              borderRight: 1,
+              borderColor: "divider",
+              position: "sticky",
+              top: 0,
+              alignSelf: "flex-start",
+              minHeight: "calc(100vh - 64px)",
+            }}
+          >
+            {rail}
+          </Box>
         ) : (
           <Drawer
             open={railOpen}
@@ -198,153 +211,155 @@ export default function XenNote() {
         )}
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <PageHeader
-            title={title}
-            onBack={undefined}
-            actions={
-              !wide ? (
-                <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
-                  <MenuBookOutlinedIcon />
-                </IconButton>
-              ) : undefined
-            }
-          />
-
-          {openBook && (
-            <Stack
-              direction="row"
-              spacing={1.5}
-              sx={{ alignItems: "center", flexWrap: "wrap", gap: 1, mb: 2 }}
-              aria-label="Notebook"
-            >
-              <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
-                {openBook.members.map((m) => (
-                  <Avatar key={m.user_id} alt={m.username} src={m.avatar ?? undefined}>
-                    {m.username.slice(0, 1).toUpperCase()}
-                  </Avatar>
-                ))}
-              </AvatarGroup>
-              {openBook.my_role && <Chip size="small" variant="outlined" label={ROLE_LABEL[openBook.my_role]} />}
-              {openBook.share?.enabled && (
-                <Chip size="small" color="primary" variant="outlined" icon={<PublicIcon />} label="Link on" />
-              )}
-              <Box sx={{ flex: 1 }} />
-              {openBook.my_role === "owner" && (
-                <Chip
-                  clickable
-                  icon={<PersonAddAltOutlinedIcon />}
-                  label="Share"
-                  onClick={() => setNotebookDialog({ id: openBook._id, tab: "people" })}
-                />
-              )}
-              <Tooltip title="Notebook settings">
-                <IconButton aria-label="Notebook settings" onClick={() => setNotebookDialog({ id: openBook._id })}>
-                  <SettingsOutlinedIcon />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          )}
-
-          <TextField
-            fullWidth
-            placeholder="Search notes..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              },
-            }}
-            sx={{ mb: 2 }}
-          />
-
-          {canWrite && !phone && (
-            <Card
-              variant="outlined"
-              sx={{ mb: 3, p: 1.5, display: "flex", alignItems: "center", gap: 1, maxWidth: 640, mx: "auto" }}
-            >
-              <Typography
-                role="button"
-                tabIndex={0}
-                onClick={() => startNote()}
-                onKeyDown={(e) => e.key === "Enter" && startNote()}
-                color="text.secondary"
-                sx={{ flex: 1, cursor: "text", px: 1 }}
-              >
-                Take a note…
-              </Typography>
-              <Tooltip title="New list">
-                <IconButton aria-label="New list" onClick={() => startNote("checklist")}>
-                  <CheckBoxOutlinedIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="New note with photos">
-                <IconButton aria-label="New note with photos" onClick={() => startNote("image")}>
-                  <ImageOutlinedIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="New link">
-                <IconButton aria-label="New link" onClick={() => startNote("link")}>
-                  <LinkIcon />
-                </IconButton>
-              </Tooltip>
-            </Card>
-          )}
-
-          <Stack direction="row" sx={{ gap: 1, mb: 2, overflowX: "auto", pb: 0.5 }} aria-label="Filter by type">
-            {TYPE_FILTERS.map((f) => (
-              <Chip
-                key={f.id}
-                label={f.label}
-                color={typeFilter === f.id ? "primary" : "default"}
-                variant={typeFilter === f.id ? "filled" : "outlined"}
-                onClick={() => setTypeFilter(f.id)}
-              />
-            ))}
-          </Stack>
-
-          {isLoading && !notes ? (
-            <ListSkeleton rows={4} height={96} gap={2} />
-          ) : isError ? (
-            <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />
-          ) : empty ? (
-            <EmptyState
-              icon={<StickyNote2OutlinedIcon />}
-              title={
-                scope === "archive"
-                  ? "Nothing archived"
-                  : search || label || typeFilter !== "all"
-                    ? "No notes match"
-                    : "No notes yet"
-              }
-              description={
-                scope === "archive"
-                  ? "Archived notes are kept here."
-                  : "Take a note, make a list, save a photo or a link."
+          <PageContainer width="wide">
+            <PageHeader
+              title={title}
+              onBack={undefined}
+              actions={
+                !wide ? (
+                  <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
+                    <MenuBookOutlinedIcon />
+                  </IconButton>
+                ) : undefined
               }
             />
-          ) : (
-            <>
-              {pinned.length > 0 && (
-                <>
-                  <Typography variant="overline" color="text.secondary">
-                    Pinned
-                  </Typography>
-                  {renderNotes(pinned)}
-                  {others.length > 0 && (
+
+            {openBook && (
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: "center", flexWrap: "wrap", gap: 1, mb: 2 }}
+                aria-label="Notebook"
+              >
+                <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
+                  {openBook.members.map((m) => (
+                    <Avatar key={m.user_id} alt={m.username} src={m.avatar ?? undefined}>
+                      {m.username.slice(0, 1).toUpperCase()}
+                    </Avatar>
+                  ))}
+                </AvatarGroup>
+                {openBook.my_role && <Chip size="small" variant="outlined" label={ROLE_LABEL[openBook.my_role]} />}
+                {openBook.share?.enabled && (
+                  <Chip size="small" color="primary" variant="outlined" icon={<PublicIcon />} label="Link on" />
+                )}
+                <Box sx={{ flex: 1 }} />
+                {openBook.my_role === "owner" && (
+                  <Chip
+                    clickable
+                    icon={<PersonAddAltOutlinedIcon />}
+                    label="Share"
+                    onClick={() => setNotebookDialog({ id: openBook._id, tab: "people" })}
+                  />
+                )}
+                <Tooltip title="Notebook settings">
+                  <IconButton aria-label="Notebook settings" onClick={() => setNotebookDialog({ id: openBook._id })}>
+                    <SettingsOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            )}
+
+            <TextField
+              fullWidth
+              placeholder="Search notes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              sx={{ mb: 2 }}
+            />
+
+            {canWrite && !phone && (
+              <Card
+                variant="outlined"
+                sx={{ mb: 3, p: 1.5, display: "flex", alignItems: "center", gap: 1, maxWidth: 640, mx: "auto" }}
+              >
+                <Typography
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => startNote()}
+                  onKeyDown={(e) => e.key === "Enter" && startNote()}
+                  color="text.secondary"
+                  sx={{ flex: 1, cursor: "text", px: 1 }}
+                >
+                  Take a note…
+                </Typography>
+                <Tooltip title="New list">
+                  <IconButton aria-label="New list" onClick={() => startNote("checklist")}>
+                    <CheckBoxOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="New note with photos">
+                  <IconButton aria-label="New note with photos" onClick={() => startNote("image")}>
+                    <ImageOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="New link">
+                  <IconButton aria-label="New link" onClick={() => startNote("link")}>
+                    <LinkIcon />
+                  </IconButton>
+                </Tooltip>
+              </Card>
+            )}
+
+            <Stack direction="row" sx={{ gap: 1, mb: 2, overflowX: "auto", pb: 0.5 }} aria-label="Filter by type">
+              {TYPE_FILTERS.map((f) => (
+                <Chip
+                  key={f.id}
+                  label={f.label}
+                  color={typeFilter === f.id ? "primary" : "default"}
+                  variant={typeFilter === f.id ? "filled" : "outlined"}
+                  onClick={() => setTypeFilter(f.id)}
+                />
+              ))}
+            </Stack>
+
+            {isLoading && !notes ? (
+              <ListSkeleton rows={4} height={96} gap={2} />
+            ) : isError ? (
+              <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />
+            ) : empty ? (
+              <EmptyState
+                icon={<StickyNote2OutlinedIcon />}
+                title={
+                  scope === "archive"
+                    ? "Nothing archived"
+                    : search || label || typeFilter !== "all"
+                      ? "No notes match"
+                      : "No notes yet"
+                }
+                description={
+                  scope === "archive"
+                    ? "Archived notes are kept here."
+                    : "Take a note, make a list, save a photo or a link."
+                }
+              />
+            ) : (
+              <>
+                {pinned.length > 0 && (
+                  <>
                     <Typography variant="overline" color="text.secondary">
-                      Others
+                      Pinned
                     </Typography>
-                  )}
-                </>
-              )}
-              {others.length > 0 && renderNotes(others)}
-            </>
-          )}
+                    {renderNotes(pinned)}
+                    {others.length > 0 && (
+                      <Typography variant="overline" color="text.secondary">
+                        Others
+                      </Typography>
+                    )}
+                  </>
+                )}
+                {others.length > 0 && renderNotes(others)}
+              </>
+            )}
+          </PageContainer>
         </Box>
       </Box>
 
@@ -389,6 +404,6 @@ export default function XenNote() {
         initialTab={notebookDialog?.tab}
         onGone={() => setScope("all")}
       />
-    </PageContainer>
+    </>
   );
 }
