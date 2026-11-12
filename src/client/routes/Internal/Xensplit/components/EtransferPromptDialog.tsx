@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getRawStored, setRawStored } from "../../../../hooks/useLocalStorageState";
 import { useNavigate } from "react-router-dom";
 import { Box, Button, Checkbox, Dialog, DialogActions, FormControlLabel, Typography } from "@mui/material";
 
@@ -7,7 +8,7 @@ import { Box, Button, Checkbox, Dialog, DialogActions, FormControlLabel, Typogra
 const DISMISS_KEY = "xensplit_etransferPrompt_dismissed";
 
 export function isEtransferPromptDismissed(): boolean {
-  return localStorage.getItem(DISMISS_KEY) === "true";
+  return getRawStored(DISMISS_KEY) === "true";
 }
 
 interface Props {
@@ -25,7 +26,7 @@ export default function EtransferPromptDialog({ open, onClose }: Props) {
   const [dontAsk, setDontAsk] = useState(false);
 
   const close = () => {
-    if (dontAsk) localStorage.setItem(DISMISS_KEY, "true");
+    if (dontAsk) setRawStored(DISMISS_KEY, "true");
     onClose();
   };
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { getRawStored, setRawStored } from "../../hooks/useLocalStorageState";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -18,7 +19,7 @@ const DISMISS_KEY = "pwa-install-dismissed";
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function checkDismissed(): boolean {
-  const raw = localStorage.getItem(DISMISS_KEY);
+  const raw = getRawStored(DISMISS_KEY);
   if (!raw) return false;
   const ts = new Date(raw).getTime();
   return !isNaN(ts) && Date.now() - ts < DISMISS_TTL_MS;
@@ -59,7 +60,7 @@ export function usePWAInstall(): UsePWAInstallReturn {
   };
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, new Date().toISOString());
+    setRawStored(DISMISS_KEY, new Date().toISOString());
     setIsDismissed(true);
   };
 

@@ -54,3 +54,21 @@ export function useLocalStorageState<T>(
   );
   return [value, set];
 }
+
+/** A raw string from localStorage, or null if it is missing or storage is blocked. */
+export function getRawStored(key: string): string | null {
+  try {
+    return browserStorage()?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Store a raw string; silently does nothing when storage is blocked or full. */
+export function setRawStored(key: string, value: string): void {
+  try {
+    browserStorage()?.setItem(key, value);
+  } catch {
+    /* storage unavailable or full */
+  }
+}
