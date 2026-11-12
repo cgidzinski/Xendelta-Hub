@@ -17,6 +17,8 @@ Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px borde
 `PageContainer` > `PageHeader` > content (`DetailHeader` instead of `PageHeader` for pages inside a book or group: back arrow, name, actions, tabs). `SectionCard` / `SectionLabel` for grouped content,
 `EmptyState` / `ListSkeleton` for empty and loading,
 `ResponsiveDialog` for dialogs (full screen on phones), `Banner` for fixed status strips.
+`useConfirm()` (`ConfirmProvider`) for every confirmation: never `window.confirm` or a hand-rolled dialog. `ImageLightbox` for viewing an image full-screen.
+Sign-in, sign-up and reset share `components/auth/AuthSplitLayout`.
 
 ## Rules
 - Colours come from the theme (`primary.main`, `text.secondary`, `alpha(theme.palette.x, n)`). No hex or `rgba()`
