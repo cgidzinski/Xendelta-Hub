@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
+import type { PublicUser } from "../types/user";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../config/api";
+import { api } from "../config/api";
 
-export interface SearchedUser {
-  _id: string;
-  username: string;
-  avatar: string | null;
-}
+export type SearchedUser = PublicUser;
 
 export function useUserSearch(query: string) {
   const [debouncedQuery, setDebouncedQuery] = useState(query);
@@ -19,8 +16,7 @@ export function useUserSearch(query: string) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["users", "search", debouncedQuery],
     queryFn: async () => {
-      const res = await apiClient.get("/api/users/search", { params: { q: debouncedQuery } });
-      return res.data.data as { users: SearchedUser[] };
+      return api.get<{ users: SearchedUser[] }>("/api/users/search", { params: { q: debouncedQuery } });
     },
     enabled: true,
   });

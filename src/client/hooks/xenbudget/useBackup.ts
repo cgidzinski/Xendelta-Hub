@@ -1,5 +1,6 @@
+import { xenbudgetKeys } from "./keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 
 export type RestoreScope = "items" | "config" | "everything";
 
@@ -17,7 +18,7 @@ export function useXenBudgetBackup(bookId: string) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget"] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.all });
   };
 
   /**
@@ -37,16 +38,14 @@ export function useXenBudgetBackup(bookId: string) {
 
   const restoreHereMutation = useMutation({
     mutationFn: async ({ payload, scope }: { payload: unknown; scope: RestoreScope }) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/import`, { ...(payload as object), scope });
-      return res.data.data as RestoreResult;
+      return api.post<RestoreResult>(`/api/xenbudget/books/${bookId}/import`, { ...(payload as object), scope });
     },
     onSuccess: invalidate,
   });
 
   const restoreAsNewMutation = useMutation({
     mutationFn: async (payload: unknown) => {
-      const res = await apiClient.post(`/api/xenbudget/books/import`, payload);
-      return res.data.data as RestoreResult;
+      return api.post<RestoreResult>(`/api/xenbudget/books/import`, payload);
     },
     onSuccess: invalidate,
   });

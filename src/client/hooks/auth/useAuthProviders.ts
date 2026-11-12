@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 
 // Types
 export interface AuthProvider {
@@ -89,17 +88,15 @@ const linkDiscordAccountRequest = async (): Promise<LinkProviderResponse> => {
 };
 
 const unlinkProviderRequest = async (provider: string): Promise<UnlinkProviderResponse> => {
-  const response = await apiClient.post<ApiResponse<UnlinkProviderResponse>>("/api/user/unlink-provider", {
+  return api.post<UnlinkProviderResponse>("/api/user/unlink-provider", {
     provider,
   });
-  return response.data.data!;
 };
 
 const addPasswordRequest = async (password: string): Promise<AddPasswordResponse> => {
-  const response = await apiClient.post<ApiResponse<AddPasswordResponse>>("/api/user/add-password", {
+  return api.post<AddPasswordResponse>("/api/user/add-password", {
     password,
   });
-  return response.data.data!;
 };
 
 // Hooks

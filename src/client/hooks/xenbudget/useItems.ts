@@ -1,5 +1,6 @@
+import { xenbudgetKeys } from "./keys";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetItem, ItemsPage, CreateItemInput, UpdateItemInput } from "./types";
 
@@ -99,16 +100,14 @@ export function useXenBudgetItemMutations(bookId: string) {
 
   const createMutation = useMutation({
     mutationFn: async (input: CreateItemInput) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/items`, input);
-      return res.data.data as XenBudgetItem;
+      return api.post<XenBudgetItem>(`/api/xenbudget/books/${bookId}/items`, input);
     },
     onSuccess: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ itemId, input }: { itemId: string; input: UpdateItemInput }) => {
-      const res = await apiClient.put(`/api/xenbudget/books/${bookId}/items/${itemId}`, input);
-      return res.data.data as XenBudgetItem;
+      return api.put<XenBudgetItem>(`/api/xenbudget/books/${bookId}/items/${itemId}`, input);
     },
     onSuccess: invalidate,
   });
@@ -128,7 +127,7 @@ export function useXenBudgetItemMutations(bookId: string) {
     },
     onSuccess: (_data, { itemId }) => {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "item-image-urls", bookId, itemId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId) });
     },
   });
 
@@ -138,7 +137,7 @@ export function useXenBudgetItemMutations(bookId: string) {
     },
     onSuccess: (_data, { itemId }) => {
       invalidate();
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "item-image-urls", bookId, itemId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId) });
     },
   });
 
@@ -159,7 +158,7 @@ export function useXenBudgetItemMutations(bookId: string) {
 /** Signed display URLs for an item's images, fetched on demand (short-lived GCS URLs). */
 export function useXenBudgetItemImageUrls(bookId: string, itemId: string | undefined, imageCount: number) {
   return useQuery<{ _id: string; signedUrl: string }[]>({
-    queryKey: ["xenbudget", "item-image-urls", bookId, itemId],
+    queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId),
     queryFn: async () => {
       const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items/${itemId}/image-urls`);
       return res.data.data;
@@ -175,12 +174,11 @@ export function useXenBudgetItemImageUrls(bookId: string, itemId: string | undef
  */
 export function useXenBudgetItems(bookId: string, filters: ItemFilters = {}) {
   const query = useInfiniteQuery({
-    queryKey: ["xenbudget", "items", bookId, filters],
+    queryKey: xenbudgetKeys.items(bookId, filters),
     queryFn: async ({ pageParam }) => {
-      const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items`, {
+      return api.get<ItemsPage>(`/api/xenbudget/books/${bookId}/items`, {
         params: { ...toParams(filters), ...(pageParam ? { cursor: pageParam } : {}) },
       });
-      return res.data.data as ItemsPage;
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,

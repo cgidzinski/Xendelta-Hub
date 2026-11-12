@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { tokenStore } from "../../../config/tokenStore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -26,7 +27,7 @@ export default function AuthCallback() {
         queryClient.clear();
 
         // Store the token and verify authentication
-        localStorage.setItem("token", token);
+        tokenStore.set(token);
         await checkAuth();
         navigate("/internal");
       } else {

@@ -32,7 +32,7 @@ clientsClaim();
 
 // registerType is "prompt": never call skipWaiting() on install. The new worker waits until
 // the user clicks Reload in UpdateBanner, so we never reload out from under someone
-// mid-action (composing a message, filling a form, uploading to Xenbox).
+// mid-action (composing a message, filling a form, uploading to Xendrive).
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();

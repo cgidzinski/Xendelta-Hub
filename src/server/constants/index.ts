@@ -3,7 +3,7 @@
  */
 
 // Re-export sub-app constants
-export { MAX_XENBOX_SIZE, XENBOX_CHUNK_SIZE } from "./xenbox";
+export { MAX_XENDRIVE_SIZE, XENDRIVE_CHUNK_SIZE } from "./xendrive";
 
 export { MAX_RECIPAINT_ASSET_SIZE } from "./recipaint";
 

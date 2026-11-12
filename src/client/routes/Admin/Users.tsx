@@ -1,4 +1,5 @@
 import PageContainer from "../../components/ui/PageContainer";
+import { useConfirm } from "../../components/ui/ConfirmProvider";
 import { useState, useMemo } from "react";
 import {
   Box,
@@ -18,7 +19,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Button,
   MenuItem,
   IconButton,
@@ -43,14 +43,14 @@ import { useSnackbar } from "notistack";
 import ListSkeleton from "../../components/ui/ListSkeleton";
 import { useTitle } from "../../hooks/useTitle";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
-import { useAdminUsers, User, NotifyChannel } from "../../hooks/admin/useAdminUsers";
+import { useAdminUsers, AdminUser, NotifyChannel } from "../../hooks/admin/useAdminUsers";
 import { formatFileSize } from "../../utils/fileUtils";
 
 const AVAILABLE_ROLES = ["admin", "user"];
 
 const ITEM_OPTIONS = [
   { value: "1000-point-voucher", label: "1000 Point Voucher" },
-  { value: "1gb-xenbox-voucher", label: "1GB XenBox Voucher" },
+  { value: "1gb-xendrive-voucher", label: "1GB XenDrive Voucher" },
   { value: "golden-badge", label: "Golden Badge" },
 ];
 
@@ -76,11 +76,11 @@ export default function Users() {
     refetch,
   } = useAdminUsers();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingRoles, setEditingRoles] = useState<string[]>([]);
   const [editingQuota, setEditingQuota] = useState<string>("");
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const confirm = useConfirm();
   const [selectedGiftItem, setSelectedGiftItem] = useState<string>("");
   const [activeTab, setActiveTab] = useState(0);
   const [notifyTitle, setNotifyTitle] = useState("");
@@ -111,10 +111,10 @@ export default function Users() {
     }
   };
 
-  const handleUserClick = (user: User) => {
+  const handleUserClick = (user: AdminUser) => {
     setSelectedUser(user);
     setEditingRoles(user.roles || []);
-    setEditingQuota(user.xenbox?.spaceAllowed ? formatFileSize(user.xenbox.spaceAllowed) : "");
+    setEditingQuota(user.xendrive?.spaceAllowed ? formatFileSize(user.xendrive.spaceAllowed) : "");
     setNotifyTitle("");
     setNotifyMessage("");
     setNotifyLink("");
@@ -209,7 +209,7 @@ export default function Users() {
       return;
     }
 
-    updateUser(selectedUser._id, { xenboxQuota: quotaBytes || 0 })
+    updateUser(selectedUser._id, { xendriveQuota: quotaBytes || 0 })
       .then(async () => {
         enqueueSnackbar("Quota updated successfully", { variant: "success" });
         // Refetch users list
@@ -219,7 +219,9 @@ export default function Users() {
           const updatedUser = updatedUsers.find((u) => u._id === selectedUser._id);
           if (updatedUser) {
             setSelectedUser(updatedUser);
-            setEditingQuota(updatedUser.xenbox?.spaceAllowed ? formatFileSize(updatedUser.xenbox.spaceAllowed) : "");
+            setEditingQuota(
+              updatedUser.xendrive?.spaceAllowed ? formatFileSize(updatedUser.xendrive.spaceAllowed) : "",
+            );
           }
         }
       })
@@ -228,12 +230,24 @@ export default function Users() {
       });
   };
 
+  const confirmDeleteUser = async () => {
+    const ok = await confirm({
+      title: "Delete user?",
+      message: (
+        <>
+          Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be undone.
+        </>
+      ),
+      confirmLabel: "Delete",
+    });
+    if (ok) await handleDeleteUser();
+  };
+
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
     deleteUser(selectedUser._id)
       .then(() => {
         enqueueSnackbar("User deleted successfully", { variant: "success" });
-        setDeleteConfirmOpen(false);
         handleCloseModal();
       })
       .catch((error) => {
@@ -469,17 +483,17 @@ export default function Users() {
                     </Box>
                   </Box>
                 </Box>
-                {selectedUser.xenbox && (
+                {selectedUser.xendrive && (
                   <Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      XenBox
+                      XenDrive
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {formatFileSize(selectedUser.xenbox.spaceUsed)} /{" "}
-                      {formatFileSize(selectedUser.xenbox.spaceAllowed)}
+                      {formatFileSize(selectedUser.xendrive.spaceUsed)} /{" "}
+                      {formatFileSize(selectedUser.xendrive.spaceAllowed)}
                       <Typography component="span" variant="caption" color="text.secondary">
                         {" "}
-                        ({selectedUser.xenbox.fileCount} files)
+                        ({selectedUser.xendrive.fileCount} files)
                       </Typography>
                     </Typography>
                   </Box>
@@ -638,7 +652,7 @@ export default function Users() {
 
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                    XenBox Quota
+                    XenDrive Quota
                   </Typography>
                   <Box sx={{ display: "flex", gap: 1 }}>
                     <TextField
@@ -658,7 +672,9 @@ export default function Users() {
                       disabled={
                         isUpdatingUser ||
                         editingQuota ===
-                          (selectedUser.xenbox?.spaceAllowed ? formatFileSize(selectedUser.xenbox.spaceAllowed) : "")
+                          (selectedUser.xendrive?.spaceAllowed
+                            ? formatFileSize(selectedUser.xendrive.spaceAllowed)
+                            : "")
                       }
                     >
                       {isUpdatingUser ? "Saving..." : "Update"}
@@ -708,7 +724,7 @@ export default function Users() {
                     color="error"
                     size="small"
                     startIcon={<DeleteIcon />}
-                    onClick={() => setDeleteConfirmOpen(true)}
+                    onClick={confirmDeleteUser}
                     disabled={isDeletingUser}
                   >
                     Delete User
@@ -785,25 +801,6 @@ export default function Users() {
               </Box>
             )}
           </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
-          <DialogTitle>Delete User</DialogTitle>
-          <DialogContent>
-            <Typography>
-              Are you sure you want to delete user <strong>{selectedUser?.username}</strong>? This action cannot be
-              undone.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteConfirmOpen(false)} disabled={isDeletingUser}>
-              Cancel
-            </Button>
-            <Button onClick={handleDeleteUser} color="error" variant="contained" disabled={isDeletingUser}>
-              {isDeletingUser ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogActions>
         </Dialog>
       </PageContainer>
     </Box>

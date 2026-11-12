@@ -1,5 +1,6 @@
+import { xensplitKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import type { XenSplit, CreateXenSplitInput } from "./types";
 import { splitDeleted } from "./splitDeleted";
 
@@ -7,10 +8,9 @@ export function useXenSplits() {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xensplit", "groups"],
+    queryKey: xensplitKeys.groups(),
     queryFn: async () => {
-      const res = await apiClient.get("/api/xensplit/groups");
-      return res.data.data as XenSplit[];
+      return api.get<XenSplit[]>("/api/xensplit/groups");
     },
     // The group cards total group.expenses directly, so deleted records have to be out
     // of that array before it reaches them.
@@ -19,11 +19,10 @@ export function useXenSplits() {
 
   const createMutation = useMutation({
     mutationFn: async (input: CreateXenSplitInput) => {
-      const res = await apiClient.post("/api/xensplit/groups", input);
-      return res.data.data as XenSplit;
+      return api.post<XenSplit>("/api/xensplit/groups", input);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     },
   });
 
@@ -32,7 +31,7 @@ export function useXenSplits() {
       await apiClient.delete(`/api/xensplit/groups/${groupId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "groups"] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.groups() });
     },
   });
 

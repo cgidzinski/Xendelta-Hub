@@ -3,7 +3,9 @@
  * Centralized axios instance setup with authentication and error handling
  */
 
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from "axios";
+import type { ApiResponse } from "../types/api";
+import { tokenStore } from "./tokenStore";
 import { Bugsnag } from "./bugsnag";
 
 /**
@@ -60,7 +62,7 @@ const createAxiosInstance = (): AxiosInstance => {
   // Request interceptor to add auth token
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      const token = localStorage.getItem("token");
+      const token = tokenStore.get();
 
       // Add Authorization header if token exists
       if (token && config.headers) {
@@ -102,7 +104,7 @@ const createAxiosInstance = (): AxiosInstance => {
 
         if (status === 401) {
           // Unauthorized - clear token and redirect. Routine token-expiry flow, not a bug.
-          localStorage.removeItem("token");
+          tokenStore.clear();
           throw makeApiError("Unauthorized - please log in again", error, status);
         } else if (status === 403) {
           throw makeApiError(data?.message || "You are not authorized to perform this action", error, status);
@@ -130,3 +132,22 @@ const createAxiosInstance = (): AxiosInstance => {
 
 // Export configured axios instance
 export const apiClient = createAxiosInstance();
+
+/**
+ * Typed shorthand over `apiClient` for the app's standard `{ status, message, data }` envelope:
+ * resolves with `data` already unwrapped, so callers write `api.get<Book[]>(url)` instead of
+ * `(await apiClient.get(url)).data.data as Book[]`. Failures throw the same ApiError as apiClient.
+ * Reach for `apiClient` directly only when you need the raw response (headers, non-standard bodies).
+ */
+export const api = {
+  get: async <T>(url: string, config?: AxiosRequestConfig): Promise<T> =>
+    (await apiClient.get<ApiResponse<T>>(url, config)).data.data as T,
+  delete: async <T>(url: string, config?: AxiosRequestConfig): Promise<T> =>
+    (await apiClient.delete<ApiResponse<T>>(url, config)).data.data as T,
+  post: async <T>(url: string, body?: unknown, config?: AxiosRequestConfig): Promise<T> =>
+    (await apiClient.post<ApiResponse<T>>(url, body, config)).data.data as T,
+  put: async <T>(url: string, body?: unknown, config?: AxiosRequestConfig): Promise<T> =>
+    (await apiClient.put<ApiResponse<T>>(url, body, config)).data.data as T,
+  patch: async <T>(url: string, body?: unknown, config?: AxiosRequestConfig): Promise<T> =>
+    (await apiClient.patch<ApiResponse<T>>(url, body, config)).data.data as T,
+};

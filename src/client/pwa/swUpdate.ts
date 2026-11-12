@@ -6,7 +6,7 @@ import { registerSW } from "virtual:pwa-register";
 // detected but NOT activated automatically. We track that state here and expose it to
 // React (see hooks/usePWAUpdate.ts); the page only reloads onto the new build when the
 // user clicks "Reload" in the banner. This avoids reloading out from under someone
-// mid-action (composing a message, filling a form, uploading to Xenbox).
+// mid-action (composing a message, filling a form, uploading to Xendrive).
 //
 // needRefresh mirrors "is a worker sitting in `waiting`?" and is re-derived from the live
 // registration - it is deliberately NOT a latch. An earlier version only ever set it to

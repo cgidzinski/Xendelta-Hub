@@ -1,12 +1,6 @@
 import { createContext, useContext, useEffect, ReactNode } from "react";
 import { useAuthHook } from "../hooks/auth/useAuth";
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  avatar: string;
-}
+import type { AuthUser } from "../types/user";
 
 interface SignupData {
   username: string;
@@ -15,7 +9,7 @@ interface SignupData {
 }
 
 interface AuthContextType {
-  user: User;
+  user: AuthUser;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
@@ -36,8 +30,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const authHook = useAuthHook();
 
-  // Convert AuthUser to User format (id vs _id)
-  const user: User | null = authHook.user
+  // AuthUser has `id` where the API sends `_id`
+  const user: AuthUser | null = authHook.user
     ? {
         id: authHook.user.id,
         username: authHook.user.username,
@@ -51,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value: AuthContextType = {
-    user: user as User,
+    user: user as AuthUser,
     isAuthenticated: authHook.isAuthenticated,
     isLoading: authHook.isLoading,
     login: authHook.login,

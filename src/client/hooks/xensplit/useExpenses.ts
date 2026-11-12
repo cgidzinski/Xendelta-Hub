@@ -1,3 +1,4 @@
+import { xensplitKeys } from "./keys";
 import type { AxiosProgressEvent } from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
@@ -5,7 +6,7 @@ import type { CreateExpenseInput, UpdateExpenseInput } from "./types";
 
 export function useExpenseImageUrls(groupId: string, expenseId: string | undefined, imageCount: number) {
   return useQuery<{ _id: string; signedUrl: string }[]>({
-    queryKey: ["xensplit", "expense-image-urls", groupId, expenseId],
+    queryKey: xensplitKeys.expenseImageUrls(groupId, expenseId),
     queryFn: async () => {
       const res = await apiClient.get(`/api/xensplit/groups/${groupId}/expenses/${expenseId}/image-urls`);
       return res.data.data;
@@ -24,8 +25,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -35,8 +36,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -46,8 +47,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -59,8 +60,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -70,8 +71,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "balances", groupId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.balances(groupId) });
     },
   });
 
@@ -93,8 +94,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: (_data, { expenseId }) => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "expense-image-urls", groupId, expenseId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.expenseImageUrls(groupId, expenseId) });
     },
   });
 
@@ -104,8 +105,8 @@ export function useXenSplitExpenses(groupId: string) {
       return res.data;
     },
     onSuccess: (_data, { expenseId }) => {
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "group", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["xensplit", "expense-image-urls", groupId, expenseId] });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.group(groupId) });
+      queryClient.invalidateQueries({ queryKey: xensplitKeys.expenseImageUrls(groupId, expenseId) });
     },
   });
 

@@ -1,10 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { userProfileKeys } from "../user/useUserProfile";
 
 // Types
-export interface User {
+export interface AdminUser {
   _id: string;
   username: string;
   email: string;
@@ -20,7 +19,7 @@ export interface User {
     purchasedAt: string;
     used: boolean;
   }>;
-  xenbox?: {
+  xendrive?: {
     fileCount: number;
     spaceUsed: number;
     spaceAllowed: number;
@@ -28,7 +27,7 @@ export interface User {
 }
 
 interface UsersResponse {
-  users: User[];
+  users: AdminUser[];
 }
 
 // Query keys
@@ -38,12 +37,11 @@ export const adminUsersKeys = {
 };
 
 // API functions
-const fetchUsers = async (): Promise<User[]> => {
-  const response = await apiClient.get<ApiResponse<UsersResponse>>("/api/admin/users");
-  return response.data.data!.users;
+const fetchUsers = async (): Promise<AdminUser[]> => {
+  return (await api.get<UsersResponse>("/api/admin/users")).users;
 };
 
-const updateUser = async (userId: string, updates: { roles?: string[]; xenboxQuota?: number }): Promise<void> => {
+const updateUser = async (userId: string, updates: { roles?: string[]; xendriveQuota?: number }): Promise<void> => {
   await apiClient.put(`/api/admin/users/${userId}`, updates);
 };
 
@@ -76,11 +74,8 @@ const sendUserNotification = async (
   userId: string,
   data: { title: string; message: string; link?: string; channels: NotifyChannel[] },
 ): Promise<SendUserNotificationResult> => {
-  const response = await apiClient.post<ApiResponse<{ result: SendUserNotificationResult }>>(
-    `/api/admin/notifications/user/${userId}`,
-    data,
-  );
-  return response.data.data!.result;
+  return (await api.post<{ result: SendUserNotificationResult }>(`/api/admin/notifications/user/${userId}`, data))
+    .result;
 };
 
 // Hooks
@@ -108,7 +103,7 @@ export const useAdminUsers = () => {
 
   // Mutation for updating user
   const { mutateAsync: updateUserMutation, isPending: isUpdatingUser } = useMutation({
-    mutationFn: ({ userId, updates }: { userId: string; updates: { roles?: string[]; xenboxQuota?: number } }) =>
+    mutationFn: ({ userId, updates }: { userId: string; updates: { roles?: string[]; xendriveQuota?: number } }) =>
       updateUser(userId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminUsersKeys.users() });
@@ -181,7 +176,7 @@ export const useAdminUsers = () => {
     isError,
     error: error as Error | null,
     refetch,
-    updateUser: (userId: string, updates: { roles?: string[]; xenboxQuota?: number }) =>
+    updateUser: (userId: string, updates: { roles?: string[]; xendriveQuota?: number }) =>
       updateUserMutation({ userId, updates }),
     isUpdatingUser,
     deleteUser: (userId: string) => deleteUserMutation(userId),

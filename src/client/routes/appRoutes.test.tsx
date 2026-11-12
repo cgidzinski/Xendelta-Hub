@@ -3,7 +3,7 @@ import { Children, Fragment, isValidElement, type ReactNode } from "react";
 import { Route, createRoutesFromElements, matchRoutes } from "react-router-dom";
 import { APPS_REGISTRY } from "../constants/apps";
 import { recipaintRoutes } from "./Internal/Recipaint/routes";
-import { xenboxRoutes } from "./Internal/XenBox/routes";
+import { xendriveRoutes } from "./Internal/XenDrive/routes";
 import { xenlinkRoutes } from "./Internal/XenLink/routes";
 import { xensplitRoutes } from "./Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./Internal/XenRoutine/routes";
@@ -15,7 +15,7 @@ import { xenbudgetRoutes } from "./Internal/XenBudget/routes";
 // list it here and mount it in main.tsx.
 const ROUTES: Record<string, ReactNode> = {
   recipaint: recipaintRoutes,
-  xenbox: xenboxRoutes,
+  xendrive: xendriveRoutes,
   xenlink: xenlinkRoutes,
   xensplit: xensplitRoutes,
   xenroutine: xenroutineRoutes,
@@ -69,7 +69,8 @@ describe("app routes", () => {
     expect(hit("/internal/xenroutine/routines")).toEqual(["/internal", "xenroutine", "routines"]);
     expect(hit("/internal/xenkitchen/abc")).toEqual(["/internal", "xenkitchen/:id"]);
     expect(hit("/internal/recipaint/abc/paint")).toEqual(["/internal", "recipaint/:id/paint"]);
-    expect(hit("/internal/xenbox/f1")).toEqual(["/internal", "xenbox/:fileId"]);
+    expect(hit("/internal/xendrive/file/f1")).toEqual(["/internal", "xendrive/file/:fileId"]);
+    expect(hit("/internal/xendrive/folder/d1")).toEqual(["/internal", "xendrive/folder/:folderId"]);
     expect(hit("/internal/nowhere")).toBeUndefined();
   });
 });

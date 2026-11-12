@@ -1,15 +1,15 @@
+import { xenbudgetKeys } from "./keys";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { apiClient, api } from "../../config/api";
 import type { XenBudgetBook, UpdateBookInput } from "./types";
 
 export function useXenBudgetBook(bookId: string) {
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["xenbudget", "book", bookId],
+    queryKey: xenbudgetKeys.book(bookId),
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xenbudget/books/${bookId}`);
-      return res.data.data as XenBudgetBook;
+      return api.get<XenBudgetBook>(`/api/xenbudget/books/${bookId}`);
     },
     enabled: !!bookId,
     staleTime: 0,
@@ -19,30 +19,27 @@ export function useXenBudgetBook(bookId: string) {
   });
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.books() });
   };
 
   const updateMutation = useMutation({
     mutationFn: async (input: UpdateBookInput) => {
-      const res = await apiClient.put(`/api/xenbudget/books/${bookId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`/api/xenbudget/books/${bookId}`, input);
     },
     onSuccess: invalidate,
   });
 
   const addMembersMutation = useMutation({
     mutationFn: async (memberIds: string[]) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/members`, { memberIds });
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(`/api/xenbudget/books/${bookId}/members`, { memberIds });
     },
     onSuccess: invalidate,
   });
 
   const removeMemberMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/members/${userId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`/api/xenbudget/books/${bookId}/members/${userId}`);
     },
     onSuccess: invalidate,
   });
@@ -52,8 +49,8 @@ export function useXenBudgetBook(bookId: string) {
       await apiClient.delete(`/api/xenbudget/books/${bookId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "books"] });
-      queryClient.removeQueries({ queryKey: ["xenbudget", "book", bookId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.books() });
+      queryClient.removeQueries({ queryKey: xenbudgetKeys.book(bookId) });
     },
   });
 

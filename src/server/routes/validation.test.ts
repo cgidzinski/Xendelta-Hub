@@ -15,7 +15,7 @@ beforeAll(async () => {
     () => import("./xenlink.js"),
     () => import("./points.js"),
     () => import("./users.js"),
-    () => import("./xenbox.js"),
+    () => import("./xendrive.js"),
     () => import("./recipaint.js"),
     () => import("./paints.js"),
     () => import("./blog.js"),
@@ -39,7 +39,7 @@ describe("path parameters must be ObjectIds", () => {
     ["PUT", `/api/paints/${BAD_ID}`],
     ["GET", `/api/recipaint/${BAD_ID}`],
     ["DELETE", `/api/recipaint/${BAD_ID}`],
-    ["GET", `/api/xenbox/files/${BAD_ID}/url`],
+    ["GET", `/api/xendrive/files/${BAD_ID}/url`],
     ["DELETE", `/api/user/inventory/${BAD_ID}`],
   ])("%s %s -> 400 (not a CastError 500)", async (method, url) => {
     const res = await (request(t.app) as any)[method.toLowerCase()](url).set(as(token)).send({});
@@ -104,14 +104,14 @@ describe("request bodies", () => {
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
   });
 
-  it("XenBox upload initiation needs sane numbers", async () => {
+  it("XenDrive upload initiation needs sane numbers", async () => {
     const bad = await request(t.app)
-      .post("/api/xenbox/initiate")
+      .post("/api/xendrive/initiate")
       .set(as(token))
       .send({ filename: "a.bin", totalChunks: 0, fileSize: 10 });
     expect(bad.status).toBe(400);
     const strings = await request(t.app)
-      .post("/api/xenbox/initiate")
+      .post("/api/xendrive/initiate")
       .set(as(token))
       .send({ filename: "a.bin", totalChunks: "2", fileSize: 10 });
     expect(strings.status).toBe(400);
@@ -122,9 +122,9 @@ describe("request bodies", () => {
     const url = `/api/admin/users/${target.user._id}`;
     const bad = await request(t.app).put(url).set(as(adminToken)).send({ roles: "admin" });
     expect(bad.status).toBe(400);
-    const negative = await request(t.app).put(url).set(as(adminToken)).send({ xenboxQuota: -5 });
+    const negative = await request(t.app).put(url).set(as(adminToken)).send({ xendriveQuota: -5 });
     expect(negative.status).toBe(400);
-    const ok = await request(t.app).put(url).set(as(adminToken)).send({ xenboxQuota: 322122547.2 });
+    const ok = await request(t.app).put(url).set(as(adminToken)).send({ xendriveQuota: 322122547.2 });
     expect(ok.status).toBe(200);
   });
 });
@@ -136,8 +136,8 @@ describe("query strings and public tokens", () => {
     expect((await request(t.app).get("/api/blog?page=2&limit=5")).status).toBe(200);
   });
 
-  it("a malformed XenBox share token is refused before any lookup", async () => {
-    const res = await request(t.app).get("/api/xenbox/info/%24ne");
+  it("a malformed XenDrive share token is refused before any lookup", async () => {
+    const res = await request(t.app).get("/api/xendrive/info/%24ne");
     expect(res.status).toBe(400);
   });
 });

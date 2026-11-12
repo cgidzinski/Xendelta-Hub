@@ -1,5 +1,6 @@
+import { xenbudgetKeys } from "./keys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { api } from "../../config/api";
 import type { XenBudgetBook } from "./types";
 
 export interface LabelInput {
@@ -22,34 +23,31 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.items(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.summary(bookId) });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.budgetStatus(bookId) });
   };
 
   const base = `/api/xenbudget/books/${bookId}/${kind}`;
 
   const createMutation = useMutation({
     mutationFn: async (input: LabelInput) => {
-      const res = await apiClient.post(base, input);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(base, input);
     },
     onSuccess: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ labelId, input }: { labelId: string; input: LabelInput }) => {
-      const res = await apiClient.put(`${base}/${labelId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`${base}/${labelId}`, input);
     },
     onSuccess: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (labelId: string) => {
-      const res = await apiClient.delete(`${base}/${labelId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`${base}/${labelId}`);
     },
     onSuccess: invalidate,
   });
@@ -73,10 +71,9 @@ export function useXenBudgetLabels(bookId: string, kind: LabelKind) {
  */
 export function useXenBudgetCategoryItemCounts(bookId: string) {
   const query = useQuery({
-    queryKey: ["xenbudget", "category-item-counts", bookId],
+    queryKey: xenbudgetKeys.categoryItemCounts(bookId),
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xenbudget/books/${bookId}/categories/counts`);
-      return res.data.data as Record<string, number>;
+      return api.get<Record<string, number>>(`/api/xenbudget/books/${bookId}/categories/counts`);
     },
     enabled: !!bookId,
   });
@@ -93,14 +90,13 @@ export function useXenBudgetReseedLabels(bookId: string) {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/reseed-labels`);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(`/api/xenbudget/books/${bookId}/reseed-labels`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "items", bookId] });
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "summary", bookId] });
-      queryClient.invalidateQueries({ queryKey: ["xenbudget", "budget-status", bookId] });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.items(bookId) });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.summary(bookId) });
+      queryClient.invalidateQueries({ queryKey: xenbudgetKeys.budgetStatus(bookId) });
     },
   });
 

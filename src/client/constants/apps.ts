@@ -28,11 +28,11 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     description: "Create and manage your recipes",
   },
   {
-    key: "xenbox",
-    label: "XenBox",
+    key: "xendrive",
+    label: "XenDrive",
     icon: FolderIcon,
-    path: "/internal/xenbox",
-    description: "Store and share your files",
+    path: "/internal/xendrive",
+    description: "Store files in folders and share them",
   },
   {
     key: "xenlink",

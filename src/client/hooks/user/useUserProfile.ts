@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { api } from "../../config/api";
 import type { EtransferInfo } from "@shared/etransfer";
 
 /** "" is the default (never chosen) and resolves to dark; "system" explicitly follows the OS. */
@@ -27,7 +26,7 @@ export interface UserProfile {
   emailNotifications: boolean;
   /** Where XenSplit tells others to send this user's settlements. Blank handle means unset. */
   etransfer: EtransferInfo;
-  xenbox: {
+  xendrive: {
     fileCount: number;
     spaceUsed: number;
     spaceAllowed: number;
@@ -66,13 +65,11 @@ export const userProfileKeys = {
 
 // API functions
 const fetchCurrentUserProfile = async (): Promise<UserProfile> => {
-  const response = await apiClient.get<ApiResponse<{ user: UserProfile }>>("/api/user/profile");
-  return response.data.data!.user;
+  return (await api.get<{ user: UserProfile }>("/api/user/profile")).user;
 };
 
 const updateCurrentUserProfile = async (data: UpdateProfileData): Promise<UserProfile> => {
-  const response = await apiClient.put<ApiResponse<{ user: UserProfile }>>("/api/user/profile", data);
-  return response.data.data!.user;
+  return (await api.put<{ user: UserProfile }>("/api/user/profile", data)).user;
 };
 
 // Hooks
@@ -107,7 +104,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
     onSuccess: () => {
       // Refetch rather than writing the response into the cache: the update endpoint
       // returns only the handful of fields it touches, so seeding the cache with it
-      // would drop pinnedApps, points and the xenbox quota until the next reload.
+      // would drop pinnedApps, points and the xendrive quota until the next reload.
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
     onError: () => {

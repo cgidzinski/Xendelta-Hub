@@ -30,7 +30,8 @@ import ListSkeleton from "../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { useUserMessages, Conversation } from "../../../hooks/user/useUserMessages";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
-import { useUsers, User } from "../../../hooks/user/useUsers";
+import { useUsers } from "../../../hooks/user/useUsers";
+import type { PublicUser } from "../../../types/user";
 import { useSocket } from "../../../hooks/useSocket";
 import { useQueryClient } from "@tanstack/react-query";
 import { getParticipantDisplay } from "../../../utils/conversationUtils";
@@ -47,7 +48,7 @@ export default function Messages() {
   const { socket } = useSocket();
   useSnackbar();
   const [newConversationOpen, setNewConversationOpen] = useState(false);
-  const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<PublicUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const { users, isLoading: loadingUsers } = useUsers();
 
@@ -312,7 +313,7 @@ export default function Messages() {
                           width: 100,
                         }}
                       >
-                        <Avatar src={user.avatar} sx={{ width: 56, height: 56 }}>
+                        <Avatar src={user.avatar ?? undefined} sx={{ width: 56, height: 56 }}>
                           {user.username.charAt(0).toUpperCase()}
                         </Avatar>
                         <Typography variant="body2" sx={{ textAlign: "center", fontWeight: isSelected ? 600 : 400 }}>

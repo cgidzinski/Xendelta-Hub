@@ -31,7 +31,7 @@ export function writeStored(storage: StorageLike | undefined, key: string, value
   }
 }
 
-function browserStorage(): Storage | undefined {
+export function browserStorage(): Storage | undefined {
   try {
     return typeof window === "undefined" ? undefined : window.localStorage;
   } catch {
@@ -53,4 +53,22 @@ export function useLocalStorageState<T>(
     [key],
   );
   return [value, set];
+}
+
+/** A raw string from localStorage, or null if it is missing or storage is blocked. */
+export function getRawStored(key: string): string | null {
+  try {
+    return browserStorage()?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Store a raw string; silently does nothing when storage is blocked or full. */
+export function setRawStored(key: string, value: string): void {
+  try {
+    browserStorage()?.setItem(key, value);
+  } catch {
+    /* storage unavailable or full */
+  }
 }

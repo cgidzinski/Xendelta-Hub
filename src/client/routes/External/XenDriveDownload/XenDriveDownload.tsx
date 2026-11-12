@@ -25,7 +25,7 @@ interface FileInfo {
   expiry: string | null;
 }
 
-export default function XenBoxDownload() {
+export default function XenDriveDownload() {
   const { shareToken } = useParams<{ shareToken: string }>();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export default function XenBoxDownload() {
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  useTitle("Download File - XenBox");
+  useTitle("Download File - XenDrive");
 
   useEffect(() => {
     if (!shareToken) {
@@ -53,12 +53,12 @@ export default function XenBoxDownload() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/xenbox/info/${shareToken}`);
+      const response = await fetch(`/api/xendrive/info/${shareToken}`);
       const data = await response.json();
 
       if (response.ok && data.status) {
         setFileInfo({
-          filename: data.data.filename || "File",
+          filename: data.data.name || "File",
           size: data.data.size || 0,
           mimeType: data.data.mimeType || "application/octet-stream",
           requiresPassword: data.data.requiresPassword || false,
@@ -93,7 +93,7 @@ export default function XenBoxDownload() {
     }
     setError(null);
 
-    const url = `/api/xenbox/download/${shareToken}${password ? `?password=${encodeURIComponent(password)}` : ""}`;
+    const url = `/api/xendrive/download/${shareToken}${password ? `?password=${encodeURIComponent(password)}` : ""}`;
 
     const response = await fetch(url, {
       method: "GET",
@@ -137,10 +137,11 @@ export default function XenBoxDownload() {
     const contentDisposition = response.headers.get("Content-Disposition");
     let filename = "download";
     if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
-      if (filenameMatch) {
-        filename = filenameMatch[1];
-      }
+      // The server sends the name RFC 5987-encoded (filename*=UTF-8''...) so any name survives
+      const encoded = contentDisposition.match(/filename*=UTF-8''([^;]+)/i);
+      const plain = contentDisposition.match(/filename="?([^";]+)"?/);
+      if (encoded) filename = decodeURIComponent(encoded[1]);
+      else if (plain) filename = plain[1];
     }
 
     // Create blob and download

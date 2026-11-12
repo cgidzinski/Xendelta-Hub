@@ -1,5 +1,6 @@
+import { xenbudgetKeys } from "./keys";
 import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { api } from "../../config/api";
 import type { XenBudgetSummary } from "./types";
 
 export interface SummaryParams {
@@ -19,9 +20,9 @@ export interface SummaryParams {
  */
 export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) {
   const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
-    queryKey: ["xenbudget", "summary", bookId, params],
+    queryKey: xenbudgetKeys.summary(bookId, params),
     queryFn: async () => {
-      const res = await apiClient.get(`/api/xenbudget/books/${bookId}/summary`, {
+      return api.get<XenBudgetSummary>(`/api/xenbudget/books/${bookId}/summary`, {
         params: {
           ...(params.from ? { from: params.from } : {}),
           ...(params.to ? { to: params.to } : {}),
@@ -32,7 +33,6 @@ export function useXenBudgetSummary(bookId: string, params: SummaryParams = {}) 
           ...(params.people?.length ? { people: params.people.join(",") } : {}),
         },
       });
-      return res.data.data as XenBudgetSummary;
     },
     enabled: !!bookId,
     staleTime: 0,

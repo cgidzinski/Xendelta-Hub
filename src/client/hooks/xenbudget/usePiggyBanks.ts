@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetBook, PiggyBankInput, ContributionInput } from "./types";
 
@@ -18,32 +18,28 @@ export function useXenBudgetPiggyBanks(bookId: string) {
 
   const createMutation = useMutation({
     mutationFn: async (input: PiggyBankInput) => {
-      const res = await apiClient.post(base, input);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(base, input);
     },
     onSuccess: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ bankId, input }: { bankId: string; input: PiggyBankInput }) => {
-      const res = await apiClient.put(`${base}/${bankId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`${base}/${bankId}`, input);
     },
     onSuccess: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (bankId: string) => {
-      const res = await apiClient.delete(`${base}/${bankId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`${base}/${bankId}`);
     },
     onSuccess: invalidate,
   });
 
   const addContributionMutation = useMutation({
     mutationFn: async ({ bankId, input }: { bankId: string; input: ContributionInput }) => {
-      const res = await apiClient.post(`${base}/${bankId}/contributions`, input);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(`${base}/${bankId}/contributions`, input);
     },
     onSuccess: invalidate,
   });
@@ -58,16 +54,14 @@ export function useXenBudgetPiggyBanks(bookId: string) {
       contributionId: string;
       input: Partial<ContributionInput>;
     }) => {
-      const res = await apiClient.put(`${base}/${bankId}/contributions/${contributionId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`${base}/${bankId}/contributions/${contributionId}`, input);
     },
     onSuccess: invalidate,
   });
 
   const deleteContributionMutation = useMutation({
     mutationFn: async ({ bankId, contributionId }: { bankId: string; contributionId: string }) => {
-      const res = await apiClient.delete(`${base}/${bankId}/contributions/${contributionId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`${base}/${bankId}/contributions/${contributionId}`);
     },
     onSuccess: invalidate,
   });

@@ -1,8 +1,7 @@
 import { useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/AuthContext";
-import { apiClient } from "../../config/api";
-import { ApiResponse } from "../../types/api";
+import { apiClient, api } from "../../config/api";
 import { InboxItem, NotificationInboxItem, ConversationInboxItem } from "../../types/InboxItem";
 import { Notification } from "./useUserNotifications";
 import { Conversation } from "./useUserMessages";
@@ -28,20 +27,16 @@ export const inboxKeys = {
 
 // API functions
 const fetchNotifications = async (): Promise<Notification[]> => {
-  const response = await apiClient.get<ApiResponse<{ notifications: Notification[] }>>("/api/user/notifications");
-  return response.data.data!.notifications;
+  return (await api.get<{ notifications: Notification[] }>("/api/user/notifications")).notifications;
 };
 
 const fetchConversations = async (): Promise<Conversation[]> => {
-  const response = await apiClient.get<ApiResponse<{ conversations: Conversation[] }>>("/api/user/messages");
-  return response.data.data!.conversations;
+  return (await api.get<{ conversations: Conversation[] }>("/api/user/messages")).conversations;
 };
 
 const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-  const response = await apiClient.put<ApiResponse<{ notification: Notification }>>(
-    `/api/user/notifications/${notificationId}/mark-read`,
-  );
-  return response.data.data!.notification;
+  return (await api.put<{ notification: Notification }>(`/api/user/notifications/${notificationId}/mark-read`))
+    .notification;
 };
 
 const markConversationAsRead = async (conversationId: string): Promise<void> => {

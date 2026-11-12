@@ -1,5 +1,6 @@
+import { xenbudgetKeys } from "./keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../../config/api";
+import { api } from "../../config/api";
 import { invalidateItemDerived } from "./invalidate";
 import type { XenBudgetBook, RuleInput, ReapplyResult } from "./types";
 
@@ -30,7 +31,7 @@ export function useXenBudgetRules(bookId: string) {
   const queryClient = useQueryClient();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["xenbudget", "book", bookId] });
+    queryClient.invalidateQueries({ queryKey: xenbudgetKeys.book(bookId) });
   };
 
   // A sweep rewrites categories, flags and exclusions across the book, so everything
@@ -39,32 +40,28 @@ export function useXenBudgetRules(bookId: string) {
 
   const createMutation = useMutation({
     mutationFn: async (input: RuleInput) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/rules`, input);
-      return res.data.data as XenBudgetBook;
+      return api.post<XenBudgetBook>(`/api/xenbudget/books/${bookId}/rules`, input);
     },
     onSuccess: invalidate,
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ ruleId, input }: { ruleId: string; input: RuleInput }) => {
-      const res = await apiClient.put(`/api/xenbudget/books/${bookId}/rules/${ruleId}`, input);
-      return res.data.data as XenBudgetBook;
+      return api.put<XenBudgetBook>(`/api/xenbudget/books/${bookId}/rules/${ruleId}`, input);
     },
     onSuccess: invalidate,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (ruleId: string) => {
-      const res = await apiClient.delete(`/api/xenbudget/books/${bookId}/rules/${ruleId}`);
-      return res.data.data as XenBudgetBook;
+      return api.delete<XenBudgetBook>(`/api/xenbudget/books/${bookId}/rules/${ruleId}`);
     },
     onSuccess: invalidate,
   });
 
   const reapplyMutation = useMutation({
     mutationFn: async (opts: { dry_run?: boolean; include_manually_edited?: boolean; exclude_ids?: string[] }) => {
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/rules/reapply`, opts);
-      return res.data.data as ReapplyResult;
+      return api.post<ReapplyResult>(`/api/xenbudget/books/${bookId}/rules/reapply`, opts);
     },
     // A dry run writes nothing, so only a real sweep needs to invalidate.
     onSuccess: (data) => {
@@ -75,8 +72,7 @@ export function useXenBudgetRules(bookId: string) {
   const previewMutation = useMutation({
     mutationFn: async ({ input, ruleId }: { input: RuleInput; ruleId?: string }) => {
       const query = ruleId ? `?ruleId=${encodeURIComponent(ruleId)}` : "";
-      const res = await apiClient.post(`/api/xenbudget/books/${bookId}/rules/preview${query}`, input);
-      return res.data.data as RulePreviewResult;
+      return api.post<RulePreviewResult>(`/api/xenbudget/books/${bookId}/rules/preview${query}`, input);
     },
   });
 

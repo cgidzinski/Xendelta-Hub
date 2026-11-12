@@ -13,12 +13,12 @@ import {
   Paper,
   Divider,
   IconButton,
-  Grid,
 } from "@mui/material";
 import { Email, LockReset as ResetIcon, ArrowBack, Lock, Visibility, VisibilityOff } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../contexts/AuthContext";
+import AuthSplitLayout from "../../../components/auth/AuthSplitLayout";
 import LandingHeader from "../../../components/LandingHeader";
 import { NEON } from "../../../theme";
 interface ResetFormData {
@@ -466,351 +466,224 @@ export default function Reset() {
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <LandingHeader />
-      <Box sx={{ flex: 1, display: "flex", alignItems: "center", py: { xs: 4, md: 0 } }}>
-        <Container maxWidth="lg" sx={{ width: "100%" }}>
-          <Grid container spacing={0} sx={{ minHeight: { md: "70vh" } }}>
-            {/* Left Side - Welcome Section */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box
-                sx={{
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  alignItems: { xs: "center", md: "flex-start" },
-                  px: { xs: 2, md: 6 },
-                  py: { xs: 4, md: 8 },
-                  textAlign: { xs: "center", md: "left" },
-                }}
+    <AuthSplitLayout
+      icon={<ResetIcon sx={{ fontSize: 40 }} />}
+      title={token ? "Reset Your Password" : "Reset Password"}
+      subtitle={
+        token
+          ? `Enter a new password for ${userInfo?.email}`
+          : "Enter your email address and we'll send you a link to reset your password"
+      }
+      footnote={
+        token
+          ? "Choose a strong password to keep your account secure."
+          : "We'll help you regain access to your account quickly and securely."
+      }
+    >
+      <Box>
+        {errors.general && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {errors.general}
+          </Alert>
+        )}
+
+        {token ? (
+          // Token-based password reset form
+          <>
+            <TextField
+              margin="normal"
+              fullWidth
+              id="email"
+              label="Email Address"
+              name="email"
+              type="email"
+              value={formData.email}
+              disabled
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Email color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ mb: 3 }}
+            />
+
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="newPassword"
+              label="New Password"
+              name="newPassword"
+              type={showPassword ? "text" : "password"}
+              autoFocus
+              value={formData.newPassword}
+              onChange={handleInputChange("newPassword")}
+              error={!!errors.newPassword}
+              helperText={errors.newPassword}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Lock color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                      sx={{ minWidth: "auto", p: 1 }}
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ mb: 3 }}
+            />
+
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="confirmPassword"
+              label="Confirm New Password"
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              value={formData.confirmPassword}
+              onChange={handleInputChange("confirmPassword")}
+              error={!!errors.confirmPassword}
+              helperText={errors.confirmPassword}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Lock color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      edge="end"
+                      sx={{ minWidth: "auto", p: 1 }}
+                    >
+                      {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ mb: 3 }}
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={isLoading}
+              onClick={handleSubmit}
+              sx={{
+                mt: 2,
+                mb: 2,
+                py: 1.5,
+                fontSize: "1.1rem",
+                fontWeight: 600,
+                backgroundColor: "primary.main",
+                "&:hover": {
+                  backgroundColor: "primary.dark",
+                },
+                "&:disabled": {
+                  boxShadow: "none",
+                },
+              }}
+            >
+              {isLoading ? <CircularProgress size={24} color="inherit" /> : "Reset Password"}
+            </Button>
+          </>
+        ) : (
+          // Email-based forgot password form
+          <>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="email"
+              label="Email Address"
+              name="email"
+              type="email"
+              autoFocus
+              value={formData.email}
+              onChange={handleInputChange("email")}
+              error={!!errors.email}
+              helperText={errors.email}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Email color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ mb: 3 }}
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={isLoading}
+              onClick={handleSubmit}
+              sx={{
+                mt: 2,
+                mb: 2,
+                py: 1.5,
+                fontSize: "1.1rem",
+                fontWeight: 600,
+                backgroundColor: "primary.main",
+                "&:hover": {
+                  backgroundColor: "primary.dark",
+                },
+                "&:disabled": {
+                  boxShadow: "none",
+                },
+              }}
+            >
+              {isLoading ? <CircularProgress size={24} color="inherit" /> : "Send Reset Email"}
+            </Button>
+
+            <Divider sx={{ my: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                OR
+              </Typography>
+            </Divider>
+
+            <Box sx={{ textAlign: "center", mt: 2 }}>
+              <Button
+                onClick={handleBackToLogin}
+                variant="text"
+                color="primary"
+                startIcon={<ArrowBack />}
+                sx={{ textTransform: "none", fontWeight: "bold" }}
               >
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: { xs: 4, md: 12 },
-                    borderRadius: 4,
-                    backgroundColor: "transparent",
-                    border: "1px solid",
-                    borderColor: "divider",
-                    position: "relative",
-                    overflow: "hidden",
-                    "&::after": {
-                      content: '""',
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: "2px",
-                      background: `linear-gradient(90deg, transparent, ${accent.cyan}, transparent)`,
-                    },
-                  }}
+                Back to Login
+              </Button>
+            </Box>
+
+            <Box sx={{ textAlign: "center", mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Remember your password?{" "}
+                <Button
+                  variant="text"
+                  color="primary"
+                  onClick={() => navigate("/login")}
+                  sx={{ textTransform: "none" }}
                 >
-                  <Box
-                    sx={{
-                      position: "relative",
-                      zIndex: 1,
-                      width: 80,
-                      height: 80,
-                      borderRadius: 3,
-                      backgroundColor: "transparent",
-                      border: "2px solid",
-                      borderColor: "primary.main",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "primary.main",
-                      mb: 3,
-                      mx: { xs: "auto", md: 0 },
-                    }}
-                  >
-                    <ResetIcon sx={{ fontSize: 40 }} />
-                  </Box>
-                  <Typography
-                    component="h1"
-                    variant="h3"
-                    fontWeight="bold"
-                    sx={{
-                      position: "relative",
-                      zIndex: 1,
-                      mb: 2,
-                      background: `linear-gradient(135deg, ${accent.cyan} 0%, ${accent.cyanMid} 50%, ${accent.blue} 100%)`,
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      backgroundClip: "text",
-                      fontSize: { xs: "2rem", md: "2.5rem" },
-                    }}
-                  >
-                    {token ? "Reset Your Password" : "Reset Password"}
-                  </Typography>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      position: "relative",
-                      zIndex: 1,
-                      color: "text.secondary",
-                      mb: 3,
-                      fontWeight: 400,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    {token
-                      ? `Enter a new password for ${userInfo?.email}`
-                      : "Enter your email address and we'll send you a link to reset your password"}
-                  </Typography>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      position: "relative",
-                      zIndex: 1,
-                      color: "text.secondary",
-                      opacity: 0.8,
-                    }}
-                  >
-                    {token
-                      ? "Choose a strong password to keep your account secure."
-                      : "We'll help you regain access to your account quickly and securely."}
-                  </Typography>
-                </Paper>
-              </Box>
-            </Grid>
-
-            {/* Right Side - Reset Form */}
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box
-                sx={{
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                  px: { xs: 2, md: 6 },
-                  py: { xs: 4, md: 8 },
-                }}
-              >
-                <Card
-                  elevation={0}
-                  sx={{
-                    width: "100%",
-                    maxWidth: 500,
-                    mx: "auto",
-                    borderRadius: 3,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    backgroundColor: "background.paper",
-                  }}
-                >
-                  <CardContent sx={{ padding: 4 }}>
-                    <Box>
-                      {errors.general && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                          {errors.general}
-                        </Alert>
-                      )}
-
-                      {token ? (
-                        // Token-based password reset form
-                        <>
-                          <TextField
-                            margin="normal"
-                            fullWidth
-                            id="email"
-                            label="Email Address"
-                            name="email"
-                            type="email"
-                            value={formData.email}
-                            disabled
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <Email color="action" />
-                                </InputAdornment>
-                              ),
-                            }}
-                            sx={{ mb: 3 }}
-                          />
-
-                          <TextField
-                            margin="normal"
-                            required
-                            fullWidth
-                            id="newPassword"
-                            label="New Password"
-                            name="newPassword"
-                            type={showPassword ? "text" : "password"}
-                            autoFocus
-                            value={formData.newPassword}
-                            onChange={handleInputChange("newPassword")}
-                            error={!!errors.newPassword}
-                            helperText={errors.newPassword}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <Lock color="action" />
-                                </InputAdornment>
-                              ),
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    edge="end"
-                                    sx={{ minWidth: "auto", p: 1 }}
-                                  >
-                                    {showPassword ? <VisibilityOff /> : <Visibility />}
-                                  </IconButton>
-                                </InputAdornment>
-                              ),
-                            }}
-                            sx={{ mb: 3 }}
-                          />
-
-                          <TextField
-                            margin="normal"
-                            required
-                            fullWidth
-                            id="confirmPassword"
-                            label="Confirm New Password"
-                            name="confirmPassword"
-                            type={showConfirmPassword ? "text" : "password"}
-                            value={formData.confirmPassword}
-                            onChange={handleInputChange("confirmPassword")}
-                            error={!!errors.confirmPassword}
-                            helperText={errors.confirmPassword}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <Lock color="action" />
-                                </InputAdornment>
-                              ),
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    edge="end"
-                                    sx={{ minWidth: "auto", p: 1 }}
-                                  >
-                                    {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                                  </IconButton>
-                                </InputAdornment>
-                              ),
-                            }}
-                            sx={{ mb: 3 }}
-                          />
-
-                          <Button
-                            type="submit"
-                            fullWidth
-                            variant="contained"
-                            disabled={isLoading}
-                            onClick={handleSubmit}
-                            sx={{
-                              mt: 2,
-                              mb: 2,
-                              py: 1.5,
-                              fontSize: "1.1rem",
-                              fontWeight: 600,
-                              backgroundColor: "primary.main",
-                              "&:hover": {
-                                backgroundColor: "primary.dark",
-                              },
-                              "&:disabled": {
-                                boxShadow: "none",
-                              },
-                            }}
-                          >
-                            {isLoading ? <CircularProgress size={24} color="inherit" /> : "Reset Password"}
-                          </Button>
-                        </>
-                      ) : (
-                        // Email-based forgot password form
-                        <>
-                          <TextField
-                            margin="normal"
-                            required
-                            fullWidth
-                            id="email"
-                            label="Email Address"
-                            name="email"
-                            type="email"
-                            autoFocus
-                            value={formData.email}
-                            onChange={handleInputChange("email")}
-                            error={!!errors.email}
-                            helperText={errors.email}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <Email color="action" />
-                                </InputAdornment>
-                              ),
-                            }}
-                            sx={{ mb: 3 }}
-                          />
-
-                          <Button
-                            type="submit"
-                            fullWidth
-                            variant="contained"
-                            disabled={isLoading}
-                            onClick={handleSubmit}
-                            sx={{
-                              mt: 2,
-                              mb: 2,
-                              py: 1.5,
-                              fontSize: "1.1rem",
-                              fontWeight: 600,
-                              backgroundColor: "primary.main",
-                              "&:hover": {
-                                backgroundColor: "primary.dark",
-                              },
-                              "&:disabled": {
-                                boxShadow: "none",
-                              },
-                            }}
-                          >
-                            {isLoading ? <CircularProgress size={24} color="inherit" /> : "Send Reset Email"}
-                          </Button>
-
-                          <Divider sx={{ my: 2 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              OR
-                            </Typography>
-                          </Divider>
-
-                          <Box sx={{ textAlign: "center", mt: 2 }}>
-                            <Button
-                              onClick={handleBackToLogin}
-                              variant="text"
-                              color="primary"
-                              startIcon={<ArrowBack />}
-                              sx={{ textTransform: "none", fontWeight: "bold" }}
-                            >
-                              Back to Login
-                            </Button>
-                          </Box>
-
-                          <Box sx={{ textAlign: "center", mt: 2 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Remember your password?{" "}
-                              <Button
-                                variant="text"
-                                color="primary"
-                                onClick={() => navigate("/login")}
-                                sx={{ textTransform: "none" }}
-                              >
-                                Sign in here
-                              </Button>
-                            </Typography>
-                          </Box>
-                        </>
-                      )}
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Box>
-            </Grid>
-          </Grid>
-        </Container>
+                  Sign in here
+                </Button>
+              </Typography>
+            </Box>
+          </>
+        )}
       </Box>
-    </Box>
+    </AuthSplitLayout>
   );
 }

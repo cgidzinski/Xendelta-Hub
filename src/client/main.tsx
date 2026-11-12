@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
-import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route } from "react-router-dom";
+import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
 import AppThemeProvider from "./theme/AppThemeProvider";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
@@ -24,7 +24,7 @@ import AdminNavBar from "./components/navbars/AdminNavBar";
 // Contexts
 import { lazyPage } from "./utils/lazyPage";
 import { recipaintRoutes } from "./routes/Internal/Recipaint/routes";
-import { xenboxRoutes } from "./routes/Internal/XenBox/routes";
+import { xendriveRoutes } from "./routes/Internal/XenDrive/routes";
 import { xenlinkRoutes } from "./routes/Internal/XenLink/routes";
 import { xensplitRoutes } from "./routes/Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./routes/Internal/XenRoutine/routes";
@@ -43,7 +43,8 @@ const Login = lazyPage(() => import("./routes/External/Auth/Login"));
 const Signup = lazyPage(() => import("./routes/External/Auth/Signup"));
 const Reset = lazyPage(() => import("./routes/External/Auth/Reset"));
 const AuthCallback = lazyPage(() => import("./routes/External/Auth/AuthCallback"));
-const XenBoxDownload = lazyPage(() => import("./routes/External/XenBoxDownload/XenBoxDownload"));
+const XenDriveDownload = lazyPage(() => import("./routes/External/XenDriveDownload/XenDriveDownload"));
+const XenDriveFolderPublic = lazyPage(() => import("./routes/External/XenDriveFolderPublic/XenDriveFolderPublic"));
 
 // Routes - Internal
 const Home = lazyPage(() => import("./routes/Internal/Home/Home"));
@@ -139,7 +140,8 @@ const router = createBrowserRouter(
         }
         errorElement={<ErrorPage />}
       />
-      <Route path="/xenbox/:shareToken" element={<XenBoxDownload />} errorElement={<ErrorPage />} />
+      <Route path="/xendrive/:shareToken" element={<XenDriveDownload />} errorElement={<ErrorPage />} />
+      <Route path="/xendrive/f/:token" element={<XenDriveFolderPublic />} errorElement={<ErrorPage />} />
       <Route path="/x/:slug" element={<XenLinkRedirect />} errorElement={<ErrorPage />} />
       <Route path="/recipaint/:id" element={<RecipaintPublic />} errorElement={<ErrorPage />} />
       <Route path="/k/:token" element={<XenKitchenPublic />} errorElement={<ErrorPage />} />
@@ -163,7 +165,9 @@ const router = createBrowserRouter(
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         {recipaintRoutes}
-        {xenboxRoutes}
+        {xendriveRoutes}
+        {/* XenDrive was called XenBox: keep old bookmarks working */}
+        <Route path="xenbox/*" element={<Navigate to="/internal/xendrive" replace />} />
         {xenlinkRoutes}
         <Route path="shop" element={<Shop />} />
         <Route path="inventory" element={<Inventory />} />

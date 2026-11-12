@@ -43,3 +43,11 @@ describe("readStored / writeStored", () => {
     expect(() => writeStored(undefined, "k", 1)).not.toThrow();
   });
 });
+
+describe("raw string helpers", () => {
+  it("read as null and write as a no-op when there is no storage (blocked / server)", async () => {
+    const { getRawStored, setRawStored } = await import("./useLocalStorageState");
+    expect(getRawStored("anything")).toBeNull();
+    expect(() => setRawStored("anything", "x")).not.toThrow();
+  });
+});
