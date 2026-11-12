@@ -73,7 +73,7 @@ export function XenNotePublicNotebook() {
         {data.notebook.name}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Shared notebook
+        A shared notebook · {data.notes.length} {data.notes.length === 1 ? "note" : "notes"}
       </Typography>
       {data.notes.length === 0 ? (
         <Typography color="text.secondary">There are no notes in this notebook yet.</Typography>
@@ -84,6 +84,11 @@ export function XenNotePublicNotebook() {
           ))}
         </Box>
       )}
+      <Box sx={{ mt: 3, p: 2, border: 1, borderColor: "divider", borderRadius: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          You are reading a shared notebook. You cannot change it, and you cannot see who else is in it.
+        </Typography>
+      </Box>
     </Frame>
   );
 }

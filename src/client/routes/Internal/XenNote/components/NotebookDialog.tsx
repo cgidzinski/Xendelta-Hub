@@ -33,6 +33,8 @@ interface NotebookDialogProps {
   onClose: () => void;
   /** Called after the notebook is deleted or the person leaves it, so the board can step back. */
   onGone?: () => void;
+  /** Which tab to open on (the board's Share button opens People). */
+  initialTab?: "general" | "people" | "link";
 }
 
 const ROLE_HELP: Record<"editor" | "viewer", string> = {
@@ -41,7 +43,13 @@ const ROLE_HELP: Record<"editor" | "viewer", string> = {
 };
 
 /** Create a notebook, or manage one: its name and colour, who can see it, and its public link. */
-export default function NotebookDialog({ notebook, open, onClose, onGone }: NotebookDialogProps) {
+export default function NotebookDialog({
+  notebook,
+  open,
+  onClose,
+  onGone,
+  initialTab = "general",
+}: NotebookDialogProps) {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
@@ -62,7 +70,7 @@ export default function NotebookDialog({ notebook, open, onClose, onGone }: Note
       setLive(notebook);
       setName(notebook?.name ?? "");
       setColor(notebook?.color ?? "default");
-      setTab("general");
+      setTab(initialTab);
       setPicked([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

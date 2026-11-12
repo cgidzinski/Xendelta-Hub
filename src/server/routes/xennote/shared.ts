@@ -68,7 +68,19 @@ async function signedImages(images: Array<{ _id: unknown; gcs_path: string }>) {
 }
 
 /** A note as its owner or a notebook member sees it. */
-export async function serializeNote(note: NoteDoc, opts: { uid: string; role: MemberRole | null }) {
+/** Display names for the people who last changed notes, in one lookup. */
+export async function namesForNotes(notes: NoteDoc[]): Promise<Map<string, string>> {
+  const ids = [...new Set(notes.filter((n) => n.notebook_id && n.updated_by).map((n) => n.updated_by as string))];
+  const users = ids.length ? await User.find({ _id: { $in: ids } }, "username").lean() : [];
+  return new Map(users.filter((u) => u.username).map((u) => [String(u._id), u.username as string]));
+}
+
+export async function serializeNote(
+  note: NoteDoc,
+  opts: { uid: string; role: MemberRole | null; names?: Map<string, string> },
+) {
+  // Who last changed it is shown for notes in a shared notebook only. A list passes `names` from one lookup.
+  const names = opts.names ?? (await namesForNotes([note]));
   const editable = note.notebook_id ? opts.role === "owner" || opts.role === "editor" : note.owner_id === opts.uid;
   return {
     _id: note.id as string,
@@ -87,6 +99,7 @@ export async function serializeNote(note: NoteDoc, opts: { uid: string; role: Me
     can_edit: editable,
     // The note's own public link is only shown to people who can change the note.
     share: editable ? { enabled: !!note.share?.enabled, token: note.share?.token ?? null } : null,
+    updated_by_name: note.notebook_id && note.updated_by ? (names.get(note.updated_by) ?? null) : null,
     created_at: note.created_at.toISOString(),
     updated_at: note.updated_at.toISOString(),
   };

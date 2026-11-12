@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../config/api";
-import type { NoteFilters, PublicXenNote, XenNote, XenNoteInput, XenNotebook } from "../../types/XenNote";
+import type {
+  NoteFilters,
+  PublicXenNote,
+  XenNote,
+  XenNoteCounts,
+  XenNoteInput,
+  XenNotebook,
+} from "../../types/XenNote";
 import { useSocketInvalidate } from "../useSocketEvent";
 import { xennoteKeys } from "./keys";
 
@@ -28,6 +35,12 @@ export const useXenNotebooks = () =>
   useQuery({
     queryKey: xennoteKeys.notebooks(),
     queryFn: async () => (await api.get<{ notebooks: XenNotebook[] }>("/api/xennote/notebooks")).notebooks,
+  });
+
+export const useXenNoteCounts = () =>
+  useQuery({
+    queryKey: xennoteKeys.counts(),
+    queryFn: () => api.get<XenNoteCounts>("/api/xennote/counts"),
   });
 
 export const useXenNoteLabels = () =>
