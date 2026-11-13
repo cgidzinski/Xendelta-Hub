@@ -1,4 +1,4 @@
-// What each app is for, in a few plain lines, and short "did you know" tips. Shown on the What's new page and, when the
+// What each app is for, in a few plain lines, and short "did you know" tips. Shown on the About page and, when the
 // Home activity feed is empty, as tips. Written for people who are new here, not for developers: say what you can DO.
 // A new sub-app must add an entry here (a test fails otherwise); see docs/adding-a-sub-app.md.
 

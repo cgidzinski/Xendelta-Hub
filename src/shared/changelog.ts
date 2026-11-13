@@ -22,7 +22,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     app: "hub",
-    title: "Added a What's new page, tips on Home, and a way to send feedback",
+    title: "Added a page about each app, tips on Home, and a way to send feedback",
   },
   {
     date: "2026-11-13",
