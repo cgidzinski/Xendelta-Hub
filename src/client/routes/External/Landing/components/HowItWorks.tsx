@@ -14,11 +14,8 @@ export default function HowItWorks() {
   return (
     <Box sx={{ py: { xs: 6, md: 8 }, borderTop: 1, borderColor: "divider" }}>
       <Container maxWidth="lg">
-        <Typography variant="overline" color="text.secondary">
-          How it works
-        </Typography>
         <Typography variant="h4" component="h2" sx={{ fontWeight: 700, mb: 3 }}>
-          No tour, no manual.
+          How it works
         </Typography>
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" } }}>
           {STEPS.map((step, i) => (
