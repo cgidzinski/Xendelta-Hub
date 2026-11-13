@@ -8,6 +8,7 @@ import { BACKUP_NAME_PATTERN, BACKUP_PREFIX } from "@shared/admin";
 import type { AdminBackup, AdminBackupJob } from "@shared/admin";
 import { restoreFromGzipStream, streamExport } from "./databaseBackup";
 import { AppError } from "./http";
+import { BRAND_NAME } from "@shared/brand";
 
 // Database backups kept in the private bucket (docs/admin.md). The dump format and the wipe-and-replace restore are
 // utils/databaseBackup.ts, the same code `npm run db:export` / `db:import` use.
@@ -77,7 +78,7 @@ export async function verifyBackup(name: string): Promise<void> {
   let first = true;
   for await (const line of readline.createInterface({ input: gunzip, crlfDelay: Infinity })) {
     if (first) {
-      if (!line.startsWith("#META\t")) throw new Error("This file isn't a Xendelta Hub backup");
+      if (!line.startsWith("#META\t")) throw new Error(`This file isn't a ${BRAND_NAME} backup`);
       first = false;
     }
   }

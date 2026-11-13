@@ -24,6 +24,7 @@ import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenBudgetBooks } from "../../../hooks/xenbudget/useBooks";
 import { receiptPath, type ReceiptApp } from "./receipt";
 import { describeShare, interpretShare } from "./shareContent";
+import { BRAND_NAME } from "@shared/brand";
 
 interface Option {
   key: string;
@@ -219,7 +220,7 @@ export default function Share() {
       {!loaded ? null : options.length === 0 ? (
         <Stack spacing={2} alignItems="flex-start">
           <Alert severity="info" icon={<ShareIcon />} sx={{ width: "100%" }}>
-            Nothing to save. Share a link, some text or a photo to Xendelta Hub from another app to put it here.
+            Nothing to save. Share a link, some text or a photo to {BRAND_NAME} from another app to put it here.
           </Alert>
           <Button onClick={dismiss}>Go home</Button>
         </Stack>

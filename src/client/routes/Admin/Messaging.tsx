@@ -10,6 +10,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAdminActions, useAdminBroadcasts, useAudienceReach } from "../../hooks/admin/useAdminData";
 import FilterChips from "./components/FilterChips";
 import { timeAgo } from "./adminFormat";
+import { BRAND_NAME } from "@shared/brand";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.5 } as const;
 type Who = "everyone" | "role";
@@ -23,7 +24,7 @@ const TEMPLATES = [
   {
     label: "Maintenance",
     title: "Maintenance tonight",
-    message: "Xendelta will be unavailable from 2 AM to 4 AM Eastern while we upgrade the database.",
+    message: `${BRAND_NAME} will be unavailable from 2 AM to 4 AM Eastern while we upgrade the database.`,
   },
   { label: "New feature", title: "Something new", message: "We've added something new. Take a look." },
   {
@@ -226,7 +227,7 @@ export default function Messaging() {
             <Box sx={{ borderRadius: 3, bgcolor: "action.hover", p: 1.5 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <Typography variant="caption" color="text.secondary">
-                  Xendelta Hub
+                  {BRAND_NAME}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   now

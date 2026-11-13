@@ -1,5 +1,6 @@
 import type express from "express";
 import { Recipe } from "../models/recipe";
+import { BRAND_NAME } from "@shared/brand";
 
 // Open Graph crawlers (Discord, Slack, iMessage, Twitter) do not run JavaScript, so a
 // shared /recipaint/:id link previews as nothing unless the tags are already in the HTML
@@ -40,13 +41,13 @@ export interface OgRecipe {
 export function buildRecipeMetaTags(recipe: OgRecipe, pageUrl: string): string {
   const title = escapeHtmlAttribute(recipe.title || "Recipe");
   const description = escapeHtmlAttribute(
-    toPreviewText(recipe.description) || "A step-by-step painting recipe on Xendelta Hub.",
+    toPreviewText(recipe.description) || `A step-by-step painting recipe on ${BRAND_NAME}.`,
   );
   const image = recipe.showcase?.[0];
 
   const tags = [
     `<meta property="og:type" content="article" />`,
-    `<meta property="og:site_name" content="Xendelta Hub" />`,
+    `<meta property="og:site_name" content="${BRAND_NAME}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${escapeHtmlAttribute(pageUrl)}" />`,

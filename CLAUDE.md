@@ -1,4 +1,4 @@
-# Xendelta Hub
+# XenSuite
 
 ## UI work
 Before changing or adding any client UI, read `src/client/components/ui/DESIGN.md`. It is the
@@ -27,12 +27,12 @@ plus `npm audit --omit=dev --audit-level=high`.
   `moneyConventions.test.ts` fails on a hand-written `Math.round(x * 100) / 100` or `new Intl.NumberFormat`.
 - Server integration tests use `src/server/testing/testApp.ts` (real routes and models, in-memory MongoDB).
 
-## Changelog (every feature)
-Every feature you add, and every change a person would notice (a fix included), adds an entry to `src/shared/changelog.ts`
-**in the same PR**: newest first, today's date, the app key (or `"hub"`), and a short title in the words a user would use
-("Added…", "You can now…", "Fixed…"). No PR numbers, file names or technical terms (a test rejects them). Add a tip to the
-app's `APP_GUIDE` in `src/shared/appGuide.ts` too when the feature is worth discovering. A change nobody can see gets no entry.
-The changelog is the feature list on the About page: pick an app and every change to it shows there as a feature.
+## Features list (every feature)
+The About page lists what each app can do. Every feature you add or remove changes that app's `features` list in
+`src/shared/appGuide.ts` **in the same PR**: one plain sentence a user would understand ("Share a note with a link anyone can
+open."), most important first. It is strictly user-facing: nothing about admins, nothing about what changed or was renamed, no
+PR numbers or technical terms (a test rejects them). Add a `tips` line too when the feature is worth discovering. A change
+nobody can use (a fix, a refactor, an admin tool) is not listed.
 
 ## Adding a sub-app
 **Design first: before writing any code for a new sub-app, mock its main screens (list, detail, create/edit; phone and desktop)
@@ -40,7 +40,7 @@ as published Artifacts using the hub's theme and shared components, share the li
 this only when the user says to skip.** Then follow `docs/adding-a-sub-app.md` (server model and sharing, routes, the client registry and `routes.tsx`, data
 hooks and query keys, tests, migrations). The short version: register the app in `server.ts` and `constants/apps.ts`;
 use `memberSchema` and `utils/membership.ts` for sharing; `lazyPage` for every page; `api.*` and a `keys.ts` factory
-for data; add a flow test next to `coreFlows.test.ts`; and add an `APP_GUIDE` entry and a changelog entry. The doc has the full
+for data; add a flow test next to `coreFlows.test.ts`; and add an `APP_GUIDE` entry (what it is for, a one-line pitch, its features, tips). The doc has the full
 list of every place an app is registered (Home feed, API-key allowlist, realtime events, admin copy...).
 
 ## Server conventions

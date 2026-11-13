@@ -233,7 +233,7 @@ describe("serializeItem", () => {
 import { buildKitchenMetaTags, createKitchenHtmlTransformer, XENKITCHEN_SHARE_PATH } from "./xenKitchenOgMeta";
 
 describe("XenKitchen link previews", () => {
-  const SHELL = "<html><head><title>Xendelta Hub</title></head><body></body></html>";
+  const SHELL = "<html><head><title>XenSuite</title></head><body></body></html>";
   const req = (path: string) => ({ path, protocol: "https", get: () => "hub.test" }) as any;
 
   it("matches only share tokens", () => {

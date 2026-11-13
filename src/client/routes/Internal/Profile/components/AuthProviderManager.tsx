@@ -21,6 +21,7 @@ import { Link as LinkIcon, LinkOff as UnlinkIcon } from "@mui/icons-material";
 import { useAuthProviders } from "../../../../hooks/auth/useAuthProviders";
 import AuthButton, { PROVIDER_CONFIG } from "./AuthButton";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import { BRAND_NAME } from "@shared/brand";
 
 export default function AuthProviderManager() {
   const {
@@ -189,8 +190,8 @@ export default function AuthProviderManager() {
 
         {!hasProvider("discord") && (
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-            On iPhone with Xendelta installed as an app: if the Discord page freezes when Face ID/AutoFill pops up, type
-            your password manually instead. If it's already frozen, force-quit Safari and reopen it to clear it.
+            On iPhone with {BRAND_NAME} installed as an app: if the Discord page freezes when Face ID/AutoFill pops up,
+            type your password manually instead. If it's already frozen, force-quit Safari and reopen it to clear it.
           </Typography>
         )}
       </Box>

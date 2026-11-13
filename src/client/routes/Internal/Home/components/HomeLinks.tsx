@@ -1,13 +1,11 @@
-import { Box, Button, Chip } from "@mui/material";
+import { Box, Button } from "@mui/material";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import FeedbackOutlinedIcon from "@mui/icons-material/FeedbackOutlined";
 import { useNavigate } from "react-router-dom";
-import { useWhatsNew } from "../../../../hooks/useWhatsNew";
 
-/** Two quiet links at the bottom of Home: about the apps (with a tag when there is something unseen) and sending feedback. */
+/** Two quiet links at the bottom of Home: about the apps and sending feedback. */
 export default function HomeLinks() {
   const navigate = useNavigate();
-  const { unseen } = useWhatsNew();
   return (
     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center", pt: 1 }}>
       <Button
@@ -18,7 +16,6 @@ export default function HomeLinks() {
         sx={{ color: "text.secondary" }}
       >
         About the apps
-        {unseen > 0 && <Chip size="small" color="primary" label="New" sx={{ ml: 1, height: 20 }} />}
       </Button>
       <Button
         color="inherit"

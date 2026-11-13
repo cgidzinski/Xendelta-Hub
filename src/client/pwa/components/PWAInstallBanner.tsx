@@ -4,6 +4,7 @@ import IosShareIcon from "@mui/icons-material/IosShare";
 import GetAppIcon from "@mui/icons-material/GetApp";
 import Banner from "../../components/ui/Banner";
 import { usePWAInstall } from "../hooks/usePWAInstall";
+import { BRAND_NAME } from "@shared/brand";
 
 export default function PWAInstallBanner() {
   const { isInstallable, isIOS, isDismissed, isInstalled, showInstallPrompt, dismiss } = usePWAInstall();
@@ -17,7 +18,7 @@ export default function PWAInstallBanner() {
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="body2" fontWeight={600} noWrap>
-            Install XenDelta Hub
+            Install {BRAND_NAME}
           </Typography>
           {isIOS ? (
             <Typography variant="caption" color="text.secondary">

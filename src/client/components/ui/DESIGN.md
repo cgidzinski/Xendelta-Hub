@@ -1,4 +1,4 @@
-# Xendelta Hub design language
+# XenSuite design language
 
 Flat, outlined surfaces on one brand blue. Surfaces are separated by a 1px border, not by shadow.
 

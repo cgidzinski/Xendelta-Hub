@@ -38,6 +38,7 @@ import { useUserNotifications, Notification } from "../../hooks/user/useUserNoti
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
 import LoadingSpinner from "../LoadingSpinner";
+import { BRAND_NAME } from "@shared/brand";
 
 const DRAWER_WIDTH = 240;
 
@@ -96,7 +97,7 @@ export default function BaseNavBar({
   showMessages = false,
   messagesPath = "/internal/messages",
   drawerHeaderPath = "/internal",
-  drawerHeaderText = "XenDelta Hub",
+  drawerHeaderText = BRAND_NAME,
   showProfile = true,
   showGems = true,
   children,

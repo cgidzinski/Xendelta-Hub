@@ -81,7 +81,7 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data?.text() };
   }
 
-  const title = payload.title || "Xendelta Hub";
+  const title = payload.title || "XenSuite"; // = BRAND_NAME (src/shared/brand.ts); the worker is built separately
 
   // ALWAYS show a notification, on every push, even when a tab is focused. iOS treats a
   // received-but-not-shown push as a violation of userVisibleOnly and will silently revoke

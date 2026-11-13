@@ -12,6 +12,7 @@ import EmptyState from "../../../components/ui/EmptyState";
 import { usePublicKitchenBook } from "../../../hooks/xenkitchen/useKitchen";
 import ItemCard from "../../Internal/XenKitchen/components/ItemCard";
 import { CategoryIconView } from "../../Internal/XenKitchen/components/kitchenIcons";
+import { BRAND_NAME } from "@shared/brand";
 
 /** Read-only browse of a whole book behind /k/b/:token. Works signed out. */
 export default function XenKitchenPublicBook() {
@@ -70,7 +71,7 @@ export default function XenKitchenPublicBook() {
             </Typography>
           </Stack>
           <Button size="small" onClick={() => navigate(isAuthenticated ? "/internal/xenkitchen" : "/")}>
-            {isAuthenticated ? "My kitchen" : "Xendelta Hub"}
+            {isAuthenticated ? "My kitchen" : BRAND_NAME}
           </Button>
         </Stack>
       </Box>

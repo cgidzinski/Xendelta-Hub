@@ -6,6 +6,7 @@ import {
   toPreviewText,
   withDeadline,
 } from "./recipaintOgMeta";
+import { BRAND_NAME } from "@shared/brand";
 
 // Same idea as the Recipaint previews: crawlers don't run JS, so a shared /k/:token link
 // needs its Open Graph tags in the HTML the server sends.
@@ -25,12 +26,12 @@ export function buildKitchenMetaTags(item: OgKitchenItem, pageUrl: string): stri
   const title = escapeHtmlAttribute(item.title || "Untitled");
   const description = escapeHtmlAttribute(
     toPreviewText(item.description) ||
-      (item.brand ? `${item.brand} — cooking instructions` : "A recipe from XenKitchen on Xendelta Hub."),
+      (item.brand ? `${item.brand} — cooking instructions` : `A recipe from XenKitchen on ${BRAND_NAME}.`),
   );
   const image = item.images?.[0]?.url;
   const tags = [
     `<meta property="og:type" content="article" />`,
-    `<meta property="og:site_name" content="XenKitchen · Xendelta Hub" />`,
+    `<meta property="og:site_name" content="XenKitchen · ${BRAND_NAME}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${escapeHtmlAttribute(pageUrl)}" />`,

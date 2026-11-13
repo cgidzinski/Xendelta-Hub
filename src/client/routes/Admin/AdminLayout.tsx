@@ -17,6 +17,7 @@ import { useSnackbar } from "notistack";
 import { railItemSx } from "../../components/ui/railStyles";
 import { verifyAdminRole } from "../../hooks/admin/useAdminData";
 import { ADMIN_NAV, isNavActive } from "./adminNav";
+import { BRAND_NAME } from "@shared/brand";
 
 const environment = import.meta.env.PROD ? "Production" : "Development";
 
@@ -32,7 +33,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.75, px: 1.5, pb: 2, pt: 0.5 }}
       >
         <Typography noWrap sx={{ fontWeight: 700, letterSpacing: "-0.01em" }}>
-          Xendelta Admin
+          {BRAND_NAME} Admin
         </Typography>
         <Chip size="small" variant="outlined" color="warning" label={environment} />
       </Box>

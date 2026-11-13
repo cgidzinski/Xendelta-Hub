@@ -13,6 +13,8 @@ import {
   validateSignupPassword,
   validatePasswordMatch,
 } from "../../../utils/formValidation";
+import { BRAND_NAME } from "@shared/brand";
+import { useTitle } from "../../../hooks/useTitle";
 
 interface SignupFormData {
   username: string;
@@ -30,6 +32,7 @@ interface SignupErrors {
 }
 
 export default function Signup() {
+  useTitle("Sign up");
   const navigate = useNavigate();
   const { signup } = useAuth();
   const [formData, setFormData] = useState<SignupFormData>({
@@ -109,9 +112,9 @@ export default function Signup() {
   return (
     <AuthSplitLayout
       icon={<SignupIcon sx={{ fontSize: 40 }} />}
-      title="Join Xendelta Hub"
-      subtitle="Create your account and start your journey with us"
-      footnote="Hopefully you're not a robot."
+      title={`Join ${BRAND_NAME}`}
+      subtitle="Create an account, pin the apps you want, and invite your people"
+      footnote="It takes a minute."
     >
       <Box>
         {errors.general && <FormErrorAlert message={errors.general} sx={{ mb: 2 }} />}

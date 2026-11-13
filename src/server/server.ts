@@ -66,7 +66,7 @@ const io = new SocketIOServer(server, {
   },
 });
 
-console.log(">>> Starting Xendelta Hub in", process.env.NODE_ENV, "mode");
+console.log(">>> Starting XenSuite in", process.env.NODE_ENV, "mode");
 console.log(">>> ------------------");
 console.log(">>> Initializing Mongo...");
 const mongoConnection = Mongo.getConnection();
