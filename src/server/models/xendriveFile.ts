@@ -1,6 +1,7 @@
 import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
 import { randomToken } from "../utils/tokens";
 import { deleteFromGCS } from "../utils/gcsUtils";
+import { checkSharePassword } from "../utils/sharePasswords";
 
 // One stored file. `storage_path` is where the bytes live in the private bucket and is stored, not
 // derived, so a file can be renamed or moved between folders without touching storage.
@@ -13,11 +14,17 @@ const xendriveFileSchema = new Schema({
   mimeType: { type: String, required: true },
   size: { type: Number },
   createdAt: { type: Date, default: Date.now },
-  password: { type: String }, // Plain text password for the file's own link (optional)
+  // The password for the file's own link (optional), as a bcrypt hash. `password` is the old plain-text field, emptied
+  // by migrations/1794900000000-xendrive-password-hash.ts; nothing writes it any more and it is never sent out.
+  passwordHash: { type: String },
+  password: { type: String },
   expiry: { type: Date }, // Expiry date for the file's own link (optional)
   shareToken: { type: String, unique: true, sparse: true }, // Unique token for the file's own link
   // The link only works while this is on. New files start private; turning it on is one switch.
   shareEnabled: { type: Boolean, default: false },
+  // Public downloads through the file's own link or through a shared folder's.
+  downloads: { type: Number, default: 0 },
+  lastDownloadedAt: { type: Date },
   // Set when an app stored the file on the person's behalf (utils/driveSources.ts). Such files have no folder and are
   // kept out of the drive's own lists; they still count toward the quota.
   source: {
@@ -41,14 +48,18 @@ xendriveFileSchema.pre("save", function (next) {
 
 export type XenDriveFileAttrs = InferSchemaType<typeof xendriveFileSchema>;
 export interface XenDriveFileMethods {
-  validPassword(password: string): boolean;
+  hasPassword(): boolean;
+  checkPassword(password: string): Promise<boolean>;
   isExpired(): boolean;
 }
 export type XenDriveFileDocument = HydratedDocument<XenDriveFileAttrs, XenDriveFileMethods>;
 
-xendriveFileSchema.method("validPassword", function (this: XenDriveFileDocument, password: string) {
-  if (!this.password) return true; // No password set, allow access
-  return this.password === password;
+xendriveFileSchema.method("hasPassword", function (this: XenDriveFileDocument) {
+  return !!(this.passwordHash || this.password);
+});
+
+xendriveFileSchema.method("checkPassword", function (this: XenDriveFileDocument, attempt: string) {
+  return checkSharePassword(attempt, { hash: this.passwordHash, legacyPlain: this.password });
 });
 
 xendriveFileSchema.method("isExpired", function (this: XenDriveFileDocument) {
