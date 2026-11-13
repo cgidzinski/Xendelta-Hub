@@ -201,6 +201,7 @@ require("./routes/shop.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/push.ts")(app);
 require("./routes/chat")(app);
+require("./routes/spaces")(app);
 require("./routes/blog.ts")(app);
 require("./routes/admin")(app);
 require("./routes/recipaint.ts")(app);

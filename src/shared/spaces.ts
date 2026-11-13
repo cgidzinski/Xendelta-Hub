@@ -2,6 +2,7 @@
 //
 // A space is a place for a group, like a Discord server: it owns channels (conversations that belong to it), roles that
 // say what people may do, and its own members. A DM or group chat is not in a space and keeps working as before.
+import type { ChatPerson } from "./chat";
 
 export const SPACE_NAME_MAX = 60;
 export const SPACE_ROLE_NAME_MAX = 32;
@@ -67,6 +68,10 @@ export interface Space {
   icon: string | null;
   ownerId: string;
   members: SpaceMember[];
+  /** Public info for the current members. */
+  people: ChatPerson[];
   roles: SpaceRoleInfo[];
+  /** What the person asking may do across the space (channels can change this for them). */
+  permissions: SpacePermission[];
   createdAt: string;
 }

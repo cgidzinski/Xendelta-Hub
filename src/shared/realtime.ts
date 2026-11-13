@@ -16,6 +16,9 @@ export interface RealtimeEvents {
   "chat:read": { conversationId: string; userId: string; seq: number };
   "chat:typing": { conversationId: string; userId: string; username: string; typing: boolean };
 
+  // Spaces: the space changed (renamed, members, roles). `removed` means you are out of it or it was deleted.
+  "space:updated": { spaceId: string; removed?: boolean };
+
   // Calls: names reserved for the calls feature, not sent yet.
   "call:started": { conversationId: string; startedBy: string };
   "call:ended": { conversationId: string };
