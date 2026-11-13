@@ -55,6 +55,7 @@ export const driveOnly = { "source.app": { $exists: false } } as const;
  * Which files a drive listing shows. By default only what the person uploaded to XenDrive itself: files an app stored for
  * them (photos, chat attachments) stay out of the way. They ask for them with a source:
  *   "all"        everything, app files included
+ *   "others"     only files apps stored for them
  *   "uncounted"  only files that don't use their storage
  *   "<app>"      only that app's files ("xensplit", "chat", ...)
  */
@@ -62,5 +63,6 @@ export function driveListFilter(source?: string): Record<string, unknown> {
   if (!source) return driveOnly;
   if (source === "all") return {};
   if (source === "uncounted") return { counted: false };
+  if (source === "others") return { "source.app": { $exists: true } };
   return { "source.app": source };
 }

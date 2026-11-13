@@ -28,7 +28,10 @@ export default function AppFiles() {
   const confirm = useConfirm();
   const { enqueueSnackbar } = useSnackbar();
 
-  const removeFiles = async (files: XenDriveFile[], what: string) => {
+  const removeFiles = async (all: XenDriveFile[], what: string) => {
+    // A file that doesn't use your storage belongs to its app; only the others can be deleted here.
+    const files = all.filter((f) => f.counted !== false);
+    if (!files.length) return;
     const ok = await confirm({
       title: files.length === 1 ? "Delete this file?" : `Delete ${files.length} files?`,
       message: `${what} will be deleted for good. Anyone it was sent to will see it as removed.`,
@@ -83,6 +86,7 @@ export default function AppFiles() {
                   <Button
                     size="small"
                     color="error"
+                    disabled={group.files.every((f) => f.counted === false)}
                     onClick={() => removeFiles(group.files, `All ${group.count} files from “${group.label}”`)}
                   >
                     Delete all
@@ -104,14 +108,16 @@ export default function AppFiles() {
                         <FileDownloadOutlinedIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton
-                        aria-label={`Delete ${file.name}`}
-                        onClick={() => removeFiles([file], `“${file.name}”`)}
-                      >
-                        <DeleteOutlineIcon />
-                      </IconButton>
-                    </Tooltip>
+                    {file.counted !== false && (
+                      <Tooltip title="Delete">
+                        <IconButton
+                          aria-label={`Delete ${file.name}`}
+                          onClick={() => removeFiles([file], `“${file.name}”`)}
+                        >
+                          <DeleteOutlineIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                 ))}
               </Box>

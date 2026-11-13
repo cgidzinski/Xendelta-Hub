@@ -663,6 +663,12 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
+      // A file that doesn't use their storage belongs to the app that stored it: deleting it here would break that app.
+      if (file.counted === false)
+        throw new AppError(
+          400,
+          "This file belongs to another app and doesn't use your storage, so it can't be deleted here",
+        );
       // The pre-delete hook removes the stored bytes too
       await XenDriveFile.findByIdAndDelete(file.id);
       // An app that stored the file lets go of it (a photo on an expense), so it doesn't show a broken image.

@@ -3,12 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
   Button,
-  Collapse,
   Fab,
   IconButton,
   InputAdornment,
   LinearProgress,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -18,8 +19,6 @@ import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import SearchIcon from "@mui/icons-material/Search";
-import TuneIcon from "@mui/icons-material/Tune";
-import { alpha } from "@mui/material/styles";
 import { useSnackbar } from "notistack";
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -32,7 +31,6 @@ import {
   downloadFile,
   fileShareUrl,
   useXendriveActions,
-  useXendriveAppFiles,
   useXendriveBrowse,
   useXendriveRecent,
 } from "../../../hooks/xendrive/useXendrive";
@@ -65,11 +63,7 @@ const VIEW_TITLE = { shared: "Shared links", recent: "Recent" } as const;
 
 /** The hidden source filter: what the list shows besides the files the person uploaded to XenDrive themselves. */
 const SOURCE_DRIVE = "drive";
-const SOURCE_OPTIONS = [
-  { value: SOURCE_DRIVE, label: "Only my XenDrive files" },
-  { value: "all", label: "Everything, with app files" },
-  { value: "uncounted", label: "Outside my storage" },
-];
+const SOURCE_OTHERS = "others";
 
 export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const navigate = useNavigate();
@@ -87,7 +81,6 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const [linkFilter, setLinkFilter] = useState<LinkFilter>("all");
   // Files apps stored for the person (photos, chat attachments) are left out of the drive unless they ask for them here.
   const [source, setSource] = useState<string>(SOURCE_DRIVE);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [menu, setMenu] = useState<{ target: ActionTarget; anchor: HTMLElement } | null>(null);
@@ -99,22 +92,9 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const [deletingFolder, setDeletingFolder] = useState<XenDriveFolder | null>(null);
 
   const { data: recent } = useXendriveRecent();
-  const { data: appFiles } = useXendriveAppFiles(moreOpen);
   // Only people who have app files ever see the control
   const hasAppFiles = !!recent?.appFiles?.count;
   const sourceActive = source !== SOURCE_DRIVE;
-  const sourceOptions = useMemo(
-    () => [
-      ...SOURCE_OPTIONS,
-      ...(appFiles?.apps ?? []).map((a) => ({ value: a.app, label: `Only from ${a.label}` })),
-      // keep the current choice selectable while the list of apps loads
-      ...(sourceActive && !SOURCE_OPTIONS.some((o) => o.value === source) && !appFiles
-        ? [{ value: source, label: `Only from ${source}` }]
-        : []),
-    ],
-    [appFiles, source, sourceActive],
-  );
-
   const { data, isLoading, isError, error, refetch } = useXendriveBrowse(folderId ?? null, q || undefined, {
     view,
     thumbs: mode === "grid",
@@ -217,21 +197,27 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const toggleAll = () => setSelected((prev) => (prev.size === everyId.length ? new Set() : new Set(everyId)));
 
   const bulkDelete = async () => {
+    // Files that don't use your storage belong to the app that stored them: they stay.
+    const deletable = selectedFiles.filter((f) => f.counted !== false);
     const chosenFolders = folders.filter((f) => selected.has(f._id));
     const parts = [
-      selectedFiles.length ? `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"}` : "",
+      deletable.length ? `${deletable.length} ${deletable.length === 1 ? "file" : "files"}` : "",
       chosenFolders.length
         ? `${chosenFolders.length} ${chosenFolders.length === 1 ? "folder" : "folders"} and everything inside`
         : "",
     ].filter(Boolean);
+    if (!deletable.length && !chosenFolders.length) {
+      enqueueSnackbar("Those files belong to another app, so they can't be deleted here", { variant: "info" });
+      return;
+    }
     const ok = await confirm({
-      title: `Delete ${selected.size} ${selected.size === 1 ? "item" : "items"}?`,
+      title: `Delete ${deletable.length + chosenFolders.length} ${deletable.length + chosenFolders.length === 1 ? "item" : "items"}?`,
       message: `${parts.join(" and ")} will be deleted for good.`,
       confirmLabel: "Delete",
     });
     if (!ok) return;
     try {
-      for (const f of selectedFiles) await actions.deleteFile.mutateAsync(f._id);
+      for (const f of deletable) await actions.deleteFile.mutateAsync(f._id);
       for (const f of chosenFolders) await actions.deleteFolder.mutateAsync(f._id);
       setSelected(new Set());
       enqueueSnackbar("Deleted", { variant: "success" });
@@ -367,7 +353,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
       )}
 
       {/* search and filters: the search takes a row to itself on a phone, then the two filters share the next one */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: moreOpen ? 1 : 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 2 }}>
         <TextField
           placeholder="Search everything in My Drive"
           value={search}
@@ -400,40 +386,29 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
           sx={{ flex: { xs: "1 1 0", md: "0 0 150px" } }}
         />
         {!view && (hasAppFiles || sourceActive) && (
-          <IconButton
-            aria-label="More filters"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen((open) => !open)}
-            color={sourceActive ? "primary" : "default"}
-            sx={(t) => ({
-              width: 40,
-              height: 40,
-              flexShrink: 0,
-              border: 1,
-              borderColor: sourceActive ? "primary.main" : "divider",
-              borderRadius: 1.5,
-              ...(sourceActive ? { bgcolor: alpha(t.palette.primary.main, 0.08) } : {}),
-            })}
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            color="primary"
+            value={source}
+            onChange={(_, v) => v && setSource(v)}
+            aria-label="Which files to show"
+            sx={{ flex: { xs: "1 1 100%", md: "0 0 auto" } }}
           >
-            <TuneIcon fontSize="small" />
-          </IconButton>
+            <ToggleButton value={SOURCE_DRIVE} sx={{ flex: 1, px: 2 }}>
+              XenDrive
+            </ToggleButton>
+            <ToggleButton value={SOURCE_OTHERS} sx={{ flex: 1, px: 2 }}>
+              Others
+            </ToggleButton>
+          </ToggleButtonGroup>
         )}
       </Box>
-      {!view && (
-        <Collapse in={moreOpen} unmountOnExit>
-          <Box sx={{ mb: 2 }}>
-            <FilterSelect
-              label="Show"
-              value={source}
-              options={sourceOptions}
-              onChange={setSource}
-              sx={{ width: { xs: "100%", md: 320 } }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-              Photos and attachments that apps stored for you stay out of My Drive. Choose what to show here.
-            </Typography>
-          </Box>
-        </Collapse>
+      {sourceActive && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2, mt: -1 }}>
+          Photos and attachments that apps stored for you. Those marked “Doesn't count toward storage” belong to their
+          app, so they can't be renamed or deleted here.
+        </Typography>
       )}
 
       {selected.size > 0 && (

@@ -170,6 +170,9 @@ describe("Needs attention", () => {
       count: 1,
     });
     expect(out.counts.xenroutine).toBe(1);
+    // the quiet "how much is in the app" count is separate from the alert count
+    expect(out.totals.xenroutine).toBe(1);
+    expect(out.totals.xennote).toBe(0);
   });
 
   it("leaves out a provider that fails or hangs and still returns the rest", async () => {

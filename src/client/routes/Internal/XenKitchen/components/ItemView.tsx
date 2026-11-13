@@ -7,14 +7,11 @@ import {
   Checkbox,
   Chip,
   Dialog,
-  FormControlLabel,
   IconButton,
   Link,
   Stack,
-  Switch,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
@@ -28,7 +25,6 @@ import AcUnitIcon from "@mui/icons-material/AcUnit";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import SoupKitchenOutlinedIcon from "@mui/icons-material/SoupKitchenOutlined";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
-import { useWakeLock } from "../../../../hooks/useWakeLock";
 import { useLocalStorageState } from "../../../../hooks/useLocalStorageState";
 import { COOK_METHOD_LABELS, formatMinuteRange, formatMinutes, scaleQuantity } from "@shared/xenkitchen/kitchen";
 import {
@@ -64,8 +60,6 @@ interface ItemViewProps {
 
 export default function ItemView({ item, actions }: ItemViewProps) {
   const theme = useTheme();
-  const [cookMode, setCookMode] = useState(false);
-  useWakeLock(cookMode);
   // How measures are shown. Remembered on this device, and only changes what is displayed, never the recipe.
   const [units, setUnits] = useLocalStorageState<UnitSystem>(
     "xenkitchen-unit-system",
@@ -136,14 +130,7 @@ export default function ItemView({ item, actions }: ItemViewProps) {
       {item.layout === "instructions" ? (
         <InstructionsSection item={item} accent={accent} units={units} onUnits={setUnits} />
       ) : (
-        <RecipeSection
-          item={item}
-          accent={accent}
-          cookMode={cookMode}
-          onCookMode={setCookMode}
-          units={units}
-          onUnits={setUnits}
-        />
+        <RecipeSection item={item} accent={accent} units={units} onUnits={setUnits} />
       )}
 
       {item.notes && (
@@ -340,15 +327,11 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
 function RecipeSection({
   item,
   accent,
-  cookMode,
-  onCookMode,
   units,
   onUnits,
 }: {
   item: KitchenItem;
   accent: string;
-  cookMode: boolean;
-  onCookMode: (v: boolean) => void;
   units: UnitSystem;
   onUnits: (v: UnitSystem) => void;
 }) {
@@ -520,17 +503,9 @@ function RecipeSection({
                 variant="outlined"
                 startIcon={<SoupKitchenOutlinedIcon />}
                 onClick={() => setCooking(true)}
-                sx={{ mr: 1 }}
               >
                 Step by step
               </Button>
-              <Tooltip title="Keeps your screen awake and makes steps easier to read">
-                <FormControlLabel
-                  control={<Switch size="small" checked={cookMode} onChange={(e) => onCookMode(e.target.checked)} />}
-                  label={<Typography variant="body2">Cook mode</Typography>}
-                  sx={{ mr: 0 }}
-                />
-              </Tooltip>
             </Stack>
             <Stack spacing={1.5}>
               {item.steps.map((step, i) => (
@@ -539,7 +514,6 @@ function RecipeSection({
                   step={step}
                   index={i}
                   accent={accent}
-                  big={cookMode}
                   done={doneSteps.has(i)}
                   onToggle={() => setDoneSteps((s) => toggle(s, i))}
                 />
@@ -572,21 +546,19 @@ function StepRow({
   step,
   index,
   accent,
-  big,
   done,
   onToggle,
 }: {
   step: KitchenStep;
   index: number;
   accent: string;
-  big: boolean;
   done: boolean;
   onToggle: () => void;
 }) {
   return (
     <Card
       variant="outlined"
-      sx={{ ...cardSx, p: big ? 2.5 : 2, display: "flex", gap: 2, opacity: done ? 0.55 : 1, transition: "opacity .2s" }}
+      sx={{ ...cardSx, p: 2, display: "flex", gap: 2, opacity: done ? 0.55 : 1, transition: "opacity .2s" }}
     >
       <Box
         onClick={onToggle}
@@ -594,8 +566,8 @@ function StepRow({
         aria-label={done ? "Mark step not done" : "Mark step done"}
         sx={{
           flexShrink: 0,
-          width: big ? 40 : 32,
-          height: big ? 40 : 32,
+          width: 32,
+          height: 32,
           borderRadius: "50%",
           cursor: "pointer",
           display: "flex",
@@ -609,10 +581,7 @@ function StepRow({
         {done ? "✓" : index + 1}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          variant={big ? "h6" : "body1"}
-          sx={{ whiteSpace: "pre-wrap", fontWeight: big ? 500 : 400, lineHeight: 1.5 }}
-        >
+        <Typography variant="body1" sx={{ whiteSpace: "pre-wrap", fontWeight: 400, lineHeight: 1.5 }}>
           {step.text}
         </Typography>
         {step.timer_minutes ? <StepTimer minutes={step.timer_minutes} accent={accent} /> : null}

@@ -8,13 +8,15 @@ interface AppTileProps {
   app: AppRegistryItem;
   /** How many things are waiting in the app (shown as a badge). */
   count?: number;
+  /** How much is in the app (recipes, notes...): shown quietly under the name, never as an alert. */
+  total?: number;
   onClick: () => void;
   /** Set while choosing pinned apps: the tile shows whether it is pinned instead of a count. */
   pinChoice?: { pinned: boolean; disabled?: boolean };
 }
 
 /** One app as a big, easy target: its icon and name, with a count of what is waiting. Used for the pinned apps and while choosing them. */
-export default function AppTile({ app, count = 0, onClick, pinChoice }: AppTileProps) {
+export default function AppTile({ app, count = 0, total, onClick, pinChoice }: AppTileProps) {
   const choosing = !!pinChoice;
   const pinned = !!pinChoice?.pinned;
   const label = choosing
@@ -80,6 +82,11 @@ export default function AppTile({ app, count = 0, onClick, pinChoice }: AppTileP
       <Typography variant="body2" fontWeight={500} noWrap sx={{ maxWidth: "100%" }}>
         {app.label}
       </Typography>
+      {!choosing && total !== undefined && app.noun && (
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: "100%", mt: -0.75 }}>
+          {total} {total === 1 ? app.noun[0] : app.noun[1]}
+        </Typography>
+      )}
     </ButtonBase>
   );
 }

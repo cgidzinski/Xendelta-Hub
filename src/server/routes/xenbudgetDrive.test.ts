@@ -83,7 +83,7 @@ describe("XenBudget photos in XenDrive", () => {
     expect(apps.apps[0].groups[0].label).toBe("Home");
   });
 
-  it("deleting a photo, then the file in XenDrive, removes them from the item", async () => {
+  it("a photo that does not count toward storage can only be removed from the item, not from XenDrive", async () => {
     const { owner, uid, b, itemId, photos, urls } = await setup();
     await photos(3);
     const [first] = await urls();
@@ -92,8 +92,8 @@ describe("XenBudget photos in XenDrive", () => {
     expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(2);
 
     const file = await XenDriveFile.findOne({ owner_id: uid });
-    expect((await request(t.app).delete(`/api/xendrive/files/${file!._id}`).set(auth(owner.token))).status).toBe(200);
-    expect(await urls()).toHaveLength(1);
+    expect((await request(t.app).delete(`/api/xendrive/files/${file!._id}`).set(auth(owner.token))).status).toBe(400);
+    expect(await urls()).toHaveLength(2);
   });
 
   it("deleting the item or the book deletes its photos", async () => {
