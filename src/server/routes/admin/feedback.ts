@@ -9,7 +9,7 @@ import { notify } from "../../utils/notificationUtils";
 import {
   adminFeedbackIdParamSchema,
   adminFeedbackQuerySchema,
-  adminFeedbackRewardSchema,
+  adminFeedbackResolveSchema,
   adminFeedbackUpdateSchema,
   validate,
   validateParams,
@@ -32,7 +32,8 @@ const serialize = (row: any): AdminFeedback => ({
 export function registerAdminFeedbackRoutes(app: express.Application) {
   app.get("/api/admin/feedback", ...admin, validateQuery(adminFeedbackQuerySchema), async (req, res) => {
     const { status, page = 1, pageSize = 25 } = adminFeedbackQuerySchema.parse(req.query);
-    const filter = status ? { status } : {};
+    // Archived items stay out of the default view; pick the Archived filter to see them.
+    const filter = status ? { status } : { status: { $ne: "archived" } };
     const [total, rows, newCount] = await Promise.all([
       Feedback.countDocuments(filter),
       Feedback.find(filter)
@@ -70,20 +71,22 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
     },
   );
 
-  // Thank someone for a bug report with gems. Once per feedback: the claim below is atomic, so two admins (or a
-  // double click) can't pay twice. The person gets the admin's message as a notification, and the feedback is done.
+  // Resolve a report: tell the person what happened, with gems if you want to thank them. The message (and the gems) reach
+  // them as a notification. Paying gems is once per feedback: the claim is atomic, so two admins (or a double click)
+  // can't pay twice. A paid report is archived; a message-only reply marks it done.
   app.post(
-    "/api/admin/feedback/:id/reward",
+    "/api/admin/feedback/:id/resolve",
     ...admin,
     validateParams(adminFeedbackIdParamSchema),
-    validate(adminFeedbackRewardSchema),
+    validate(adminFeedbackResolveSchema),
     async (req, res) => {
-      const { gems, message } = adminFeedbackRewardSchema.parse(req.body);
+      const { gems, message } = adminFeedbackResolveSchema.parse(req.body);
       const id = req.params.id as string;
+      const status = gems > 0 ? "archived" : "done";
 
       const claimed = await Feedback.findOneAndUpdate(
         { _id: id, rewardedGems: { $exists: false } },
-        { $set: { rewardedGems: gems, rewardedAt: new Date(), status: "done" } },
+        { $set: { status, ...(gems > 0 ? { rewardedGems: gems, rewardedAt: new Date() } : {}) } },
         { new: true },
       ).exec();
       if (!claimed) {
@@ -91,35 +94,60 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
         throw new AppError(409, "This feedback has already been rewarded");
       }
 
-      const credited = await User.findOneAndUpdate(
-        { _id: claimed.user_id },
-        { $inc: { gems } },
-        { new: true, projection: "gems" },
-      ).exec();
-      if (!credited) {
-        // The sender is gone: release the claim rather than leave it marked as paid.
-        await Feedback.updateOne({ _id: id }, { $unset: { rewardedGems: "", rewardedAt: "" } });
-        throw new AppError(404, "The person who sent this feedback no longer exists");
+      let balance: number | undefined;
+      if (gems > 0) {
+        const credited = await User.findOneAndUpdate(
+          { _id: claimed.user_id },
+          { $inc: { gems } },
+          { new: true, projection: "gems" },
+        ).exec();
+        if (!credited) {
+          // The sender is gone: release the claim rather than leave it marked as paid.
+          await Feedback.updateOne(
+            { _id: id },
+            { $unset: { rewardedGems: "", rewardedAt: "" }, $set: { status: "seen" } },
+          );
+          throw new AppError(404, "The person who sent this feedback no longer exists");
+        }
+        balance = credited.gems;
       }
 
+      const gemsText = gems.toLocaleString("en-US");
       await recordAudit(req, {
-        action: "feedback_reward",
+        action: gems > 0 ? "feedback_reward" : "feedback_resolve",
         target: { type: "feedback", id: String(claimed._id), label: `Feedback from ${claimed.username}` },
-        detail: `Rewarded ${gems.toLocaleString("en-US")} gems for feedback from ${claimed.username}`,
-        meta: { gems, balance: credited.gems, message },
+        detail:
+          gems > 0
+            ? `Rewarded ${gemsText} gems for feedback from ${claimed.username}`
+            : `Replied to feedback from ${claimed.username}`,
+        meta: { gems, balance, message },
       });
       await notify(String(claimed.user_id), {
-        title: `You earned ${gems.toLocaleString("en-US")} gems`,
+        title: gems > 0 ? `You earned ${gemsText} gems` : "About your feedback",
         message,
-        link: "/internal/shop",
+        link: gems > 0 ? "/internal/shop" : "/internal",
         icon: "announcement",
       });
 
       res.json({
         status: true,
-        message: `Rewarded ${gems.toLocaleString("en-US")} gems`,
+        message: gems > 0 ? `Rewarded ${gemsText} gems` : "Reply sent",
         data: { feedback: serialize(claimed.toObject()) },
       });
     },
   );
+
+  // Only archived feedback can be deleted, so a stray click on a live report can't lose it.
+  app.delete("/api/admin/feedback/:id", ...admin, validateParams(adminFeedbackIdParamSchema), async (req, res) => {
+    const row = await Feedback.findById(req.params.id);
+    if (!row) throw new AppError(404, "Feedback not found");
+    if (row.status !== "archived") throw new AppError(409, "Archive this feedback before deleting it");
+    await row.deleteOne();
+    await recordAudit(req, {
+      action: "feedback_delete",
+      target: { type: "feedback", id: String(row._id), label: `Feedback from ${row.username}` },
+      detail: `Deleted archived feedback from ${row.username}`,
+    });
+    res.json({ status: true, message: "Deleted", data: {} });
+  });
 }

@@ -14,8 +14,9 @@ export const sendFeedbackSchema = z.object({
 
 export const adminFeedbackIdParamSchema = z.object({ id: objectIdSchema });
 export const adminFeedbackUpdateSchema = z.object({ status: z.enum(FEEDBACK_STATUSES) });
-export const adminFeedbackRewardSchema = z.object({
-  gems: z.number().int().min(1).max(FEEDBACK_REWARD_MAX_GEMS),
+export const adminFeedbackResolveSchema = z.object({
+  // 0 means a message only, no gems.
+  gems: z.number().int().min(0).max(FEEDBACK_REWARD_MAX_GEMS),
   message: z.string().trim().min(1).max(FEEDBACK_REWARD_MESSAGE_MAX_LENGTH),
 });
 export const adminFeedbackQuerySchema = z.object({

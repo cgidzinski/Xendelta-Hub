@@ -140,9 +140,9 @@ describe("the admin inbox", () => {
   });
 });
 
-describe("rewarding a bug report with gems", () => {
-  const reward = (who: { token: string }, id: string, body: object) =>
-    request(t.app).post(`/api/admin/feedback/${id}/reward`).set(auth(who)).send(body);
+describe("resolving a report, with gems or a message", () => {
+  const resolve = (who: { token: string }, id: string, body: object) =>
+    request(t.app).post(`/api/admin/feedback/${id}/resolve`).set(auth(who)).send(body);
   const gemsOf = async (who: { user: { _id: unknown } }) =>
     ((await mongoose.model("User").findById(who.user._id)) as any).gems;
   const sendAndGetId = async (who: { token: string }) => {
@@ -150,12 +150,12 @@ describe("rewarding a bug report with gems", () => {
     return String((await mongoose.model("Feedback").findOne({}))!._id);
   };
 
-  it("credits the gems once, tells the person with the admin's message, marks it done and audits it", async () => {
+  it("credits the gems once, tells the person with the admin's message, archives it and audits it", async () => {
     const id = await sendAndGetId(ann);
     const before = await gemsOf(ann);
-    const res = await reward(boss, id, { gems: 50, message: "Thanks, it's fixed!" });
+    const res = await resolve(boss, id, { gems: 50, message: "Thanks, it's fixed!" });
     expect(res.status).toBe(200);
-    expect(res.body.data.feedback).toMatchObject({ status: "done", rewardedGems: 50 });
+    expect(res.body.data.feedback).toMatchObject({ status: "archived", rewardedGems: 50 });
     expect(await gemsOf(ann)).toBe(before + 50);
 
     const notes = await mongoose
@@ -179,8 +179,8 @@ describe("rewarding a bug report with gems", () => {
     const id = await sendAndGetId(ann);
     const before = await gemsOf(ann);
     const results = await Promise.all([
-      reward(boss, id, { gems: 25, message: "Thanks!" }),
-      reward(otherAdmin, id, { gems: 25, message: "Thanks!" }),
+      resolve(boss, id, { gems: 25, message: "Thanks!" }),
+      resolve(otherAdmin, id, { gems: 25, message: "Thanks!" }),
     ]);
     expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
     expect(await gemsOf(ann)).toBe(before + 25);
@@ -189,9 +189,8 @@ describe("rewarding a bug report with gems", () => {
   it("is for admins only, and checks the amount, the message and the id", async () => {
     const id = await sendAndGetId(ann);
     const before = await gemsOf(ann);
-    expect((await reward(ann, id, { gems: 50, message: "Thanks" })).status).toBe(403);
+    expect((await resolve(ann, id, { gems: 50, message: "Thanks" })).status).toBe(403);
     for (const body of [
-      { gems: 0, message: "x" },
       { gems: -5, message: "x" },
       { gems: 1.5, message: "x" },
       { gems: 10_001, message: "x" },
@@ -199,21 +198,65 @@ describe("rewarding a bug report with gems", () => {
       { gems: 50, message: "x".repeat(501) },
       { message: "x" },
     ]) {
-      expect((await reward(boss, id, body)).status).toBe(400);
+      expect((await resolve(boss, id, body)).status).toBe(400);
     }
-    expect((await reward(boss, "nope", { gems: 50, message: "x" })).status).toBe(400);
+    expect((await resolve(boss, "nope", { gems: 50, message: "x" })).status).toBe(400);
     const missing = new mongoose.Types.ObjectId().toString();
-    expect((await reward(boss, missing, { gems: 50, message: "x" })).status).toBe(404);
+    expect((await resolve(boss, missing, { gems: 50, message: "x" })).status).toBe(404);
     expect(await gemsOf(ann)).toBe(before);
+  });
+
+  it("sends a message without gems, marks it done, and can be followed by a reward", async () => {
+    const id = await sendAndGetId(ann);
+    const before = await gemsOf(ann);
+    const res = await resolve(boss, id, { gems: 0, message: "Fixed, thanks!" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.feedback.status).toBe("done");
+    expect(res.body.data.feedback.rewardedGems).toBeUndefined();
+    expect(await gemsOf(ann)).toBe(before);
+    const notes = await mongoose
+      .model("Notification")
+      .find({ userId: String(ann.user._id) })
+      .lean<any[]>();
+    expect(notes[0]).toMatchObject({ title: "About your feedback", message: "Fixed, thanks!" });
+    expect(await mongoose.model("AdminAudit").countDocuments({ action: "feedback_resolve" })).toBe(1);
+
+    expect((await resolve(boss, id, { gems: 25, message: "Here you go" })).status).toBe(200);
+    expect(await gemsOf(ann)).toBe(before + 25);
   });
 
   it("releases the claim when the sender no longer exists", async () => {
     const row = await mongoose
       .model("Feedback")
       .create({ user_id: String(new mongoose.Types.ObjectId()), username: "ghost", message: "hi there" });
-    const res = await reward(boss, String(row._id), { gems: 50, message: "Thanks" });
+    const res = await resolve(boss, String(row._id), { gems: 50, message: "Thanks" });
     expect(res.status).toBe(404);
     const after: any = await mongoose.model("Feedback").findById(row._id).lean();
     expect(after.rewardedGems).toBeUndefined();
+  });
+});
+
+describe("archiving and deleting", () => {
+  it("keeps archived feedback out of the default list, and shows it under the Archived filter", async () => {
+    const model = mongoose.model("Feedback");
+    await model.create({ user_id: "1", username: "a", message: "open one" });
+    await model.create({ user_id: "2", username: "b", message: "put away", status: "archived" });
+    expect((await inbox(boss)).body.data.items.map((i: any) => i.message)).toEqual(["open one"]);
+    expect((await inbox(boss, "?status=archived")).body.data.items.map((i: any) => i.message)).toEqual(["put away"]);
+  });
+
+  it("deletes only archived feedback, for admins, and audits it", async () => {
+    const live = await mongoose.model("Feedback").create({ user_id: "1", username: "a", message: "still open" });
+    const del = (who: { token: string }, id: unknown) =>
+      request(t.app).delete(`/api/admin/feedback/${id}`).set(auth(who));
+    expect((await del(boss, live._id)).status).toBe(409);
+    expect(await mongoose.model("Feedback").countDocuments()).toBe(1);
+
+    await request(t.app).put(`/api/admin/feedback/${live._id}`).set(auth(boss)).send({ status: "archived" });
+    expect((await del(ann, live._id)).status).toBe(403);
+    expect((await del(boss, live._id)).status).toBe(200);
+    expect(await mongoose.model("Feedback").countDocuments()).toBe(0);
+    expect(await mongoose.model("AdminAudit").countDocuments({ action: "feedback_delete" })).toBe(1);
+    expect((await del(boss, live._id)).status).toBe(404);
   });
 });

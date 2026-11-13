@@ -5,30 +5,45 @@ import { FEEDBACK_STATUSES, FEEDBACK_STATUS_LABEL, type AdminFeedback, type Feed
 import GemAmount from "../../components/GemAmount";
 import { GemIcon } from "../../components/icons/GemIcon";
 import { GEM_COLOR } from "../../theme";
+import { useConfirm } from "../../components/ui/ConfirmProvider";
 import PageHeader from "../../components/ui/PageHeader";
 import EmptyState from "../../components/ui/EmptyState";
 import ListSkeleton from "../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import { cardSx } from "../../components/ui/surfaceStyles";
 import { useTitle } from "../../hooks/useTitle";
-import { useAdminFeedback, useUpdateFeedback } from "../../hooks/admin/useAdminData";
+import { useAdminFeedback, useDeleteFeedback, useUpdateFeedback } from "../../hooks/admin/useAdminData";
 import { Pager } from "./components/DataTable";
-import RewardFeedbackDialog from "./components/RewardFeedbackDialog";
+import ResolveFeedbackDialog from "./components/ResolveFeedbackDialog";
 import FilterChips from "./components/FilterChips";
 import StatusChip, { type Tone } from "./components/StatusChip";
 import { dateTime } from "./adminFormat";
 
-const TONE: Record<FeedbackStatus, Tone> = { new: "info", seen: "default", done: "success" };
+const TONE: Record<FeedbackStatus, Tone> = { new: "info", seen: "default", done: "success", archived: "default" };
 
 function FeedbackCard({ item }: { item: AdminFeedback }) {
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const update = useUpdateFeedback();
-  const [rewarding, setRewarding] = useState(false);
+  const deleteFeedback = useDeleteFeedback();
+  const [resolving, setResolving] = useState(false);
+  const archived = item.status === "archived";
+  const busy = update.isPending || deleteFeedback.isPending;
   const set = (status: FeedbackStatus) =>
     update.mutate(
       { id: item._id, status },
       { onError: (e) => enqueueSnackbar((e as Error).message || "Couldn't update that", { variant: "error" }) },
     );
+  const remove = async () => {
+    const ok = await confirm({
+      title: "Delete this feedback?",
+      message: `The message from ${item.from.username} will be removed for good.`,
+    });
+    if (!ok) return;
+    deleteFeedback.mutate(item._id, {
+      onError: (e) => enqueueSnackbar((e as Error).message || "Couldn't delete that", { variant: "error" }),
+    });
+  };
   return (
     <Card variant="outlined" sx={{ ...cardSx, p: 2 }}>
       <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", mb: 1 }}>
@@ -39,19 +54,35 @@ function FeedbackCard({ item }: { item: AdminFeedback }) {
       </Stack>
       <Typography sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.message}</Typography>
       <Box sx={{ display: "flex", gap: 1, mt: 1.5, flexWrap: "wrap", alignItems: "center" }}>
-        {item.status !== "seen" && item.status !== "done" && (
-          <Button size="small" disabled={update.isPending} onClick={() => set("seen")}>
-            Mark seen
-          </Button>
-        )}
-        {item.status !== "done" ? (
-          <Button size="small" variant="outlined" disabled={update.isPending} onClick={() => set("done")}>
-            Mark done
-          </Button>
+        {archived ? (
+          <>
+            <Button size="small" disabled={busy} onClick={() => set("seen")}>
+              Unarchive
+            </Button>
+            <Button size="small" color="error" disabled={busy} onClick={remove}>
+              Delete
+            </Button>
+          </>
         ) : (
-          <Button size="small" disabled={update.isPending} onClick={() => set("new")}>
-            Reopen
-          </Button>
+          <>
+            {item.status === "new" && (
+              <Button size="small" disabled={busy} onClick={() => set("seen")}>
+                Mark seen
+              </Button>
+            )}
+            {item.status !== "done" ? (
+              <Button size="small" disabled={busy} onClick={() => set("done")}>
+                Mark done
+              </Button>
+            ) : (
+              <Button size="small" disabled={busy} onClick={() => set("new")}>
+                Reopen
+              </Button>
+            )}
+            <Button size="small" disabled={busy} onClick={() => set("archived")}>
+              Archive
+            </Button>
+          </>
         )}
         {item.rewardedGems ? (
           <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, ml: "auto" }}>
@@ -61,18 +92,20 @@ function FeedbackCard({ item }: { item: AdminFeedback }) {
             <GemAmount amount={item.rewardedGems} iconSize={16} variant="body2" />
           </Box>
         ) : (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<GemIcon sx={{ color: GEM_COLOR }} />}
-            onClick={() => setRewarding(true)}
-            sx={{ ml: "auto" }}
-          >
-            Reward gems
-          </Button>
+          !archived && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<GemIcon sx={{ color: GEM_COLOR }} />}
+              onClick={() => setResolving(true)}
+              sx={{ ml: "auto" }}
+            >
+              Resolve
+            </Button>
+          )
         )}
       </Box>
-      <RewardFeedbackDialog item={item} open={rewarding} onClose={() => setRewarding(false)} />
+      {resolving && <ResolveFeedbackDialog item={item} open onClose={() => setResolving(false)} />}
     </Card>
   );
 }
@@ -96,7 +129,7 @@ export default function Feedback() {
             setPage(1);
           }}
           options={[
-            { value: "" as FeedbackStatus | "", label: "All" },
+            { value: "" as FeedbackStatus | "", label: "Open" },
             ...FEEDBACK_STATUSES.map((s) => ({ value: s as FeedbackStatus | "", label: FEEDBACK_STATUS_LABEL[s] })),
           ]}
         />

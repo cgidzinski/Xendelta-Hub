@@ -2,7 +2,6 @@ import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
 import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
 import AppThemeProvider from "./theme/AppThemeProvider";
-import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -16,6 +15,7 @@ import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/navbars/NavBar";
 import PWA from "./pwa/PWA";
 import ConfirmProvider from "./components/ui/ConfirmProvider";
+import AppSnackbarProvider from "./components/ui/AppSnackbarProvider";
 import ProtectedRoute from "./components/routeguards/ProtectedRoute";
 import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
 import AdminRoute from "./components/routeguards/AdminRoute";
@@ -276,16 +276,12 @@ ReactDOM.createRoot(rootElement).render(
           <AppThemeProvider>
             <SocketProvider>
               <NavBarProvider>
-                <SnackbarProvider
-                  maxSnack={10}
-                  autoHideDuration={6000}
-                  anchorOrigin={{ vertical: "top", horizontal: "right" }}
-                >
+                <AppSnackbarProvider>
                   <ConfirmProvider>
                     <RouterProvider router={router} />
                     <PWA />
                   </ConfirmProvider>
-                </SnackbarProvider>
+                </AppSnackbarProvider>
               </NavBarProvider>
             </SocketProvider>
           </AppThemeProvider>

@@ -223,7 +223,7 @@ function GemsCard({ user }: { user: AdminUserDetail }) {
         </Button>
       </Box>
       <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.75 }}>
-        Use this to correct a mistake or refund. To thank someone for a bug report, use Reward gems in Feedback.
+        Use this to correct a mistake or refund. To thank someone for a bug report, use Resolve in Feedback.
       </Typography>
     </Box>
   );

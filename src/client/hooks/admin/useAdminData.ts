@@ -222,12 +222,21 @@ export const useUpdateFeedback = () => {
   });
 };
 
-/** Thank the person for a bug report with gems and a message (once per feedback). */
-export const useRewardFeedback = () => {
+/** Resolve a report: send the person a message, with gems if they should be thanked (once per feedback). */
+export const useResolveFeedback = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (v: { id: string; gems: number; message: string }) =>
-      api.post(`/api/admin/feedback/${v.id}/reward`, { gems: v.gems, message: v.message }),
+      api.post(`/api/admin/feedback/${v.id}/resolve`, { gems: v.gems, message: v.message }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.feedbackAll() }),
+  });
+};
+
+/** Delete archived feedback for good. */
+export const useDeleteFeedback = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/admin/feedback/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.feedbackAll() }),
   });
 };

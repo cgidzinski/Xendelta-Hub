@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Button, Chip, Stack, TextField, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
 import {
+  FEEDBACK_RESOLVE_MESSAGES,
   FEEDBACK_REWARD_DEFAULT_GEMS,
   FEEDBACK_REWARD_MAX_GEMS,
   FEEDBACK_REWARD_MESSAGES,
@@ -11,37 +12,59 @@ import {
 } from "@shared/feedback";
 import GemAmount from "../../../components/GemAmount";
 import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
-import { useRewardFeedback } from "../../../hooks/admin/useAdminData";
+import { useResolveFeedback } from "../../../hooks/admin/useAdminData";
 
 const CUSTOM = "custom";
+type Choice = number | typeof CUSTOM;
 
-interface RewardFeedbackDialogProps {
+interface ResolveFeedbackDialogProps {
   item: AdminFeedback;
   open: boolean;
   onClose: () => void;
 }
 
-/** Thank someone for a bug report: pick an amount and a message; they get the gems and the message as a notification. */
-export default function RewardFeedbackDialog({ item, open, onClose }: RewardFeedbackDialogProps) {
+const sameChip = (selected: boolean) => ({
+  variant: selected ? ("filled" as const) : ("outlined" as const),
+  color: selected ? ("primary" as const) : ("default" as const),
+});
+
+/**
+ * Resolve a report: pick gems (or none) and a message. The person gets both as a notification. Gems are paid once,
+ * and a paid report is archived.
+ */
+export default function ResolveFeedbackDialog({ item, open, onClose }: ResolveFeedbackDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const reward = useRewardFeedback();
-  const [choice, setChoice] = useState<number | typeof CUSTOM>(FEEDBACK_REWARD_DEFAULT_GEMS);
+  const resolve = useResolveFeedback();
+  const [choice, setChoice] = useState<Choice>(FEEDBACK_REWARD_DEFAULT_GEMS);
   const [custom, setCustom] = useState("");
   const [message, setMessage] = useState<string>(FEEDBACK_REWARD_MESSAGES[0]);
 
   const gems = choice === CUSTOM ? Number(custom) : choice;
-  const gemsValid = Number.isInteger(gems) && gems >= 1 && gems <= FEEDBACK_REWARD_MAX_GEMS;
+  const gemsValid = Number.isInteger(gems) && gems >= 0 && gems <= FEEDBACK_REWARD_MAX_GEMS;
+  const messages: readonly string[] = gems > 0 ? FEEDBACK_REWARD_MESSAGES : FEEDBACK_RESOLVE_MESSAGES;
   const messageValid = message.trim().length > 0;
 
+  const pick = (next: Choice) => {
+    setChoice(next);
+    const nextGems = next === CUSTOM ? Number(custom) : next;
+    // Swap a quick-pick message for its counterpart, but leave anything the admin typed alone.
+    const wasPreset = [...FEEDBACK_REWARD_MESSAGES, ...FEEDBACK_RESOLVE_MESSAGES].includes(message as never);
+    if (wasPreset && next !== CUSTOM)
+      setMessage((nextGems > 0 ? FEEDBACK_REWARD_MESSAGES : FEEDBACK_RESOLVE_MESSAGES)[0]);
+  };
+
   const submit = () =>
-    reward.mutate(
+    resolve.mutate(
       { id: item._id, gems, message: message.trim() },
       {
         onSuccess: () => {
-          enqueueSnackbar(`Rewarded ${item.from.username} with ${gems.toLocaleString()} gems`, { variant: "success" });
+          enqueueSnackbar(
+            gems > 0 ? `Sent ${item.from.username} ${gems.toLocaleString()} gems` : `Replied to ${item.from.username}`,
+            { variant: "success" },
+          );
           onClose();
         },
-        onError: (e) => enqueueSnackbar((e as Error).message || "Couldn't reward that", { variant: "error" }),
+        onError: (e) => enqueueSnackbar((e as Error).message || "Couldn't resolve that", { variant: "error" }),
       },
     );
 
@@ -49,46 +72,40 @@ export default function RewardFeedbackDialog({ item, open, onClose }: RewardFeed
     <ResponsiveDialog
       open={open}
       onClose={onClose}
-      title="Reward gems"
+      title="Resolve feedback"
       actions={
         <>
-          <Button onClick={onClose} disabled={reward.isPending}>
+          <Button onClick={onClose} disabled={resolve.isPending}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={submit} disabled={!gemsValid || !messageValid || reward.isPending}>
-            Reward {gemsValid ? gems.toLocaleString() : ""} gems
+          <Button variant="contained" onClick={submit} disabled={!gemsValid || !messageValid || resolve.isPending}>
+            {gems > 0 ? `Send ${gems.toLocaleString()} gems` : "Send reply"}
           </Button>
         </>
       }
     >
       <Stack spacing={2.5} sx={{ pt: 0.5 }}>
         <Typography variant="body2" color="text.secondary">
-          Thank {item.from.username} for the report. The gems go to their balance once, and they get your message as a
-          notification.
+          {item.from.username} gets your message as a notification{gems > 0 ? ", along with the gems" : ""}.
+          {gems > 0 ? " Gems are paid once, and the feedback is archived afterwards." : ""}
         </Typography>
 
         <Box>
           <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.75 }}>
-            Amount
+            Gems
           </Typography>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Chip clickable {...sameChip(choice === 0)} onClick={() => pick(0)} label="No gems" />
             {FEEDBACK_REWARD_PRESETS.map((n) => (
               <Chip
                 key={n}
                 clickable
-                variant={choice === n ? "filled" : "outlined"}
-                color={choice === n ? "primary" : "default"}
-                onClick={() => setChoice(n)}
+                {...sameChip(choice === n)}
+                onClick={() => pick(n)}
                 label={<GemAmount amount={n} iconSize={16} variant="body2" />}
               />
             ))}
-            <Chip
-              clickable
-              variant={choice === CUSTOM ? "filled" : "outlined"}
-              color={choice === CUSTOM ? "primary" : "default"}
-              onClick={() => setChoice(CUSTOM)}
-              label="Custom"
-            />
+            <Chip clickable {...sameChip(choice === CUSTOM)} onClick={() => pick(CUSTOM)} label="Custom" />
           </Box>
           {choice === CUSTOM && (
             <TextField
@@ -98,7 +115,7 @@ export default function RewardFeedbackDialog({ item, open, onClose }: RewardFeed
               label="Gems"
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
-              slotProps={{ htmlInput: { min: 1, max: FEEDBACK_REWARD_MAX_GEMS, step: 1 } }}
+              slotProps={{ htmlInput: { min: 0, max: FEEDBACK_REWARD_MAX_GEMS, step: 1 } }}
               error={custom !== "" && !gemsValid}
               helperText={`Up to ${FEEDBACK_REWARD_MAX_GEMS.toLocaleString()}`}
               sx={{ mt: 1.5, width: 180 }}
@@ -111,13 +128,12 @@ export default function RewardFeedbackDialog({ item, open, onClose }: RewardFeed
             Message
           </Typography>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
-            {FEEDBACK_REWARD_MESSAGES.map((m) => (
+            {messages.map((m) => (
               <Chip
                 key={m}
                 clickable
                 size="small"
-                variant={message === m ? "filled" : "outlined"}
-                color={message === m ? "primary" : "default"}
+                {...sameChip(message === m)}
                 onClick={() => setMessage(m)}
                 label={m.length > 36 ? `${m.slice(0, 34)}…` : m}
               />
