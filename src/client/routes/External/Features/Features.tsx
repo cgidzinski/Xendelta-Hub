@@ -1,22 +1,13 @@
 import { Box, Button, Card, Container, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { APP_GUIDE, type GuideApp } from "@shared/appGuide";
-import { BRAND_NAME } from "@shared/brand";
-import { CHANGELOG } from "@shared/changelog";
 import LandingHeader from "../../../components/LandingHeader";
 import { cardSx } from "../../../components/ui/surfaceStyles";
-import { APPS_REGISTRY } from "../../../constants/apps";
 import { useTitle } from "../../../hooks/useTitle";
 import { showcaseApps } from "../components/AppShowcase";
 import PublicFooter from "../components/PublicFooter";
 
-const RECENT = 5;
-const labelOf = (key: GuideApp) =>
-  key === "hub" ? BRAND_NAME : (APPS_REGISTRY.find((a) => a.key === key)?.label ?? key);
-const monthDay = (date: string) =>
-  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-
-/** What each app is for and a few things to try in it, then the latest changes. Everything comes from the app list, the guide and the changelog. */
+/** What each app is for and everything it can do. Everything comes from the app list and the app guide. */
 export default function Features() {
   useTitle("Features");
   const navigate = useNavigate();
@@ -29,7 +20,7 @@ export default function Features() {
           What each app does
         </Typography>
         <Typography color="text.secondary" sx={{ maxWidth: 620, mb: 5 }}>
-          Here is what each app is for, and a few things you can try in it.
+          Here is what each app is for, and what you can do in it.
         </Typography>
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 6 }}>
@@ -60,12 +51,12 @@ export default function Features() {
                 </Box>
                 <Box>
                   <Typography variant="overline" color="text.secondary">
-                    Try this
+                    Features
                   </Typography>
                   <Box component="ul" sx={{ m: 0, pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75 }}>
-                    {guide.tips.map((tip) => (
-                      <Typography key={tip.text} component="li" variant="body2">
-                        {tip.text}
+                    {guide.features.map((feature) => (
+                      <Typography key={feature} component="li" variant="body2">
+                        {feature}
                       </Typography>
                     ))}
                   </Box>
@@ -73,21 +64,6 @@ export default function Features() {
               </Card>
             );
           })}
-        </Box>
-
-        <Typography variant="overline" color="text.secondary">
-          Recently added
-        </Typography>
-        <Box component="ul" sx={{ m: 0, pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75, mb: 6 }}>
-          {CHANGELOG.slice(0, RECENT).map((e) => (
-            <Typography key={`${e.date}|${e.title}`} component="li" variant="body2">
-              {e.title}
-              <Typography component="span" variant="caption" color="text.secondary">
-                {" "}
-                ({labelOf(e.app)}, {monthDay(e.date)})
-              </Typography>
-            </Typography>
-          ))}
         </Box>
 
         <Box sx={{ textAlign: "center" }}>

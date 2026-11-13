@@ -17,14 +17,6 @@ const OLD_SPELLINGS: Array<[RegExp, string]> = [
   [/["'`>]Xensplit["'`<]/, "Xensplit (the app is XenSplit)"],
 ];
 
-// Places that name the old name on purpose, with the spelling they use and why.
-const ALLOWED: Record<string, { spellings: string[]; why: string }> = {
-  "src/shared/changelog.ts": {
-    spellings: ["Xendelta Hub", "Xendelta"],
-    why: 'the entry "Xendelta Hub is now called XenSuite" has to say what it was called',
-  },
-};
-
 const SRC = join(__dirname, "..");
 const ROOT = join(SRC, "..");
 
@@ -51,7 +43,6 @@ describe("the product name", () => {
       const text = readFileSync(file, "utf8");
       const rel = relative(ROOT, file);
       for (const [pattern, label] of OLD_SPELLINGS) {
-        if (ALLOWED[rel]?.spellings.includes(label)) continue;
         if (pattern.test(text)) found.push(`${rel}: ${label}`);
       }
     }

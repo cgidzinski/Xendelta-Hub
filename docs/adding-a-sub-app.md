@@ -17,7 +17,7 @@ Use **XenKitchen** (`routes/xenkitchen.ts`, `Internal/XenKitchen/`) as the worke
 2. Build it with the sections below. The [checklist](#everything-a-new-app-touches) is the full list of places a new app
    has to be registered; it is long on purpose, because the easy ones to miss (the feed, the guide, the API-key
    allowlist, the realtime events) are what make an app feel part of the hub.
-3. **Tell people about it:** an `APP_GUIDE` entry and a changelog entry ([section 9](#9-tell-people-about-it)). A test
+3. **Tell people about it:** an `APP_GUIDE` entry with its features ([section 9](#9-tell-people-about-it)). A test
    fails without the guide entry.
 4. Run every check and click through the real UI. Open a PR.
 
@@ -44,12 +44,11 @@ A new app, `myapp`, has to appear in all of these. Each is explained in the sect
 | 15 | `src/shared/activity.ts`, `server/activity/spaces.ts`, `recordActivity` | activity on Home | 4b |
 | 16 | `src/server/feed/providers/` + `feed/attention.ts` | "needs attention" cards and badges | 4b |
 | 17 | `notify()` | notifications | 2 |
-| 18 | `src/shared/appGuide.ts`, `src/server/feed/appUsage.ts` | what it is for, a one-line `pitch`, tips, and how to tell someone uses it (**required**, tests enforce it) | 9 |
-| 19 | `src/shared/changelog.ts` | a "what's new" entry (**always**) | 9 |
-| 20 | `src/client/routes/Admin/Storage.tsx`, `Overview.tsx` | admin copy that names the apps | 10 |
-| 21 | `src/client/routes/Internal/Share/` | accept shared photos/links, if it makes sense | 10 |
-| 22 | a flow test next to `routes/coreFlows.test.ts` | create, edit and delete through the real routes (**required**) | 6 |
-| 23 | `migrations/` | only if stored data changes shape | 7 |
+| 18 | `src/shared/appGuide.ts`, `src/server/feed/appUsage.ts` | what it is for, a one-line `pitch`, its `features` (kept up to date), tips, and how to tell someone uses it (**required**, tests enforce it) | 9 |
+| 19 | `src/client/routes/Admin/Storage.tsx`, `Overview.tsx` | admin copy that names the apps | 10 |
+| 20 | `src/client/routes/Internal/Share/` | accept shared photos/links, if it makes sense | 10 |
+| 21 | a flow test next to `routes/coreFlows.test.ts` | create, edit and delete through the real routes (**required**) | 6 |
+| 22 | `migrations/` | only if stored data changes shape | 7 |
 
 The public pages (the landing page and Features) list every app from `APPS_REGISTRY` and `APP_GUIDE`, so a new app appears on them
 with no extra edit. Say the product's name with `BRAND_NAME` (`src/shared/brand.ts`), never by typing it; a test fails on the old
@@ -66,7 +65,7 @@ spellings.
 6. [Tests](#6-tests)
 7. [Migrations and deploy](#7-migrations-and-deploy)
 8. [Mistakes to avoid](#8-mistakes-to-avoid)
-9. [Tell people about it: guide and changelog](#9-tell-people-about-it)
+9. [Tell people about it: the app guide](#9-tell-people-about-it)
 10. [Other places an app shows up](#10-other-places-an-app-shows-up)
 
 ## 1. Server model and sharing
@@ -251,20 +250,19 @@ shape, `reset`, and unit-tested helpers) instead of parallel `useState`s for "ad
 
 ## 9. Tell people about it
 
-Two files, both written for the people who use the hub, not for developers.
+This is written for the people who use the apps, not for developers or admins.
 
 - **`src/shared/appGuide.ts` (`APP_GUIDE`), required for a new app.** `about`: two or three plain sentences on what the app
-  is for. `pitch`: one line that gets someone who doesn't use the app to try it ("Try XenNote for quick notes and checklists you
+  is for. `features`: everything it can do, one sentence each (see the next point). `pitch`: one line that gets someone who doesn't use the app to try it ("Try XenNote for quick notes and checklists you
   can share."), with a link to open it. `tips`: at least two sentences on what you can do once you use the app, with a link to
-  where to try it. Add the key to `GUIDE_APPS` too. The About page (pick an app, see what it is for and what it can do) lists the apps from this. The "Did you know?" cards on an
+  where to try it. Add the key to `GUIDE_APPS` too. The About page and the public Features page list the apps from this. The "Did you know?" cards on an
   empty Home invite people to the apps they **don't** use (the `pitch`) and only show `tips` for apps they **do**, so add a line for
   the app in `src/server/feed/appUsage.ts` that says what "uses it" means (they have something in it). Tests fail if an app in
   `APPS_REGISTRY` has no guide entry, no pitch, or isn't tracked there.
-- **`src/shared/changelog.ts` (`CHANGELOG`), every time.** Every feature you add, and every change a person would
-  notice (a fix included), gets an entry **in the same PR**: newest first, `date` (today), `app` (the app key, or
-  `"hub"`) and a short `title` (one line: the page shows only that). Write "Added…", "You can now…" or "Fixed…". No PR
-  numbers, file names or technical words; a test rejects them. A change nobody can see (a refactor, a test) gets no entry.
-  Also add a tip to the app's `APP_GUIDE` when the feature is worth discovering.
+- **Its `features` list, every time a feature is added or removed.** The About page shows it: pick an app, see what it is for and
+  everything it can do. One plain sentence per feature, most important first, written for the people who use the app (not for
+  admins). Nothing about what changed, no PR numbers, no technical terms; a test rejects them. A fix, a refactor or an admin
+  tool is not a feature and is not listed. Also add a tip to `tips` when the feature is worth discovering.
 
 ## 10. Other places an app shows up
 

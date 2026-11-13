@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { APP_GUIDE, GUIDE_APPS, pickTips } from "./appGuide";
-import { CHANGELOG } from "./changelog";
 
 describe("the app guide", () => {
   it("has a few plain lines and at least three tips for every app", () => {
@@ -94,21 +93,26 @@ describe("pickTips", () => {
   });
 });
 
-describe("the changelog", () => {
-  it("is newest first, with real dates and known apps", () => {
-    for (const entry of CHANGELOG) {
-      expect(entry.date, entry.title).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(Number.isNaN(Date.parse(entry.date)), entry.title).toBe(false);
-      expect(GUIDE_APPS as readonly string[], entry.title).toContain(entry.app);
+describe("the feature lists", () => {
+  it("every app lists what it can do, one plain sentence each", () => {
+    for (const app of GUIDE_APPS) {
+      const { features } = APP_GUIDE[app];
+      expect(features.length, app).toBeGreaterThanOrEqual(5);
+      expect(new Set(features).size, `${app} repeats a feature`).toBe(features.length);
+      for (const feature of features) {
+        expect(feature.endsWith("."), feature).toBe(true);
+        expect(feature.length, feature).toBeLessThan(180);
+      }
     }
-    const dates = CHANGELOG.map((e) => e.date);
-    expect([...dates].sort().reverse()).toEqual(dates);
   });
-  it("is written for people: short, no PR numbers, no file names or code words", () => {
-    for (const entry of CHANGELOG) {
-      const text = entry.title;
-      expect(entry.title.length, entry.title).toBeLessThan(100);
-      expect(text, entry.title).not.toMatch(/#\d{2,}|\.tsx?\b|\bAPI\b|\bendpoint\b|\bmigration\b|\brefactor/i);
+
+  it("is only about what people can do: nothing for admins, nothing about changes, no code words", () => {
+    for (const app of GUIDE_APPS) {
+      for (const feature of APP_GUIDE[app].features) {
+        expect(feature, feature).not.toMatch(
+          /\badmin|renamed|now called|\bnew\b|#\d{2,}|\.tsx?\b|\bAPI\b|\bendpoint\b|\bmigration\b|\brefactor/i,
+        );
+      }
     }
   });
 });
