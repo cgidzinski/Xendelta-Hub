@@ -9,7 +9,7 @@ export default function HomeLinks() {
   return (
     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center", pt: 1 }}>
       <Typography variant="caption" color="text.secondary" sx={{ width: "100%", textAlign: "center" }}>
-        Found a bug? Report it and earn gems when it's fixed.
+        Report a bug or suggest an idea. Earn gems when it's fixed or built.
       </Typography>
       <Button
         color="inherit"
