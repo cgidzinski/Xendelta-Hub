@@ -3,11 +3,8 @@ import HomeIcon from "@mui/icons-material/Home";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import InventoryIcon from "@mui/icons-material/Inventory2Outlined";
 import SecurityIcon from "@mui/icons-material/Security";
-import PushPinIcon from "@mui/icons-material/PushPin";
-import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { APPS_REGISTRY, AppRegistryItem, resolvePinnedApps } from "../../constants/apps";
 import IconButton from "@mui/material/IconButton";
-import Tooltip from "@mui/material/Tooltip";
 import { Link, useLocation } from "react-router-dom";
 import Chip from "@mui/material/Chip";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
@@ -15,7 +12,6 @@ import FeedbackOutlinedIcon from "@mui/icons-material/FeedbackOutlined";
 import { useWhatsNew } from "../../hooks/useWhatsNew";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
-import { usePinnedApps } from "../../hooks/user/usePinnedApps";
 import BaseNavBar, { NavItem } from "./BaseNavBar";
 
 // APPS_REGISTRY now imported from constants/apps.ts
@@ -23,26 +19,8 @@ import BaseNavBar, { NavItem } from "./BaseNavBar";
 export default function Root() {
   const { isNavBarOpen, toggleNavBar, title } = useNavBar();
   const { profile } = useUserProfile();
-  const { togglePinnedApp, isUpdating } = usePinnedApps();
 
   const pinnedApps = resolvePinnedApps(profile?.pinnedApps);
-
-  const buildPinAction = (app: AppRegistryItem, isPinned: boolean): React.ReactNode => (
-    <Tooltip title={isPinned ? "Unpin" : "Pin"}>
-      <span>
-        <IconButton
-          edge="end"
-          size="small"
-          disabled={isUpdating}
-          onClick={() => togglePinnedApp(app.key, pinnedApps)}
-          aria-label={isPinned ? `Unpin ${app.label}` : `Pin ${app.label}`}
-          sx={{ color: isPinned ? "warning.main" : "action.active" }}
-        >
-          {isPinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
-        </IconButton>
-      </span>
-    </Tooltip>
-  );
 
   const buildAppNavItem = (app: AppRegistryItem, keyPrefix: string): NavItem => ({
     key: `${keyPrefix}-${app.key}`,
@@ -50,7 +28,6 @@ export default function Root() {
     icon: app.icon ? <app.icon sx={{ fontSize: 22 }} /> : undefined,
     path: app.path,
     isSelected: (pathname: string) => pathname.startsWith(app.path),
-    endAction: buildPinAction(app, pinnedApps.includes(app.key)),
   });
 
   const pinnedNavItems: NavItem[] = pinnedApps

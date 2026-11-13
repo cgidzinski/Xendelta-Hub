@@ -73,7 +73,8 @@ module.exports = function (app: express.Application) {
           unread_messages: hasUnreadMessages,
           unread_notifications: hasUnreadNotifications,
           has_new_notifications: !!hasNewNotifications,
-          pinnedApps: user.pinnedApps || [],
+          // null = never chosen (the client shows its default pin); [] = chose none.
+          pinnedApps: user.pinnedApps ?? null,
           timezone: user.timezone || "",
           theme: user.theme || "",
           emailNotifications: user.notificationPrefs?.email !== false,
@@ -498,7 +499,7 @@ module.exports = function (app: express.Application) {
     if (!user) throw new AppError(404, "User not found");
     return res.json({
       status: true,
-      data: { pinnedApps: user.pinnedApps || [] },
+      data: { pinnedApps: user.pinnedApps ?? null },
     });
   });
 

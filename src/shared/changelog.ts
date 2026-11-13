@@ -19,6 +19,13 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     app: "hub",
+    title: "You can now pin as many apps as you like, from the new All apps block on Home",
+    detail:
+      "Press Edit, tap the apps you want at the top of Home, and press Done. The pin buttons in the sidebar are gone.",
+  },
+  {
+    date: "2026-11-13",
+    app: "hub",
     title: "Added a What's new page, tips on Home, and a way to send feedback",
     detail:
       "See what each app is for and what changed, find ideas on Home when it is quiet, and tell us what you think from the sidebar.",
