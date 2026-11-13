@@ -10,6 +10,17 @@
     { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/android-chrome-512x512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "share_target": {
+    "action": "/internal/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [{ "name": "files", "accept": ["image/*", "application/pdf", "text/plain"] }]
+    }
+  },
   "shortcuts": [
     {
       "name": "XenSplit",

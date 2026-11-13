@@ -1,4 +1,5 @@
 import { randomToken } from "./tokens";
+import { isSafeUrl } from "@shared/xennote/notes";
 import {
   roleOf,
   canView,
@@ -84,6 +85,9 @@ export function itemFieldsFromBody(body: any): Record<string, unknown> {
     if (typeof body[k] === "string") out[k] = body[k].trim();
   };
   ["title", "description", "notes", "brand", "storage_note"].forEach(copyStr);
+  // The source is a web address or nothing; anything else is dropped rather than stored.
+  if (typeof body.source_url === "string")
+    out.source_url = isSafeUrl(body.source_url.trim()) ? body.source_url.trim() : "";
 
   if ("category_id" in body) out.category_id = body.category_id || null;
   if (Array.isArray(body.tags)) {
@@ -288,6 +292,7 @@ export function serializeItem(raw: any, categories: Map<string, CategoryLike>, o
     brand: item.brand || "",
     methods: pick(item.methods).map((m: any) => ({ ...m, _id: String(m._id) })),
     storage_note: item.storage_note || "",
+    source_url: item.source_url || "",
     created_at: item.created_at,
     updated_at: item.updated_at,
   };
