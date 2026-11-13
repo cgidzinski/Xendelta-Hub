@@ -1,4 +1,5 @@
 import zlib from "zlib";
+import { pipeline, type Readable } from "stream";
 import readline from "readline";
 import { EJSON } from "bson";
 import type { Db, Document } from "mongodb";
@@ -112,7 +113,12 @@ export async function restoreFromGzipStream(
   }
 
   const gunzip = zlib.createGunzip();
-  srcStream.pipe(gunzip);
+  // pipeline (not pipe) so a failing source or a truncated/corrupt file destroys the gunzip stream and is reported,
+  // instead of the loop below ending quietly as if the dump were complete.
+  let sourceError: Error | null = null;
+  pipeline(srcStream as Readable, gunzip, (err) => {
+    if (err) sourceError = err;
+  });
   const rl = readline.createInterface({ input: gunzip, crlfDelay: Infinity });
 
   let currentCollection: string | null = null;
@@ -148,6 +154,7 @@ export async function restoreFromGzipStream(
     }
   }
   await flush();
+  if (sourceError) throw sourceError;
 
   return Array.from(summaries.values());
 }

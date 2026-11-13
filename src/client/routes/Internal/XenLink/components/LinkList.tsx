@@ -1,4 +1,4 @@
-import { Box, Typography, Card, CardContent, CardActionArea, IconButton } from "@mui/material";
+import { Box, Typography, Card, CardContent, CardActionArea, Chip, IconButton } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
@@ -7,6 +7,8 @@ import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import EmptyState from "../../../../components/ui/EmptyState";
 import LinkIcon from "@mui/icons-material/Link";
+import AdsClickIcon from "@mui/icons-material/AdsClick";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 
 interface LinkListProps {
   links: XenLink[] | undefined;
@@ -95,7 +97,26 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
                       URL: {link.url}
                     </Typography>
                   </Box>
-                  <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      icon={<AdsClickIcon sx={{ fontSize: 14 }} />}
+                      label={`${link.clicks ?? 0} ${link.clicks === 1 ? "click" : "clicks"}`}
+                    />
+                    {link.expires_at && (
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color={new Date(link.expires_at) <= new Date() ? "error" : "warning"}
+                        icon={<ScheduleIcon sx={{ fontSize: 14 }} />}
+                        label={
+                          new Date(link.expires_at) <= new Date()
+                            ? "Expired"
+                            : `Expires ${format(new Date(link.expires_at), "MMM d")}`
+                        }
+                      />
+                    )}
                     <Typography variant="body2" color="text.secondary">
                       Created: {format(new Date(link.createdAt), "MMM d, yyyy")}
                     </Typography>

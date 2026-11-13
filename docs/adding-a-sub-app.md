@@ -48,9 +48,8 @@ A new app, `myapp`, has to appear in all of these. Each is explained in the sect
 | 19 | `src/shared/changelog.ts` | a "what's new" entry (**always**) | 9 |
 | 20 | `src/client/routes/Admin/Storage.tsx`, `Overview.tsx` | admin copy that names the apps | 10 |
 | 21 | `src/client/routes/Internal/Share/` | accept shared photos/links, if it makes sense | 10 |
-| 22 | `src/client/offline/queryPersistence.ts` | keep its data for offline reading, if it makes sense | 10 |
-| 23 | a flow test next to `routes/coreFlows.test.ts` | create, edit and delete through the real routes (**required**) | 6 |
-| 24 | `migrations/` | only if stored data changes shape | 7 |
+| 22 | a flow test next to `routes/coreFlows.test.ts` | create, edit and delete through the real routes (**required**) | 6 |
+| 23 | `migrations/` | only if stored data changes shape | 7 |
 
 ## Checklist
 
@@ -270,11 +269,6 @@ Not every app needs these; decide for each and say so in the PR.
 - **Share target** (`src/client/routes/Internal/Share/`, `pwa/shareStash.ts`): the phone's Share button can send a link, text or
   photos to the hub, which offers places to save them. An app that makes sense as a destination adds an option there
   (the receipt flow into XenSplit and XenBudget in `Share/receipt.ts` is the example: pick a group, open the new-expense form).
-- **Offline reading and quick writes** (`src/client/offline/`): `queryPersistence.ts` keeps a per-person copy of selected
-  apps' queries for offline use; add the app's key to `PERSISTED_APPS` only for lists people read away from a
-  connection (never money or chat). A write may be queued for later only if it is safe to send late and twice
-  (`offlineQueue.ts`: a "set this to done" with the state the person saw); anything else needs a connection.
-- **Admin backups** (`utils/gcsBackups.ts`) dump the whole database, so a new collection is included with nothing to do. XenDrive
-  thumbnails (`utils/xendriveThumbs.ts`) apply to files in XenDrive, including app files, with nothing to do.
+- **Admin backups** (`utils/gcsBackups.ts`) dump the whole database, so a new collection is included with nothing to do.
 - **Feedback** (`/internal/feedback`) is for the hub as a whole; an app does not need its own.
 

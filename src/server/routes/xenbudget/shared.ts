@@ -1,6 +1,7 @@
-import { Request, Response } from "express";
+import { Request } from "express";
 import { XenBudgetBook } from "../../models/xenBudget";
 import { accessOf, canManage, canView } from "../../utils/membership";
+import { AppError, callerId } from "../../utils/http";
 import { SocketManager } from "../../infrastructure/SocketManager";
 
 import { resolveShares, resolveCategories, roundMoney } from "../../utils/xenBudgetUtils";
@@ -9,9 +10,7 @@ import { normalizeFlagNames, type DraftItem, type Rule } from "../../utils/xenBu
 
 export const mongoose = require("mongoose");
 
-export function callerId(req: Request): string {
-  return (req.user as any)._id.toString();
-}
+export { callerId };
 
 export function memberIds(book: any): string[] {
   return (book.members as any[]).map((m: any) => (m._id ? m._id.toString() : m.toString()));
@@ -22,29 +21,19 @@ export function isMember(book: any, userId: string): boolean {
 }
 
 // XenSplit repeats its 404/403 block in every handler; XenBudget keeps it here so the
-// membership rule is stated once. Returns null having ALREADY sent the response.
-export async function loadBookForMember(req: Request, res: Response): Promise<any | null> {
+// membership rule is stated once. Throws the 404/403 (the global errorHandler answers it).
+export async function loadBookForMember(req: Request): Promise<any> {
   const book = await XenBudgetBook.findById(req.params.bookId);
-  if (!book) {
-    res.status(404).json({ status: false, message: "Book not found" });
-    return null;
-  }
-  if (!isMember(book, callerId(req))) {
-    res.status(403).json({ status: false, message: "Not a member of this book" });
-    return null;
-  }
+  if (!book) throw new AppError(404, "Book not found");
+  if (!isMember(book, callerId(req))) throw new AppError(403, "Not a member of this book");
   return book;
 }
 
 // The creator is the book's main admin: only they manage members, transfer, or delete.
 // Every other member can do everything else.
-export async function loadBookForCreator(req: Request, res: Response): Promise<any | null> {
-  const book = await loadBookForMember(req, res);
-  if (!book) return null;
-  if (!canManage(accessOf(book), callerId(req))) {
-    res.status(403).json({ status: false, message: "Only the book owner can do that" });
-    return null;
-  }
+export async function loadBookForCreator(req: Request): Promise<any> {
+  const book = await loadBookForMember(req);
+  if (!canManage(accessOf(book), callerId(req))) throw new AppError(403, "Only the book owner can do that");
   return book;
 }
 

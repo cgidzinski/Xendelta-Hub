@@ -26,12 +26,6 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     app: "hub",
-    title: "You can now read your notes, routines and recipes without a connection",
-    detail: "Tick a checklist item or mark a routine done while offline, and it saves when you are back online.",
-  },
-  {
-    date: "2026-11-13",
-    app: "hub",
     title: "Added sharing to the hub from your phone",
     detail:
       "Use the Share button in another app to save a link, some text or a photo as a note, a short link or a file. A photo of a receipt can start a new expense in XenSplit or XenBudget.",
@@ -99,17 +93,6 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "Added checklists to routines",
     detail:
       "Break a routine into steps and tick them off on its card. Marking it done records which steps you did, and asks first if some are left.",
-  },
-  {
-    date: "2026-11-13",
-    app: "xendrive",
-    title: "The grid now shows small previews of PDFs as well as photos",
-  },
-  {
-    date: "2026-11-13",
-    app: "xendrive",
-    title: "Added real thumbnails to the photo grid",
-    detail: "Folders of photos open much faster.",
   },
   {
     date: "2026-11-13",

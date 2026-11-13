@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AppError } from "../../utils/http";
 import {
   validate,
   validateParams,
@@ -51,21 +52,15 @@ export function registerBudgetRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     validate(createXenBudgetBudgetSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const error = validateBudgetTarget(req.body, book);
-        if (error) return res.status(400).json({ status: false, message: error });
+      const book = await loadBookForMember(req);
+      const error = validateBudgetTarget(req.body, book);
+      if (error) throw new AppError(400, error);
 
-        book.budgets.push(toBudgetFields(req.body));
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: "Budget created", data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error("Error creating budget:", error);
-        res.status(500).json({ status: false, message: "Failed to create budget" });
-      }
+      book.budgets.push(toBudgetFields(req.body));
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: "Budget created", data: serializeBookFor(book, callerId(req)) });
     },
   );
 
@@ -74,23 +69,17 @@ export function registerBudgetRoutes(app: any) {
     validateParams(xenBudgetBudgetParamSchema),
     validate(updateXenBudgetBudgetSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const budget = book.budgets.id(req.params.budgetId);
-        if (!budget) return res.status(404).json({ status: false, message: "Budget not found" });
-        const error = validateBudgetTarget(req.body, book);
-        if (error) return res.status(400).json({ status: false, message: error });
+      const book = await loadBookForMember(req);
+      const budget = book.budgets.id(req.params.budgetId);
+      if (!budget) throw new AppError(404, "Budget not found");
+      const error = validateBudgetTarget(req.body, book);
+      if (error) throw new AppError(400, error);
 
-        Object.assign(budget, toBudgetFields(req.body));
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: "Budget updated", data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error("Error updating budget:", error);
-        res.status(500).json({ status: false, message: "Failed to update budget" });
-      }
+      Object.assign(budget, toBudgetFields(req.body));
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: "Budget updated", data: serializeBookFor(book, callerId(req)) });
     },
   );
 
@@ -98,20 +87,14 @@ export function registerBudgetRoutes(app: any) {
     "/api/xenbudget/books/:bookId/budgets/:budgetId",
     validateParams(xenBudgetBudgetParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const budget = book.budgets.id(req.params.budgetId);
-        if (!budget) return res.status(404).json({ status: false, message: "Budget not found" });
-        book.budgets.pull({ _id: budget._id });
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: "Budget deleted", data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error("Error deleting budget:", error);
-        res.status(500).json({ status: false, message: "Failed to delete budget" });
-      }
+      const book = await loadBookForMember(req);
+      const budget = book.budgets.id(req.params.budgetId);
+      if (!budget) throw new AppError(404, "Budget not found");
+      book.budgets.pull({ _id: budget._id });
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: "Budget deleted", data: serializeBookFor(book, callerId(req)) });
     },
   );
 }

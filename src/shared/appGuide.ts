@@ -63,7 +63,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "XenDrive is your file storage: put files in folders, preview them, and share a file or a whole folder with a link.",
     tips: [
       {
-        text: "Switch to the grid view to see photos and the first page of PDFs as thumbnails.",
+        text: "Switch to the grid view to see your photos at a glance.",
         link: "/internal/xendrive",
       },
       {
@@ -126,10 +126,6 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       },
       { text: "Give a routine a checklist of steps so you can tick them off as you go.", link: "/internal/xenroutine" },
       { text: "Share a routine with someone at home so either of you can mark it done.", link: "/internal/xenroutine" },
-      {
-        text: "It works without a connection: mark things done offline and they save when you are back.",
-        link: "/internal/xenroutine",
-      },
     ],
   },
   xenkitchen: {
@@ -152,7 +148,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     about:
       "XenNote is for quick notes, checklists, photos and links, in notebooks you can share with the people around you.",
     tips: [
-      { text: "Tick checklist items right from the board, even without a connection.", link: "/internal/xennote" },
+      { text: "Tick checklist items right from the board, without opening the note.", link: "/internal/xennote" },
       {
         text: "Link one note to another by typing its name in double square brackets, and see what links back.",
         link: "/internal/xennote",

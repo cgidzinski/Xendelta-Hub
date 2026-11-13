@@ -2,6 +2,7 @@ import express = require("express");
 import { blogListQuerySchema, blogSlugParamSchema, validateParams, validateQuery } from "../utils/validation";
 import { BlogPost } from "../models/blogPost";
 import { PUBLIC_USER_FIELDS } from "../utils/publicUser";
+import { AppError } from "../utils/http";
 
 module.exports = function (app: express.Application) {
   app.get(
@@ -46,10 +47,7 @@ module.exports = function (app: express.Application) {
         .exec();
 
       if (!post) {
-        return res.status(404).json({
-          status: false,
-          message: "Blog post not found",
-        });
+        throw new AppError(404, "Blog post not found");
       }
 
       return res.json({
