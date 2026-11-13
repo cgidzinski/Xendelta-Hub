@@ -12,7 +12,6 @@ const STILL_HAND_WRITTEN: Record<string, string> = {
   "users.ts": "profile routes wrap their bodies in try/catch",
   "xendrive.ts": "a few answers carry extra fields (password prompts)",
   "xenlink.ts": "moved in the owner_id change (#258)",
-  "xensplit.ts": "74 answers inside try/catch blocks; its own piece of work",
   "admin/blog.ts": "content editing, left as it was",
 };
 
