@@ -10,6 +10,9 @@ import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { folderShareUrl, useXendriveActions, useXendriveFolderStats } from "../../../../hooks/xendrive/useXendrive";
 import type { XenDriveFolder } from "../../../../types/XenDriveFile";
 import { folderContentsLabel } from "../lib/driveFormat";
+import DownloadTally from "./DownloadTally";
+import LinkExpiryPicker from "./LinkExpiryPicker";
+import LinkPasswordField from "./LinkPasswordField";
 
 interface FolderShareDialogProps {
   /** The folder being shared, kept current by the page behind. */
@@ -21,20 +24,29 @@ interface FolderShareDialogProps {
 export default function FolderShareDialog({ folder, onClose }: FolderShareDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
-  const { shareFolder } = useXendriveActions();
+  const { shareFolder, updateFolderShare } = useXendriveActions();
   const { data: stats } = useXendriveFolderStats(folder?._id ?? null);
 
   // The page behind refetches after each change; the mutation result is a fallback until it has
-  const fresh = shareFolder.data?.folder;
+  const fresh = updateFolderShare.data?.folder ?? shareFolder.data?.folder;
   const live = fresh && folder && fresh._id === folder._id ? { ...folder, ...fresh } : folder;
   const url = live?.shareToken ? folderShareUrl(live.shareToken) : null;
   const on = !!url;
-  const busy = shareFolder.isPending;
+  const busy = shareFolder.isPending || updateFolderShare.isPending;
 
   const act = (action: "enable" | "rotate" | "disable") =>
     shareFolder.mutate(
       { folderId: folder!._id, action },
       { onError: (e: Error) => enqueueSnackbar(e.message || "Couldn't update the link", { variant: "error" }) },
+    );
+
+  const saveSettings = (settings: { password?: string | null; expiry?: string | null }, message?: string) =>
+    updateFolderShare.mutate(
+      { folderId: folder!._id, settings },
+      {
+        onSuccess: () => message && enqueueSnackbar(message, { variant: "success" }),
+        onError: (e: Error) => enqueueSnackbar(e.message || "Couldn't save", { variant: "error" }),
+      },
     );
 
   const rotate = async () => {
@@ -129,10 +141,22 @@ export default function FolderShareDialog({ folder, onClose }: FolderShareDialog
                 <Line ok>
                   {stats ? folderContentsLabel(stats) : "Everything in this folder"}, including everything added later
                 </Line>
-                <Line ok>Files with a password or their own link off can still be downloaded through it</Line>
+                <Line ok>Files with their own password or link off can still be downloaded through it</Line>
                 <Line>Nothing above “{folder?.name}” and nobody’s name</Line>
               </Stack>
             </Box>
+
+            <LinkPasswordField
+              resetKey={live!._id}
+              hasPassword={!!live?.hasPassword}
+              busy={busy}
+              onSave={(password) => saveSettings({ password }, "Password saved")}
+              onRemove={() => saveSettings({ password: null }, "Password removed")}
+            />
+
+            <LinkExpiryPicker expiry={live?.expiry} onChange={(expiry, message) => saveSettings({ expiry }, message)} />
+
+            <DownloadTally downloads={live?.downloads} last={live?.lastDownloadedAt} />
 
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
               <Button variant="outlined" onClick={rotate} disabled={busy}>

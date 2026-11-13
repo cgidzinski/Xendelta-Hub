@@ -10,7 +10,7 @@ import {
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types";
 import { User } from "../models/user";
-import { XenLink } from "../models/xenlink";
+import { XenLink, createXenLink } from "../models/xenlink";
 module.exports = function (app: express.Application) {
   app.get("/api/xenlink/list", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = (req as AuthenticatedRequest).user!._id.toString();
@@ -42,11 +42,7 @@ module.exports = function (app: express.Application) {
           message: "User not found",
         });
       }
-      const xenlink = new XenLink({
-        name: link.name,
-        url: link.url,
-      });
-      await xenlink.save();
+      const xenlink = await createXenLink({ name: link.name, url: link.url });
       user.xenlink.push(xenlink._id);
       await user.save();
       return res.json({

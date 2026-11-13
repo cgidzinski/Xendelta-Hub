@@ -15,6 +15,7 @@ const ROUNDING_ALLOWED: Record<string, string> = {
   "client/routes/Internal/XenBudget/components/WeightedSplitEditor.tsx": "split weights and percentages, not money",
   "client/routes/Internal/XenKitchen/components/ItemView.tsx": "a recipe scaling factor, not money",
   "shared/xenkitchen/kitchen.ts": "recipe quantities, not money",
+  "shared/xenkitchen/units.ts": "recipe measures and temperatures, not money",
 };
 
 function walk(dir: string, out: string[] = []): string[] {
