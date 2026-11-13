@@ -12,6 +12,7 @@ with where they came from and are **exempt from the quota for now** (`counted: f
 | XenSplit expense photos | tagged file, `ref` = group id | private | 10 MB each, 10 per expense | no |
 | XenBudget item photos | tagged file, `ref` = book id | private | 10 MB each, 10 per item | no |
 | XenNote photos | tagged file, `ref` = note id | private | 15 MB each (resized), 10 per note | no |
+| XenRoutine "done" photos | tagged file, `ref` = routine id, on a history entry | private | 15 MB each (resized), 5 per "done" | no |
 | XenKitchen photos | tagged file, `ref` = item id | private (was public) | 15 MB each (resized), 10 per item | no |
 | XenSplit group image | `mediaUtils.uploadXenSplitGroupImageFile` | public | resized, one per group | exempt |
 | Avatars | `mediaUtils.uploadAvatarFile` | public | 5 MB, resized, one per person | exempt |

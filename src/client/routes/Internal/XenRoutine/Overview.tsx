@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import type { AxiosProgressEvent } from "axios";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { useSnackbar } from "notistack";
 import { useOutletContext } from "react-router-dom";
@@ -41,7 +42,9 @@ import {
   type Occurrence,
 } from "../../../hooks/xenroutine/routineViews";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
+import CompleteDialog from "./components/CompleteDialog";
 import SlideToComplete from "./components/SlideToComplete";
+import AddAPhotoOutlinedIcon from "@mui/icons-material/AddAPhotoOutlined";
 import RoutineMenu from "./components/RoutineMenu";
 import type { XenRoutineOutletContext } from "./outletContext";
 
@@ -63,6 +66,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
   const complete = useCompleteRoutine();
   const invalidate = useInvalidateRoutines();
   const [leaving, setLeaving] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const projected = index > 1;
 
   // Each occurrence is its own completion. Resolves once the server has recorded it, then
@@ -74,7 +78,11 @@ function PendingCard({ occ }: { occ: Occurrence }) {
   const progress = checklistProgress(steps);
   const unticked = progress.total - progress.done;
 
-  const handleComplete = async () => {
+  // Mark this occurrence done, with a note and photos when they were added in the dialog. Resolves once the server has
+  // recorded it. Rejects on failure (so the slider springs back, or the dialog stays open), with a message shown.
+  const handleComplete = async (
+    extra: { note?: string; images?: File[]; onUploadProgress?: (e: AxiosProgressEvent) => void } = {},
+  ) => {
     // Some steps not ticked: ask first. Cancelling rejects, so the slider springs back without an error message.
     if (unticked > 0) {
       const ok = await confirm({
@@ -86,9 +94,9 @@ function PendingCard({ occ }: { occ: Occurrence }) {
       if (!ok) throw new Error("cancelled");
     }
     try {
-      await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at });
+      await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at, ...extra });
     } catch (e: any) {
-      enqueueSnackbar(e?.response?.data?.message ?? "Couldn't mark as done", { variant: "error" });
+      enqueueSnackbar(e?.response?.data?.message ?? e?.message ?? "Couldn't mark as done", { variant: "error" });
       if (e?.response?.status === 409) void invalidate();
       throw e;
     }
@@ -158,7 +166,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
         )}
         <Box sx={{ mt: 1.5 }}>
           <SlideToComplete
-            onComplete={handleComplete}
+            onComplete={() => handleComplete()}
             onKeyboardActivate={async () => {
               // With steps left unticked, handleComplete asks about that instead, so there is only one question.
               if (unticked > 0) {
@@ -178,6 +186,25 @@ function PendingCard({ occ }: { occ: Occurrence }) {
             }}
           />
         </Box>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.5 }}>
+          <Button
+            size="small"
+            startIcon={<AddAPhotoOutlinedIcon />}
+            onClick={() => setNoteOpen(true)}
+            sx={{ textTransform: "none" }}
+          >
+            Done with a note or photos
+          </Button>
+        </Box>
+        <CompleteDialog
+          open={noteOpen}
+          routineName={routine.name}
+          onClose={() => setNoteOpen(false)}
+          onSubmit={async ({ note, files, onUploadProgress }) => {
+            await handleComplete({ note: note || undefined, images: files, onUploadProgress });
+            setNoteOpen(false);
+          }}
+        />
       </Card>
     </Collapse>
   );
@@ -359,6 +386,7 @@ export default function Overview() {
                       {format(new Date(c.at), "PP")}
                       {c.occurrenceAt ? ` (for ${format(new Date(c.occurrenceAt), "PP")})` : ""}
                       {c.by_username ? ` · ${c.by_username}` : ""}
+                      {c.photos > 0 ? ` · ${c.photos} ${c.photos === 1 ? "photo" : "photos"}` : ""}
                       {c.note ? ` · ${c.note}` : ""}
                     </Typography>
                   </Box>

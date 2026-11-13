@@ -1,9 +1,14 @@
 import { Request, Response } from "express";
+import sharp from "sharp";
 import { XenRoutine } from "../models/xenRoutine";
 import { XenRoutineSettings } from "../models/xenRoutineSettings";
 import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
+import { uploadXenRoutineImages } from "../config/multer";
+import { MAX_XENROUTINE_IMAGES } from "../constants";
+import { removeAppFiles, signedUrlsFor, storeAppFiles } from "../utils/appFiles";
+import { XENROUTINE_SOURCE, removeHistoryPhotos } from "../utils/xenRoutineFiles";
 import {
   validate,
   validateParams,
@@ -29,11 +34,13 @@ import {
   doneAheadIndices,
   DEFAULT_REMIND_HOUR,
   effectiveTimezone,
+  MAX_HISTORY,
   type RoutineLike,
 } from "../utils/xenRoutine";
 import { sendActivityNotices } from "../utils/xenRoutineReminders";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { addRefused } from "../social/policy";
+import { AppError } from "../utils/http";
 
 const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 
@@ -58,6 +65,23 @@ async function loadRoutine(req: Request, res: Response, need: "edit" | "act") {
   return routine;
 }
 
+const PHOTO_URL_MINUTES = 60;
+const IMAGE_MAX_EDGE = 1600;
+
+/** The file's name with the extension of what it was re-encoded to ("IMG_1.heic" → "IMG_1.webp"). */
+const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
+
+/** Resize to a sensible size, honour EXIF rotation, and re-encode as WebP (GIF stays GIF). */
+async function processImage(file: Express.Multer.File): Promise<{ buffer: Buffer; contentType: string; ext: string }> {
+  if (file.mimetype === "image/gif") return { buffer: file.buffer, contentType: "image/gif", ext: "gif" };
+  const buffer = await sharp(file.buffer)
+    .rotate()
+    .resize(IMAGE_MAX_EDGE, IMAGE_MAX_EDGE, { fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 82 })
+    .toBuffer();
+  return { buffer, contentType: "image/webp", ext: "webp" };
+}
+
 async function serialize(routines: any[], uid: string) {
   const ids = [...new Set(routines.flatMap((r) => r.members.map((m: any) => m.user_id)))];
   const users = await User.find({ _id: { $in: ids } }, PUBLIC_USER_FIELDS)
@@ -65,6 +89,11 @@ async function serialize(routines: any[], uid: string) {
     .exec();
   const byId = new Map<string, any>(users.map((u: any) => [u._id.toString(), u]));
   const now = new Date();
+  // One lookup for every photo on every routine's history, rather than one per entry.
+  const fileIds = routines.flatMap((r) =>
+    (r.toObject ? r.toObject() : r).history.flatMap((h: any) => (h.images ?? []).map((i: any) => String(i.file_id))),
+  );
+  const photoUrls = fileIds.length > 0 ? await signedUrlsFor(fileIds, PHOTO_URL_MINUTES) : new Map<string, string>();
 
   return routines.map((r) => {
     const obj = r.toObject ? r.toObject() : r;
@@ -95,6 +124,14 @@ async function serialize(routines: any[], uid: string) {
       })),
       history: [...obj.history].reverse().map((h: any) => ({
         ...h,
+        // Photos taken when it was marked done; one that has since been deleted from XenDrive is left out.
+        ...(h.images
+          ? {
+              images: h.images
+                .map((i: any) => ({ file_id: String(i.file_id), url: photoUrls.get(String(i.file_id)) }))
+                .filter((i: { url?: string }) => !!i.url),
+            }
+          : {}),
         by_username: byId.get(h.by_user)?.username ?? null,
       })),
     };
@@ -230,7 +267,10 @@ module.exports = function (app: any) {
       try {
         const routine = await loadRoutine(req, res, "edit");
         if (!routine) return;
+        const history = routine.history.map((h: any) => ({ images: h.images }));
         await routine.deleteOne();
+        // Their photos go with it (best effort: a storage hiccup must not make the delete fail).
+        await removeHistoryPhotos(history).catch((e) => console.error("xenroutine photo cleanup failed:", e));
         return res.json({ status: true, message: "Routine deleted" });
       } catch (e) {
         console.error("xenroutine delete failed:", e);
@@ -242,8 +282,13 @@ module.exports = function (app: any) {
   app.post(
     "/api/xenroutine/routines/:id/complete",
     validateParams(xenRoutineIdParamSchema),
+    // A "done" can carry photos, so it may arrive as a form; a plain JSON one passes straight through.
+    uploadXenRoutineImages.array("images", MAX_XENROUTINE_IMAGES),
     validate(completeXenRoutineSchema),
     async (req: Request, res: Response) => {
+      // Photos stored for this request, so a failure afterwards can take them back out.
+      let stored: Array<{ _id: unknown }> = [];
+      let saved = false;
       try {
         const routine = await loadRoutine(req, res, "act");
         if (!routine) return;
@@ -252,19 +297,50 @@ module.exports = function (app: any) {
         if (req.body.expected_due_at && new Date(req.body.expected_due_at).getTime() !== routine.due_at.getTime()) {
           return fail(res, 409, "This routine changed. Refresh and try again.");
         }
+        // Resize every photo first, so one unreadable file fails the request before anything is stored.
+        const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+        const processed = await Promise.all(
+          files.map(async (file) => {
+            try {
+              const image = await processImage(file);
+              return { buffer: image.buffer, mimeType: image.contentType, name: renamed(file.originalname, image.ext) };
+            } catch {
+              // Most likely a HEIC this server can't decode; say what to do rather than failing silently.
+              throw new AppError(400, `Couldn't read "${file.originalname}". Try a JPEG or PNG.`);
+            }
+          }),
+        );
+        // Stored as private XenDrive files owned by the person (tagged to this routine); all or nothing.
+        stored = await storeAppFiles(callerId(req), { app: XENROUTINE_SOURCE, ref: String(routine._id) }, processed);
+
+        const before = routine.history.map((h: any) => ({ images: h.images }));
         const patch = applyComplete(routine.toObject() as unknown as RoutineLike, {
           by: callerId(req),
           now: new Date(),
           doneAt: req.body.done_at ? new Date(req.body.done_at) : undefined,
           note: req.body.note,
           occurrence: req.body.occurrence,
+          images: stored.map((f) => ({ file_id: f._id, uploaded_by: callerId(req) })),
         });
         routine.set(patch);
         await routine.save();
+        saved = true;
+        // History keeps only the latest MAX_HISTORY entries; the photos on the ones that fell off go too.
+        const dropped = Math.max(0, before.length + 1 - MAX_HISTORY);
+        if (dropped > 0) {
+          await removeHistoryPhotos(before.slice(0, dropped)).catch((e) =>
+            console.error("xenroutine photo cleanup failed:", e),
+          );
+        }
         const [out] = await serialize([routine], callerId(req));
         void sendActivityNotices(routine, callerId(req), actorName(req), `marked "${routine.name}" as done`);
         return res.json({ status: true, message: "Marked as done", data: { routine: out } });
       } catch (e) {
+        // Anything that went wrong before the routine was saved leaves no photos behind.
+        if (!saved && stored.length > 0)
+          await removeAppFiles(stored.map((f) => f._id as string)).catch(() => undefined);
+        // A deliberate refusal (a photo that can't be read) says why; anything else is logged.
+        if (e instanceof AppError) return fail(res, e.status, e.message);
         console.error("xenroutine complete failed:", e);
         return fail(res, 500, "Failed to complete routine");
       }

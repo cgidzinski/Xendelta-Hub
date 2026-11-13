@@ -134,6 +134,25 @@ describe("recentCompletions", () => {
     expect(out[1].by_username).toBe("sam");
     expect(out[0].note).toBe("new one");
   });
+
+  it("counts the photos on each completion", () => {
+    const list = [
+      routine({
+        history: [
+          {
+            action: "done",
+            at: iso(-2),
+            images: [
+              { file_id: "f1", url: "https://x/1" },
+              { file_id: "f2", url: "https://x/2" },
+            ],
+          },
+          { action: "done", at: iso(-1) },
+        ],
+      }),
+    ];
+    expect(recentCompletions(list, 30, now).map((c) => c.photos)).toEqual([0, 2]);
+  });
 });
 
 describe("checklist helpers", () => {
