@@ -236,6 +236,28 @@ describe("resolving a report, with gems or a message", () => {
   });
 });
 
+describe("telling the person", () => {
+  it("only happens when an admin resolves with a message, never from a status change, archive or delete", async () => {
+    await send(ann, { message: "The timer didn't ring" });
+    const id = String((await mongoose.model("Feedback").findOne({}))!._id);
+    const mine = () => mongoose.model("Notification").countDocuments({ userId: String(ann.user._id) });
+    for (const status of ["seen", "done", "new", "archived"]) {
+      await request(t.app).put(`/api/admin/feedback/${id}`).set(auth(boss)).send({ status });
+    }
+    await request(t.app).delete(`/api/admin/feedback/${id}`).set(auth(boss));
+    expect(await mine()).toBe(0);
+
+    const row = await mongoose
+      .model("Feedback")
+      .create({ user_id: String(ann.user._id), username: "ann", message: "hi there" });
+    await request(t.app)
+      .post(`/api/admin/feedback/${row._id}/resolve`)
+      .set(auth(boss))
+      .send({ gems: 0, message: "Thanks" });
+    expect(await mine()).toBe(1);
+  });
+});
+
 describe("archiving and deleting", () => {
   it("keeps archived feedback out of the default list, and shows it under the Archived filter", async () => {
     const model = mongoose.model("Feedback");
