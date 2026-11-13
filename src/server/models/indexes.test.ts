@@ -36,4 +36,9 @@ describe("model indexes", () => {
     await import("./conversation.js");
     expect(await indexKeys("Conversation")).toContain("members.user_id,lastMessage.at");
   });
+
+  it("spaces are indexed by member (the my-spaces query)", async () => {
+    await import("./space.js");
+    expect(await indexKeys("Space")).toContain("members.user_id");
+  });
 });

@@ -9,7 +9,9 @@
 //
 // Members use the standard shape of utils/membership.ts (`user_id`, `role`) with two roles, owner and member.
 import type { ChatRole } from "@shared/chat";
+import type { ChannelOverride, SpacePermission } from "@shared/spaces";
 import { can } from "../social/policy";
+import { hasPermission, type SpaceLike } from "../spaces/policy";
 
 export interface ChatMemberLike {
   user_id: string;
@@ -43,4 +45,33 @@ export function nextOwner(chat: HasChatMembers, leaving: string): string | null 
   const rest = chat.members.filter((m) => m.user_id !== leaving);
   rest.sort((a, b) => (a.joinedAt?.getTime() ?? 0) - (b.joinedAt?.getTime() ?? 0));
   return rest[0]?.user_id ?? null;
+}
+
+// A chat inside a space (a channel) is decided by the space's permissions instead of by who is in `members`. Pass the
+// chat's space and its overrides for a channel, or leave `space` out for a DM or group chat, which behaves as before.
+export interface ChatAccess {
+  chat: HasChatMembers;
+  space?: SpaceLike | null;
+  overrides?: readonly ChannelOverride[];
+}
+
+function allowed(access: ChatAccess, userId: string, permission: SpacePermission): boolean {
+  if (access.space) return hasPermission(access.space, userId, permission, access.overrides);
+  return isChatMember(access.chat, userId);
+}
+
+/** May see the chat and read its messages. */
+export const canReadChat = (access: ChatAccess, userId: string) => allowed(access, userId, "readMessages");
+
+/** May send messages, and react, in the chat. Needs read as well: you can't post where you can't see. */
+export const canPostChat = (access: ChatAccess, userId: string) =>
+  canReadChat(access, userId) && allowed(access, userId, "sendMessages");
+
+/**
+ * May do the managing `permission` stands for in the chat (delete others' messages, pin, mention everyone...). In a
+ * DM or group chat that is the owner, as before.
+ */
+export function canManageChat(access: ChatAccess, userId: string, permission: SpacePermission): boolean {
+  if (access.space) return canReadChat(access, userId) && allowed(access, userId, permission);
+  return isChatOwner(access.chat, userId);
 }
