@@ -29,6 +29,8 @@ export const MAX_XENBUDGET_IMAGES_PER_ITEM = 10;
 export const MAX_XENKITCHEN_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB per photo (resized on upload)
 export const MAX_XENKITCHEN_IMAGES = 10;
 export const MAX_XENNOTE_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB per photo (resized on upload)
+export const MAX_XENROUTINE_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB per photo (resized on upload)
+export const MAX_XENROUTINE_IMAGES = 5; // photos on one "done" entry
 
 // Image processing constants
 export const AVATAR_WIDTH = 500;

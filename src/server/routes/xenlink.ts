@@ -9,7 +9,7 @@ import {
 } from "../utils/validation";
 import { authenticateToken } from "../middleware/auth";
 import { AppError, callerId } from "../utils/http";
-import { XenLink } from "../models/xenlink";
+import { XenLink, createXenLink } from "../models/xenlink";
 
 // A link belongs to the person in its `owner_id`. Looking a link up by `{ _id, owner_id }` answers "not yours"
 // and "doesn't exist" the same way (404), so one person can't probe another's ids.
@@ -31,7 +31,7 @@ module.exports = function (app: express.Application) {
     validate(xenLinkCreateSchema),
     async function (req: express.Request, res: express.Response) {
       const link = req.body;
-      await new XenLink({ name: link.name, url: link.url, owner_id: callerId(req) }).save();
+      await createXenLink({ name: link.name, url: link.url, owner_id: callerId(req) });
       return res.json({
         status: true,
         message: "Link created successfully",

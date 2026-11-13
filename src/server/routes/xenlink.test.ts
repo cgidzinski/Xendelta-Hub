@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
+import { randomToken } from "../utils/tokens";
+import { XenLink, createXenLink } from "../models/xenlink";
+
+vi.mock("../utils/tokens", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/tokens")>();
+  return { ...actual, randomToken: vi.fn(actual.randomToken) };
+});
 
 let t: TestApp;
 
@@ -90,5 +97,50 @@ describe("xenlink", () => {
     expect(res.body.data.link.url).toBe("https://go.example");
     expect(res.body.data.link.owner_id).toBeUndefined();
     expect((await request(t.app).get("/api/xenlink/redirect/nope")).status).toBe(404);
+  });
+
+  it("keeps creating links after one is deleted (slugs used to be count + 1 and collided)", async () => {
+    const { token } = await createUser();
+    for (const name of ["a", "b", "c"]) {
+      await request(t.app)
+        .post("/api/xenlink")
+        .set(auth(token))
+        .send({ name, url: `https://example.com/${name}` });
+    }
+    const list = await request(t.app).get("/api/xenlink/list").set(auth(token));
+    const middle = list.body.data.links.find((l: { name: string }) => l.name === "b");
+    const del = await request(t.app).delete(`/api/xenlink/${middle._id}`).set(auth(token));
+    expect(del.body.status).toBe(true);
+
+    const created = await request(t.app)
+      .post("/api/xenlink")
+      .set(auth(token))
+      .send({ name: "d", url: "https://example.com/d" });
+    expect(created.status).toBe(200);
+
+    const after = await request(t.app).get("/api/xenlink/list").set(auth(token));
+    const slugs = after.body.data.links.map((l: { slug: string }) => l.slug);
+    expect(slugs).toHaveLength(3);
+    expect(new Set(slugs).size).toBe(3);
+  });
+
+  it("resolves a link by its slug on the public redirect", async () => {
+    const { token } = await createUser();
+    await request(t.app).post("/api/xenlink").set(auth(token)).send({ name: "Go", url: "https://example.com/go" });
+    const list = await request(t.app).get("/api/xenlink/list").set(auth(token));
+    const { slug } = list.body.data.links[0];
+    expect(slug).toMatch(/^[A-Za-z0-9_-]{8}$/);
+
+    const res = await request(t.app).get(`/api/xenlink/redirect/${slug}`);
+    expect(res.body.data.link.url).toBe("https://example.com/go");
+  });
+
+  it("retries with a new slug when the first one is taken", async () => {
+    await XenLink.create({ name: "Existing", url: "https://example.com/e", slug: "taken-01" });
+    vi.mocked(randomToken).mockReturnValueOnce("taken-01");
+
+    const link = await createXenLink({ name: "New", url: "https://example.com/n" });
+    expect(link.slug).not.toBe("taken-01");
+    expect(await XenLink.countDocuments({ slug: link.slug })).toBe(1);
   });
 });
