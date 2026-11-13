@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AppError } from "../../utils/http";
 import { escapeRegex } from "@shared/regex";
 import { XenBudgetItem } from "../../models/xenBudget";
 import {
@@ -83,8 +84,7 @@ export function registerItemRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
+        const book = await loadBookForMember(req);
 
         const q = req.query as Record<string, string>;
         const filter = baseItemMatch(book._id, q);
@@ -295,11 +295,12 @@ export function registerItemRoutes(app: any) {
           data: { items: serializeItems(page, batchLabelById), totals, next_cursor: nextCursor, has_more: hasMore },
         });
       } catch (error) {
-        console.error("Error fetching items:", error);
         // A CSV export may already be streaming, in which case the headers are long gone and
         // the only honest signal left is an abrupt end.
-        if (res.headersSent) res.end();
-        else res.status(500).json({ status: false, message: "Failed to fetch items" });
+        // Otherwise the global errorHandler answers it.
+        if (!res.headersSent) throw error;
+        console.error("Error fetching items:", error);
+        res.end();
       }
     },
   );
@@ -310,81 +311,75 @@ export function registerItemRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     validate(createXenBudgetItemSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const userId = callerId(req);
-        const body = req.body;
+      const book = await loadBookForMember(req);
+      const userId = callerId(req);
+      const body = req.body;
 
-        // Rules run on hand-entered items too, not just imports — otherwise the same
-        // transaction would be tagged one way through a CSV and another way by hand.
-        // "Skip auto-tagging" leaves the item exactly as it was entered.
-        const draft = draftFromRow({ ...body, source: "manual" }, book);
-        const {
-          item: ruled,
-          skipped,
-          skippedByRuleName,
-        } = body.skip_rules
-          ? { item: draft, skipped: false, skippedByRuleName: undefined }
-          : applyRules(draft, plainRules(book));
-        if (skipped) {
-          // A manual add is a deliberate act, so a "skip" rule refuses it by name rather
-          // than accepting the item and silently dropping it.
-          return res.status(400).json({
-            status: false,
-            message: `Rule "${skippedByRuleName}" is set to skip items like this. Edit the rule, or change the item.`,
-          });
-        }
-
-        // A rule that named categories overrides what the form asked for; otherwise the
-        // form's own weights are resolved, which is what allows an uneven split.
-        const manualCategories =
-          ruled.rule_categories.length > 0
-            ? draftCategoryWeights(ruled, ruled.amount)
-            : resolveCategories(body.category_split_type || "equal", ruled.amount, body.categories || []);
-
-        let shares;
-        try {
-          // A rule's set_people overrides what the form asked for.
-          shares = ruled.people && ruled.people.length > 0 ? buildRuleShares(ruled, book) : buildShares(body, book);
-        } catch (e: any) {
-          return res.status(400).json({ status: false, message: e.message });
-        }
-
-        const amount = ruled.amount;
-        // Anchor the picked day as a date-only UTC value.
-        const date = bookDateToUtc(ruled.date);
-        const item = new XenBudgetItem({
-          book_id: book._id,
-          type: ruled.type,
-          amount,
-          currency: body.currency || book.default_currency,
-          date,
-          description: ruled.description,
-          original_description: ruled.original_description || body.description,
-          notes: body.notes,
-          categories: manualCategories,
-          category_split_type:
-            ruled.rule_categories.length > 0
-              ? (ruled.category_split_type ?? "equal")
-              : body.category_split_type || "equal",
-          rule_categories: ruled.rule_categories,
-          flags: withDerivedUncategorised(ruled.flags, manualCategories),
-          rule_flags: ruled.rule_flags,
-          applied_rule_ids: ruled.applied_rule_ids,
-          share_type: shares.share_type,
-          shares: shares.shares,
-          source: "manual",
-          import_hash: computeImportHash(ruled.date, amount, ruled.description),
-          created_by: userId,
-        });
-        await item.save();
-        broadcastBook(book);
-        res.json({ status: true, message: "Item added", data: serializeItem(item) });
-      } catch (error) {
-        console.error("Error creating item:", error);
-        res.status(500).json({ status: false, message: "Failed to create item" });
+      // Rules run on hand-entered items too, not just imports — otherwise the same
+      // transaction would be tagged one way through a CSV and another way by hand.
+      // "Skip auto-tagging" leaves the item exactly as it was entered.
+      const draft = draftFromRow({ ...body, source: "manual" }, book);
+      const {
+        item: ruled,
+        skipped,
+        skippedByRuleName,
+      } = body.skip_rules
+        ? { item: draft, skipped: false, skippedByRuleName: undefined }
+        : applyRules(draft, plainRules(book));
+      if (skipped) {
+        // A manual add is a deliberate act, so a "skip" rule refuses it by name rather
+        // than accepting the item and silently dropping it.
+        throw new AppError(
+          400,
+          `Rule "${skippedByRuleName}" is set to skip items like this. Edit the rule, or change the item.`,
+        );
       }
+
+      // A rule that named categories overrides what the form asked for; otherwise the
+      // form's own weights are resolved, which is what allows an uneven split.
+      const manualCategories =
+        ruled.rule_categories.length > 0
+          ? draftCategoryWeights(ruled, ruled.amount)
+          : resolveCategories(body.category_split_type || "equal", ruled.amount, body.categories || []);
+
+      let shares;
+      try {
+        // A rule's set_people overrides what the form asked for.
+        shares = ruled.people && ruled.people.length > 0 ? buildRuleShares(ruled, book) : buildShares(body, book);
+      } catch (e: any) {
+        throw new AppError(400, e.message);
+      }
+
+      const amount = ruled.amount;
+      // Anchor the picked day as a date-only UTC value.
+      const date = bookDateToUtc(ruled.date);
+      const item = new XenBudgetItem({
+        book_id: book._id,
+        type: ruled.type,
+        amount,
+        currency: body.currency || book.default_currency,
+        date,
+        description: ruled.description,
+        original_description: ruled.original_description || body.description,
+        notes: body.notes,
+        categories: manualCategories,
+        category_split_type:
+          ruled.rule_categories.length > 0
+            ? (ruled.category_split_type ?? "equal")
+            : body.category_split_type || "equal",
+        rule_categories: ruled.rule_categories,
+        flags: withDerivedUncategorised(ruled.flags, manualCategories),
+        rule_flags: ruled.rule_flags,
+        applied_rule_ids: ruled.applied_rule_ids,
+        share_type: shares.share_type,
+        shares: shares.shares,
+        source: "manual",
+        import_hash: computeImportHash(ruled.date, amount, ruled.description),
+        created_by: userId,
+      });
+      await item.save();
+      broadcastBook(book);
+      res.json({ status: true, message: "Item added", data: serializeItem(item) });
     },
   );
 
@@ -394,77 +389,71 @@ export function registerItemRoutes(app: any) {
     validateParams(xenBudgetItemParamSchema),
     validate(updateXenBudgetItemSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
-        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+      const book = await loadBookForMember(req);
+      const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+      if (!item) throw new AppError(404, "Item not found");
 
-        const body = req.body;
-        if (body.type !== undefined) item.type = body.type;
-        if (body.amount !== undefined) item.amount = roundMoney(body.amount);
-        if (body.currency !== undefined) item.currency = body.currency;
-        if (body.date !== undefined) item.date = bookDateToUtc(new Date(body.date));
-        if (body.description !== undefined) item.description = body.description;
-        if (body.notes !== undefined) item.notes = body.notes;
-        if (body.flags !== undefined) {
-          item.flags = normalizeFlagNames(body.flags);
-          // Provenance has to follow the hand edit. `rule_flags` is what a re-apply sweep
-          // strips before running the rules again (stripRuleEffects), so a name left in it
-          // after the user removed - or deliberately re-added - that flag is a flag the
-          // next sweep silently deletes.
-          item.rule_flags = (item.rule_flags || []).filter((f: string) =>
-            item.flags.some((n: string) => n.toLowerCase() === f.toLowerCase()),
-          );
-        }
-        if (body.categories !== undefined || body.category_split_type !== undefined || body.amount !== undefined) {
-          // Weights have to be recomputed whenever the amount or the split changes, or
-          // the per-category rollup stops summing to the item.
-          const requested =
-            body.categories !== undefined
-              ? body.categories
-              : item.categories.map((c: any) => ({ name: c.name, amount: c.amount, percentage: c.percentage }));
-          item.category_split_type = body.category_split_type || item.category_split_type || "equal";
-          item.set("categories", resolveCategories(item.category_split_type, item.amount, requested));
-        }
-        // Both directions, after the categories are settled: a hand-categorised item is no
-        // longer the importer's "nothing matched" case, and one whose last category was
-        // just removed is again. Unconditional, so an edit that only touches the flags
-        // can't reintroduce the contradiction the form was showing.
-        item.flags = withDerivedUncategorised(item.flags, item.categories);
-
-        // Shares have to be recomputed whenever the amount or the split changes, or the
-        // per-person totals stop reconciling with the item.
-        if (body.shares !== undefined || body.share_type !== undefined || body.amount !== undefined) {
-          try {
-            const resolved = buildShares(
-              {
-                amount: item.amount,
-                share_type: body.share_type || item.share_type,
-                shares:
-                  body.shares !== undefined
-                    ? body.shares
-                    : item.shares.map((s: any) => ({ user_id: s.user_id, amount: s.amount, percentage: s.percentage })),
-              },
-              book,
-            );
-            item.set("share_type", resolved.share_type);
-            item.set("shares", resolved.shares);
-          } catch (e: any) {
-            return res.status(400).json({ status: false, message: e.message });
-          }
-        }
-
-        item.import_hash = computeImportHash(item.date, item.amount, item.description);
-        // Marks the item as hand-corrected so a later rules re-apply leaves it alone.
-        item.manually_edited = true;
-        await item.save();
-        broadcastBook(book);
-        res.json({ status: true, message: "Item updated", data: serializeItem(item) });
-      } catch (error) {
-        console.error("Error updating item:", error);
-        res.status(500).json({ status: false, message: "Failed to update item" });
+      const body = req.body;
+      if (body.type !== undefined) item.type = body.type;
+      if (body.amount !== undefined) item.amount = roundMoney(body.amount);
+      if (body.currency !== undefined) item.currency = body.currency;
+      if (body.date !== undefined) item.date = bookDateToUtc(new Date(body.date));
+      if (body.description !== undefined) item.description = body.description;
+      if (body.notes !== undefined) item.notes = body.notes;
+      if (body.flags !== undefined) {
+        item.flags = normalizeFlagNames(body.flags);
+        // Provenance has to follow the hand edit. `rule_flags` is what a re-apply sweep
+        // strips before running the rules again (stripRuleEffects), so a name left in it
+        // after the user removed - or deliberately re-added - that flag is a flag the
+        // next sweep silently deletes.
+        item.rule_flags = (item.rule_flags || []).filter((f: string) =>
+          item.flags.some((n: string) => n.toLowerCase() === f.toLowerCase()),
+        );
       }
+      if (body.categories !== undefined || body.category_split_type !== undefined || body.amount !== undefined) {
+        // Weights have to be recomputed whenever the amount or the split changes, or
+        // the per-category rollup stops summing to the item.
+        const requested =
+          body.categories !== undefined
+            ? body.categories
+            : item.categories.map((c: any) => ({ name: c.name, amount: c.amount, percentage: c.percentage }));
+        item.category_split_type = body.category_split_type || item.category_split_type || "equal";
+        item.set("categories", resolveCategories(item.category_split_type, item.amount, requested));
+      }
+      // Both directions, after the categories are settled: a hand-categorised item is no
+      // longer the importer's "nothing matched" case, and one whose last category was
+      // just removed is again. Unconditional, so an edit that only touches the flags
+      // can't reintroduce the contradiction the form was showing.
+      item.flags = withDerivedUncategorised(item.flags, item.categories);
+
+      // Shares have to be recomputed whenever the amount or the split changes, or the
+      // per-person totals stop reconciling with the item.
+      if (body.shares !== undefined || body.share_type !== undefined || body.amount !== undefined) {
+        try {
+          const resolved = buildShares(
+            {
+              amount: item.amount,
+              share_type: body.share_type || item.share_type,
+              shares:
+                body.shares !== undefined
+                  ? body.shares
+                  : item.shares.map((s: any) => ({ user_id: s.user_id, amount: s.amount, percentage: s.percentage })),
+            },
+            book,
+          );
+          item.set("share_type", resolved.share_type);
+          item.set("shares", resolved.shares);
+        } catch (e: any) {
+          throw new AppError(400, e.message);
+        }
+      }
+
+      item.import_hash = computeImportHash(item.date, item.amount, item.description);
+      // Marks the item as hand-corrected so a later rules re-apply leaves it alone.
+      item.manually_edited = true;
+      await item.save();
+      broadcastBook(book);
+      res.json({ status: true, message: "Item updated", data: serializeItem(item) });
     },
   );
 
@@ -473,20 +462,14 @@ export function registerItemRoutes(app: any) {
     "/api/xenbudget/books/:bookId/items/:itemId",
     validateParams(xenBudgetItemParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const item = await XenBudgetItem.findOneAndDelete({ _id: req.params.itemId, book_id: book._id });
-        if (!item) {
-          return res.status(404).json({ status: false, message: "Item not found" });
-        }
-        await removeItemPhotos(item.images ?? []);
-        broadcastBook(book);
-        res.json({ status: true, message: "Item deleted" });
-      } catch (error) {
-        console.error("Error deleting item:", error);
-        res.status(500).json({ status: false, message: "Failed to delete item" });
+      const book = await loadBookForMember(req);
+      const item = await XenBudgetItem.findOneAndDelete({ _id: req.params.itemId, book_id: book._id });
+      if (!item) {
+        throw new AppError(404, "Item not found");
       }
+      await removeItemPhotos(item.images ?? []);
+      broadcastBook(book);
+      res.json({ status: true, message: "Item deleted" });
     },
   );
 
@@ -496,44 +479,36 @@ export function registerItemRoutes(app: any) {
     validateParams(xenBudgetItemParamSchema),
     uploadXenBudgetImages.array("images", MAX_XENBUDGET_IMAGES_PER_ITEM),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
-        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+      const book = await loadBookForMember(req);
+      const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+      if (!item) throw new AppError(404, "Item not found");
 
-        const files = req.files as Express.Multer.File[] | undefined;
-        if (!files || files.length === 0) {
-          return res.status(400).json({ status: false, message: "No images provided" });
-        }
-
-        if (!item.images) item.set("images", []);
-        if (item.images.length + files.length > MAX_XENBUDGET_IMAGES_PER_ITEM) {
-          return res
-            .status(400)
-            .json({ status: false, message: `Cannot exceed ${MAX_XENBUDGET_IMAGES_PER_ITEM} images per item` });
-        }
-
-        // Stored as XenDrive files owned by the uploader (tagged to this book); all or nothing.
-        const userId = callerId(req);
-        const stored = await storeAppFiles(
-          userId,
-          { app: XENBUDGET_SOURCE, ref: req.params.bookId as string },
-          files.map((file) => ({ buffer: file.buffer, name: file.originalname, mimeType: file.mimetype })),
-        );
-        for (const file of stored) item.images.push({ file_id: file._id, uploaded_by: userId });
-        try {
-          await item.save();
-        } catch (error) {
-          await removeAppFiles(stored.map((f) => f._id));
-          throw error;
-        }
-        broadcastBook(book);
-        res.json({ status: true, message: "Images uploaded", data: serializeItem(item) });
-      } catch (error) {
-        console.error("Error uploading item images:", error);
-        res.status(500).json({ status: false, message: "Failed to upload images" });
+      const files = req.files as Express.Multer.File[] | undefined;
+      if (!files || files.length === 0) {
+        throw new AppError(400, "No images provided");
       }
+
+      if (!item.images) item.set("images", []);
+      if (item.images.length + files.length > MAX_XENBUDGET_IMAGES_PER_ITEM) {
+        throw new AppError(400, `Cannot exceed ${MAX_XENBUDGET_IMAGES_PER_ITEM} images per item`);
+      }
+
+      // Stored as XenDrive files owned by the uploader (tagged to this book); all or nothing.
+      const userId = callerId(req);
+      const stored = await storeAppFiles(
+        userId,
+        { app: XENBUDGET_SOURCE, ref: req.params.bookId as string },
+        files.map((file) => ({ buffer: file.buffer, name: file.originalname, mimeType: file.mimetype })),
+      );
+      for (const file of stored) item.images.push({ file_id: file._id, uploaded_by: userId });
+      try {
+        await item.save();
+      } catch (error) {
+        await removeAppFiles(stored.map((f) => f._id));
+        throw error;
+      }
+      broadcastBook(book);
+      res.json({ status: true, message: "Images uploaded", data: serializeItem(item) });
     },
   );
 
@@ -542,26 +517,20 @@ export function registerItemRoutes(app: any) {
     "/api/xenbudget/books/:bookId/items/:itemId/images/:imageId",
     validateParams(xenBudgetItemImageParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
-        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+      const book = await loadBookForMember(req);
+      const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+      if (!item) throw new AppError(404, "Item not found");
 
-        const imageIndex = (item.images || []).findIndex((img: any) => img._id.toString() === req.params.imageId);
-        if (imageIndex === -1) {
-          return res.status(404).json({ status: false, message: "Image not found" });
-        }
-
-        await removeItemPhotos([item.images[imageIndex]]);
-        item.images.splice(imageIndex, 1);
-        await item.save();
-        broadcastBook(book);
-        res.json({ status: true, message: "Image deleted", data: serializeItem(item) });
-      } catch (error) {
-        console.error("Error deleting item image:", error);
-        res.status(500).json({ status: false, message: "Failed to delete image" });
+      const imageIndex = (item.images || []).findIndex((img: any) => img._id.toString() === req.params.imageId);
+      if (imageIndex === -1) {
+        throw new AppError(404, "Image not found");
       }
+
+      await removeItemPhotos([item.images[imageIndex]]);
+      item.images.splice(imageIndex, 1);
+      await item.save();
+      broadcastBook(book);
+      res.json({ status: true, message: "Image deleted", data: serializeItem(item) });
     },
   );
 
@@ -570,39 +539,33 @@ export function registerItemRoutes(app: any) {
     "/api/xenbudget/books/:bookId/items/:itemId/image-urls",
     validateParams(xenBudgetItemParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
-        if (!item) return res.status(404).json({ status: false, message: "Item not found" });
+      const book = await loadBookForMember(req);
+      const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id });
+      if (!item) throw new AppError(404, "Item not found");
 
-        if (!item.images || item.images.length === 0) {
-          return res.json({ status: true, data: [] });
-        }
-
-        const fileUrls = await signedUrlsFor(
-          item.images.filter((img: any) => img.file_id).map((img: any) => img.file_id),
-          15,
-        );
-        const signedUrls = (
-          await Promise.all(
-            item.images.map(async (img: any) => ({
-              _id: img._id.toString(),
-              // Photos not yet moved to XenDrive still have a storage path.
-              signedUrl: img.file_id
-                ? fileUrls.get(String(img.file_id))
-                : img.gcs_path
-                  ? await generateSignedUrl(img.gcs_path, 15)
-                  : undefined,
-            })),
-          )
-        ).filter((u): u is { _id: string; signedUrl: string } => !!u.signedUrl);
-
-        res.json({ status: true, data: signedUrls });
-      } catch (error) {
-        console.error("Error generating signed URLs:", error);
-        res.status(500).json({ status: false, message: "Failed to generate image URLs" });
+      if (!item.images || item.images.length === 0) {
+        return res.json({ status: true, data: [] });
       }
+
+      const fileUrls = await signedUrlsFor(
+        item.images.filter((img: any) => img.file_id).map((img: any) => img.file_id),
+        15,
+      );
+      const signedUrls = (
+        await Promise.all(
+          item.images.map(async (img: any) => ({
+            _id: img._id.toString(),
+            // Photos not yet moved to XenDrive still have a storage path.
+            signedUrl: img.file_id
+              ? fileUrls.get(String(img.file_id))
+              : img.gcs_path
+                ? await generateSignedUrl(img.gcs_path, 15)
+                : undefined,
+          })),
+        )
+      ).filter((u): u is { _id: string; signedUrl: string } => !!u.signedUrl);
+
+      res.json({ status: true, data: signedUrls });
     },
   );
 }
