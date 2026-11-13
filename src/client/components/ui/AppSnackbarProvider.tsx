@@ -6,16 +6,16 @@ import { SnackbarProvider } from "notistack";
 const providerRef = createRef<SnackbarProvider>();
 
 /**
- * The app's toasts: always at the bottom, clear of the top bar that holds the navigation. Tapping one dismisses it.
- * On a phone fewer show at a time and they go sooner.
+ * The app's toasts: always at the bottom, clear of the top bar that holds the navigation. Up to 5 show at once, each
+ * for 4 seconds, and tapping one dismisses it.
  */
 export default function AppSnackbarProvider({ children }: { children: ReactNode }) {
   const isMobile = useMediaQuery(useTheme().breakpoints.down("sm"));
   return (
     <SnackbarProvider
       ref={providerRef}
-      maxSnack={isMobile ? 2 : 4}
-      autoHideDuration={isMobile ? 4000 : 6000}
+      maxSnack={5}
+      autoHideDuration={4000}
       anchorOrigin={{ vertical: "bottom", horizontal: isMobile ? "center" : "right" }}
       SnackbarProps={{ onClick: () => providerRef.current?.closeSnackbar() }}
     >
