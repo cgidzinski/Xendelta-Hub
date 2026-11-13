@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund --loglevel=error
       # Production dependencies only: build and test tooling is not shipped. Fails the PR if a
       # high or critical advisory lands in something the server or browser actually runs.
       - run: npm audit --omit=dev --audit-level=high
@@ -26,4 +26,4 @@ jobs:
       - run: npm run lint
       - run: npm run type-check
       - run: npm test
-      - run: npm run build
+      - run: npm run build -- --logLevel warn

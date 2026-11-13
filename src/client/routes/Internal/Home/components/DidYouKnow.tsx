@@ -5,17 +5,22 @@ import { pickTips, type GuideApp } from "@shared/appGuide";
 import { APPS_REGISTRY } from "../../../../constants/apps";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import SectionLabel from "../../../../components/ui/SectionLabel";
+import { useUsedApps } from "../../../../hooks/feed/useFeed";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Ideas for what to try, shown when the activity feed has nothing in it: one card per tip. The same three for a whole day
- * (so they don't jump around), different ones tomorrow. With an app filter on, tips for just that app.
+ * Ideas shown when the activity feed has nothing in it: one card per tip. They invite people to apps they don't use yet, and
+ * only teach tricks for apps they do use. The same three for a whole day (so they don't jump around), different ones tomorrow.
+ * With an app filter on, just that app.
  */
 export default function DidYouKnow({ app }: { app?: string }) {
   const navigate = useNavigate();
   const known = APPS_REGISTRY.some((a) => a.key === app) ? (app as GuideApp) : undefined;
-  const tips = pickTips(today(), 3, known);
+  const usage = useUsedApps();
+  // Wait until we know which apps they use, so the first thing shown isn't a tip they'd never have been given.
+  if (!usage.data) return null;
+  const tips = pickTips(today(), 3, { used: usage.data, app: known });
   if (tips.length === 0) return null;
   return (
     <Box sx={{ mt: 2 }}>
@@ -30,7 +35,7 @@ export default function DidYouKnow({ app }: { app?: string }) {
               </Typography>
               {tip.link && (
                 <Button size="small" onClick={() => navigate(tip.link!)} sx={{ flexShrink: 0 }}>
-                  Try it
+                  {tip.kind === "try" ? "Open" : "Try it"}
                 </Button>
               )}
             </Stack>
