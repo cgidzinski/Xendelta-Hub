@@ -8,20 +8,17 @@ import {
   xenLinkUpdateSchema,
 } from "../utils/validation";
 import { authenticateToken } from "../middleware/auth";
-import { AuthenticatedRequest } from "../types";
-import { User } from "../models/user";
+import { AppError, callerId } from "../utils/http";
 import { XenLink, createXenLink } from "../models/xenlink";
+
+// A link belongs to the person in its `owner_id`. Looking a link up by `{ _id, owner_id }` answers "not yours"
+// and "doesn't exist" the same way (404), so one person can't probe another's ids.
 module.exports = function (app: express.Application) {
   app.get("/api/xenlink/list", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id.toString();
-    const user = await User.findById(userId).populate("xenlink").exec();
-    if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
-    }
-    const links = user.xenlink;
+    const links = await XenLink.find({ owner_id: callerId(req) })
+      .sort({ _id: 1 })
+      .select("-owner_id")
+      .exec();
     return res.json({
       status: true,
       data: { links },
@@ -34,17 +31,7 @@ module.exports = function (app: express.Application) {
     validate(xenLinkCreateSchema),
     async function (req: express.Request, res: express.Response) {
       const link = req.body;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
-      const user = await User.findById(userId).exec();
-      if (!user) {
-        return res.status(404).json({
-          status: false,
-          message: "User not found",
-        });
-      }
-      const xenlink = await createXenLink({ name: link.name, url: link.url });
-      user.xenlink.push(xenlink._id);
-      await user.save();
+      await createXenLink({ name: link.name, url: link.url, owner_id: callerId(req) });
       return res.json({
         status: true,
         message: "Link created successfully",
@@ -58,24 +45,11 @@ module.exports = function (app: express.Application) {
     validate(xenLinkUpdateSchema),
     async function (req: express.Request, res: express.Response) {
       const link = req.body;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
-      const user = await User.findById(userId).exec();
-      if (!user) {
-        return res.status(404).json({
-          status: false,
-          message: "User not found",
-        });
-      }
-      const owned = user.xenlink.some((id) => id.toString() === link._id);
-      if (!owned) {
-        return res.status(404).json({
-          status: false,
-          message: "Link not found",
-        });
-      }
-      // Update the XenLink document itself: changes made to a populated copy are not written
-      // back by user.save(), so editing a link through the user silently did nothing.
-      await XenLink.updateOne({ _id: link._id }, { name: link.name, url: link.url, updatedAt: new Date() });
+      const updated = await XenLink.updateOne(
+        { _id: link._id, owner_id: callerId(req) },
+        { name: link.name, url: link.url, updatedAt: new Date() },
+      );
+      if (updated.matchedCount === 0) throw new AppError(404, "Link not found");
       return res.json({
         status: true,
         message: "Link updated successfully",
@@ -88,28 +62,8 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(xenLinkIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const linkId = req.params.linkId;
-      const userId = (req as AuthenticatedRequest).user!._id.toString();
-      const user = await User.findById(userId).populate("xenlink").exec();
-      if (!user) {
-        return res.status(404).json({
-          status: false,
-          message: "User not found",
-        });
-      }
-      const xenlink = user.xenlink.find((l: any) => l._id.toString() === linkId);
-      if (!xenlink) {
-        return res.status(404).json({
-          status: false,
-          message: "Link not found",
-        });
-      }
-      await XenLink.findByIdAndDelete(linkId);
-      user.set(
-        "xenlink",
-        user.xenlink.filter((id) => id.toString() !== linkId),
-      );
-      await user.save();
+      const deleted = await XenLink.deleteOne({ _id: req.params.linkId, owner_id: callerId(req) });
+      if (deleted.deletedCount === 0) throw new AppError(404, "Link not found");
       return res.json({
         status: true,
         message: "Link deleted successfully",
@@ -122,13 +76,9 @@ module.exports = function (app: express.Application) {
     validateParams(xenLinkSlugParamSchema),
     async function (req: express.Request, res: express.Response) {
       const slug = req.params.slug;
-      const link = await XenLink.findOne({ slug }).exec();
-      if (!link) {
-        return res.status(404).json({
-          status: false,
-          message: "Link not found",
-        });
-      }
+      // Public: don't expose who owns the link.
+      const link = await XenLink.findOne({ slug }).select("-owner_id").exec();
+      if (!link) throw new AppError(404, "Link not found");
       return res.json({
         status: true,
         data: { link },

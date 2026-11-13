@@ -61,6 +61,44 @@ describe("xenlink", () => {
     expect(after.body.data.links[0].name).toBe("Mine");
   });
 
+  it("lists only the caller's own links", async () => {
+    const ann = await createUser();
+    const bob = await createUser();
+    await request(t.app).post("/api/xenlink").set(auth(ann.token)).send({ name: "Ann's", url: "https://a.example" });
+    await request(t.app).post("/api/xenlink").set(auth(bob.token)).send({ name: "Bob's", url: "https://b.example" });
+
+    const list = await request(t.app).get("/api/xenlink/list").set(auth(ann.token));
+    expect(list.body.data.links.map((l: { name: string }) => l.name)).toEqual(["Ann's"]);
+    expect(list.body.data.links[0].owner_id).toBeUndefined();
+  });
+
+  it("deletes your own link and refuses to delete someone else's", async () => {
+    const owner = await createUser();
+    const other = await createUser();
+    await request(t.app).post("/api/xenlink").set(auth(owner.token)).send({ name: "Keep", url: "https://k.example" });
+    const link = (await request(t.app).get("/api/xenlink/list").set(auth(owner.token))).body.data.links[0];
+
+    const refused = await request(t.app).delete(`/api/xenlink/${link._id}`).set(auth(other.token));
+    expect(refused.status).toBe(404);
+    expect((await request(t.app).get("/api/xenlink/list").set(auth(owner.token))).body.data.links).toHaveLength(1);
+
+    const ok = await request(t.app).delete(`/api/xenlink/${link._id}`).set(auth(owner.token));
+    expect(ok.body.status).toBe(true);
+    expect((await request(t.app).get("/api/xenlink/list").set(auth(owner.token))).body.data.links).toHaveLength(0);
+    expect((await request(t.app).delete(`/api/xenlink/${link._id}`).set(auth(owner.token))).status).toBe(404);
+  });
+
+  it("redirects publicly without revealing the owner", async () => {
+    const { token } = await createUser();
+    await request(t.app).post("/api/xenlink").set(auth(token)).send({ name: "Go", url: "https://go.example" });
+    const { slug } = (await request(t.app).get("/api/xenlink/list").set(auth(token))).body.data.links[0];
+
+    const res = await request(t.app).get(`/api/xenlink/redirect/${slug}`);
+    expect(res.body.data.link.url).toBe("https://go.example");
+    expect(res.body.data.link.owner_id).toBeUndefined();
+    expect((await request(t.app).get("/api/xenlink/redirect/nope")).status).toBe(404);
+  });
+
   it("keeps creating links after one is deleted (slugs used to be count + 1 and collided)", async () => {
     const { token } = await createUser();
     for (const name of ["a", "b", "c"]) {

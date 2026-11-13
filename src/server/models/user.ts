@@ -41,7 +41,6 @@ const userSchema = new Schema({
     // Extra bytes on top of the free tier (FREE_STORAGE_BYTES): admin grants and redeemed vouchers.
     spaceAllowed: { type: Number, default: 0 },
   },
-  xenlink: [{ type: Schema.Types.ObjectId, ref: "XenLink" }],
   pinnedApps: [{ type: String }],
   // What Home's feed hides for this person: whole apps, single spaces ("<app>:<id>") and single events.
   feedPrefs: {

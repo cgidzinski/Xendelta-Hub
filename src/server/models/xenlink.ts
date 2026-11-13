@@ -6,6 +6,8 @@ const xenlinkSchema = new Schema({
   name: { type: String, required: true },
   url: { type: String, required: true },
   slug: { type: String, unique: true, index: true },
+  // The person who owns the link (a user id). Links used to be listed in `users.xenlink` instead.
+  owner_id: { type: String, index: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
@@ -26,7 +28,7 @@ export function newSlug(): string {
  * Create a link with a fresh random slug. A collision with an existing slug (the unique index answers with
  * E11000) is retried with a new slug, so concurrent creates and deletes can never wedge link creation.
  */
-export async function createXenLink(fields: { name: string; url: string }) {
+export async function createXenLink(fields: { name: string; url: string; owner_id?: string }) {
   for (let attempt = 1; ; attempt++) {
     try {
       return await new XenLink({ ...fields, slug: newSlug() }).save();
