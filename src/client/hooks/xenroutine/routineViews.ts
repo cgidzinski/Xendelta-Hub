@@ -105,6 +105,8 @@ export interface Completion {
   at: string;
   by_username: string | null;
   note?: string;
+  /** How many photos were added when it was marked done. */
+  photos: number;
   /** When the completion was for a later occurrence done ahead of time. */
   occurrenceAt?: string;
 }
@@ -127,6 +129,7 @@ export function recentCompletions(
         at: h.at,
         by_username: h.by_username ?? null,
         note: h.note,
+        photos: h.images?.length ?? 0,
         occurrenceAt: h.occurrence_at,
       });
     }
@@ -140,4 +143,18 @@ export function dueText(r: Pick<Routine, "due_at"> | Date, now: Date = new Date(
   if (days === 0) return "Due today";
   if (days < 0) return `${-days} day${days === -1 ? "" : "s"} overdue`;
   return `Due in ${days} day${days === 1 ? "" : "s"} (${format(due, "PP")})`;
+}
+
+/** How many of a routine's steps are ticked, out of how many. */
+export function checklistProgress(checklist: ReadonlyArray<{ done: boolean }> | undefined): {
+  done: number;
+  total: number;
+} {
+  const list = checklist ?? [];
+  return { done: list.filter((c) => c.done).length, total: list.length };
+}
+
+/** "2 of 5 steps" for a history entry or a card, or null when there was no checklist. */
+export function stepsLabel(done: number, total: number): string | null {
+  return total > 0 ? `${done} of ${total} ${total === 1 ? "step" : "steps"}` : null;
 }
