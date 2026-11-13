@@ -188,6 +188,7 @@ require("./routes/xensplit")(app);
 require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
+require("./routes/xenkitchenPlan.ts")(app);
 require("./routes/xennote")(app);
 require("./routes/feed")(app);
 
