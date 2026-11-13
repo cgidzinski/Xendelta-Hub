@@ -15,11 +15,11 @@ export interface AppRegistryItem {
   description: string;
 }
 
-/** What is pinned for someone who has never chosen. Anyone who has chosen (even to pin nothing) gets exactly their choice. */
-export const DEFAULT_PINNED_APPS = ["xensplit"];
+/** What is pinned when nothing is: someone who has pinned nothing (or everything was unpinned) still sees these two. */
+export const DEFAULT_PINNED_APPS = ["xensplit", "xennote"];
 
 export const resolvePinnedApps = (pinnedApps: string[] | null | undefined): string[] =>
-  pinnedApps ?? DEFAULT_PINNED_APPS;
+  pinnedApps && pinnedApps.length > 0 ? pinnedApps : DEFAULT_PINNED_APPS;
 
 /** The pinned list after pinning an app that isn't pinned (added at the end) or unpinning one that is. */
 export const toggledPins = (pinned: string[], key: string): string[] =>

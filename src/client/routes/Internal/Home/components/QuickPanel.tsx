@@ -1,4 +1,4 @@
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { APPS_REGISTRY } from "../../../../constants/apps";
 import AppTile from "./AppTile";
@@ -14,13 +14,7 @@ export default function QuickPanel({ pinnedApps, counts }: QuickPanelProps) {
   const navigate = useNavigate();
   const apps = pinnedApps.flatMap((key) => APPS_REGISTRY.filter((a) => a.key === key));
 
-  if (apps.length === 0) {
-    return (
-      <Typography color="text.secondary" variant="body2">
-        No apps pinned. Press Edit under All apps to choose the ones you want here.
-      </Typography>
-    );
-  }
+  if (apps.length === 0) return null;
 
   return (
     <Box

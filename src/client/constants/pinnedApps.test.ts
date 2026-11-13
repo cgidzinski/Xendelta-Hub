@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_PINNED_APPS, resolvePinnedApps, toggledPins } from "./apps";
 
 describe("pinned apps", () => {
-  it("someone who has never chosen gets the default, and anyone who has chosen gets exactly that, even nothing", () => {
-    expect(resolvePinnedApps(null)).toEqual(DEFAULT_PINNED_APPS);
+  it("when nothing is pinned, XenSplit and XenNote are; otherwise exactly what was pinned", () => {
+    expect(DEFAULT_PINNED_APPS).toEqual(["xensplit", "xennote"]);
     expect(resolvePinnedApps(undefined)).toEqual(DEFAULT_PINNED_APPS);
-    expect(resolvePinnedApps([])).toEqual([]);
-    expect(resolvePinnedApps(["xennote"])).toEqual(["xennote"]);
+    expect(resolvePinnedApps(null)).toEqual(DEFAULT_PINNED_APPS);
+    expect(resolvePinnedApps([])).toEqual(DEFAULT_PINNED_APPS);
+    expect(resolvePinnedApps(["xenkitchen"])).toEqual(["xenkitchen"]);
   });
 
   it("pinning adds to the end with no limit, and unpinning removes only that app", () => {

@@ -41,8 +41,7 @@ const userSchema = new Schema({
     // Extra bytes on top of the free tier (FREE_STORAGE_BYTES): admin grants and redeemed vouchers.
     spaceAllowed: { type: Number, default: 0 },
   },
-  // Unset = never chosen (the app shows its default pin); [] = chose none. `default: undefined` stops Mongoose filling in [].
-  pinnedApps: { type: [String], default: undefined },
+  pinnedApps: [{ type: String }],
   // What Home's feed hides for this person: whole apps, single spaces ("<app>:<id>") and single events.
   feedPrefs: {
     mutedApps: { type: [String], default: [] },

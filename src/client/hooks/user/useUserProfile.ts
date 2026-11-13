@@ -19,8 +19,7 @@ export interface UserProfile {
   unread_messages: boolean;
   unread_notifications: boolean;
   has_new_notifications: boolean;
-  /** null = never chosen (the default pin is shown); [] = chose none. */
-  pinnedApps: string[] | null;
+  pinnedApps: string[];
   /** Preferred IANA zone; "" means follow the browser. */
   timezone: string;
   /** "" means never chosen (defaults to dark); "system" means follow the OS setting. */
