@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AppError } from "../../utils/http";
 import { XenBudgetItem } from "../../models/xenBudget";
 import {
   validate,
@@ -92,23 +93,17 @@ export function registerRuleRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     validate(createXenBudgetRuleSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const error = validateRulePeople(req.body, book);
-        if (error) return res.status(400).json({ status: false, message: error });
-        // New rules land at the end of the chain unless they say otherwise.
-        const priority =
-          req.body.priority ?? (book.rules.length ? Math.max(...book.rules.map((r: any) => r.priority ?? 0)) + 1 : 0);
-        book.rules.push({ ...req.body, priority });
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: "Rule created", data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error("Error creating rule:", error);
-        res.status(500).json({ status: false, message: "Failed to create rule" });
-      }
+      const book = await loadBookForMember(req);
+      const error = validateRulePeople(req.body, book);
+      if (error) throw new AppError(400, error);
+      // New rules land at the end of the chain unless they say otherwise.
+      const priority =
+        req.body.priority ?? (book.rules.length ? Math.max(...book.rules.map((r: any) => r.priority ?? 0)) + 1 : 0);
+      book.rules.push({ ...req.body, priority });
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: "Rule created", data: serializeBookFor(book, callerId(req)) });
     },
   );
 
@@ -117,22 +112,16 @@ export function registerRuleRoutes(app: any) {
     validateParams(xenBudgetRuleParamSchema),
     validate(updateXenBudgetRuleSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const rule = book.rules.id(req.params.ruleId);
-        if (!rule) return res.status(404).json({ status: false, message: "Rule not found" });
-        const error = validateRulePeople(req.body, book);
-        if (error) return res.status(400).json({ status: false, message: error });
-        Object.assign(rule, req.body);
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: "Rule updated", data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error("Error updating rule:", error);
-        res.status(500).json({ status: false, message: "Failed to update rule" });
-      }
+      const book = await loadBookForMember(req);
+      const rule = book.rules.id(req.params.ruleId);
+      if (!rule) throw new AppError(404, "Rule not found");
+      const error = validateRulePeople(req.body, book);
+      if (error) throw new AppError(400, error);
+      Object.assign(rule, req.body);
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: "Rule updated", data: serializeBookFor(book, callerId(req)) });
     },
   );
 
@@ -145,59 +134,51 @@ export function registerRuleRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     validate(createXenBudgetRuleSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const ruleId = typeof req.query.ruleId === "string" ? req.query.ruleId : "";
-        const rule: Rule = {
-          _id: "preview",
-          name: req.body.name || "preview",
-          enabled: req.body.enabled !== false,
-          priority: 0,
-          match: {
-            mode: req.body.match?.mode || "all",
-            conditions: req.body.match?.conditions || [],
-          },
-          actions: {},
-          stop_on_match: false,
-        };
+      const book = await loadBookForMember(req);
+      const ruleId = typeof req.query.ruleId === "string" ? req.query.ruleId : "";
+      const rule: Rule = {
+        _id: "preview",
+        name: req.body.name || "preview",
+        enabled: req.body.enabled !== false,
+        priority: 0,
+        match: {
+          mode: req.body.match?.mode || "all",
+          conditions: req.body.match?.conditions || [],
+        },
+        actions: {},
+        stop_on_match: false,
+      };
 
-        // Scan a bounded window of the newest items and return at most a handful of
-        // matches — a preview is a sanity check, not a full sweep.
-        const MATCH_LIMIT = 10;
-        const SCAN_LIMIT = 1000;
-        const items = await XenBudgetItem.find({ book_id: book._id })
-          .sort({ date: -1, _id: -1 })
-          .limit(SCAN_LIMIT)
-          .lean();
+      // Scan a bounded window of the newest items and return at most a handful of
+      // matches — a preview is a sanity check, not a full sweep.
+      const MATCH_LIMIT = 10;
+      const SCAN_LIMIT = 1000;
+      const items = await XenBudgetItem.find({ book_id: book._id })
+        .sort({ date: -1, _id: -1 })
+        .limit(SCAN_LIMIT)
+        .lean();
 
-        const matches: any[] = [];
-        for (const item of items) {
-          if (matches.length >= MATCH_LIMIT) break;
-          if (ruleMatches(rule, toDraft(item))) {
-            matches.push({
-              _id: item._id.toString(),
-              description: item.description,
-              amount: item.amount,
-              currency: item.currency,
-              date: item.date,
-              type: item.type,
-              already_tagged: ruleId
-                ? (item.applied_rule_ids || []).some((id: any) => id.toString() === ruleId)
-                : false,
-            });
-          }
+      const matches: any[] = [];
+      for (const item of items) {
+        if (matches.length >= MATCH_LIMIT) break;
+        if (ruleMatches(rule, toDraft(item))) {
+          matches.push({
+            _id: item._id.toString(),
+            description: item.description,
+            amount: item.amount,
+            currency: item.currency,
+            date: item.date,
+            type: item.type,
+            already_tagged: ruleId ? (item.applied_rule_ids || []).some((id: any) => id.toString() === ruleId) : false,
+          });
         }
-
-        res.json({
-          status: true,
-          message: "Rule preview ready",
-          data: { matches, limit: MATCH_LIMIT, scanned: items.length },
-        });
-      } catch (error) {
-        console.error("Error previewing rule:", error);
-        res.status(500).json({ status: false, message: "Failed to preview rule" });
       }
+
+      res.json({
+        status: true,
+        message: "Rule preview ready",
+        data: { matches, limit: MATCH_LIMIT, scanned: items.length },
+      });
     },
   );
 
@@ -205,26 +186,20 @@ export function registerRuleRoutes(app: any) {
     "/api/xenbudget/books/:bookId/rules/:ruleId",
     validateParams(xenBudgetRuleParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const rule = book.rules.id(req.params.ruleId);
-        if (!rule) return res.status(404).json({ status: false, message: "Rule not found" });
-        book.rules.pull({ _id: rule._id });
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        // Deleting a rule doesn't undo what it already did — that takes a re-apply sweep,
-        // which the client offers next. Say so rather than implying it's been reversed.
-        res.json({
-          status: true,
-          message: "Rule deleted. Re-apply rules to undo its effects on existing items.",
-          data: serializeBookFor(book, callerId(req)),
-        });
-      } catch (error) {
-        console.error("Error deleting rule:", error);
-        res.status(500).json({ status: false, message: "Failed to delete rule" });
-      }
+      const book = await loadBookForMember(req);
+      const rule = book.rules.id(req.params.ruleId);
+      if (!rule) throw new AppError(404, "Rule not found");
+      book.rules.pull({ _id: rule._id });
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      // Deleting a rule doesn't undo what it already did — that takes a re-apply sweep,
+      // which the client offers next. Say so rather than implying it's been reversed.
+      res.json({
+        status: true,
+        message: "Rule deleted. Re-apply rules to undo its effects on existing items.",
+        data: serializeBookFor(book, callerId(req)),
+      });
     },
   );
 
@@ -238,77 +213,71 @@ export function registerRuleRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     validate(reapplyXenBudgetRulesSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const dryRun = req.body.dry_run === true;
-        const includeManual = req.body.include_manually_edited === true;
-        const excludeIds = Array.isArray(req.body.exclude_ids) ? req.body.exclude_ids : [];
+      const book = await loadBookForMember(req);
+      const dryRun = req.body.dry_run === true;
+      const includeManual = req.body.include_manually_edited === true;
+      const excludeIds = Array.isArray(req.body.exclude_ids) ? req.body.exclude_ids : [];
 
-        const filter: Record<string, any> = { book_id: book._id };
-        if (!includeManual) filter.manually_edited = { $ne: true };
-        if (excludeIds.length > 0) filter._id = { $nin: excludeIds };
+      const filter: Record<string, any> = { book_id: book._id };
+      if (!includeManual) filter.manually_edited = { $ne: true };
+      if (excludeIds.length > 0) filter._id = { $nin: excludeIds };
 
-        const items = await XenBudgetItem.find(filter);
-        const rules = plainRules(book);
-        const changes: any[] = [];
+      const items = await XenBudgetItem.find(filter);
+      const rules = plainRules(book);
+      const changes: any[] = [];
 
-        for (const item of items) {
-          const before = toDraft(item);
-          // skipBecomesOffBudget: a "skip" rule can't retroactively delete an item that
-          // already exists, so on a sweep it becomes "Off budget". Nothing is destroyed.
-          const { item: after } = applyRules(stripRuleEffects(before), rules, { skipBecomesOffBudget: true });
-          // Before the diff, so the dry run shows the same thing the sweep writes. This is
-          // the path that used to leave "Uncategorised" on a row a rule had just
-          // categorised: the flag isn't rule-contributed, so stripRuleEffects never took
-          // it off, and nothing else here looked at it.
-          after.flags = withDerivedUncategorised(after.flags, after.categories);
-          const diff = describeChange(item, before, after);
-          if (!diff) continue;
-          changes.push(diff);
-          if (!dryRun) {
-            // Rules name categories; the weights (even or percentage) are derived here.
-            item.set("categories", draftCategoryWeights(after, item.amount));
-            item.category_split_type = after.category_split_type ?? "equal";
-            item.rule_categories = after.rule_categories;
-            item.flags = after.flags;
-            item.rule_flags = after.rule_flags;
-            item.set("applied_rule_ids", after.applied_rule_ids);
-            item.description = after.description;
-            item.original_description = after.original_description;
-            item.type = after.type;
-            if (after.people && after.people.length > 0) {
-              try {
-                const resolved = buildRuleShares(after, book);
-                item.set("share_type", resolved.share_type);
-                item.set("shares", resolved.shares);
-              } catch {
-                // A rule naming someone who has since left the book shouldn't fail the
-                // whole sweep; leave that item's existing shares alone.
-              }
+      for (const item of items) {
+        const before = toDraft(item);
+        // skipBecomesOffBudget: a "skip" rule can't retroactively delete an item that
+        // already exists, so on a sweep it becomes "Off budget". Nothing is destroyed.
+        const { item: after } = applyRules(stripRuleEffects(before), rules, { skipBecomesOffBudget: true });
+        // Before the diff, so the dry run shows the same thing the sweep writes. This is
+        // the path that used to leave "Uncategorised" on a row a rule had just
+        // categorised: the flag isn't rule-contributed, so stripRuleEffects never took
+        // it off, and nothing else here looked at it.
+        after.flags = withDerivedUncategorised(after.flags, after.categories);
+        const diff = describeChange(item, before, after);
+        if (!diff) continue;
+        changes.push(diff);
+        if (!dryRun) {
+          // Rules name categories; the weights (even or percentage) are derived here.
+          item.set("categories", draftCategoryWeights(after, item.amount));
+          item.category_split_type = after.category_split_type ?? "equal";
+          item.rule_categories = after.rule_categories;
+          item.flags = after.flags;
+          item.rule_flags = after.rule_flags;
+          item.set("applied_rule_ids", after.applied_rule_ids);
+          item.description = after.description;
+          item.original_description = after.original_description;
+          item.type = after.type;
+          if (after.people && after.people.length > 0) {
+            try {
+              const resolved = buildRuleShares(after, book);
+              item.set("share_type", resolved.share_type);
+              item.set("shares", resolved.shares);
+            } catch {
+              // A rule naming someone who has since left the book shouldn't fail the
+              // whole sweep; leave that item's existing shares alone.
             }
-            await item.save();
           }
+          await item.save();
         }
-
-        if (!dryRun && changes.length > 0) broadcastBook(book);
-        res.json({
-          status: true,
-          message: dryRun ? "Preview ready" : "Rules re-applied",
-          data: {
-            dry_run: dryRun,
-            examined: items.length,
-            changed: changes.length,
-            skipped_manually_edited: includeManual
-              ? 0
-              : await XenBudgetItem.countDocuments({ book_id: book._id, manually_edited: true }),
-            sample: changes.slice(0, 20),
-          },
-        });
-      } catch (error) {
-        console.error("Error re-applying rules:", error);
-        res.status(500).json({ status: false, message: "Failed to re-apply rules" });
       }
+
+      if (!dryRun && changes.length > 0) broadcastBook(book);
+      res.json({
+        status: true,
+        message: dryRun ? "Preview ready" : "Rules re-applied",
+        data: {
+          dry_run: dryRun,
+          examined: items.length,
+          changed: changes.length,
+          skipped_manually_edited: includeManual
+            ? 0
+            : await XenBudgetItem.countDocuments({ book_id: book._id, manually_edited: true }),
+          sample: changes.slice(0, 20),
+        },
+      });
     },
   );
 
@@ -320,61 +289,55 @@ export function registerRuleRoutes(app: any) {
     "/api/xenbudget/books/:bookId/items/preview",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const rows = Array.isArray(req.body?.items) ? req.body.items : [];
-        if (rows.length === 0) {
-          return res.status(400).json({ status: false, message: "No rows to preview" });
-        }
-        if (rows.length > MAX_BULK_ROWS) {
-          return res.status(400).json({ status: false, message: `At most ${MAX_BULK_ROWS} rows at a time` });
-        }
-
-        const rules = plainRules(book);
-        const previews = rows.map((row: any, index: number) => {
-          const draft = draftFromRow(row, book);
-          const result = req.body.skip_rules
-            ? { item: draft, skipped: false, skippedByRuleName: undefined }
-            : applyRules(draft, rules);
-          return {
-            index,
-            skipped: result.skipped,
-            skipped_by: result.skippedByRuleName,
-            original: {
-              description: draft.description,
-              categories: draft.categories,
-              type: draft.type,
-              amount: draft.amount,
-            },
-            item: {
-              type: result.item.type,
-              amount: result.item.amount,
-              date: result.item.date,
-              description: result.item.description,
-              notes: result.item.notes,
-              categories: result.item.categories,
-              // Derived here too, so the preview shows the flags the import will actually
-              // write rather than the draft's own idea of them.
-              flags: withDerivedUncategorised(result.item.flags, result.item.categories),
-            },
-          };
-        });
-
-        res.json({
-          status: true,
-          message: "Preview ready",
-          data: {
-            previews,
-            skipped: previews.filter((p: any) => p.skipped).length,
-            off_budget: previews.filter((p: any) => !p.skipped && p.item.flags.includes(FLAG_OFF_BUDGET)).length,
-            flagged: previews.filter((p: any) => !p.skipped && p.item.flags.length > 0).length,
-          },
-        });
-      } catch (error) {
-        console.error("Error previewing items:", error);
-        res.status(500).json({ status: false, message: "Failed to preview items" });
+      const book = await loadBookForMember(req);
+      const rows = Array.isArray(req.body?.items) ? req.body.items : [];
+      if (rows.length === 0) {
+        throw new AppError(400, "No rows to preview");
       }
+      if (rows.length > MAX_BULK_ROWS) {
+        throw new AppError(400, `At most ${MAX_BULK_ROWS} rows at a time`);
+      }
+
+      const rules = plainRules(book);
+      const previews = rows.map((row: any, index: number) => {
+        const draft = draftFromRow(row, book);
+        const result = req.body.skip_rules
+          ? { item: draft, skipped: false, skippedByRuleName: undefined }
+          : applyRules(draft, rules);
+        return {
+          index,
+          skipped: result.skipped,
+          skipped_by: result.skippedByRuleName,
+          original: {
+            description: draft.description,
+            categories: draft.categories,
+            type: draft.type,
+            amount: draft.amount,
+          },
+          item: {
+            type: result.item.type,
+            amount: result.item.amount,
+            date: result.item.date,
+            description: result.item.description,
+            notes: result.item.notes,
+            categories: result.item.categories,
+            // Derived here too, so the preview shows the flags the import will actually
+            // write rather than the draft's own idea of them.
+            flags: withDerivedUncategorised(result.item.flags, result.item.categories),
+          },
+        };
+      });
+
+      res.json({
+        status: true,
+        message: "Preview ready",
+        data: {
+          previews,
+          skipped: previews.filter((p: any) => p.skipped).length,
+          off_budget: previews.filter((p: any) => !p.skipped && p.item.flags.includes(FLAG_OFF_BUDGET)).length,
+          flagged: previews.filter((p: any) => !p.skipped && p.item.flags.length > 0).length,
+        },
+      });
     },
   );
 }

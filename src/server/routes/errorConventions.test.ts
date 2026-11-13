@@ -14,16 +14,6 @@ const STILL_HAND_WRITTEN: Record<string, string> = {
   "xenlink.ts": "moved in the owner_id change (#258)",
   "xensplit.ts": "74 answers inside try/catch blocks; its own piece of work",
   "admin/blog.ts": "content editing, left as it was",
-  "xenbudget/backup.ts": "XenBudget is moved as one area",
-  "xenbudget/books.ts": "XenBudget is moved as one area",
-  "xenbudget/budgets.ts": "XenBudget is moved as one area",
-  "xenbudget/importCsv.ts": "XenBudget is moved as one area",
-  "xenbudget/items.ts": "XenBudget is moved as one area",
-  "xenbudget/labels.ts": "XenBudget is moved as one area",
-  "xenbudget/piggyBanks.ts": "XenBudget is moved as one area",
-  "xenbudget/rules.ts": "XenBudget is moved as one area",
-  "xenbudget/shared.ts": "XenBudget is moved as one area",
-  "xenbudget/summary.ts": "XenBudget is moved as one area",
 };
 
 // Files that still read the caller's id by casting the request.
