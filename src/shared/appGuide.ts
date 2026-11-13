@@ -27,6 +27,9 @@ export interface Tip {
 export interface AppGuideEntry {
   /** Two or three plain sentences: what it is for and who it is for. */
   about: string;
+  /** One line that gets someone who doesn't use the app to try it ("Try XenNote for…"), with a link to open it. The hub has none. */
+  pitch?: Tip;
+  /** Things worth knowing once you already use the app. Shown only to people who do. */
   tips: Tip[];
 }
 
@@ -53,6 +56,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   recipaint: {
     about:
       "Recipaint is for keeping your paint recipes: the mixes, the images and the notes, so you can make the same colour again.",
+    pitch: { text: "Try Recipaint to keep your paint recipes in one place.", link: "/internal/recipaint" },
     tips: [
       { text: "Add photos to a recipe so you can see the result next to the mix.", link: "/internal/recipaint" },
       { text: "Look through the public recipes for ideas from other people.", link: "/internal/recipaint" },
@@ -61,6 +65,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   xendrive: {
     about:
       "XenDrive is your file storage: put files in folders, preview them, and share a file or a whole folder with a link.",
+    pitch: { text: "Try XenDrive to store your files and share them with a link.", link: "/internal/xendrive" },
     tips: [
       {
         text: "Switch to the grid view to see your photos at a glance.",
@@ -78,6 +83,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   },
   xenlink: {
     about: "XenLink makes short links you can send to people, and shows you how many times each one was opened.",
+    pitch: { text: "Try XenLink to make a short link and see how often it is opened.", link: "/internal/xenlink" },
     tips: [
       { text: "Choose your own short name, like /x/summer-party, instead of a random one.", link: "/internal/xenlink" },
       { text: "Give a link an expiry date so it stops working on its own.", link: "/internal/xenlink" },
@@ -86,6 +92,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   },
   xensplit: {
     about: "XenSplit keeps track of who paid for what in a group, and works out who owes whom so you can settle up.",
+    pitch: { text: "Try XenSplit to keep track of who paid for what in a group.", link: "/internal/xensplit" },
     tips: [
       {
         text: "Add a photo of the receipt to an expense so everyone can see what it was for.",
@@ -104,6 +111,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   xenbudget: {
     about:
       "XenBudget is a shared budget book: log what you spend, set budgets by category, and see where the money goes.",
+    pitch: { text: "Try XenBudget to see where your money goes.", link: "/internal/xenbudget" },
     tips: [
       { text: "Import a bank CSV and let rules sort the items into categories for you.", link: "/internal/xenbudget" },
       {
@@ -119,6 +127,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   xenroutine: {
     about:
       "XenRoutine reminds you of things you do on a schedule, like changing a filter or testing a smoke alarm, and remembers when you last did them.",
+    pitch: { text: "Try XenRoutine to get reminded about things you do on a schedule.", link: "/internal/xenroutine" },
     tips: [
       {
         text: "Slide a routine to mark it done, or press Done with a note or photos to say what you did.",
@@ -131,6 +140,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   xenkitchen: {
     about:
       "XenKitchen is your recipe box and kitchen planner: keep recipes, plan the week's meals, and get a shopping list built for you.",
+    pitch: { text: "Try XenKitchen to plan the week's meals and get a shopping list.", link: "/internal/xenkitchen" },
     tips: [
       { text: "Paste a web address into Import and the recipe is filled in for you.", link: "/internal/xenkitchen" },
       {
@@ -147,6 +157,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   xennote: {
     about:
       "XenNote is for quick notes, checklists, photos and links, in notebooks you can share with the people around you.",
+    pitch: { text: "Try XenNote for quick notes and checklists you can share.", link: "/internal/xennote" },
     tips: [
       { text: "Tick checklist items right from the board, without opening the note.", link: "/internal/xennote" },
       {
@@ -181,24 +192,38 @@ function seededOrder<T>(items: T[], seed: string): T[] {
 
 export interface PickedTip extends Tip {
   app: GuideApp;
+  /** "try": an invitation to start using an app. "feature": something worth knowing about an app already in use. */
+  kind: "try" | "feature";
+}
+
+export interface TipOptions {
+  /** The apps this person already uses. */
+  used?: ReadonlySet<string>;
+  /** Only tips about this app (the feed is filtered to it). */
+  app?: GuideApp;
 }
 
 /**
- * Up to `count` tips for the "did you know" block. The same `seed` (use today's date) gives the same tips, so they stay
- * put while someone is on the page and change from day to day. With `app`, only that app's tips; otherwise one tip per
- * app first (so the three are from different apps), then any left over.
+ * Up to `count` tips for the "did you know" block. They push people towards apps they don't use yet: one invitation per such
+ * app comes first. Tips about how to get more out of an app are only for people who already use it (and the hub-wide ones), and
+ * fill what is left. The same `seed` (use today's date) gives the same tips, so they stay put while someone is on the page
+ * and change from day to day.
  */
-export function pickTips(seed: string, count: number, app?: GuideApp): PickedTip[] {
-  const all = (apps: readonly GuideApp[]) =>
-    apps.flatMap((a) => APP_GUIDE[a].tips.map((t): PickedTip => ({ ...t, app: a })));
-  if (app) return seededOrder(all([app]), seed).slice(0, count);
-  const firstOfEach = seededOrder(
-    GUIDE_APPS.filter((a) => a !== "hub").map((a) => seededOrder(all([a]), `${seed}:${a}`)[0]),
+export function pickTips(seed: string, count: number, { used = new Set(), app }: TipOptions = {}): PickedTip[] {
+  const invite = (a: GuideApp): PickedTip[] =>
+    APP_GUIDE[a].pitch ? [{ ...APP_GUIDE[a].pitch!, app: a, kind: "try" }] : [];
+  const features = (a: GuideApp): PickedTip[] => APP_GUIDE[a].tips.map((t) => ({ ...t, app: a, kind: "feature" }));
+
+  if (app) return (app === "hub" || used.has(app) ? seededOrder(features(app), seed) : invite(app)).slice(0, count);
+
+  const apps = GUIDE_APPS.filter((a) => a !== "hub");
+  const invitations = seededOrder(
+    apps.filter((a) => !used.has(a)),
     seed,
+  ).flatMap(invite);
+  const inUse = GUIDE_APPS.filter((a) => a === "hub" || used.has(a));
+  const oneFeatureEach = seededOrder(inUse, `${seed}:in-use`).flatMap((a) =>
+    seededOrder(features(a), `${seed}:${a}`).slice(0, 1),
   );
-  const rest = seededOrder(
-    all(GUIDE_APPS).filter((t) => !firstOfEach.some((f) => f.app === t.app && f.text === t.text)),
-    `${seed}:rest`,
-  );
-  return [...firstOfEach, ...rest].slice(0, count);
+  return [...invitations, ...oneFeatureEach].slice(0, count);
 }

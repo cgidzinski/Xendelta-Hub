@@ -4,5 +4,6 @@ export const feedKeys = {
   lists: () => [...feedKeys.all, "list"] as const,
   list: (app?: string) => [...feedKeys.lists(), app ?? "all"] as const,
   attention: () => [...feedKeys.all, "attention"] as const,
+  usage: () => [...feedKeys.all, "usage"] as const,
   prefs: () => [...feedKeys.all, "prefs"] as const,
 };

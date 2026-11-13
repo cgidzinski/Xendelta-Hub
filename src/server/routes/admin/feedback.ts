@@ -19,9 +19,7 @@ const admin = [authenticateToken, requireAdmin];
 const serialize = (row: any): AdminFeedback => ({
   _id: String(row._id),
   createdAt: row.createdAt.toISOString(),
-  kind: row.kind,
   message: row.message,
-  page: row.page ?? undefined,
   status: row.status,
   from: { _id: String(row.user_id), username: row.username },
 });

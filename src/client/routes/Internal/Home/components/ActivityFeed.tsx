@@ -186,18 +186,20 @@ export default function ActivityFeed() {
           action={<Button onClick={() => void feed.refetch()}>Retry</Button>}
         />
       ) : byDay.length === 0 ? (
-        <Card variant="outlined" sx={cardSx}>
-          <EmptyState
-            title={app ? "Nothing here" : "Nothing new"}
-            description={
-              app
-                ? "No activity from this app yet."
-                : "When people in your shared spaces add expenses, notes and more, it shows up here."
-            }
-            sx={{ py: 4 }}
-          />
+        <>
+          <Card variant="outlined" sx={cardSx}>
+            <EmptyState
+              title={app ? "Nothing here" : "Nothing new"}
+              description={
+                app
+                  ? "No activity from this app yet."
+                  : "When people in your shared spaces add expenses, notes and more, it shows up here."
+              }
+              sx={{ py: 4 }}
+            />
+          </Card>
           <DidYouKnow app={app ?? undefined} />
-        </Card>
+        </>
       ) : (
         <>
           {byDay.map(({ day, items }) => (
