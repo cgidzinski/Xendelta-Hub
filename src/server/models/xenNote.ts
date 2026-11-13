@@ -34,6 +34,17 @@ const checklistItemSchema = new Schema(
   { _id: true },
 );
 
+// A reminder is personal: anyone who can see a note can set one for themselves, and only they are told. One per person
+// per note. `notified_at` is stamped when it has been sent, so a reminder goes out once.
+const reminderSchema = new Schema(
+  {
+    user_id: { type: String, required: true },
+    at: { type: Date, required: true },
+    notified_at: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const noteSchema = new Schema({
   owner_id: { type: String, required: true },
   notebook_id: { type: Schema.Types.ObjectId, ref: "XenNotebook", default: null },
@@ -59,6 +70,7 @@ const noteSchema = new Schema({
     description: { type: String, default: "", maxlength: 1000 },
   },
   color: { type: String, enum: NOTE_COLORS, default: "default" },
+  reminders: { type: [reminderSchema], default: [] },
   pinned: { type: Boolean, default: false },
   archived: { type: Boolean, default: false },
   labels: { type: [String], default: [] },
@@ -74,6 +86,8 @@ const noteSchema = new Schema({
 noteSchema.index({ notebook_id: 1, updated_at: -1 });
 noteSchema.index({ owner_id: 1, notebook_id: 1 });
 noteSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
+// The reminder job: notes with a reminder that has come due.
+noteSchema.index({ "reminders.at": 1 });
 
 noteSchema.pre("save", function (next) {
   this.updated_at = new Date();

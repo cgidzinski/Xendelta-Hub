@@ -6,6 +6,7 @@ import type {
   BrowseView,
   FileDetailResult,
   FolderStats,
+  PublicFolderInfo,
   PublicFolderView,
   XenDriveFile,
   XenDriveFolder,
@@ -159,14 +160,32 @@ export const useXendriveFolderStats = (folderId: string | null) =>
     gcTime: 0,
   });
 
-export const usePublicFolder = (token: string | undefined, folderId?: string | null) =>
+/** Whether a folder link wants a password (and its name), before anything is opened. */
+export const usePublicFolderInfo = (token: string | undefined) =>
   useQuery({
-    queryKey: xendriveKeys.publicFolder(token ?? "", folderId),
-    queryFn: () =>
-      api.get<PublicFolderView>(
-        `/api/xendrive/public/folder/${token}${folderId ? `?folder=${encodeURIComponent(folderId)}` : ""}`,
-      ),
+    queryKey: xendriveKeys.publicFolderInfo(token ?? ""),
+    queryFn: () => api.get<PublicFolderInfo>(`/api/xendrive/public/folder/${token}/info`),
     enabled: !!token,
+    retry: false,
+  });
+
+/** What is in a shared folder. `password` is the folder link's, when it has one; `enabled` waits until it is known. */
+export const usePublicFolder = (
+  token: string | undefined,
+  folderId?: string | null,
+  password?: string,
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: xendriveKeys.publicFolder(token ?? "", folderId, password),
+    queryFn: () => {
+      const query = new URLSearchParams();
+      if (folderId) query.set("folder", folderId);
+      if (password) query.set("password", password);
+      const qs = query.toString();
+      return api.get<PublicFolderView>(`/api/xendrive/public/folder/${token}${qs ? `?${qs}` : ""}`);
+    },
+    enabled: !!token && enabled,
     retry: false,
   });
 
@@ -209,6 +228,11 @@ export const useXendriveActions = () => {
     },
     onSuccess: refresh,
   });
+  const updateFolderShare = useMutation({
+    mutationFn: (v: { folderId: string; settings: { password?: string | null; expiry?: string | null } }) =>
+      api.put<{ folder: XenDriveFolder }>(`/api/xendrive/folders/${v.folderId}/share/settings`, v.settings),
+    onSuccess: refresh,
+  });
   const deleteFile = useMutation({
     mutationFn: (fileId: string) => api.delete(`/api/xendrive/files/${fileId}`),
     onSuccess: refresh,
@@ -226,7 +250,16 @@ export const useXendriveActions = () => {
     onSuccess: refresh,
   });
 
-  return { createFolder, renameFolder, deleteFolder, shareFolder, deleteFile, updateFileSettings, rotateFileLink };
+  return {
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    shareFolder,
+    updateFolderShare,
+    deleteFile,
+    updateFileSettings,
+    rotateFileLink,
+  };
 };
 
 /** Save a file to the computer under its real name. */

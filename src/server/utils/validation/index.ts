@@ -9,6 +9,7 @@ export * from "./paints";
 export * from "./account";
 export * from "./shop";
 export * from "./xendrive";
+export * from "./xenkitchenPlan";
 export * from "./recipaint";
 export * from "./admin";
 export * from "./xennote";
