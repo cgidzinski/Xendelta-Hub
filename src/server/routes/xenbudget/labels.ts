@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AppError } from "../../utils/http";
 import { XenBudgetItem } from "../../models/xenBudget";
 import {
   validate,
@@ -125,26 +126,20 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
     validateParams(xenBudgetBookIdParamSchema),
     validate(createXenBudgetLabelSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const name = req.body.name.trim();
-        if (book[kind].some((l: any) => l.name.toLowerCase() === name.toLowerCase())) {
-          return res.status(400).json({ status: false, message: `That ${singular.toLowerCase()} already exists` });
-        }
-        book[kind].push({
-          name,
-          color: req.body.color,
-          ...(kind === "categories" ? { need_want: req.body.need_want ?? "none" } : {}),
-        });
-        await book.save();
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: `${singular} created`, data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error(`Error creating ${kind}:`, error);
-        res.status(500).json({ status: false, message: `Failed to create ${singular.toLowerCase()}` });
+      const book = await loadBookForMember(req);
+      const name = req.body.name.trim();
+      if (book[kind].some((l: any) => l.name.toLowerCase() === name.toLowerCase())) {
+        throw new AppError(400, `That ${singular.toLowerCase()} already exists`);
       }
+      book[kind].push({
+        name,
+        color: req.body.color,
+        ...(kind === "categories" ? { need_want: req.body.need_want ?? "none" } : {}),
+      });
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: `${singular} created`, data: serializeBookFor(book, callerId(req)) });
     },
   );
 
@@ -153,124 +148,109 @@ function registerLabelRoutes(app: any, kind: "categories" | "flags") {
     validateParams(xenBudgetLabelParamSchema),
     validate(updateXenBudgetLabelSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const label = book[kind].id(req.params.labelId);
-        if (!label) return res.status(404).json({ status: false, message: `${singular} not found` });
+      const book = await loadBookForMember(req);
+      const label = book[kind].id(req.params.labelId);
+      if (!label) throw new AppError(404, `${singular} not found`);
 
-        const oldName = label.name;
-        if (req.body.name !== undefined && req.body.name.trim() !== oldName) {
-          // A built-in flag's name is referenced by rules and by the importer, so renaming
-          // one would quietly stop them working.
-          if (label.system) {
-            return res.status(400).json({
-              status: false,
-              message: `"${oldName}" is built in and can't be renamed — rules and imports refer to it by name. You can change its colour.`,
-            });
-          }
-          const name = req.body.name.trim();
-          if (
-            book[kind].some(
-              (l: any) => l._id.toString() !== label._id.toString() && l.name.toLowerCase() === name.toLowerCase(),
-            )
-          ) {
-            return res.status(400).json({ status: false, message: `That ${singular.toLowerCase()} already exists` });
-          }
-          label.name = name;
+      const oldName = label.name;
+      if (req.body.name !== undefined && req.body.name.trim() !== oldName) {
+        // A built-in flag's name is referenced by rules and by the importer, so renaming
+        // one would quietly stop them working.
+        if (label.system) {
+          throw new AppError(
+            400,
+            `"${oldName}" is built in and can't be renamed — rules and imports refer to it by name. You can change its colour.`,
+          );
         }
-        if (req.body.color !== undefined) label.color = req.body.color;
-        if (kind === "categories" && req.body.need_want !== undefined) label.need_want = req.body.need_want;
-        await book.save();
-
-        if (label.name !== oldName) {
-          await renameOnItems(book._id, oldName, label.name);
-          // Budgets, rules and import presets reference names too, so they follow the
-          // rename rather than being left pointing at something that no longer exists.
-          if (kind === "categories") {
-            book.budgets.forEach((b: any) => renameInList(b.categories, oldName, label.name));
-            book.import_presets.forEach((p: any) => renameInList(p.default_categories, oldName, label.name));
-          }
-          book.rules.forEach((r: any) => {
-            const actions = r.actions || {};
-            if (kind === "categories") {
-              renameInList(actions.set_categories, oldName, label.name);
-              (actions.set_category_weights || []).forEach((w: any) => {
-                if ((w.name || "").toLowerCase() === oldName.toLowerCase()) w.name = label.name;
-              });
-            } else {
-              renameInList(actions.add_flags, oldName, label.name);
-              renameInList(actions.remove_flags, oldName, label.name);
-            }
-            // A rule condition names a category or flag in its `value`; without this a
-            // "category is Groceries" condition would silently stop matching.
-            const conditionField = kind === "categories" ? "category" : "flags";
-            ((r.match && r.match.conditions) || []).forEach((c: any) => {
-              if (c.field === conditionField && (c.value || "").toLowerCase() === oldName.toLowerCase()) {
-                c.value = label.name;
-              }
-            });
-          });
-          await book.save();
+        const name = req.body.name.trim();
+        if (
+          book[kind].some(
+            (l: any) => l._id.toString() !== label._id.toString() && l.name.toLowerCase() === name.toLowerCase(),
+          )
+        ) {
+          throw new AppError(400, `That ${singular.toLowerCase()} already exists`);
         }
-
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({ status: true, message: `${singular} updated`, data: serializeBookFor(book, callerId(req)) });
-      } catch (error) {
-        console.error(`Error updating ${kind}:`, error);
-        res.status(500).json({ status: false, message: `Failed to update ${singular.toLowerCase()}` });
+        label.name = name;
       }
+      if (req.body.color !== undefined) label.color = req.body.color;
+      if (kind === "categories" && req.body.need_want !== undefined) label.need_want = req.body.need_want;
+      await book.save();
+
+      if (label.name !== oldName) {
+        await renameOnItems(book._id, oldName, label.name);
+        // Budgets, rules and import presets reference names too, so they follow the
+        // rename rather than being left pointing at something that no longer exists.
+        if (kind === "categories") {
+          book.budgets.forEach((b: any) => renameInList(b.categories, oldName, label.name));
+          book.import_presets.forEach((p: any) => renameInList(p.default_categories, oldName, label.name));
+        }
+        book.rules.forEach((r: any) => {
+          const actions = r.actions || {};
+          if (kind === "categories") {
+            renameInList(actions.set_categories, oldName, label.name);
+            (actions.set_category_weights || []).forEach((w: any) => {
+              if ((w.name || "").toLowerCase() === oldName.toLowerCase()) w.name = label.name;
+            });
+          } else {
+            renameInList(actions.add_flags, oldName, label.name);
+            renameInList(actions.remove_flags, oldName, label.name);
+          }
+          // A rule condition names a category or flag in its `value`; without this a
+          // "category is Groceries" condition would silently stop matching.
+          const conditionField = kind === "categories" ? "category" : "flags";
+          ((r.match && r.match.conditions) || []).forEach((c: any) => {
+            if (c.field === conditionField && (c.value || "").toLowerCase() === oldName.toLowerCase()) {
+              c.value = label.name;
+            }
+          });
+        });
+        await book.save();
+      }
+
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({ status: true, message: `${singular} updated`, data: serializeBookFor(book, callerId(req)) });
     },
   );
 
   app.delete(`${base}/:labelId`, validateParams(xenBudgetLabelParamSchema), async (req: Request, res: Response) => {
-    try {
-      const book = await loadBookForMember(req, res);
-      if (!book) return;
-      const label = book[kind].id(req.params.labelId);
-      if (!label) return res.status(404).json({ status: false, message: `${singular} not found` });
+    const book = await loadBookForMember(req);
+    const label = book[kind].id(req.params.labelId);
+    if (!label) throw new AppError(404, `${singular} not found`);
 
-      if (label.system) {
-        return res.status(400).json({
-          status: false,
-          message: `"${label.name}" is built in and can't be deleted — rules and imports refer to it by name.`,
-        });
-      }
-      if (kind === "categories") {
-        // A budget on a category that no longer exists could never match again, so this
-        // is refused rather than left quietly broken.
-        const budget = book.budgets.find((b: any) => (b.categories || []).includes(label.name));
-        if (budget) {
-          return res.status(400).json({
-            status: false,
-            message: `"${label.name}" still has a budget on it. Delete that budget first.`,
-          });
-        }
-      }
-
-      // A rule or import preset that still points at this name would be left dangling,
-      // so this is refused rather than silently changing what it does.
-      const blockers = findLabelReferences(book, kind, label.name);
-      if (blockers.length > 0) {
-        return res.status(400).json({
-          status: false,
-          message: `"${label.name}" is still used by ${blockers.join(" and ")}. Update or delete ${blockers.length === 1 ? "it" : "them"} first.`,
-        });
-      }
-
-      const name = label.name;
-      book[kind].pull({ _id: label._id });
-      await book.save();
-      await removeFromItems(book._id, name);
-
-      await book.populate("members", PUBLIC_USER_FIELDS);
-      broadcastBook(book);
-      res.json({ status: true, message: `${singular} deleted`, data: serializeBookFor(book, callerId(req)) });
-    } catch (error) {
-      console.error(`Error deleting ${kind}:`, error);
-      res.status(500).json({ status: false, message: `Failed to delete ${singular.toLowerCase()}` });
+    if (label.system) {
+      throw new AppError(
+        400,
+        `"${label.name}" is built in and can't be deleted — rules and imports refer to it by name.`,
+      );
     }
+    if (kind === "categories") {
+      // A budget on a category that no longer exists could never match again, so this
+      // is refused rather than left quietly broken.
+      const budget = book.budgets.find((b: any) => (b.categories || []).includes(label.name));
+      if (budget) {
+        throw new AppError(400, `"${label.name}" still has a budget on it. Delete that budget first.`);
+      }
+    }
+
+    // A rule or import preset that still points at this name would be left dangling,
+    // so this is refused rather than silently changing what it does.
+    const blockers = findLabelReferences(book, kind, label.name);
+    if (blockers.length > 0) {
+      throw new AppError(
+        400,
+        `"${label.name}" is still used by ${blockers.join(" and ")}. Update or delete ${blockers.length === 1 ? "it" : "them"} first.`,
+      );
+    }
+
+    const name = label.name;
+    book[kind].pull({ _id: label._id });
+    await book.save();
+    await removeFromItems(book._id, name);
+
+    await book.populate("members", PUBLIC_USER_FIELDS);
+    broadcastBook(book);
+    res.json({ status: true, message: `${singular} deleted`, data: serializeBookFor(book, callerId(req)) });
   });
 }
 export function registerLabelSectionRoutes(app: any) {
@@ -292,23 +272,17 @@ export function registerLabelSectionRoutes(app: any) {
     "/api/xenbudget/books/:bookId/categories/counts",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const rows = await XenBudgetItem.aggregate([
-          { $match: { book_id: book._id } },
-          { $unwind: "$categories" },
-          { $group: { _id: "$categories.name", count: { $sum: 1 } } },
-        ]);
-        const counts: Record<string, number> = {};
-        rows.forEach((row: any) => {
-          counts[row._id] = row.count;
-        });
-        res.json({ status: true, message: "Category item counts retrieved", data: counts });
-      } catch (error) {
-        console.error("Error fetching category item counts:", error);
-        res.status(500).json({ status: false, message: "Failed to fetch category item counts" });
-      }
+      const book = await loadBookForMember(req);
+      const rows = await XenBudgetItem.aggregate([
+        { $match: { book_id: book._id } },
+        { $unwind: "$categories" },
+        { $group: { _id: "$categories.name", count: { $sum: 1 } } },
+      ]);
+      const counts: Record<string, number> = {};
+      rows.forEach((row: any) => {
+        counts[row._id] = row.count;
+      });
+      res.json({ status: true, message: "Category item counts retrieved", data: counts });
     },
   );
 
@@ -320,31 +294,25 @@ export function registerLabelSectionRoutes(app: any) {
     "/api/xenbudget/books/:bookId/reseed-labels",
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
-      try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
-        const categoriesChanged = ensureStarterCategories(book);
-        const flagsChanged = ensureSystemLabels(book);
-        if (!categoriesChanged && !flagsChanged) {
-          await book.populate("members", PUBLIC_USER_FIELDS);
-          return res.json({
-            status: true,
-            message: "Nothing to re-seed — the starter categories and flags are already all there",
-            data: serializeBookFor(book, callerId(req)),
-          });
-        }
-        await book.save();
+      const book = await loadBookForMember(req);
+      const categoriesChanged = ensureStarterCategories(book);
+      const flagsChanged = ensureSystemLabels(book);
+      if (!categoriesChanged && !flagsChanged) {
         await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-        res.json({
+        return res.json({
           status: true,
-          message: "Categories and flags re-seeded",
+          message: "Nothing to re-seed — the starter categories and flags are already all there",
           data: serializeBookFor(book, callerId(req)),
         });
-      } catch (error) {
-        console.error("Error reseeding labels:", error);
-        res.status(500).json({ status: false, message: "Failed to re-seed labels" });
       }
+      await book.save();
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+      res.json({
+        status: true,
+        message: "Categories and flags re-seeded",
+        data: serializeBookFor(book, callerId(req)),
+      });
     },
   );
 }

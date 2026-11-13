@@ -7,7 +7,6 @@ import {
   Chip,
   IconButton,
   LinearProgress,
-  Link,
   Stack,
   Tooltip,
   Typography,
@@ -19,8 +18,8 @@ import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import type { PublicXenNote, XenNote } from "../../../../types/XenNote";
-import { checklistProgress, hostOf, splitLinks } from "../noteDraft";
-import { isSafeUrl } from "@shared/xennote/notes";
+import { checklistProgress, hostOf } from "../noteDraft";
+import NoteMarkdown from "./NoteMarkdown";
 import { noteSurfaceSx } from "../noteColors";
 import { formatReminder } from "../reminders";
 
@@ -30,6 +29,10 @@ interface NoteCardProps {
   /** Tick or untick checklist item `index` straight from the board. Omit for read-only. */
   onToggleItem?: (index: number) => void;
   onTogglePin?: () => void;
+  /** The id of the note a [[title]] means (omit on a public page, where [[links]] are just their words). */
+  resolveTitle?: (title: string) => string | null;
+  /** Open a note a [[link]] points to. */
+  onOpenLinked?: (id: string) => void;
 }
 
 const MAX_LINES = 8;
@@ -78,7 +81,14 @@ function PhotoMosaic({ images }: { images: Array<{ url: string }> }) {
 }
 
 /** One note on the board: its content for its type, progress, labels, and quick actions. */
-export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin }: NoteCardProps) {
+export default function NoteCard({
+  note,
+  onOpen,
+  onToggleItem,
+  onTogglePin,
+  resolveTitle,
+  onOpenLinked,
+}: NoteCardProps) {
   const full = "can_edit" in note ? note : null;
   const pinned = full?.pinned ?? false;
   const editable = !!full?.can_edit;
@@ -164,24 +174,18 @@ export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin }: No
         ) : (
           note.type !== "link" &&
           note.body && (
-            <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {splitLinks(lines.slice(0, MAX_LINES).join("\n")).map((part, i) =>
-                part.url && isSafeUrl(part.url) ? (
-                  <Link
-                    key={i}
-                    href={part.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {part.text}
-                  </Link>
-                ) : (
-                  part.text
-                ),
+            <>
+              <NoteMarkdown
+                text={lines.slice(0, MAX_LINES).join("\n")}
+                resolve={resolveTitle}
+                onOpenNote={onOpenLinked}
+              />
+              {lines.length > MAX_LINES && (
+                <Typography variant="body2" color="text.secondary">
+                  …
+                </Typography>
               )}
-              {lines.length > MAX_LINES ? "…" : ""}
-            </Typography>
+            </>
           )
         )}
 

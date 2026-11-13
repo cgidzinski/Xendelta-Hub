@@ -12,12 +12,12 @@ import {
 import { authenticateToken } from "../middleware/auth";
 import { uploadRecipaintAsset as multerUploadRecipaintAsset } from "../config/multer";
 import { uploadRecipaintAsset, generateUniqueFilename, deleteRecipaintAssetByUrl } from "../utils/mediaUtils";
-import { AuthenticatedRequest } from "../types";
 import { sanitizeCompletedSteps } from "@shared/recipaint/progress";
 import { isSameId } from "../utils/objectId";
 import { Recipe } from "../models/recipe";
 import { RecipeProgress } from "../models/recipeProgress";
 import { PUBLIC_USER_FIELDS } from "../utils/publicUser";
+import { AppError, callerId } from "../utils/http";
 const mongoose = require("mongoose");
 const {
   Types: { ObjectId },
@@ -64,7 +64,7 @@ async function findRecipeSummaries(match: any, limit: number, offset: number) {
 module.exports = function (app: express.Application) {
   // Get all recipes for authenticated user
   app.get("/api/recipaint", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
     const search = req.query.search as string;
     const { limit, offset } = parsePaging(req);
 
@@ -88,7 +88,7 @@ module.exports = function (app: express.Application) {
 
   // Get public recipes from other users
   app.get("/api/recipaint/public", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
     const { limit, offset } = parsePaging(req);
 
     const recipes = await findRecipeSummaries({ isPublic: true, owner: { $ne: new ObjectId(userId) } }, limit, offset);
@@ -113,18 +113,12 @@ module.exports = function (app: express.Application) {
         .exec();
 
       if (!recipe) {
-        return res.status(404).json({
-          status: false,
-          message: "Recipe not found",
-        });
+        throw new AppError(404, "Recipe not found");
       }
 
       // If recipe is not public, return 401
       if (!recipe.isPublic) {
-        return res.status(401).json({
-          status: false,
-          message: "Access denied",
-        });
+        throw new AppError(401, "Access denied");
       }
 
       return res.json({
@@ -142,7 +136,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(recipeIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const recipeId = req.params.id;
 
       const recipe = await Recipe.findById(recipeId)
@@ -152,10 +146,7 @@ module.exports = function (app: express.Application) {
         .exec();
 
       if (!recipe) {
-        return res.status(404).json({
-          status: false,
-          message: "Recipe not found",
-        });
+        throw new AppError(404, "Recipe not found");
       }
       // If recipe is public, allow access to anyone
       if (recipe.isPublic) {
@@ -169,17 +160,11 @@ module.exports = function (app: express.Application) {
 
       // If recipe is private, require authentication and check if user is owner
       if (!userId) {
-        return res.status(401).json({
-          status: false,
-          message: "Authentication required",
-        });
+        throw new AppError(401, "Authentication required");
       }
       // isSameId reaches through a populated owner to the id it carries.
       if (!isSameId(recipe.owner, userId)) {
-        return res.status(403).json({
-          status: false,
-          message: "Access denied",
-        });
+        throw new AppError(403, "Access denied");
       }
 
       return res.json({
@@ -197,14 +182,11 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(recipeCreateSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { showcase, title, description, steps, isPublic } = req.body;
 
       if (!title) {
-        return res.status(400).json({
-          status: false,
-          message: "Title is required",
-        });
+        throw new AppError(400, "Title is required");
       }
 
       const recipe = new Recipe({
@@ -240,41 +222,29 @@ module.exports = function (app: express.Application) {
     validateParams(recipeIdParamSchema),
     validate(recipeUpdateSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const recipeId = req.params.id;
       const { showcase, title, description, steps, isPublic } = req.body;
 
       const recipe = await Recipe.findById(recipeId).exec();
 
       if (!recipe) {
-        return res.status(404).json({
-          status: false,
-          message: "Recipe not found",
-        });
+        throw new AppError(404, "Recipe not found");
       }
 
       // Check if user is the owner
       if (!isSameId(recipe.owner, userId)) {
-        return res.status(403).json({
-          status: false,
-          message: "Access denied",
-        });
+        throw new AppError(403, "Access denied");
       }
 
       // Validate that steps are only RecipeStep objects (not recipe IDs)
       if (steps !== undefined) {
         if (!Array.isArray(steps)) {
-          return res.status(400).json({
-            status: false,
-            message: "Steps must be an array",
-          });
+          throw new AppError(400, "Steps must be an array");
         }
         for (const step of steps) {
           if (typeof step === "string" || (typeof step === "object" && step !== null && !("index" in step))) {
-            return res.status(400).json({
-              status: false,
-              message: "Steps must be RecipeStep objects only. Recipe references are not supported.",
-            });
+            throw new AppError(400, "Steps must be RecipeStep objects only. Recipe references are not supported.");
           }
         }
       }
@@ -315,10 +285,7 @@ module.exports = function (app: express.Application) {
       const assetUrl = req.query.assetUrl as string;
 
       if (!assetUrl) {
-        return res.status(400).json({
-          status: false,
-          message: "Asset URL is required",
-        });
+        throw new AppError(400, "Asset URL is required");
       }
 
       await deleteRecipaintAssetByUrl(assetUrl);
@@ -346,11 +313,11 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(recipeIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const recipeId = req.params.id;
 
       if (!(await canTrackProgress(recipeId, userId))) {
-        return res.status(404).json({ status: false, message: "Recipe not found" });
+        throw new AppError(404, "Recipe not found");
       }
 
       const progress = await RecipeProgress.findOne({
@@ -373,20 +340,20 @@ module.exports = function (app: express.Application) {
     validateParams(recipeIdParamSchema),
     validate(recipeProgressSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const recipeId = req.params.id;
       const { completedSteps } = req.body;
 
       if (!Array.isArray(completedSteps)) {
-        return res.status(400).json({ status: false, message: "completedSteps must be an array" });
+        throw new AppError(400, "completedSteps must be an array");
       }
 
       const recipe = await Recipe.findById(recipeId).select("owner isPublic steps").lean().exec();
       if (!recipe) {
-        return res.status(404).json({ status: false, message: "Recipe not found" });
+        throw new AppError(404, "Recipe not found");
       }
       if (!recipe.isPublic && !isSameId(recipe.owner, userId)) {
-        return res.status(403).json({ status: false, message: "Access denied" });
+        throw new AppError(403, "Access denied");
       }
 
       const cleaned = sanitizeCompletedSteps(completedSteps, (recipe.steps || []).length);
@@ -412,24 +379,18 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(recipeIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const recipeId = req.params.id;
 
       const recipe = await Recipe.findById(recipeId).exec();
 
       if (!recipe) {
-        return res.status(404).json({
-          status: false,
-          message: "Recipe not found",
-        });
+        throw new AppError(404, "Recipe not found");
       }
 
       // Check if user is the owner
       if (!isSameId(recipe.owner, userId)) {
-        return res.status(403).json({
-          status: false,
-          message: "Access denied",
-        });
+        throw new AppError(403, "Access denied");
       }
 
       // Delete the recipe's images - showcase and every step's - along with their thumbnails.
@@ -460,10 +421,7 @@ module.exports = function (app: express.Application) {
     multerUploadRecipaintAsset.single("asset"),
     async function (req: express.Request, res: express.Response) {
       if (!req.file) {
-        return res.status(400).json({
-          status: false,
-          message: "No asset file provided",
-        });
+        throw new AppError(400, "No asset file provided");
       }
 
       // Generate unique filename
@@ -491,25 +449,19 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(recipeIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const recipeId = req.params.id;
 
       const originalRecipe = await Recipe.findById(recipeId).populate("author", PUBLIC_USER_FIELDS).lean().exec();
 
       if (!originalRecipe) {
-        return res.status(404).json({
-          status: false,
-          message: "Recipe not found",
-        });
+        throw new AppError(404, "Recipe not found");
       }
 
       // If recipe is private, check if user is the owner
       if (!originalRecipe.isPublic) {
         if (!isSameId(originalRecipe.owner, userId)) {
-          return res.status(403).json({
-            status: false,
-            message: "Access denied",
-          });
+          throw new AppError(403, "Access denied");
         }
       }
       // If recipe is public, anyone can clone it

@@ -42,6 +42,15 @@ export interface XenNote {
   updated_at: string;
 }
 
+/** A note that links to another with [[its title]] (what "Linked from" lists). */
+export interface XenNoteBacklink {
+  _id: string;
+  title: string;
+  type: NoteType;
+  notebook_id: string | null;
+  updated_at: string;
+}
+
 /** How many notes each part of the rail holds. */
 export interface XenNoteCounts {
   all: number;

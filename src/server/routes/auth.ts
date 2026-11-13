@@ -1,5 +1,5 @@
 import express = require("express");
-import { loadCaller } from "../utils/http";
+import { AppError, loadCaller } from "../utils/http";
 import { User } from "../models/user";
 import { Notification } from "../models/notification";
 import { authenticateToken } from "../middleware/auth";
@@ -26,10 +26,7 @@ module.exports = function (app: express.Application) {
     const user = await loadCaller(req);
 
     if (!user) {
-      return res.status(404).json({
-        status: false,
-        message: "User not found",
-      });
+      throw new AppError(404, "User not found");
     }
 
     return res.json({
@@ -64,10 +61,7 @@ module.exports = function (app: express.Application) {
         token: newToken,
       });
     } else {
-      return res.status(401).json({
-        status: false,
-        message: "User Not Found.",
-      });
+      throw new AppError(401, "User Not Found.");
     }
   });
 
