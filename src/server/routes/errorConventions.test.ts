@@ -11,9 +11,7 @@ const STILL_HAND_WRITTEN: Record<string, string> = {
   "auth.ts": "sign-in answers carry their own fields",
   "users.ts": "profile routes wrap their bodies in try/catch",
   "xendrive.ts": "a few answers carry extra fields (password prompts)",
-  "xenkitchen.ts": "uses its own handle() wrapper around fail(res, ...)",
   "xenlink.ts": "moved in the owner_id change (#258)",
-  "xenroutine.ts": "every handler wraps its body in try/catch",
   "xensplit.ts": "74 answers inside try/catch blocks; its own piece of work",
   "admin/blog.ts": "content editing, left as it was",
   "xenbudget/backup.ts": "XenBudget is moved as one area",
@@ -31,9 +29,7 @@ const STILL_HAND_WRITTEN: Record<string, string> = {
 // Files that still read the caller's id by casting the request.
 const STILL_CASTING: Record<string, string> = {
   "admin/blog.ts": "content editing, left as it was",
-  "xenkitchen.ts": "uses its own callerId helper",
   "xenlink.ts": "moved in the owner_id change (#258)",
-  "xenroutine.ts": "uses its own callerId helper",
 };
 
 // A hand-written refusal: res.status(4xx or 5xx).json(...) or the kitchen/routine helper fail(res, 4xx, ...).

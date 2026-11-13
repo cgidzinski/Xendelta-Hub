@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import sharp from "sharp";
 import { z } from "zod";
 import { rateLimit } from "express-rate-limit";
@@ -10,7 +10,7 @@ import { uploadXenKitchenImages } from "../config/multer";
 import { MAX_XENKITCHEN_IMAGES } from "../constants";
 import { storeAppFiles, copyAppFiles, removeAppFiles } from "../utils/appFiles";
 import { XENKITCHEN_SOURCE, removeKitchenPhotos, withPhotoUrls } from "../utils/xenKitchenFiles";
-import { AppError } from "../utils/http";
+import { AppError, callerId } from "../utils/http";
 import { fetchPublicImage, fetchPublicPage } from "../utils/safeFetch";
 import { extractRecipe } from "../utils/recipeImport";
 import { notify } from "../utils/notificationUtils";
@@ -57,20 +57,11 @@ import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "@shared/x
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { addRefused } from "../social/policy";
 
-const callerId = (req: Request) => (req as AuthenticatedRequest).user!._id.toString();
 const callerName = (req: Request) => (req as AuthenticatedRequest).user!.username;
 
-const fail = (res: Response, code: number, message: string) => res.status(code).json({ status: false, message });
-
-// Express 5 forwards rejected promises, but a JSON error beats the default HTML page.
-const handle =
-  (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, _next: NextFunction) =>
-    fn(req, res).catch((err) => {
-      // A deliberate refusal (not enough storage, a photo that can't be read) says why.
-      if (err instanceof AppError) return fail(res, err.status, err.message);
-      console.error(">>> XenKitchen error:", err);
-      if (!res.headersSent) fail(res, 500, "Something went wrong");
-    });
+// Express 5 forwards a rejected promise to the global errorHandler, which answers an AppError as { status: false, message }
+// (and anything else as a logged 500). This only gives the handlers' (req, res) their types.
+const handle = (fn: (req: Request, res: Response) => Promise<unknown>) => fn;
 
 /** The file's name with the extension of what it was re-encoded to ("IMG_1.heic" → "IMG_1.webp"). */
 const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
@@ -143,32 +134,28 @@ const allowed = (book: BookLike, uid: string, need: Need) =>
 const denial = (need: Need) =>
   need === "manage" ? "Only the book's owner can do that" : "You can view this book but not change it";
 
-/** Loads a book and checks the caller's role. 404 for non-members so ids can't be probed. */
-async function loadBook(req: Request, res: Response, id: unknown, need: Need) {
+/** Loads a book and checks the caller's role; throws the 404 (for non-members, so ids can't be probed) or 403. */
+async function loadBook(req: Request, id: unknown, need: Need) {
   const uid = callerId(req);
   const book = id ? await XenKitchenBook.findById(id).exec() : null;
   if (!book || !canView(book, uid)) {
-    fail(res, 404, "Book not found");
-    return null;
+    throw new AppError(404, "Book not found");
   }
   if (!allowed(book, uid, need)) {
-    fail(res, 403, denial(need));
-    return null;
+    throw new AppError(403, denial(need));
   }
   return book;
 }
 
-async function loadItem(req: Request, res: Response, need: Need) {
+async function loadItem(req: Request, need: Need) {
   const uid = callerId(req);
   const item = await XenKitchenItem.findById(req.params.id).exec();
   const book = item ? await XenKitchenBook.findById(item.book_id).lean().exec() : null;
   if (!item || !book || !canView(book, uid)) {
-    fail(res, 404, "Not found");
-    return null;
+    throw new AppError(404, "Not found");
   }
   if (!allowed(book, uid, need)) {
-    fail(res, 403, denial(need));
-    return null;
+    throw new AppError(403, denial(need));
   }
   return { item, book };
 }
@@ -319,7 +306,7 @@ module.exports = function (app: any) {
       const item = await XenKitchenItem.findOne({ "share.token": req.params.token, "share.enabled": true })
         .lean()
         .exec();
-      if (!item) return fail(res, 404, "This link isn't available");
+      if (!item) throw new AppError(404, "This link isn't available");
       const { map } = await categoriesForBooks([item.book_id]);
       const creator = item.created_by ? await User.findById(item.created_by, "username").lean().exec() : null;
       const [shown] = await withPhotoUrls([item]);
@@ -340,7 +327,7 @@ module.exports = function (app: any) {
     validateParams(xenKitchenTokenParamSchema),
     handle(async (req, res) => {
       const book = await loadPublicBook(req.params.token);
-      if (!book) return fail(res, 404, "This link isn't available");
+      if (!book) throw new AppError(404, "This link isn't available");
       const [items, { list, map }] = await Promise.all([
         XenKitchenItem.find({ book_id: book._id }).sort({ updated_at: -1 }).lean().exec(),
         categoriesForBooks([book._id]),
@@ -371,7 +358,7 @@ module.exports = function (app: any) {
       const item = book
         ? await XenKitchenItem.findOne({ _id: req.params.itemId, book_id: book._id }).lean().exec()
         : null;
-      if (!book || !item) return fail(res, 404, "This link isn't available");
+      if (!book || !item) throw new AppError(404, "This link isn't available");
       const { map } = await categoriesForBooks([book._id]);
       const [shown] = await withPhotoUrls([item]);
       res.json({
@@ -397,13 +384,13 @@ module.exports = function (app: any) {
       } else {
         src = await XenKitchenItem.findOne({ "share.token": req.params.token, "share.enabled": true }).lean().exec();
       }
-      if (!src) return fail(res, 404, "This link isn't available");
+      if (!src) throw new AppError(404, "This link isn't available");
       const books = await ensureBooks(uid);
       const wanted = req.body?.book_id;
       const target = wanted
         ? books.find((b) => String(b._id) === wanted && canEdit(b, uid))
         : books.find((b) => canEdit(b, uid));
-      if (!target) return fail(res, 400, "You don't have a book you can add to");
+      if (!target) throw new AppError(400, "You don't have a book you can add to");
       const copy = await cloneItem(src, target._id, uid, await targetCategory(src, target._id));
       await respondItem(res, copy, target, uid);
     }),
@@ -433,7 +420,7 @@ module.exports = function (app: any) {
       const uid = callerId(req);
       const body = xenKitchenBookSchema.parse(req.body);
       const owned = await XenKitchenBook.countDocuments({ members: { $elemMatch: { user_id: uid, role: "owner" } } });
-      if (owned >= 30) return fail(res, 400, "30 books is the limit");
+      if (owned >= 30) throw new AppError(400, "30 books is the limit");
       const book = await createBook(uid, body);
       res.json({ status: true, message: "Book created", data: { book: await serializeBook(book.toObject(), uid) } });
     }),
@@ -445,8 +432,7 @@ module.exports = function (app: any) {
     validateParams(xenKitchenIdParamSchema),
     validate(xenKitchenBookUpdateSchema),
     handle(async (req, res) => {
-      const book = await loadBook(req, res, req.params.id, "manage");
-      if (!book) return;
+      const book = await loadBook(req, req.params.id, "manage");
       const body = xenKitchenBookUpdateSchema.parse(req.body);
       if (body.icon && !validIcon(body.icon)) delete body.icon;
       book.set(body);
@@ -461,8 +447,7 @@ module.exports = function (app: any) {
     validateParams(xenKitchenIdParamSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const book = await loadBook(req, res, req.params.id, "manage");
-      if (!book) return;
+      const book = await loadBook(req, req.params.id, "manage");
       const items = await XenKitchenItem.find({ book_id: book._id }, "images").lean().exec();
       await XenKitchenItem.deleteMany({ book_id: book._id }).exec();
       await XenKitchenCategory.deleteMany({ book_id: book._id }).exec();
@@ -480,8 +465,7 @@ module.exports = function (app: any) {
     validate(xenKitchenAddMembersSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const book = await loadBook(req, res, req.params.id, "manage");
-      if (!book) return;
+      const book = await loadBook(req, req.params.id, "manage");
       const { userIds, role } = xenKitchenAddMembersSchema.parse(req.body);
       if (addRefused(res, uid, userIds)) return;
       const found = await User.find({ _id: { $in: userIds } }, "_id")
@@ -489,7 +473,7 @@ module.exports = function (app: any) {
         .exec();
       const existing = new Set(book.members.map((m: any) => m.user_id));
       const added = found.map((u: any) => u._id.toString()).filter((id: string) => !existing.has(id));
-      if (book.members.length + added.length > 50) return fail(res, 400, "50 people per book is the limit");
+      if (book.members.length + added.length > 50) throw new AppError(400, "50 people per book is the limit");
       added.forEach((id: string) => book.members.push({ user_id: id, role }));
       await book.save();
       await Promise.all(
@@ -516,10 +500,9 @@ module.exports = function (app: any) {
     validate(xenKitchenMemberRoleSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const book = await loadBook(req, res, req.params.id, "view");
-      if (!book) return;
+      const book = await loadBook(req, req.params.id, "view");
       const result = changeRole(book.toObject(), uid, String(req.params.userId), req.body.role);
-      if (!result.ok) return fail(res, result.code, result.message);
+      if (!result.ok) throw new AppError(result.code, result.message);
       book.set("members", result.members);
       // Handed to someone else, it's no longer the old owner's starter book; clearing the
       // marker lets them get a fresh one if they later leave and have none.
@@ -535,11 +518,10 @@ module.exports = function (app: any) {
     validateParams(xenKitchenMemberParamSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const book = await loadBook(req, res, req.params.id, "view");
-      if (!book) return;
+      const book = await loadBook(req, req.params.id, "view");
       const target = String(req.params.userId);
       const result = removeMember(book.toObject(), uid, target);
-      if (!result.ok) return fail(res, result.code, result.message);
+      if (!result.ok) throw new AppError(result.code, result.message);
       book.set("members", result.members);
       await book.save();
       // Their stars on this book's items go with them.
@@ -555,8 +537,7 @@ module.exports = function (app: any) {
 
   const bookShare = (action: "enable" | "disable" | "rotate") =>
     handle(async (req, res) => {
-      const book = await loadBook(req, res, req.params.id, "manage");
-      if (!book) return;
+      const book = await loadBook(req, req.params.id, "manage");
       if (action === "rotate" || !book.share?.token)
         book.share = { enabled: action !== "disable", token: generateShareToken() };
       else book.share.enabled = action === "enable";
@@ -593,7 +574,7 @@ module.exports = function (app: any) {
       const books = await ensureBooks(uid);
       const which = typeof req.query.book === "string" ? req.query.book : "all";
       const scope = which === "all" ? books : books.filter((b) => String(b._id) === which);
-      if (!scope.length) return fail(res, 404, "Book not found");
+      if (!scope.length) throw new AppError(404, "Book not found");
       const ids = scope.map((b) => b._id);
       const [{ list }, counts] = await Promise.all([
         categoriesForBooks(ids),
@@ -636,10 +617,9 @@ module.exports = function (app: any) {
     validate(createCategorySchema),
     handle(async (req, res) => {
       const body = createCategorySchema.parse(req.body);
-      const book = await loadBook(req, res, body.book_id, "edit");
-      if (!book) return;
+      const book = await loadBook(req, body.book_id, "edit");
       const count = await XenKitchenCategory.countDocuments({ book_id: book._id });
-      if (count >= 50) return fail(res, 400, "That's a lot of categories — 50 is the limit");
+      if (count >= 50) throw new AppError(400, "That's a lot of categories — 50 is the limit");
       const cat = await XenKitchenCategory.create({
         ...body,
         book_id: book._id,
@@ -658,8 +638,7 @@ module.exports = function (app: any) {
     validate(orderSchema),
     handle(async (req, res) => {
       const { ids, book_id } = orderSchema.parse(req.body);
-      const book = await loadBook(req, res, book_id, "edit");
-      if (!book) return;
+      const book = await loadBook(req, book_id, "edit");
       await XenKitchenCategory.bulkWrite(
         ids.map((id, i) => ({ updateOne: { filter: { _id: id, book_id: book._id }, update: { $set: { order: i } } } })),
       );
@@ -667,14 +646,11 @@ module.exports = function (app: any) {
     }),
   );
 
-  async function loadCategory(req: Request, res: Response) {
+  async function loadCategory(req: Request) {
     const cat = await XenKitchenCategory.findById(req.params.id).exec();
-    if (!cat) {
-      fail(res, 404, "Category not found");
-      return null;
-    }
-    const book = await loadBook(req, res, cat.book_id, "edit");
-    return book ? cat : null;
+    if (!cat) throw new AppError(404, "Category not found");
+    await loadBook(req, cat.book_id, "edit");
+    return cat;
   }
 
   app.put(
@@ -683,8 +659,7 @@ module.exports = function (app: any) {
     validateParams(xenKitchenIdParamSchema),
     validate(xenKitchenCategoryUpdateSchema),
     handle(async (req, res) => {
-      const cat = await loadCategory(req, res);
-      if (!cat) return;
+      const cat = await loadCategory(req);
       const body = xenKitchenCategoryUpdateSchema.parse(req.body);
       if (body.icon && !validIcon(body.icon)) delete body.icon;
       cat.set(body);
@@ -698,8 +673,7 @@ module.exports = function (app: any) {
     authenticateToken,
     validateParams(xenKitchenIdParamSchema),
     handle(async (req, res) => {
-      const cat = await loadCategory(req, res);
-      if (!cat) return;
+      const cat = await loadCategory(req);
       await cat.deleteOne();
       // Items are kept, just uncategorised.
       await XenKitchenItem.updateMany(
@@ -752,7 +726,7 @@ module.exports = function (app: any) {
       const books = await ensureBooks(uid);
       const which = params.get("book") || "all";
       const scope = which === "all" ? books : books.filter((b) => String(b._id) === which);
-      if (!scope.length) return fail(res, 404, "Book not found");
+      if (!scope.length) throw new AppError(404, "Book not found");
       const items = await XenKitchenItem.find({ book_id: { $in: scope.map((b) => b._id) } })
         .lean()
         .exec();
@@ -774,12 +748,11 @@ module.exports = function (app: any) {
     handle(async (req, res) => {
       const uid = callerId(req);
       const body = createItemSchema.parse(req.body);
-      const book = await loadBook(req, res, body.book_id, "edit");
-      if (!book) return;
+      const book = await loadBook(req, body.book_id, "edit");
       if (!(await categoryBelongs(book._id, body.category_id)))
-        return fail(res, 400, "That category isn't in this book");
+        throw new AppError(400, "That category isn't in this book");
       const count = await XenKitchenItem.countDocuments({ book_id: book._id });
-      if (count >= 5000) return fail(res, 400, "This book is full (5000 items)");
+      if (count >= 5000) throw new AppError(400, "This book is full (5000 items)");
       const item = await XenKitchenItem.create({
         ...itemFieldsFromBody(body),
         book_id: book._id,
@@ -815,9 +788,9 @@ module.exports = function (app: any) {
       if (category_id) {
         // A category belongs to one book, so only that book's items can go into it.
         const cat = await XenKitchenCategory.findById(category_id).lean().exec();
-        if (!cat) return fail(res, 400, "Unknown category");
+        if (!cat) throw new AppError(400, "Unknown category");
         const inBook = items.filter((i) => String(i.book_id) === String(cat.book_id)).map((i) => i._id);
-        if (!inBook.length) return fail(res, 400, "Those items aren't in that category's book");
+        if (!inBook.length) throw new AppError(400, "Those items aren't in that category's book");
         moved = (
           await XenKitchenItem.updateMany(
             { _id: { $in: inBook } },
@@ -855,8 +828,7 @@ module.exports = function (app: any) {
     authenticateToken,
     validateParams(xenKitchenIdParamSchema),
     handle(async (req, res) => {
-      const loaded = await loadItem(req, res, "view");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "view");
       await respondItem(res, loaded.item, loaded.book, callerId(req));
     }),
   );
@@ -868,12 +840,11 @@ module.exports = function (app: any) {
     validate(xenKitchenItemSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const { item, book } = loaded;
       const body = xenKitchenItemSchema.parse(req.body);
       if (!(await categoryBelongs(book._id, body.category_id)))
-        return fail(res, 400, "That category isn't in this book");
+        throw new AppError(400, "That category isn't in this book");
       item.set({ ...itemFieldsFromBody(body), updated_by: uid });
       if (body.image_order) {
         const rank = new Map(body.image_order.map((id, i) => [id, i]));
@@ -892,8 +863,7 @@ module.exports = function (app: any) {
     authenticateToken,
     validateParams(xenKitchenIdParamSchema),
     handle(async (req, res) => {
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const images = loaded.item.images.map((i: any) => ({ file_id: i.file_id, gcs_path: i.gcs_path }));
       await loaded.item.deleteOne();
       await removeKitchenPhotos(images);
@@ -905,8 +875,7 @@ module.exports = function (app: any) {
   const setFavorite = (on: boolean) =>
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "view");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "view");
       await XenKitchenItem.updateOne(
         { _id: loaded.item._id },
         on ? { $addToSet: { favorited_by: uid } } : { $pull: { favorited_by: uid } },
@@ -933,8 +902,7 @@ module.exports = function (app: any) {
     validateParams(xenKitchenIdParamSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const { item, book } = loaded;
       const copy = await cloneItem(
         item.toObject(),
@@ -955,10 +923,8 @@ module.exports = function (app: any) {
     validate(copyToBookSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "view");
-      if (!loaded) return;
-      const target = await loadBook(req, res, req.body.book_id, "edit");
-      if (!target) return;
+      const loaded = await loadItem(req, "view");
+      const target = await loadBook(req, req.body.book_id, "edit");
       const src = loaded.item.toObject();
       const copy = await cloneItem(src, target._id, uid, await targetCategory(src, target._id, req.body.category_id));
       await respondItem(res, copy, target.toObject(), uid);
@@ -972,10 +938,8 @@ module.exports = function (app: any) {
     validate(xenKitchenMoveSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
-      const target = await loadBook(req, res, req.body.book_id, "edit");
-      if (!target) return;
+      const loaded = await loadItem(req, "edit");
+      const target = await loadBook(req, req.body.book_id, "edit");
       const { item } = loaded;
       if (String(item.book_id) !== String(target._id)) {
         item.set("category_id", await targetCategory(item, target._id, req.body.category_id));
@@ -1021,11 +985,10 @@ module.exports = function (app: any) {
     validate(xenKitchenImportUrlSchema),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const { item, book } = loaded;
       if (item.images.length >= MAX_XENKITCHEN_IMAGES) {
-        return fail(res, 400, `Up to ${MAX_XENKITCHEN_IMAGES} photos per item`);
+        throw new AppError(400, `Up to ${MAX_XENKITCHEN_IMAGES} photos per item`);
       }
       const { url } = xenKitchenImportUrlSchema.parse(req.body);
       const fetched = await fetchPublicImage(url);
@@ -1062,13 +1025,12 @@ module.exports = function (app: any) {
     uploadXenKitchenImages.array("images", MAX_XENKITCHEN_IMAGES),
     handle(async (req, res) => {
       const uid = callerId(req);
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const { item, book } = loaded;
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-      if (files.length === 0) return fail(res, 400, "No images provided");
+      if (files.length === 0) throw new AppError(400, "No images provided");
       if (item.images.length + files.length > MAX_XENKITCHEN_IMAGES) {
-        return fail(res, 400, `Up to ${MAX_XENKITCHEN_IMAGES} photos per item`);
+        throw new AppError(400, `Up to ${MAX_XENKITCHEN_IMAGES} photos per item`);
       }
 
       // Resize them all first, so one unreadable file fails the request before anything is stored.
@@ -1103,11 +1065,10 @@ module.exports = function (app: any) {
     authenticateToken,
     validateParams(xenKitchenImageParamSchema),
     handle(async (req, res) => {
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const { item, book } = loaded;
       const img = item.images.id(req.params.imageId);
-      if (!img) return fail(res, 404, "Photo not found");
+      if (!img) throw new AppError(404, "Photo not found");
       const removed = { file_id: img.file_id, gcs_path: img.gcs_path };
       img.deleteOne();
       await item.save();
@@ -1120,8 +1081,7 @@ module.exports = function (app: any) {
 
   const itemShare = (action: "enable" | "disable" | "rotate") =>
     handle(async (req, res) => {
-      const loaded = await loadItem(req, res, "edit");
-      if (!loaded) return;
+      const loaded = await loadItem(req, "edit");
       const { item, book } = loaded;
       // Turning sharing back on restores the same link; "reset" is how old links get revoked.
       if (action === "rotate" || !item.share?.token)
