@@ -32,6 +32,11 @@ export const SPACE_PERMISSIONS = [
 ] as const;
 export type SpacePermission = (typeof SPACE_PERMISSIONS)[number];
 
+/** The permissions a channel can allow or deny for a role. Running the space itself is never a channel matter. */
+export const CHANNEL_PERMISSIONS: readonly SpacePermission[] = SPACE_PERMISSIONS.filter(
+  (p) => p !== "manageSpace" && p !== "manageRoles" && p !== "manageChannels",
+);
+
 /** What every member gets before any other role is added. */
 export const DEFAULT_EVERYONE_PERMISSIONS: readonly SpacePermission[] = ["readMessages", "sendMessages", "invite"];
 

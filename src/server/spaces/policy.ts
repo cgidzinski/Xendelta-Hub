@@ -8,7 +8,7 @@
 // Resolution order for a channel: owner → the channel's override for `everyone` → the channel's overrides for the
 // person's other roles (every deny, then every allow). A deny from any of those roles wins over the base permissions.
 import type { ChannelOverride, SpacePermission, SpaceRole } from "@shared/spaces";
-import { SPACE_PERMISSIONS } from "@shared/spaces";
+import { CHANNEL_PERMISSIONS, SPACE_PERMISSIONS } from "@shared/spaces";
 
 export interface SpaceRoleLike {
   _id: unknown;
@@ -28,10 +28,7 @@ export interface SpaceLike {
 
 const idOf = (v: unknown) => String(v);
 const ALL: ReadonlySet<SpacePermission> = new Set(SPACE_PERMISSIONS);
-/** The permissions a channel can allow or deny. Managing the space itself is never a channel matter. */
-const CHANNEL_SCOPED: ReadonlySet<SpacePermission> = new Set(
-  SPACE_PERMISSIONS.filter((p) => p !== "manageSpace" && p !== "manageRoles" && p !== "manageChannels"),
-);
+const CHANNEL_SCOPED: ReadonlySet<SpacePermission> = new Set(CHANNEL_PERMISSIONS);
 
 export const memberOf = (space: SpaceLike, userId: string) => space.members.find((m) => m.user_id === userId) ?? null;
 export const isSpaceMember = (space: SpaceLike, userId: string) => memberOf(space, userId) !== null;
@@ -88,4 +85,30 @@ export function hasPermission(
   overrides?: readonly ChannelOverride[],
 ): boolean {
   return channelPermissions(space, userId, overrides).has(permission);
+}
+
+// ---- Roles: who may change which ----------------------------------------------------------------------------------
+// Roles are ranked by `position` (higher is above). Someone with manage roles may only change roles ranked below their
+// own highest role, and may only hand out permissions they hold themselves, so nobody can promote themselves past
+// their own rank. The owner is above every rank.
+
+/** How high a person ranks: the owner above everything, others by their highest role (0 with none). */
+export function rankOf(space: SpaceLike, userId: string): number {
+  const member = memberOf(space, userId);
+  if (!member) return -1;
+  if (member.role === "owner") return Infinity;
+  const held = new Set((member.roleIds ?? []).map(String));
+  return Math.max(0, ...space.roles.filter((r) => held.has(idOf(r._id))).map((r) => r.position ?? 0));
+}
+
+/** May the person edit this role (its name, colour, permissions, place) or give it to people and take it away? */
+export function canManageRole(space: SpaceLike, actor: string, role: SpaceRoleLike): boolean {
+  if (isSpaceOwner(space, actor)) return true;
+  return hasPermission(space, actor, "manageRoles") && !role.everyone && (role.position ?? 0) < rankOf(space, actor);
+}
+
+/** May the person give these permissions to a role? Only ones they hold themselves (the owner holds all). */
+export function canGrantPermissions(space: SpaceLike, actor: string, permissions: readonly string[]): boolean {
+  const mine = spacePermissions(space, actor);
+  return permissions.every((p) => (mine as ReadonlySet<string>).has(p));
 }
