@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Box,
+  Button,
   Card,
   Checkbox,
   Chip,
@@ -22,6 +23,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import AcUnitIcon from "@mui/icons-material/AcUnit";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import SoupKitchenOutlinedIcon from "@mui/icons-material/SoupKitchenOutlined";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { useWakeLock } from "../../../../hooks/useWakeLock";
 import { COOK_METHOD_LABELS, formatMinuteRange, formatMinutes, scaleQuantity } from "@shared/xenkitchen/kitchen";
@@ -32,6 +34,7 @@ import type {
   KitchenStep,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
+import CookMode from "../cook/CookMode";
 
 interface ItemViewProps {
   item: KitchenItem;
@@ -308,6 +311,7 @@ function RecipeSection({
   useEffect(() => setServings(baseServings), [baseServings]);
   const factor = baseServings > 0 && servings > 0 ? servings / baseServings : 1;
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [cooking, setCooking] = useState(false);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
   const toggle = (set: Set<number>, i: number) => {
     const n = new Set(set);
@@ -464,6 +468,15 @@ function RecipeSection({
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 Steps
               </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<SoupKitchenOutlinedIcon />}
+                onClick={() => setCooking(true)}
+                sx={{ mr: 1 }}
+              >
+                Step by step
+              </Button>
               <Tooltip title="Keeps your screen awake and makes steps easier to read">
                 <FormControlLabel
                   control={<Switch size="small" checked={cookMode} onChange={(e) => onCookMode(e.target.checked)} />}
@@ -488,6 +501,22 @@ function RecipeSection({
           </Box>
         )}
       </Box>
+      <CookMode
+        open={cooking}
+        onClose={() => setCooking(false)}
+        title={item.title || "Recipe"}
+        accent={accent}
+        steps={item.steps.map((st) => ({ text: st.text, timer_minutes: st.timer_minutes }))}
+        ingredients={item.ingredients.map((ing, key) => ({
+          key,
+          section: ing.section || "",
+          text:
+            [scaleQuantity(ing.quantity, factor), ing.unit, ing.name].filter(Boolean).join(" ") +
+            (ing.note ? `, ${ing.note}` : ""),
+        }))}
+        checked={checked}
+        onToggleIngredient={(key) => setChecked((set) => toggle(set, key))}
+      />
     </>
   );
 }
