@@ -50,7 +50,11 @@ export async function startTestApp(routes: Array<() => Promise<any>>): Promise<T
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     res
       .status(err.status || 500)
-      .json({ message: err.message, stack: String(err.stack).split(String.fromCharCode(10)).slice(0, 4) });
+      .json({
+        ...err.extra,
+        message: err.message,
+        stack: String(err.stack).split(String.fromCharCode(10)).slice(0, 4),
+      });
   });
 
   return {
