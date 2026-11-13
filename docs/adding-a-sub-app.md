@@ -256,7 +256,7 @@ Two files, both written for the people who use the hub, not for developers.
   an app in `APPS_REGISTRY` has no entry.
 - **`src/shared/changelog.ts` (`CHANGELOG`), every time.** Every feature you add, and every change a person would
   notice (a fix included), gets an entry **in the same PR**: newest first, `date` (today), `app` (the app key, or
-  `"hub"`), a short `title` and optionally one sentence of `detail`. Write "Added…", "You can now…" or "Fixed…". No PR
+  `"hub"`) and a short `title` (one line: the page shows only that). Write "Added…", "You can now…" or "Fixed…". No PR
   numbers, file names or technical words; a test rejects them. A change nobody can see (a refactor, a test) gets no entry.
   Also add a tip to the app's `APP_GUIDE` when the feature is worth discovering.
 

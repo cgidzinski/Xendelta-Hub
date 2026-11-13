@@ -1,14 +1,16 @@
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { Box, Button, Card, Stack, Typography } from "@mui/material";
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
 import { useNavigate } from "react-router-dom";
 import { pickTips, type GuideApp } from "@shared/appGuide";
 import { APPS_REGISTRY } from "../../../../constants/apps";
+import { cardSx } from "../../../../components/ui/surfaceStyles";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Ideas for what to try, shown when the activity feed has nothing in it. The same three for a whole day (so they don't jump
- * around), different ones tomorrow. With an app filter on, tips for just that app.
+ * Ideas for what to try, shown when the activity feed has nothing in it: one card per tip. The same three for a whole day
+ * (so they don't jump around), different ones tomorrow. With an app filter on, tips for just that app.
  */
 export default function DidYouKnow({ app }: { app?: string }) {
   const navigate = useNavigate();
@@ -16,26 +18,25 @@ export default function DidYouKnow({ app }: { app?: string }) {
   const tips = pickTips(today(), 3, known);
   if (tips.length === 0) return null;
   return (
-    <Box sx={{ px: 2, pb: 2.5 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-        <LightbulbOutlinedIcon fontSize="small" color="primary" />
-        <Typography variant="subtitle2">Did you know?</Typography>
-      </Stack>
+    <Box sx={{ mt: 2 }}>
+      <SectionLabel>Did you know?</SectionLabel>
       <Stack spacing={1.25}>
         {tips.map((tip) => (
-          <Typography key={`${tip.app}:${tip.text}`} variant="body2" color="text.secondary">
-            {tip.text}
-            {tip.link && (
-              <Button size="small" onClick={() => navigate(tip.link!)} sx={{ ml: 0.5, minWidth: 0 }}>
-                Try it
-              </Button>
-            )}
-          </Typography>
+          <Card key={`${tip.app}:${tip.text}`} variant="outlined" sx={{ ...cardSx, p: 1.75 }}>
+            <Stack direction="row" spacing={1.5} alignItems="flex-start">
+              <LightbulbOutlinedIcon fontSize="small" color="primary" sx={{ mt: 0.25 }} />
+              <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
+                {tip.text}
+              </Typography>
+              {tip.link && (
+                <Button size="small" onClick={() => navigate(tip.link!)} sx={{ flexShrink: 0 }}>
+                  Try it
+                </Button>
+              )}
+            </Stack>
+          </Card>
         ))}
       </Stack>
-      <Button size="small" onClick={() => navigate("/internal/whats-new")} sx={{ mt: 1.5 }}>
-        See all apps and what's new
-      </Button>
     </Box>
   );
 }

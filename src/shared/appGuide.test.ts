@@ -55,7 +55,7 @@ describe("the changelog", () => {
   });
   it("is written for people: short, no PR numbers, no file names or code words", () => {
     for (const entry of CHANGELOG) {
-      const text = `${entry.title} ${entry.detail ?? ""}`;
+      const text = entry.title;
       expect(entry.title.length, entry.title).toBeLessThan(100);
       expect(text, entry.title).not.toMatch(/#\d{2,}|\.tsx?\b|\bAPI\b|\bendpoint\b|\bmigration\b|\brefactor/i);
     }

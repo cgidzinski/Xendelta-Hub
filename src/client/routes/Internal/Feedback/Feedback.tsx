@@ -1,33 +1,17 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Alert, Button, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
-import {
-  FEEDBACK_KINDS,
-  FEEDBACK_KIND_LABEL,
-  FEEDBACK_MAX_LENGTH,
-  FEEDBACK_MIN_LENGTH,
-  type FeedbackKind,
-} from "@shared/feedback";
+import { useNavigate } from "react-router-dom";
+import { Alert, Button, Stack, TextField } from "@mui/material";
+import { FEEDBACK_MAX_LENGTH, FEEDBACK_MIN_LENGTH } from "@shared/feedback";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import { useTitle } from "../../../hooks/useTitle";
 import { useSendFeedback } from "../../../hooks/feedback/useSendFeedback";
-import { pageFromParam } from "./feedbackPage";
 
-const PLACEHOLDER: Record<FeedbackKind, string> = {
-  idea: "I'd love it if…",
-  bug: "What happened, and what did you expect?",
-  other: "Tell us anything",
-};
-
-/** Send an idea, a problem or anything else to the people who run the hub. Linked from the sidebar. */
+/** Send an idea, a problem or anything else to the people who run the hub. Linked from Home. */
 export default function Feedback() {
   useTitle("Send feedback");
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const page = pageFromParam(params.get("from"));
   const send = useSendFeedback();
-  const [kind, setKind] = useState<FeedbackKind>("idea");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
 
@@ -62,28 +46,10 @@ export default function Feedback() {
 
   return (
     <PageContainer width="narrow">
-      <PageHeader
-        title="Send feedback"
-        subtitle="An idea, something that's wrong, or anything else. It goes to the people who run the hub."
-      />
+      <PageHeader title="Send feedback" subtitle="An idea, something that's wrong, or anything else." />
       <Stack spacing={2}>
-        <ToggleButtonGroup
-          exclusive
-          fullWidth
-          size="small"
-          color="primary"
-          value={kind}
-          onChange={(_, v: FeedbackKind | null) => v && setKind(v)}
-        >
-          {FEEDBACK_KINDS.map((k) => (
-            <ToggleButton key={k} value={k}>
-              {FEEDBACK_KIND_LABEL[k]}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
         <TextField
           label="Your message"
-          placeholder={PLACEHOLDER[kind]}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           multiline
@@ -93,18 +59,13 @@ export default function Feedback() {
           slotProps={{ htmlInput: { maxLength: FEEDBACK_MAX_LENGTH } }}
           helperText={`${trimmed.length} / ${FEEDBACK_MAX_LENGTH}`}
         />
-        {page && (
-          <Typography variant="caption" color="text.secondary">
-            Sent from {page}
-          </Typography>
-        )}
         {send.isError && (
           <Alert severity="error">{(send.error as Error).message || "Couldn't send that. Try again."}</Alert>
         )}
         <Button
           variant="contained"
           disabled={!ok || send.isPending}
-          onClick={() => send.mutate({ kind, message: trimmed, page }, { onSuccess: () => setSent(true) })}
+          onClick={() => send.mutate({ message: trimmed }, { onSuccess: () => setSent(true) })}
           sx={{ alignSelf: "flex-start" }}
         >
           {send.isPending ? "Sending…" : "Send"}
