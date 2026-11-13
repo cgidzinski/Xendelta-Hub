@@ -43,8 +43,7 @@ export function registerInviteRoutes(app: Application) {
       const community = await loadCommunity(req.params.communityId as string, me);
       needInvite(community, me);
       const { userIds } = inviteCommunitySchema.parse(req.body);
-      if (userIds.some((id) => !can(me, id, "addToSpace")))
-        throw new AppError(403, "You can't invite that person");
+      if (userIds.some((id) => !can(me, id, "addToSpace"))) throw new AppError(403, "You can't invite that person");
 
       const users = await User.find({ _id: { $in: userIds } }, "_id")
         .lean()
