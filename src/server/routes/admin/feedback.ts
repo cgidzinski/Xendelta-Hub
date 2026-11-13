@@ -32,8 +32,8 @@ const serialize = (row: any): AdminFeedback => ({
 export function registerAdminFeedbackRoutes(app: express.Application) {
   app.get("/api/admin/feedback", ...admin, validateQuery(adminFeedbackQuerySchema), async (req, res) => {
     const { status, page = 1, pageSize = 25 } = adminFeedbackQuerySchema.parse(req.query);
-    // Archived items stay out of the default view; pick the Archived filter to see them.
-    const filter = status ? { status } : { status: { $ne: "archived" } };
+    // The default view is what still needs a decision; Done and Archived have their own filters.
+    const filter = status ? { status } : { status: { $in: ["new", "seen"] } };
     const [total, rows, newCount] = await Promise.all([
       Feedback.countDocuments(filter),
       Feedback.find(filter)
@@ -71,9 +71,9 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
     },
   );
 
-  // Resolve a report: tell the person what happened, with gems if you want to thank them. The message (and the gems) reach
-  // them as a notification. Paying gems is once per feedback: the claim is atomic, so two admins (or a double click)
-  // can't pay twice. A paid report is archived; a message-only reply marks it done.
+  // Resolve a report with one action. The person hears about it only if the admin chose to: a message, gems (which
+  // always come with a message), or both. With neither, it is closed quietly. Gems are paid once per feedback: the
+  // claim is atomic, so two admins (or a double click) can't pay twice. A paid report is archived, anything else is done.
   app.post(
     "/api/admin/feedback/:id/resolve",
     ...admin,
@@ -119,19 +119,23 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
         detail:
           gems > 0
             ? `Rewarded ${gemsText} gems for feedback from ${claimed.username}`
-            : `Replied to feedback from ${claimed.username}`,
+            : message
+              ? `Replied to feedback from ${claimed.username}`
+              : `Resolved feedback from ${claimed.username} without telling them`,
         meta: { gems, balance, message },
       });
-      await notify(String(claimed.user_id), {
-        title: gems > 0 ? `You earned ${gemsText} gems` : "About your feedback",
-        message,
-        link: gems > 0 ? "/internal/shop" : "/internal",
-        icon: "announcement",
-      });
+      if (gems > 0 || message) {
+        await notify(String(claimed.user_id), {
+          title: gems > 0 ? `You earned ${gemsText} gems` : "About your feedback",
+          message,
+          link: gems > 0 ? "/internal/shop" : "/internal",
+          icon: "announcement",
+        });
+      }
 
       res.json({
         status: true,
-        message: gems > 0 ? `Rewarded ${gemsText} gems` : "Reply sent",
+        message: gems > 0 ? `Rewarded ${gemsText} gems` : message ? "Reply sent" : "Resolved",
         data: { feedback: serialize(claimed.toObject()) },
       });
     },
