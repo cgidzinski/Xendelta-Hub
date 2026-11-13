@@ -4,10 +4,12 @@ import {
   Badge,
   Box,
   Button,
+  Card,
   Chip,
   Fab,
   IconButton,
   InputAdornment,
+  ListItemIcon,
   Menu,
   MenuItem,
   Paper,
@@ -18,12 +20,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
+import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import CloseIcon from "@mui/icons-material/Close";
 import SettingsIcon from "@mui/icons-material/Settings";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -37,6 +40,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import EmptyState from "../../../components/ui/EmptyState";
+import { cardSx } from "../../../components/ui/surfaceStyles";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import {
   COOK_METHOD_LABELS,
@@ -60,7 +64,10 @@ import {
   type KitchenItem,
 } from "../../../hooks/xenkitchen/useKitchen";
 import ItemCard from "./components/ItemCard";
-import FilterPanel, { SORT_LABELS } from "./components/FilterPanel";
+import CategoryPicker from "./components/CategoryPicker";
+import SortMenu from "./components/SortMenu";
+import { categoryOptions } from "./components/categoryOptions";
+import FilterPanel from "./components/FilterPanel";
 import CategoryDialog from "./components/CategoryDialog";
 import ItemEditor from "./components/ItemEditor";
 import { CategoryIconView } from "./components/kitchenIcons";
@@ -80,7 +87,6 @@ function bookSubtitle(b: KitchenBook): string {
 
 export default function XenKitchen() {
   useTitle("XenKitchen");
-  const theme = useTheme();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
@@ -135,6 +141,7 @@ export default function XenKitchen() {
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   const filterBtn = useRef<HTMLButtonElement>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [bookMenu, setBookMenu] = useState<HTMLElement | null>(null);
   const [bookDialog, setBookDialog] = useState<null | "general" | "people">(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -174,9 +181,6 @@ export default function XenKitchen() {
   };
 
   const activeCategory = categories.find((c) => c._id === filters.category);
-  // Uncategorised items use the recipe layout, so they count (and filter) as recipes.
-  const layoutCount = (l: KitchenLayout) =>
-    categories.filter((c) => c.layout === l).reduce((n, c) => n + c.count, 0) + (l === "recipe" ? uncategorised : 0);
   const visibleCategories = filters.layout ? categories.filter((c) => c.layout === filters.layout) : categories;
   const setLayout = (layout: KitchenLayout | "") => {
     // A category from the other type would make the list empty, so drop it.
@@ -195,7 +199,15 @@ export default function XenKitchen() {
   const anyFilter = filterCount > 0 || !!filters.q || !!filters.category || !!filters.layout;
 
   const chip = (key: string, label: React.ReactNode, onDelete: () => void) => (
-    <Chip key={key} label={label} size="small" onDelete={onDelete} />
+    <Chip
+      key={key}
+      label={label}
+      size="small"
+      color="primary"
+      variant="outlined"
+      onDelete={onDelete}
+      sx={(t) => ({ height: 28, fontWeight: 500, bgcolor: alpha(t.palette.primary.main, 0.08) })}
+    />
   );
   const activeChips = [
     filters.layout &&
@@ -222,37 +234,7 @@ export default function XenKitchen() {
     ),
   ].filter(Boolean);
 
-  const categoryChip = (id: string, label: string, count: number, color?: string, icon?: string) => {
-    const active = filters.category === id;
-    const c = color ?? theme.palette.text.primary;
-    return (
-      <Chip
-        key={id || "all"}
-        onClick={() => setFilters({ ...filters, category: active && id ? "" : id })}
-        icon={icon ? <CategoryIconView icon={icon} sx={{ fontSize: 18 }} /> : undefined}
-        label={
-          <span>
-            {label}{" "}
-            <Box component="span" sx={{ opacity: 0.6, ml: 0.25 }}>
-              {count}
-            </Box>
-          </span>
-        }
-        sx={{
-          flexShrink: 0,
-          height: { xs: 32, sm: 36 },
-          borderRadius: 5,
-          px: 0.5,
-          fontWeight: 600,
-          border: "1px solid",
-          borderColor: active ? c : "divider",
-          bgcolor: active ? alpha(c, 0.18) : "transparent",
-          "& .MuiChip-icon": { color: c },
-          "&:hover": { bgcolor: alpha(c, 0.12) },
-        }}
-      />
-    );
-  };
+  const options = categoryOptions({ categories, total, uncategorised, layout: filters.layout });
 
   return (
     <PageContainer>
@@ -281,29 +263,12 @@ export default function XenKitchen() {
             variant="outlined"
             aria-label="Meal plan"
             startIcon={<CalendarMonthIcon sx={{ mr: { xs: -1, sm: 0 } }} />}
-            sx={{ minWidth: { xs: 44, sm: 64 }, px: { xs: 1.5, sm: 2 } }}
+            sx={{ minWidth: { xs: 44, sm: 64 }, height: { xs: 44, sm: 40 }, px: { xs: 1.5, sm: 2 } }}
           >
             <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
               Meal plan
             </Box>
           </Button>
-          {currentBook && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={<PersonAddIcon />}
-                onClick={() => setBookDialog("people")}
-                sx={{ display: { xs: "none", sm: "inline-flex" } }}
-              >
-                Share
-              </Button>
-              <Tooltip title="Book settings">
-                <IconButton onClick={() => setBookDialog("general")} aria-label="Book settings">
-                  <MoreHorizIcon />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
           {canAdd && (
             <Button
               variant="contained"
@@ -314,101 +279,148 @@ export default function XenKitchen() {
               New
             </Button>
           )}
-        </Stack>
-      </Stack>
-
-      {/* Category strip — categories belong to a book, so it shows inside one */}
-      {!allView && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: { xs: 1, sm: 2 } }}>
-          <Box sx={{ display: "flex", gap: 1, overflowX: "auto", flex: 1, pb: 0.5, scrollbarWidth: "thin" }}>
-            {catsLoading ? (
-              Array.from({ length: 5 }, (_, i) => (
-                <Skeleton key={i} variant="rounded" width={100} height={36} sx={{ borderRadius: 5, flexShrink: 0 }} />
-              ))
-            ) : (
-              <>
-                {categoryChip("", "All", filters.layout ? layoutCount(filters.layout) : total)}
-                {visibleCategories.map((c) => categoryChip(c._id, c.name, c.count, c.color, c.icon))}
-                {uncategorised > 0 &&
-                  filters.layout !== "instructions" &&
-                  categoryChip("none", "Uncategorised", uncategorised)}
-              </>
-            )}
-          </Box>
-          {currentBook && canEditBook(currentBook.my_role) && (
-            <Tooltip title="Manage categories">
-              <IconButton onClick={() => setManageOpen(true)} aria-label="Manage categories">
-                <SettingsIcon />
-              </IconButton>
-            </Tooltip>
+          {currentBook && (
+            <>
+              <Tooltip title="Share, people and settings">
+                <IconButton
+                  aria-label="Book options"
+                  aria-haspopup="menu"
+                  onClick={(e) => setBookMenu(e.currentTarget)}
+                  sx={{ width: 44, height: 44 }}
+                >
+                  <MoreHorizIcon />
+                </IconButton>
+              </Tooltip>
+              <Menu anchorEl={bookMenu} open={!!bookMenu} onClose={() => setBookMenu(null)}>
+                <MenuItem
+                  onClick={() => {
+                    setBookMenu(null);
+                    setBookDialog("people");
+                  }}
+                >
+                  <ListItemIcon>
+                    <PersonAddIcon fontSize="small" />
+                  </ListItemIcon>
+                  Share and people
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setBookMenu(null);
+                    setBookDialog("general");
+                  }}
+                >
+                  <ListItemIcon>
+                    <SettingsIcon fontSize="small" />
+                  </ListItemIcon>
+                  Book settings
+                </MenuItem>
+              </Menu>
+            </>
           )}
         </Stack>
-      )}
-
-      {/* Search + filters */}
-      <Stack direction="row" spacing={1} sx={{ mb: { xs: 1, sm: 1.5 } }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder={activeCategory ? `Search ${activeCategory.name}` : "Search titles, ingredients, tags…"}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-              endAdornment: search ? (
-                <InputAdornment position="end">
-                  <IconButton size="small" aria-label="Clear search" onClick={() => setSearch("")}>
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : undefined,
-            },
-          }}
-        />
-        <Badge badgeContent={filterCount} color="primary">
-          <Button
-            ref={filterBtn}
-            variant="outlined"
-            aria-label="Filters"
-            startIcon={<TuneIcon sx={{ mr: { xs: -1, sm: 0 } }} />}
-            onClick={() => setFilterAnchor(filterBtn.current)}
-            sx={{ whiteSpace: "nowrap", height: 40, minWidth: { xs: 44, sm: 64 }, px: { xs: 1.5, sm: 2 } }}
-          >
-            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
-              Filters
-            </Box>
-          </Button>
-        </Badge>
       </Stack>
 
+      {/* Browse: the book's categories, then search, filters and sort, in one place */}
+      <Card
+        variant="outlined"
+        sx={{ ...cardSx, p: { xs: 1.5, sm: 2 }, mb: 2, display: "flex", flexDirection: "column", gap: 1.5 }}
+      >
+        {allView ? (
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 24 }}>
+            <InfoOutlinedIcon fontSize="small" color="action" />
+            <Typography variant="body2" color="text.secondary">
+              Categories belong to a book. Pick a book to browse by category.
+            </Typography>
+          </Stack>
+        ) : (
+          <CategoryPicker
+            options={options}
+            value={filters.category}
+            onChange={(id) => setFilters({ ...filters, category: id })}
+            loading={catsLoading}
+            onManage={currentBook && canEditBook(currentBook.my_role) ? () => setManageOpen(true) : undefined}
+          />
+        )}
+
+        <Stack direction="row" spacing={1}>
+          <TextField
+            fullWidth
+            placeholder={activeCategory ? `Search ${activeCategory.name}` : "Search titles, ingredients, tags…"}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            slotProps={{
+              htmlInput: { "aria-label": "Search" },
+              input: {
+                sx: { height: 44 },
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: search ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" aria-label="Clear search" onClick={() => setSearch("")}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
+              },
+            }}
+          />
+          <Badge badgeContent={filterCount} color="primary">
+            <Button
+              ref={filterBtn}
+              variant="outlined"
+              color="inherit"
+              aria-label="Filters"
+              startIcon={<TuneIcon sx={{ mr: { xs: -1, sm: 0 } }} />}
+              onClick={() => setFilterAnchor(filterBtn.current)}
+              sx={{
+                whiteSpace: "nowrap",
+                height: 44,
+                minWidth: { xs: 44, sm: 64 },
+                px: { xs: 1.5, sm: 2 },
+                borderColor: "divider",
+              }}
+            >
+              <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                Filters
+              </Box>
+            </Button>
+          </Badge>
+          <Box sx={{ display: { xs: "none", sm: "block" } }}>
+            <SortMenu value={filters.sort} onChange={(sort) => setFilters({ ...filters, sort })} />
+          </Box>
+        </Stack>
+      </Card>
+
+      {/* Results: the count, and the active filters only when there are some */}
       <Stack
         direction="row"
         spacing={1}
         alignItems="center"
         sx={{
-          mb: { xs: 1, sm: 2 },
-          minHeight: 28,
-          // One scrolling line instead of a wrapping pile of chips.
-          overflowX: "auto",
-          flexWrap: "nowrap",
+          mb: 2,
+          minHeight: 32,
+          // One scrolling line on a phone instead of a wrapping pile of chips.
+          overflowX: { xs: "auto", sm: "visible" },
+          flexWrap: { xs: "nowrap", sm: "wrap" },
+          rowGap: 1,
           scrollbarWidth: "none",
           "&::-webkit-scrollbar": { display: "none" },
           "& > *": { flexShrink: 0 },
         }}
       >
-        <Typography variant="body2" color="text.secondary" noWrap>
-          {isLoading ? " " : `${items.length} ${items.length === 1 ? "item" : "items"}`} · {SORT_LABELS[filters.sort]}
+        <Typography variant="body2" color="text.secondary" noWrap sx={{ mr: 0.5 }}>
+          <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>
+            {isLoading ? " " : `${items.length} ${items.length === 1 ? "item" : "items"}`}
+          </Box>
+          {currentBook ? ` in ${currentBook.name}` : " in all books"}
         </Typography>
         {activeChips}
         {activeChips.length > 0 && (
           <Button
             size="small"
-            color="inherit"
             onClick={() =>
               setFilters({
                 ...filters,
@@ -515,7 +527,7 @@ export default function XenKitchen() {
             zIndex: 1200,
             px: 2,
             py: 1,
-            borderRadius: 5,
+            borderRadius: 3,
             display: "flex",
             alignItems: "center",
             gap: 1,
@@ -526,7 +538,7 @@ export default function XenKitchen() {
           </Typography>
           {!allView && (
             <Button size="small" startIcon={<DriveFileMoveIcon />} onClick={(e) => setMoveAnchor(e.currentTarget)}>
-              Category
+              Move to category
             </Button>
           )}
           <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={deleteSelected}>
