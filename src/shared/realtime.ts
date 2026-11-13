@@ -19,6 +19,9 @@ export interface RealtimeEvents {
   // Spaces: the space changed (renamed, members, roles). `removed` means you are out of it or it was deleted.
   "space:updated": { spaceId: string; removed?: boolean };
 
+  /** A channel in the space was added, changed, reordered or deleted. */
+  "space:channels": { spaceId: string };
+
   // Calls: names reserved for the calls feature, not sent yet.
   "call:started": { conversationId: string; startedBy: string };
   "call:ended": { conversationId: string };

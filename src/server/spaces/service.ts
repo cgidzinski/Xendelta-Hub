@@ -2,6 +2,7 @@ import { Space, type SpaceDocument } from "../models/space";
 import { AppError } from "../utils/http";
 import { loadPeople } from "../chat/service";
 import { realtime } from "../realtime";
+import { deleteChannelsOf } from "./channels";
 import { spacePermissions } from "./policy";
 import type { ChatPerson } from "@shared/chat";
 import type { Space as SpaceWire } from "@shared/spaces";
@@ -62,7 +63,8 @@ export function announceSpace(space: SpaceDocument, removed: string[] = []) {
   if (removed.length > 0) realtime.toUsers(removed, "space:updated", { spaceId: id, removed: true });
 }
 
-/** Delete a space. Its channels and their messages are deleted with it once channels exist (see #308). */
+/** Delete a space with its channels and their messages. */
 export async function deleteSpace(space: SpaceDocument): Promise<void> {
+  await deleteChannelsOf(String(space._id));
   await Space.deleteOne({ _id: space._id }).exec();
 }

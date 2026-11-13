@@ -1,5 +1,6 @@
 import mongoose, { Schema, type HydratedDocument, type InferSchemaType } from "mongoose";
 import { memberFields } from "../utils/membership";
+import { SPACE_PERMISSIONS } from "@shared/spaces";
 
 // A conversation: everything is one, and a conversation with two members is what people call a DM. The messages are
 // not stored here (see models/message.ts), so a send never rewrites this document and history can be paged.
@@ -19,10 +20,30 @@ const chatMemberSchema = new Schema(
   { _id: false },
 );
 
+// A channel's allow/deny list for one of the space's roles (shared/spaces.ts ChannelOverride).
+const channelOverrideSchema = new Schema(
+  {
+    roleId: { type: String, required: true },
+    allow: [{ type: String, enum: SPACE_PERMISSIONS }],
+    deny: [{ type: String, enum: SPACE_PERMISSIONS }],
+  },
+  { _id: false },
+);
+
 const conversationSchema = new Schema(
   {
     name: { type: String }, // empty: the client shows the other members' names
     members: [chatMemberSchema],
+    // A channel of a space (models/space.ts). A DM or group chat has no `spaceId`. A channel has no `members`: who may
+    // read and post comes from the space's roles and this channel's `overrides` (spaces/policy.ts), and each person's
+    // read and mute state is in models/channelState.ts.
+    spaceId: { type: String },
+    channel: {
+      position: { type: Number, default: 0 },
+      category: { type: String, default: "" },
+      topic: { type: String, default: "" },
+    },
+    overrides: [channelOverrideSchema],
     // The member ids sorted and joined (shared/chat.ts rosterKeyOf). Finds "the chat with exactly these people".
     rosterKey: { type: String, required: true },
     // The number of the newest message; each send takes the next one with $inc.
@@ -40,6 +61,8 @@ const conversationSchema = new Schema(
 // "My conversations", newest activity first.
 conversationSchema.index({ "members.user_id": 1, "lastMessage.at": -1 });
 conversationSchema.index({ rosterKey: 1 });
+// "The channels of this space", in order.
+conversationSchema.index({ spaceId: 1, "channel.position": 1 }, { sparse: true });
 
 export type ConversationAttrs = InferSchemaType<typeof conversationSchema>;
 export type ConversationDocument = HydratedDocument<ConversationAttrs>;

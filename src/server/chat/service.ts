@@ -8,6 +8,7 @@ import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { realtime } from "../realtime";
 import { registerDriveSource } from "../utils/driveSources";
 import { sendPushToUser } from "../utils/pushUtils";
+import { unreadChannelCount } from "../spaces/channels";
 import {
   CHAT_PREVIEW_MAX,
   chatTitle,
@@ -283,7 +284,7 @@ export async function deleteChat(conversationId: unknown): Promise<void> {
 
 // ---------- unread ----------
 
-/** How many of the person's conversations have unread messages (muted ones don't count). */
+/** How many of the person's conversations and space channels have unread messages (muted ones don't count). */
 export async function unreadConversationCount(userId: string): Promise<number> {
   const chats = await Conversation.find(
     { "members.user_id": userId, "lastMessage.at": { $exists: true } },
@@ -292,10 +293,11 @@ export async function unreadConversationCount(userId: string): Promise<number> {
     .lean()
     .exec();
   const now = Date.now();
-  return chats.filter((c) => {
+  const chatCount = chats.filter((c) => {
     const me = c.members[0];
     return (c.seq ?? 0) > (me?.lastReadSeq ?? 0) && !isMuted(me, now);
   }).length;
+  return chatCount + (await unreadChannelCount(userId));
 }
 
 export { rosterKeyOf };

@@ -9,6 +9,12 @@ export const SPACE_ROLE_NAME_MAX = 32;
 export const SPACE_MAX_ROLES = 25;
 export const SPACE_MAX_MEMBERS = 500;
 export const SPACE_MAX_SPACES_PER_USER = 50;
+export const SPACE_CHANNEL_NAME_MAX = 50;
+export const SPACE_CHANNEL_TOPIC_MAX = 200;
+export const SPACE_CATEGORY_MAX = 40;
+export const SPACE_MAX_CHANNELS = 100;
+/** The channel every new space starts with. */
+export const DEFAULT_CHANNEL_NAME = "general";
 
 /** What a person can be allowed to do in a space. A role is a list of these. */
 export const SPACE_PERMISSIONS = [
@@ -73,5 +79,26 @@ export interface Space {
   roles: SpaceRoleInfo[];
   /** What the person asking may do across the space (channels can change this for them). */
   permissions: SpacePermission[];
+  createdAt: string;
+}
+
+/** A text channel: a conversation that belongs to a space. Its messages are ordinary chat messages (`seq`, `ChatMessage`). */
+export interface SpaceChannel {
+  _id: string;
+  spaceId: string;
+  name: string;
+  topic: string;
+  /** The heading it sits under in the sidebar; empty for none. */
+  category: string;
+  /** Lower comes first. */
+  position: number;
+  /** The number of the newest message. */
+  seq: number;
+  lastMessage?: { seq: number; from: string | null; preview: string; at: string } | null;
+  /** Messages the caller has not read. */
+  unread: number;
+  muted: boolean;
+  /** Who this channel is closed to, or open only to. Empty means it follows the space's roles. */
+  overrides: ChannelOverride[];
   createdAt: string;
 }

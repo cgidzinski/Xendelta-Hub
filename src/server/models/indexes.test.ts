@@ -41,4 +41,13 @@ describe("model indexes", () => {
     await import("./space.js");
     expect(await indexKeys("Space")).toContain("members.user_id");
   });
+
+  it("channels are indexed by space, and read state is one row per person and channel", async () => {
+    await import("./conversation.js");
+    await import("./channelState.js");
+    expect(await indexKeys("Conversation")).toContain("spaceId,channel.position");
+    expect(await indexKeys("ChannelState")).toContain("userId,conversationId");
+    const unique = (await mongoose.model("ChannelState").collection.indexes()).find((i) => i.unique && i.key.userId);
+    expect(unique?.key).toEqual({ userId: 1, conversationId: 1 });
+  });
 });

@@ -2,6 +2,7 @@ import type { Application, Request, Response } from "express";
 import { authenticateToken } from "../../middleware/auth";
 import { Space } from "../../models/space";
 import { loadPeople } from "../../chat/service";
+import { createChannel } from "../../spaces/channels";
 import { hasPermission, isSpaceOwner } from "../../spaces/policy";
 import { announceSpace, deleteSpace, loadSpace, presentSpace, serializeSpace } from "../../spaces/service";
 import { AppError, callerId } from "../../utils/http";
@@ -12,7 +13,7 @@ import {
   renameSpaceSchema,
   spaceParamSchema,
 } from "../../utils/validation";
-import { DEFAULT_EVERYONE_PERMISSIONS, SPACE_MAX_SPACES_PER_USER } from "@shared/spaces";
+import { DEFAULT_CHANNEL_NAME, DEFAULT_EVERYONE_PERMISSIONS, SPACE_MAX_SPACES_PER_USER } from "@shared/spaces";
 
 const ok = (res: Response, data: unknown) => res.json({ status: true, message: "", data });
 
@@ -36,6 +37,7 @@ export function registerSpaceRoutes(app: Application) {
       members: [{ user_id: me, role: "owner" }],
       roles: [{ name: "everyone", position: 0, everyone: true, permissions: [...DEFAULT_EVERYONE_PERMISSIONS] }],
     });
+    await createChannel(space, { name: DEFAULT_CHANNEL_NAME });
     ok(res, { space: await presentSpace(space, me) });
   });
 
