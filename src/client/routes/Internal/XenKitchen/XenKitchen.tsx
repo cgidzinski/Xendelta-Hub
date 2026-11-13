@@ -240,7 +240,7 @@ export default function XenKitchen() {
         }
         sx={{
           flexShrink: 0,
-          height: 36,
+          height: { xs: 32, sm: 36 },
           borderRadius: 5,
           px: 0.5,
           fontWeight: 600,
@@ -279,9 +279,13 @@ export default function XenKitchen() {
             component={RouterLink}
             to="/internal/xenkitchen/plan"
             variant="outlined"
-            startIcon={<CalendarMonthIcon />}
+            aria-label="Meal plan"
+            startIcon={<CalendarMonthIcon sx={{ mr: { xs: -1, sm: 0 } }} />}
+            sx={{ minWidth: { xs: 44, sm: 64 }, px: { xs: 1.5, sm: 2 } }}
           >
-            Meal plan
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+              Meal plan
+            </Box>
           </Button>
           {currentBook && (
             <>
@@ -315,7 +319,7 @@ export default function XenKitchen() {
 
       {/* Category strip — categories belong to a book, so it shows inside one */}
       {!allView && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: { xs: 1, sm: 2 } }}>
           <Box sx={{ display: "flex", gap: 1, overflowX: "auto", flex: 1, pb: 0.5, scrollbarWidth: "thin" }}>
             {catsLoading ? (
               Array.from({ length: 5 }, (_, i) => (
@@ -342,7 +346,7 @@ export default function XenKitchen() {
       )}
 
       {/* Search + filters */}
-      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+      <Stack direction="row" spacing={1} sx={{ mb: { xs: 1, sm: 1.5 } }}>
         <TextField
           fullWidth
           size="small"
@@ -370,17 +374,34 @@ export default function XenKitchen() {
           <Button
             ref={filterBtn}
             variant="outlined"
-            startIcon={<TuneIcon />}
+            aria-label="Filters"
+            startIcon={<TuneIcon sx={{ mr: { xs: -1, sm: 0 } }} />}
             onClick={() => setFilterAnchor(filterBtn.current)}
-            sx={{ whiteSpace: "nowrap", height: 40 }}
+            sx={{ whiteSpace: "nowrap", height: 40, minWidth: { xs: 44, sm: 64 }, px: { xs: 1.5, sm: 2 } }}
           >
-            Filters
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+              Filters
+            </Box>
           </Button>
         </Badge>
       </Stack>
 
-      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center" sx={{ mb: 2, minHeight: 24 }}>
-        <Typography variant="body2" color="text.secondary">
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{
+          mb: { xs: 1, sm: 2 },
+          minHeight: 28,
+          // One scrolling line instead of a wrapping pile of chips.
+          overflowX: "auto",
+          flexWrap: "nowrap",
+          scrollbarWidth: "none",
+          "&::-webkit-scrollbar": { display: "none" },
+          "& > *": { flexShrink: 0 },
+        }}
+      >
+        <Typography variant="body2" color="text.secondary" noWrap>
           {isLoading ? " " : `${items.length} ${items.length === 1 ? "item" : "items"}`} · {SORT_LABELS[filters.sort]}
         </Typography>
         {activeChips}
