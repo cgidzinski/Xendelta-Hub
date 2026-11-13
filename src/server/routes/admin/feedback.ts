@@ -32,7 +32,7 @@ const serialize = (row: any): AdminFeedback => ({
 export function registerAdminFeedbackRoutes(app: express.Application) {
   app.get("/api/admin/feedback", ...admin, validateQuery(adminFeedbackQuerySchema), async (req, res) => {
     const { status, page = 1, pageSize = 25 } = adminFeedbackQuerySchema.parse(req.query);
-    // The default view is what still needs a decision; Done and Archived have their own filters.
+    // The default view is what still needs a decision; Resolved, Dismissed and Archived have their own filters.
     const filter = status ? { status } : { status: { $in: ["new", "seen"] } };
     const [total, rows, newCount] = await Promise.all([
       Feedback.countDocuments(filter),
@@ -80,9 +80,9 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
     validateParams(adminFeedbackIdParamSchema),
     validate(adminFeedbackResolveSchema),
     async (req, res) => {
-      const { gems, message } = adminFeedbackResolveSchema.parse(req.body);
+      const { outcome, gems, message } = adminFeedbackResolveSchema.parse(req.body);
       const id = req.params.id as string;
-      const status = gems > 0 ? "archived" : "done";
+      const status = outcome === "dismissed" ? "dismissed" : gems > 0 ? "archived" : "done";
 
       const claimed = await Feedback.findOneAndUpdate(
         { _id: id, rewardedGems: { $exists: false } },
@@ -121,8 +121,10 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
             ? `Rewarded ${gemsText} gems for feedback from ${claimed.username}`
             : message
               ? `Replied to feedback from ${claimed.username}`
-              : `Resolved feedback from ${claimed.username} without telling them`,
-        meta: { gems, balance, message },
+              : outcome === "dismissed"
+                ? `Dismissed feedback from ${claimed.username}`
+                : `Resolved feedback from ${claimed.username} without telling them`,
+        meta: { outcome, gems, balance, message },
       });
       if (gems > 0 || message) {
         await notify(String(claimed.user_id), {
@@ -135,7 +137,14 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
 
       res.json({
         status: true,
-        message: gems > 0 ? `Rewarded ${gemsText} gems` : message ? "Reply sent" : "Resolved",
+        message:
+          gems > 0
+            ? `Rewarded ${gemsText} gems`
+            : message
+              ? "Reply sent"
+              : outcome === "dismissed"
+                ? "Dismissed"
+                : "Resolved",
         data: { feedback: serialize(claimed.toObject()) },
       });
     },

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Card, CardActionArea, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Card, ListItemButton, Stack, Typography } from "@mui/material";
 import { FEEDBACK_STATUSES, FEEDBACK_STATUS_LABEL, type AdminFeedback, type FeedbackStatus } from "@shared/feedback";
 import GemAmount from "../../components/GemAmount";
 import PageHeader from "../../components/ui/PageHeader";
@@ -13,38 +13,69 @@ import { Pager } from "./components/DataTable";
 import FeedbackDialog from "./components/FeedbackDialog";
 import FilterChips from "./components/FilterChips";
 import StatusChip, { type Tone } from "./components/StatusChip";
-import { dateTime } from "./adminFormat";
+import { timeAgo } from "./adminFormat";
 
-const TONE: Record<FeedbackStatus, Tone> = { new: "info", seen: "info", done: "success", archived: "default" };
-// "Open" (the default) is what is new; "seen" is no longer set by anything, and older items with it count as open.
-const FILTERS = FEEDBACK_STATUSES.filter((s) => s === "done" || s === "archived");
+const TONE: Record<FeedbackStatus, Tone> = {
+  new: "info",
+  seen: "info",
+  done: "success",
+  dismissed: "default",
+  archived: "default",
+};
+// "Open" (the default) is what still needs a decision; "seen" is no longer set by anything and counts as open.
+const FILTERS = FEEDBACK_STATUSES.filter((s) => s === "done" || s === "dismissed" || s === "archived");
 
-/** A feedback in the list. Click it to open it and decide what to do. */
-function FeedbackCard({ item, onOpen }: { item: AdminFeedback; onOpen: () => void }) {
+/** One feedback in the list: who, when, the message (three lines, the rest is in the modal) and where it stands. */
+function FeedbackRow({ item, onOpen }: { item: AdminFeedback; onOpen: () => void }) {
+  const isOpen = item.status === "new" || item.status === "seen";
   return (
-    <Card variant="outlined" sx={{ ...cardSx }}>
-      <CardActionArea onClick={onOpen} sx={{ p: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", mb: 1 }}>
-          <StatusChip label={FEEDBACK_STATUS_LABEL[item.status]} tone={TONE[item.status]} />
-          <Typography variant="body2" color="text.secondary">
-            from {item.from.username} · {dateTime(item.createdAt)}
+    <ListItemButton
+      onClick={onOpen}
+      alignItems="flex-start"
+      sx={{
+        gap: 2,
+        px: { xs: 2, sm: 2.5 },
+        py: 2,
+        "&:not(:last-of-type)": { borderBottom: 1, borderColor: "divider" },
+      }}
+    >
+      <Avatar sx={{ width: 36, height: 36, bgcolor: "primary.main", fontSize: 16, mt: 0.25 }}>
+        {(item.from.username || "?").charAt(0).toUpperCase()}
+      </Avatar>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", mb: 0.5 }}>
+          {isOpen && (
+            <Box
+              role="img"
+              aria-label="Needs a decision"
+              sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "primary.main", flex: "none" }}
+            />
+          )}
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            {item.from.username}
           </Typography>
-          {item.rewardedGems ? <GemAmount amount={item.rewardedGems} iconSize={16} variant="body2" /> : null}
+          <Typography variant="body2" color="text.secondary">
+            {timeAgo(item.createdAt)}
+          </Typography>
+          <Box sx={{ ml: "auto !important", display: "flex", alignItems: "center", gap: 1 }}>
+            {item.rewardedGems ? <GemAmount amount={item.rewardedGems} iconSize={16} variant="body2" /> : null}
+            <StatusChip label={FEEDBACK_STATUS_LABEL[item.status]} tone={TONE[item.status]} />
+          </Box>
         </Stack>
         <Typography
           sx={{
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
             display: "-webkit-box",
-            WebkitLineClamp: 4,
+            WebkitLineClamp: 3,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
         >
           {item.message}
         </Typography>
-      </CardActionArea>
-    </Card>
+      </Box>
+    </ListItemButton>
   );
 }
 
@@ -59,7 +90,10 @@ export default function Feedback() {
 
   return (
     <Box>
-      <PageHeader title="Feedback" subtitle={data ? `${data.newCount} new` : "What people sent from Send feedback."} />
+      <PageHeader
+        title="Feedback"
+        subtitle={data ? `${data.newCount} need a decision` : "What people sent from Send feedback."}
+      />
       <Box sx={{ mb: 2 }}>
         <FilterChips
           label="Status"
@@ -82,11 +116,11 @@ export default function Feedback() {
         <EmptyState title="Nothing here" description={status ? "No feedback with that status." : "No feedback yet."} />
       ) : (
         <>
-          <Stack spacing={1.5}>
+          <Card variant="outlined" sx={{ ...cardSx, p: 0, overflow: "hidden" }}>
             {data?.items.map((item) => (
-              <FeedbackCard key={item._id} item={item} onOpen={() => setOpenId(item._id)} />
+              <FeedbackRow key={item._id} item={item} onOpen={() => setOpenId(item._id)} />
             ))}
-          </Stack>
+          </Card>
           {data && <Pager page={page} pageSize={data.pageSize} total={data.total} onPage={setPage} />}
         </>
       )}

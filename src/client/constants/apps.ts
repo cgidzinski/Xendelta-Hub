@@ -15,8 +15,8 @@ export interface AppRegistryItem {
   description: string;
 }
 
-/** What is pinned when nothing is: someone who has pinned nothing (or everything was unpinned) still sees these two. */
-export const DEFAULT_PINNED_APPS = ["xensplit", "xennote"];
+/** What is pinned when nothing is: someone who has pinned nothing (or everything was unpinned) still sees these three. */
+export const DEFAULT_PINNED_APPS = ["xensplit", "xennote", "xenkitchen"];
 
 export const resolvePinnedApps = (pinnedApps: string[] | null | undefined): string[] =>
   pinnedApps && pinnedApps.length > 0 ? pinnedApps : DEFAULT_PINNED_APPS;

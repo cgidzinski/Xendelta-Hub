@@ -26,7 +26,8 @@ export default function Feedback() {
         <PageHeader title="Thanks" />
         <Stack spacing={2} alignItems="flex-start">
           <Alert severity="success" sx={{ width: "100%" }}>
-            Your feedback was sent. We read everything, and if it's a bug we fix, you'll be rewarded with gems.
+            Your feedback was sent. We read everything, and if we fix the bug or build the idea, you'll be rewarded with
+            gems.
           </Alert>
           <Stack direction="row" spacing={1}>
             <Button
@@ -51,7 +52,8 @@ export default function Feedback() {
       <PageHeader title="Send feedback" subtitle="An idea, something that's wrong, or anything else." />
       <Stack spacing={2}>
         <Alert severity="info" icon={<GemIcon sx={{ color: GEM_COLOR }} />}>
-          Found a bug? Tell us what went wrong. When we fix a bug you reported, you're rewarded with gems.
+          Bug reports and feature ideas that get implemented are rewarded with gems. Tell us what went wrong, or what
+          you'd like to see.
         </Alert>
         <TextField
           label="Your message"

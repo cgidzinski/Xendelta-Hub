@@ -14,7 +14,7 @@ import type {
   NotifyChannel,
   Paged,
 } from "@shared/admin";
-import type { AdminFeedback, FeedbackStatus } from "@shared/feedback";
+import type { AdminFeedback, FeedbackOutcome, FeedbackStatus } from "@shared/feedback";
 import { adminKeys, type UserListParams } from "./keys";
 
 // One hook per admin page, plus the changes an admin can make. Reads refresh after a change, so every screen stays true.
@@ -226,8 +226,8 @@ export const useUpdateFeedback = () => {
 export const useResolveFeedback = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: string; gems: number; message: string }) =>
-      api.post(`/api/admin/feedback/${v.id}/resolve`, { gems: v.gems, message: v.message }),
+    mutationFn: (v: { id: string; outcome: FeedbackOutcome; gems: number; message: string }) =>
+      api.post(`/api/admin/feedback/${v.id}/resolve`, { outcome: v.outcome, gems: v.gems, message: v.message }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.feedbackAll() }),
   });
 };

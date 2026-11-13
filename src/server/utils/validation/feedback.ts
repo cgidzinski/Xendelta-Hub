@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   FEEDBACK_MAX_LENGTH,
   FEEDBACK_MIN_LENGTH,
+  FEEDBACK_OUTCOMES,
   FEEDBACK_REWARD_MAX_GEMS,
   FEEDBACK_REWARD_MESSAGE_MAX_LENGTH,
   FEEDBACK_STATUSES,
@@ -16,14 +17,19 @@ export const adminFeedbackIdParamSchema = z.object({ id: objectIdSchema });
 export const adminFeedbackUpdateSchema = z.object({ status: z.enum(FEEDBACK_STATUSES) });
 export const adminFeedbackResolveSchema = z
   .object({
+    outcome: z.enum(FEEDBACK_OUTCOMES).default("resolved"),
     // 0 means no gems.
-    gems: z.number().int().min(0).max(FEEDBACK_REWARD_MAX_GEMS),
+    gems: z.number().int().min(0).max(FEEDBACK_REWARD_MAX_GEMS).default(0),
     // Empty means the person is not told anything.
     message: z.string().trim().max(FEEDBACK_REWARD_MESSAGE_MAX_LENGTH).default(""),
   })
   .refine((v) => v.gems === 0 || v.message.length > 0, {
     message: "Add a message to send with the gems",
     path: ["message"],
+  })
+  .refine((v) => v.outcome === "resolved" || (v.gems === 0 && v.message.length === 0), {
+    message: "A dismissed report is closed quietly",
+    path: ["outcome"],
   });
 export const adminFeedbackQuerySchema = z.object({
   status: z.enum(FEEDBACK_STATUSES).optional(),

@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { DEFAULT_PINNED_APPS, resolvePinnedApps, toggledPins } from "./apps";
 
 describe("pinned apps", () => {
-  it("when nothing is pinned, XenSplit and XenNote are; otherwise exactly what was pinned", () => {
-    expect(DEFAULT_PINNED_APPS).toEqual(["xensplit", "xennote"]);
+  it("when nothing is pinned, XenSplit, XenNote and XenKitchen are; otherwise exactly what was pinned", () => {
+    expect(DEFAULT_PINNED_APPS).toEqual(["xensplit", "xennote", "xenkitchen"]);
     expect(resolvePinnedApps(undefined)).toEqual(DEFAULT_PINNED_APPS);
     expect(resolvePinnedApps(null)).toEqual(DEFAULT_PINNED_APPS);
     expect(resolvePinnedApps([])).toEqual(DEFAULT_PINNED_APPS);

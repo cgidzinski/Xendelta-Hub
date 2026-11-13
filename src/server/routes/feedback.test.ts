@@ -199,7 +199,6 @@ describe("resolving a report, with gems or a message", () => {
       { gems: 10_001, message: "x" },
       { gems: 50, message: "  " },
       { gems: 50, message: "x".repeat(501) },
-      { message: "x" },
     ]) {
       expect((await resolve(boss, id, body)).status).toBe(400);
     }
@@ -216,6 +215,21 @@ describe("resolving a report, with gems or a message", () => {
     expect(res.body.data.feedback.status).toBe("done");
     expect(await mongoose.model("Notification").countDocuments({ userId: String(ann.user._id) })).toBe(0);
     expect(await mongoose.model("AdminAudit").countDocuments({ action: "feedback_resolve" })).toBe(1);
+  });
+
+  it("dismisses quietly: status dismissed, no notification, and no gems or message allowed with it", async () => {
+    const id = await sendAndGetId(ann);
+    const before = await gemsOf(ann);
+    expect((await resolve(boss, id, { outcome: "dismissed", gems: 100, message: "Thanks" })).status).toBe(400);
+    expect((await resolve(boss, id, { outcome: "dismissed", message: "Thanks" })).status).toBe(400);
+    const res = await resolve(boss, id, { outcome: "dismissed" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.feedback.status).toBe("dismissed");
+    expect(await gemsOf(ann)).toBe(before);
+    expect(await mongoose.model("Notification").countDocuments({ userId: String(ann.user._id) })).toBe(0);
+    const audit = await mongoose.model("AdminAudit").find({ action: "feedback_resolve" }).lean<any[]>();
+    expect(audit[0].detail).toContain("Dismissed");
+    expect(audit[0].meta.outcome).toBe("dismissed");
   });
 
   it("needs a message to go with gems", async () => {
@@ -287,6 +301,8 @@ describe("archiving and deleting", () => {
     await model.create({ user_id: "2", username: "b", message: "put away", status: "archived" });
     expect((await inbox(boss)).body.data.items.map((i: any) => i.message)).toEqual(["open one"]);
     expect((await inbox(boss, "?status=archived")).body.data.items.map((i: any) => i.message)).toEqual(["put away"]);
+    await model.create({ user_id: "3", username: "c", message: "no thanks", status: "dismissed" });
+    expect((await inbox(boss, "?status=dismissed")).body.data.items.map((i: any) => i.message)).toEqual(["no thanks"]);
   });
 
   it("deletes only archived feedback, for admins, and audits it", async () => {
