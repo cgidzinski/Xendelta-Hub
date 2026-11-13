@@ -146,3 +146,18 @@ export async function notify(userId: string, input: NotifyInput): Promise<Notify
 
   return result;
 }
+
+/**
+ * Tell every admin something (a new piece of feedback). Goes to each person with the admin role, on the usual channels,
+ * and never throws: a notification failing must not undo the thing that caused it.
+ */
+export async function notifyAdmins(input: NotifyInput): Promise<number> {
+  try {
+    const admins = await User.find({ roles: "admin" }, "_id").lean();
+    await Promise.all(admins.map((a) => notify(String(a._id), input)));
+    return admins.length;
+  } catch (error) {
+    console.error("Failed to notify admins:", error);
+    return 0;
+  }
+}

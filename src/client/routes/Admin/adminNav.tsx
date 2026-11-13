@@ -7,6 +7,7 @@ import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import HistoryIcon from "@mui/icons-material/History";
+import FeedbackOutlinedIcon from "@mui/icons-material/FeedbackOutlined";
 
 export interface AdminNavItem {
   key: string;
@@ -32,6 +33,12 @@ export const ADMIN_NAV: AdminNavItem[] = [
     group: "People",
     phone: true,
     prefix: true,
+  },
+  {
+    key: "feedback",
+    label: "Feedback",
+    path: "/admin/feedback",
+    icon: <FeedbackOutlinedIcon fontSize="small" />,
   },
   {
     key: "blog",

@@ -9,6 +9,7 @@ import { cardSx } from "../../../../components/ui/surfaceStyles";
 import EmptyState from "../../../../components/ui/EmptyState";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import SectionLabel from "../../../../components/ui/SectionLabel";
+import DidYouKnow from "./DidYouKnow";
 import { useFeed, useFeedPrefs, useNewFeedCount } from "../../../../hooks/feed/useFeed";
 
 const appLabel = (key: string) => APPS_REGISTRY.find((a) => a.key === key)?.label ?? key;
@@ -195,6 +196,7 @@ export default function ActivityFeed() {
             }
             sx={{ py: 4 }}
           />
+          <DidYouKnow app={app ?? undefined} />
         </Card>
       ) : (
         <>

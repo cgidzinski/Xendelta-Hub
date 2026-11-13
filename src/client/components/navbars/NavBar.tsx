@@ -8,7 +8,11 @@ import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { APPS_REGISTRY, AppRegistryItem, resolvePinnedApps } from "../../constants/apps";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import Chip from "@mui/material/Chip";
+import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
+import FeedbackOutlinedIcon from "@mui/icons-material/FeedbackOutlined";
+import { useWhatsNew } from "../../hooks/useWhatsNew";
 import { useNavBar } from "../../contexts/NavBarContext";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { usePinnedApps } from "../../hooks/user/usePinnedApps";
@@ -130,7 +134,27 @@ export default function Root() {
       : []),
   ];
 
-  const footerNavItems: NavItem[] = [];
+  // Where the person is, so feedback can say which page it was about.
+  const { pathname, search } = useLocation();
+  const { unseen } = useWhatsNew();
+  const here = encodeURIComponent(`${pathname}${search}`);
+  const footerNavItems: NavItem[] = [
+    {
+      key: "whats-new",
+      label: "What's new",
+      icon: <CampaignOutlinedIcon />,
+      path: "/internal/whats-new",
+      isSelected: (p) => p.startsWith("/internal/whats-new"),
+      endAction: unseen > 0 ? <Chip size="small" color="primary" label="New" sx={{ height: 20 }} /> : undefined,
+    },
+    {
+      key: "feedback",
+      label: "Send feedback",
+      icon: <FeedbackOutlinedIcon />,
+      path: pathname.startsWith("/internal/feedback") ? pathname : `/internal/feedback?from=${here}`,
+      isSelected: (p) => p.startsWith("/internal/feedback"),
+    },
+  ];
 
   const isAdmin = profile?.roles?.some((role: string) => role.toLowerCase() === "admin");
 

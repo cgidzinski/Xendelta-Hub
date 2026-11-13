@@ -8,6 +8,7 @@ import { registerAdminBackupRoutes } from "./backups";
 import { registerAdminAuditRoutes } from "./audit";
 import { registerAdminBlogRoutes } from "./blog";
 import { registerAdminDebugRoutes } from "./debug";
+import { registerAdminFeedbackRoutes } from "./feedback";
 
 // The admin API, one file per page of the admin area (docs/adding-a-sub-app.md describes the route-folder pattern).
 // Every route is behind authenticateToken + requireAdmin; API keys can't reach /api/admin (shared/apiKeys.ts).
@@ -23,4 +24,5 @@ module.exports = function (app: any) {
   registerAdminAuditRoutes(app);
   registerAdminBlogRoutes(app);
   registerAdminDebugRoutes(app);
+  registerAdminFeedbackRoutes(app);
 };

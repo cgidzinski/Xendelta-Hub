@@ -21,5 +21,7 @@ export const adminKeys = {
   system: () => [...adminKeys.all, "system"] as const,
   backups: () => [...adminKeys.all, "backups"] as const,
   backupJob: () => [...adminKeys.all, "backup-job"] as const,
+  feedback: (status: string, page: number) => [...adminKeys.all, "feedback", status, page] as const,
+  feedbackAll: () => [...adminKeys.all, "feedback"] as const,
   audit: (params: object) => [...adminKeys.all, "audit", params] as const,
 };

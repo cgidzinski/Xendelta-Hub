@@ -58,6 +58,8 @@ const People = lazyPage(() => import("./routes/Internal/People/People"));
 const PersonProfile = lazyPage(() => import("./routes/Internal/People/PersonProfile"));
 const Profile = lazyPage(() => import("./routes/Internal/Profile/Profile"));
 const Messages = lazyPage(() => import("./routes/Internal/Messages/Messages"));
+const WhatsNew = lazyPage(() => import("./routes/Internal/WhatsNew/WhatsNew"));
+const Feedback = lazyPage(() => import("./routes/Internal/Feedback/Feedback"));
 const Notifications = lazyPage(() => import("./routes/Internal/Notifications/Notifications"));
 const InternalBlog = lazyPage(() => import("./routes/Internal/Blog/InternalBlog"));
 const InternalBlogPostDetail = lazyPage(() => import("./routes/Internal/Blog/InternalBlogPostDetail"));
@@ -80,6 +82,7 @@ const UserDetail = lazyPage(() => import("./routes/Admin/UserDetail"));
 const AdminStorage = lazyPage(() => import("./routes/Admin/Storage"));
 const AdminMoney = lazyPage(() => import("./routes/Admin/Money"));
 const AdminMessaging = lazyPage(() => import("./routes/Admin/Messaging"));
+const AdminFeedback = lazyPage(() => import("./routes/Admin/Feedback"));
 const AdminSystem = lazyPage(() => import("./routes/Admin/System"));
 const AdminAudit = lazyPage(() => import("./routes/Admin/Audit"));
 const AdminBlog = lazyPage(() => import("./routes/Admin/Blog"));
@@ -183,6 +186,8 @@ const router = createBrowserRouter(
         <Route path="notifications" element={<Notifications />} />
         {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
         <Route path="share" element={<Share />} />
+        <Route path="whats-new" element={<WhatsNew />} />
+        <Route path="feedback" element={<Feedback />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         {recipaintRoutes}
@@ -215,6 +220,7 @@ const router = createBrowserRouter(
         <Route path="money" element={<AdminMoney />} />
         <Route path="messaging" element={<AdminMessaging />} />
         <Route path="system" element={<AdminSystem />} />
+        <Route path="feedback" element={<AdminFeedback />} />
         <Route path="audit" element={<AdminAudit />} />
         <Route path="blog" element={<AdminBlog />} />
         <Route path="blog/new" element={<BlogPostForm />} />
