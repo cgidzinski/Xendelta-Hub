@@ -803,8 +803,7 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFolderTokenParamSchema),
     async function (req: express.Request, res: express.Response) {
       const folder = await sharedFolder(req.params.token as string);
-      if (folderLinkExpired(folder))
-        return res.status(403).json({ status: false, message: "Link expired", isExpired: true });
+      if (folderLinkExpired(folder)) throw new AppError(403, "Link expired", { isExpired: true });
       return res.json({
         status: true,
         data: {
