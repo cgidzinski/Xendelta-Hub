@@ -9,6 +9,7 @@ import {
   Dialog,
   FormControlLabel,
   IconButton,
+  Link,
   Stack,
   Switch,
   ToggleButton,
@@ -45,6 +46,15 @@ import type {
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
 import CookMode from "../cook/CookMode";
+
+/** "food.example.com" for a recipe's source link. */
+const sourceHost = (url: string) => {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
 
 interface ItemViewProps {
   item: KitchenItem;
@@ -103,6 +113,15 @@ export default function ItemView({ item, actions }: ItemViewProps) {
       {item.description && (
         <Typography variant="body1" color="text.secondary" sx={{ mt: 1.5, whiteSpace: "pre-wrap" }}>
           {item.description}
+        </Typography>
+      )}
+
+      {item.source_url && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          From{" "}
+          <Link href={item.source_url} target="_blank" rel="noopener noreferrer nofollow" underline="hover">
+            {sourceHost(item.source_url)}
+          </Link>
         </Typography>
       )}
 

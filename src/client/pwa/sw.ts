@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
 import { clientsClaim } from "workbox-core";
+import { shareFromForm, stashShare } from "./shareStash";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -37,6 +38,28 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+});
+
+// --- Share target -----------------------------------------------------------------------
+//
+// The manifest's share_target makes the installed app appear in other apps' share sheets: sharing a link, text or photo
+// POSTs a form to /internal/share. There is no server route for that, so the worker takes it: it keeps the content in
+// IndexedDB (a shared photo is a file and has to survive the redirect, and a sign-in if the person isn't signed in) and
+// answers with a redirect to the Share page, which reads it back and offers where to save it. This is the only request
+// the worker ever answers itself; every other one goes to the network untouched, as the notes above require.
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "POST" || new URL(request.url).pathname !== "/internal/share") return;
+  event.respondWith(
+    (async () => {
+      try {
+        await stashShare(shareFromForm(await request.formData()));
+      } catch {
+        // Nothing kept: the Share page will say there is nothing to save, rather than the share showing an error page.
+      }
+      return Response.redirect("/internal/share", 303);
+    })(),
+  );
 });
 
 // --- Web Push ---------------------------------------------------------------------------
