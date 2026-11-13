@@ -13,7 +13,7 @@ interface AppTileProps {
   pinChoice?: { pinned: boolean; disabled?: boolean };
 }
 
-/** One app as a big, easy target: its icon and name, with a count of what is waiting. Shared by the pinned and all-apps blocks. */
+/** One app as a big, easy target: its icon and name, with a count of what is waiting. Used for the pinned apps and while choosing them. */
 export default function AppTile({ app, count = 0, onClick, pinChoice }: AppTileProps) {
   const choosing = !!pinChoice;
   const pinned = !!pinChoice?.pinned;

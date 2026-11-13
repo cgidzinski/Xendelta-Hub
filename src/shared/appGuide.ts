@@ -1,4 +1,4 @@
-// What each app is for, in a few plain lines, and short "did you know" tips. Shown on the What's new page and, when the
+// What each app is for, in a few plain lines, and short "did you know" tips. Shown on the About page and, when the
 // Home activity feed is empty, as tips. Written for people who are new here, not for developers: say what you can DO.
 // A new sub-app must add an entry here (a test fails otherwise); see docs/adding-a-sub-app.md.
 
@@ -39,7 +39,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "XenSuite is one place for the apps you share with the people around you. Your Home page shows what needs attention and what your people have been up to.",
     tips: [
       {
-        text: "Press Edit under All apps on Home to pin the apps you use. They show up at the top with a count of what is waiting.",
+        text: "Press Edit next to Pinned apps on Home to pin the apps you use. They show up at the top with a count of what is waiting.",
         link: "/internal",
       },
       {

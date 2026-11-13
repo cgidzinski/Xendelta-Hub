@@ -32,7 +32,7 @@ Every feature you add, and every change a person would notice (a fix included), 
 **in the same PR**: newest first, today's date, the app key (or `"hub"`), and a short title in the words a user would use
 ("Added…", "You can now…", "Fixed…"). No PR numbers, file names or technical terms (a test rejects them). Add a tip to the
 app's `APP_GUIDE` in `src/shared/appGuide.ts` too when the feature is worth discovering. A change nobody can see gets no entry.
-The changelog is shown on the What's new page.
+The changelog is the feature list on the About page: pick an app and every change to it shows there as a feature.
 
 ## Adding a sub-app
 **Design first: before writing any code for a new sub-app, mock its main screens (list, detail, create/edit; phone and desktop)

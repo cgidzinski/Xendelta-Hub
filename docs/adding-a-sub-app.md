@@ -256,7 +256,7 @@ Two files, both written for the people who use the hub, not for developers.
 - **`src/shared/appGuide.ts` (`APP_GUIDE`), required for a new app.** `about`: two or three plain sentences on what the app
   is for. `pitch`: one line that gets someone who doesn't use the app to try it ("Try XenNote for quick notes and checklists you
   can share."), with a link to open it. `tips`: at least two sentences on what you can do once you use the app, with a link to
-  where to try it. Add the key to `GUIDE_APPS` too. The What's new page lists the apps from this. The "Did you know?" cards on an
+  where to try it. Add the key to `GUIDE_APPS` too. The About page (pick an app, see what it is for and what it can do) lists the apps from this. The "Did you know?" cards on an
   empty Home invite people to the apps they **don't** use (the `pitch`) and only show `tips` for apps they **do**, so add a line for
   the app in `src/server/feed/appUsage.ts` that says what "uses it" means (they have something in it). Tests fail if an app in
   `APPS_REGISTRY` has no guide entry, no pitch, or isn't tracked there.
