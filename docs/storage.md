@@ -88,3 +88,13 @@ private one; the public original is deleted only after the item points at the co
 
 It ties to the ongoing-cost plan in `docs/monetization.md` ("Gems to keep files stored or shared"): once counting is on, the
 quota is what gems extend.
+
+## Thumbnails of images
+The drive's grid (and a shared folder's page) shows a small picture of each image file, not the original. A thumbnail
+(360 px on the long side, WebP) is made once, in the background, and stored beside the file as
+`xendrive/<user>/thumbs/<name>.webp` (`utils/xendriveThumbs.ts`, paths in `utils/xendriveThumbPaths.ts`). It is made after an
+upload finishes, and for older files the first time a listing asks for pictures. Until it exists, or if it can't be made
+(`XenDriveFile.thumbnail` is `"failed"`: not a readable picture, SVG, or over 40 MB), the grid uses the original, so
+nothing waits on one. Thumbnails aren't counted toward anyone's storage, and are deleted with their file (a single delete,
+a folder delete, or an app removing its photos). PDF previews are not generated: the server has no PDF renderer.
+

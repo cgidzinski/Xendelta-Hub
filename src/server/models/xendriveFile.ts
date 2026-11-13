@@ -1,6 +1,7 @@
 import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
 import { randomToken } from "../utils/tokens";
 import { deleteFromGCS } from "../utils/gcsUtils";
+import { removeThumbnails } from "../utils/xendriveThumbPaths";
 
 // One stored file. `storage_path` is where the bytes live in the private bucket and is stored, not
 // derived, so a file can be renamed or moved between folders without touching storage.
@@ -18,6 +19,9 @@ const xendriveFileSchema = new Schema({
   shareToken: { type: String, unique: true, sparse: true }, // Unique token for the file's own link
   // The link only works while this is on. New files start private; turning it on is one switch.
   shareEnabled: { type: Boolean, default: false },
+  // A small picture of an image file for the grid (utils/xendriveThumbs.ts): "ready" once it has been made and stored beside
+  // the file, "failed" when it can't be (so it isn't retried on every listing). Absent = not tried yet.
+  thumbnail: { type: String, enum: ["ready", "failed"] },
   // Set when an app stored the file on the person's behalf (utils/driveSources.ts). Such files have no folder and are
   // kept out of the drive's own lists; they still count toward the quota.
   source: {
@@ -63,6 +67,7 @@ xendriveFileSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
     await deleteFromGCS(doc.storage_path, true).catch(() => {
       // Ignore errors if the object is already gone
     });
+    await removeThumbnails([doc.storage_path]);
   }
 });
 

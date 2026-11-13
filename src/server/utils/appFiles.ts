@@ -12,6 +12,7 @@ import { AppError } from "./http";
 import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
 import { deleteFromGCS, generateSignedUrl, uploadToGCS } from "./gcsUtils";
 import { checkQuota, generateXendriveFilename } from "./xendriveUtils";
+import { removeThumbnails } from "./xendriveThumbPaths";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -163,6 +164,7 @@ export async function removeAppFiles(fileIds: Array<string | { toString(): strin
   const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path").lean();
   await XenDriveFile.deleteMany({ _id: { $in: ids } });
   await deleteBytes(files.map((f) => f.storage_path));
+  await removeThumbnails(files.map((f) => f.storage_path));
 }
 
 /** Short-lived links for these files, by id. Files that no longer exist are left out. */

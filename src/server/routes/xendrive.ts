@@ -46,6 +46,8 @@ import {
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
 import { generateSignedUrl } from "../utils/gcsUtils";
+import { thumbPathFor } from "../utils/xendriveThumbPaths";
+import { scheduleThumbnails } from "../utils/xendriveThumbs";
 import { privateBucket } from "../config/gcs";
 import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
@@ -88,13 +90,33 @@ const PREVIEWABLE = /^(image\/|application\/pdf$|video\/|audio\/)/;
 const MAX_THUMBS = 60;
 const PREVIEW_MINUTES = 60;
 
-/** Short-lived picture links for image files (the grid shows them). Capped so a huge folder signs a bounded number. */
+/**
+ * Short-lived picture links for image files (the grid shows them). A file with a thumbnail gets the thumbnail's link; one
+ * without gets the original's, and has its thumbnail made in the background for next time. Capped so a huge folder signs
+ * a bounded number.
+ */
 async function previewUrls(
-  files: Array<{ _id: unknown; mimeType: string; storage_path: string }>,
+  files: Array<{
+    _id: unknown;
+    mimeType: string;
+    storage_path: string;
+    size?: number | null;
+    thumbnail?: string | null;
+  }>,
 ): Promise<Map<string, string>> {
   const images = files.filter((f) => isImage(f.mimeType)).slice(0, MAX_THUMBS);
+  scheduleThumbnails(images.filter((f) => !f.thumbnail));
   const pairs = await Promise.all(
-    images.map(async (f) => [String(f._id), await generateSignedUrl(f.storage_path, PREVIEW_MINUTES)] as const),
+    images.map(
+      async (f) =>
+        [
+          String(f._id),
+          await generateSignedUrl(
+            f.thumbnail === "ready" ? thumbPathFor(f.storage_path) : f.storage_path,
+            PREVIEW_MINUTES,
+          ),
+        ] as const,
+    ),
   );
   return new Map(pairs);
 }

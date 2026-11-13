@@ -14,6 +14,8 @@ import { XenDriveFolder } from "../models/xendriveFolder";
 import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
+import { canThumbnail } from "./xendriveThumbPaths";
+import { scheduleThumbnails } from "./xendriveThumbs";
 import { driveSourceApp } from "./driveSources";
 
 const gcsFileFor = (storagePath: string) => privateBucket.file(storagePath);
@@ -198,6 +200,8 @@ export async function finalizeChunkedUpload(
   }).save();
 
   await XenDriveUploadSession.deleteOne({ upload_id: uploadId });
+  // A picture gets its grid thumbnail made in the background; the upload doesn't wait for it.
+  if (canThumbnail({ mimeType: contentType, size: fileSize })) scheduleThumbnails([saved]);
 
   return {
     _id: saved._id.toString(),

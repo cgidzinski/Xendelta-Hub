@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { XenDriveFile } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { deleteFromGCS } from "./gcsUtils";
+import { removeThumbnails } from "./xendriveThumbPaths";
 
 // Folder tree helpers. Folders nest through parent_id; these walk that tree. Nothing here trusts the
 // caller: every function that takes a folder id either filters by owner or is given an already-verified id.
@@ -92,6 +93,7 @@ export async function deleteFolderTree(rootId: string): Promise<void> {
       // already gone
     });
   }
+  await removeThumbnails(files.map((f) => f.storage_path));
   await XenDriveFile.deleteMany({ folder_id: { $in: ids } });
   await XenDriveFolder.deleteMany({ _id: { $in: ids } });
 }
