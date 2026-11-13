@@ -29,6 +29,14 @@ export interface HistoryEntry {
   note?: string;
   due_at?: Date;
   occurrence_at?: Date;
+  /** The checklist steps ticked off when it was done, and how many steps there were. */
+  steps_done?: string[];
+  steps_total?: number;
+}
+export interface ChecklistStep {
+  _id?: unknown;
+  text: string;
+  done: boolean;
 }
 export interface RoutineLike {
   owner_id: string;
@@ -41,6 +49,8 @@ export interface RoutineLike {
   remind_again_days: number;
   members: RoutineMember[];
   history: HistoryEntry[];
+  /** Optional steps for each occurrence. Absent on routines that never had any. */
+  checklist?: ChecklistStep[];
 }
 
 export const MAX_HISTORY = 50;
@@ -123,7 +133,8 @@ export function doneAheadIndices(
 export function applyComplete(
   routine: RoutineLike,
   opts: { by: string; now: Date; doneAt?: Date; note?: string; occurrence?: number },
-): Pick<RoutineLike, "last_done_at" | "due_at" | "last_notified_at" | "history" | "done_ahead"> {
+): Pick<RoutineLike, "last_done_at" | "due_at" | "last_notified_at" | "history" | "done_ahead"> &
+  Partial<Pick<RoutineLike, "checklist">> {
   const n = Math.max(1, Math.floor(opts.occurrence ?? 1));
   const doneAt = opts.doneAt && opts.doneAt.getTime() <= opts.now.getTime() ? opts.doneAt : opts.now;
 
@@ -145,6 +156,12 @@ export function applyComplete(
     };
   }
 
+  // The ticks belong to the occurrence that is due now: completing it records what was ticked, then starts the next one
+  // with every step unticked. (A later occurrence completed ahead of time has no ticks of its own, so it records none.)
+  const steps = routine.checklist ?? [];
+  const stepsRecord =
+    steps.length > 0 ? { steps_done: steps.filter((c) => c.done).map((c) => c.text), steps_total: steps.length } : {};
+
   const base = routine.due_at.getTime() > doneAt.getTime() ? routine.due_at : doneAt;
   let due = addInterval(base, routine.interval);
   const skipped = new Set(routine.done_ahead.map((d) => d.getTime()));
@@ -155,7 +172,14 @@ export function applyComplete(
     last_notified_at: null,
     // Drop entries the new due date has caught up with; they can't be shown any more.
     done_ahead: routine.done_ahead.filter((d) => d.getTime() > due.getTime()),
-    history: pushHistory(routine.history, { action: "done", at: opts.now, by_user: opts.by, note: opts.note }),
+    history: pushHistory(routine.history, {
+      action: "done",
+      at: opts.now,
+      by_user: opts.by,
+      note: opts.note,
+      ...stepsRecord,
+    }),
+    ...(steps.length > 0 ? { checklist: steps.map((c) => ({ ...c, done: false })) } : {}),
   };
 }
 

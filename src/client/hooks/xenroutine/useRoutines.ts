@@ -29,6 +29,16 @@ export interface RoutineHistoryEntry {
   due_at?: string;
   /** Set when a later occurrence was completed ahead of its time. */
   occurrence_at?: string;
+  /** For a routine with a checklist: the steps ticked off when it was done, and how many there were. */
+  steps_done?: string[];
+  steps_total?: number;
+}
+
+/** One step of a routine's checklist. `done` is the tick for the occurrence that is due now. */
+export interface RoutineChecklistItem {
+  _id: string;
+  text: string;
+  done: boolean;
 }
 
 export interface Routine {
@@ -36,6 +46,7 @@ export interface Routine {
   name: string;
   category: string;
   notes: string;
+  checklist: RoutineChecklistItem[];
   interval: { every: number; unit: IntervalUnit };
   last_done_at: string | null;
   due_at: string;
@@ -54,6 +65,8 @@ export interface RoutineInput {
   name: string;
   category?: string;
   notes?: string;
+  /** The steps, in order. A step that keeps its `_id` keeps its tick; leave the field out to keep the steps as they are. */
+  checklist?: Array<{ _id?: string; text: string }>;
   interval: { every: number; unit: IntervalUnit };
   due_at?: string;
   last_done_at?: string;
@@ -91,6 +104,28 @@ export const useUpdateRoutine = () =>
   useRoutineMutation((v: { id: string; patch: Partial<RoutineInput> & { enabled?: boolean } }) =>
     apiClient.put(`${base}/${v.id}`, v.patch),
   );
+
+/**
+ * Tick or untick one step for the occurrence that is due now (anyone on the routine can). The tick shows at once and the
+ * server catches up; if it fails, or when it settles, the list is refetched so it shows what is really saved.
+ */
+export function useToggleChecklistItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; itemId: string; done: boolean }) =>
+      apiClient.put(`${base}/${v.id}/checklist/${v.itemId}`, { done: v.done }),
+    onMutate: (v) => {
+      qc.setQueryData<Routine[]>(routineKeys.list(), (routines) =>
+        routines?.map((r) =>
+          r._id === v.id
+            ? { ...r, checklist: r.checklist.map((c) => (c._id === v.itemId ? { ...c, done: v.done } : c)) }
+            : r,
+        ),
+      );
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: routineKeys.all }),
+  });
+}
 
 export const useDeleteRoutine = () => useRoutineMutation((id: string) => apiClient.delete(`${base}/${id}`));
 

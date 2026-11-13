@@ -15,6 +15,8 @@ import {
   xenRoutineSettingsSchema,
   shareXenRoutineSchema,
   xenRoutineIdParamSchema,
+  xenRoutineChecklistItemParamSchema,
+  xenRoutineChecklistTickSchema,
   xenRoutineMemberParamSchema,
 } from "../utils/validation";
 import {
@@ -72,6 +74,7 @@ async function serialize(routines: any[], uid: string) {
       name: obj.name,
       category: obj.category,
       notes: obj.notes,
+      checklist: (obj.checklist ?? []).map((c: any) => ({ _id: String(c._id), text: c.text, done: !!c.done })),
       interval: obj.interval,
       last_done_at: obj.last_done_at,
       due_at: obj.due_at,
@@ -168,6 +171,7 @@ module.exports = function (app: any) {
         name: b.name,
         category: b.category ?? "",
         notes: b.notes ?? "",
+        checklist: (b.checklist ?? []).map((c: { text: string }) => ({ text: c.text, done: false })),
         interval: b.interval,
         last_done_at: lastDone,
         due_at: dueAt,
@@ -193,6 +197,17 @@ module.exports = function (app: any) {
         const b = req.body;
         for (const k of ["name", "category", "notes", "interval", "enabled", "remind_again_days"]) {
           if (b[k] !== undefined) routine.set(k, b[k]);
+        }
+        if (b.checklist !== undefined) {
+          // A step that is still there keeps its tick; a new one starts unticked; a missing one is gone.
+          const ticked = new Map(routine.checklist.map((c: any) => [String(c._id), !!c.done]));
+          routine.set(
+            "checklist",
+            (b.checklist as Array<{ _id?: string; text: string }>).map((c) => ({
+              ...(c._id && ticked.has(c._id) ? { _id: c._id, done: ticked.get(c._id) } : { done: false }),
+              text: c.text,
+            })),
+          );
         }
         if (b.due_at !== undefined) {
           routine.due_at = new Date(b.due_at);
@@ -252,6 +267,31 @@ module.exports = function (app: any) {
       } catch (e) {
         console.error("xenroutine complete failed:", e);
         return fail(res, 500, "Failed to complete routine");
+      }
+    },
+  );
+
+  // Tick or untick one step for the occurrence that is due now. Anyone on the routine may (not just the owner), and it
+  // is one atomic update, so two people ticking different steps at once can't undo each other.
+  app.put(
+    "/api/xenroutine/routines/:id/checklist/:itemId",
+    validateParams(xenRoutineChecklistItemParamSchema),
+    validate(xenRoutineChecklistTickSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const routine = await loadRoutine(req, res, "act");
+        if (!routine) return;
+        const result = await XenRoutine.updateOne(
+          { _id: routine._id, "checklist._id": req.params.itemId },
+          { $set: { "checklist.$.done": req.body.done } },
+        );
+        if (result.matchedCount === 0) return fail(res, 404, "Step not found");
+        const fresh = await XenRoutine.findById(routine._id).exec();
+        const [out] = await serialize([fresh], callerId(req));
+        return res.json({ status: true, message: "Saved", data: { routine: out } });
+      } catch (e) {
+        console.error("xenroutine checklist tick failed:", e);
+        return fail(res, 500, "Failed to save the step");
       }
     },
   );

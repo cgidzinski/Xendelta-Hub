@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { format } from "date-fns";
 import type { Routine } from "../../../../hooks/xenroutine/useRoutines";
+import { stepsLabel } from "../../../../hooks/xenroutine/routineViews";
 
 interface Props {
   open: boolean;
@@ -38,7 +39,18 @@ export default function HistoryDialog({ open, routine, onClose }: Props) {
               <ListItem key={i} disableGutters>
                 <ListItemText
                   primary={`${h.action === "done" ? "Done" : `Postponed to ${h.due_at ? format(new Date(h.due_at), "PP") : "?"}`} · ${format(new Date(h.at), "PP")}`}
-                  secondary={[h.by_username && `by ${h.by_username}`, h.note].filter(Boolean).join(" — ") || undefined}
+                  secondary={
+                    [
+                      h.by_username && `by ${h.by_username}`,
+                      // A routine with a checklist: how many steps were ticked, and which.
+                      h.steps_total
+                        ? `${stepsLabel(h.steps_done?.length ?? 0, h.steps_total)}${h.steps_done?.length ? ` (${h.steps_done.join(", ")})` : ""}`
+                        : null,
+                      h.note,
+                    ]
+                      .filter(Boolean)
+                      .join(" — ") || undefined
+                  }
                 />
               </ListItem>
             ))}
