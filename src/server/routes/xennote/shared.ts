@@ -87,6 +87,12 @@ export async function namesForNotes(notes: NoteDoc[]): Promise<Map<string, strin
   return new Map(users.filter((u) => u.username).map((u) => [String(u._id), u.username as string]));
 }
 
+/** The caller's own reminder on a note, or null. */
+function reminderFor(note: NoteDoc, uid: string) {
+  const mine = note.reminders.find((r) => r.user_id === uid);
+  return mine ? { at: mine.at.toISOString(), sent: !!mine.notified_at } : null;
+}
+
 export async function serializeNote(
   note: NoteDoc,
   opts: { uid: string; role: MemberRole | null; names?: Map<string, string> },
@@ -108,6 +114,8 @@ export async function serializeNote(
     pinned: note.pinned,
     archived: note.archived,
     labels: note.labels,
+    // Only my own reminder: other people's are theirs.
+    reminder: reminderFor(note, opts.uid),
     can_edit: editable,
     // The note's own public link is only shown to people who can change the note.
     share: editable ? { enabled: !!note.share?.enabled, token: note.share?.token ?? null } : null,

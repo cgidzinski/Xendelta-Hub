@@ -16,6 +16,8 @@ export const xendriveKeys = {
   recent: () => [...xendriveKeys.all, "recent"] as const,
   /** What apps have stored in the drive (XenDrive > From apps). */
   appFiles: () => [...xendriveKeys.all, "app-files"] as const,
-  publicFolder: (token: string, folderId?: string | null) =>
-    [...xendriveKeys.all, "public-folder", token, folderId ?? null] as const,
+  // The password (when the link has one) is part of the key so a corrected one fetches again instead of reusing the error.
+  publicFolder: (token: string, folderId?: string | null, password?: string) =>
+    [...xendriveKeys.all, "public-folder", token, folderId ?? null, ...(password ? [password] : [])] as const,
+  publicFolderInfo: (token: string) => [...xendriveKeys.all, "public-folder-info", token] as const,
 };

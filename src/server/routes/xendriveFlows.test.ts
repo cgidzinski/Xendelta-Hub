@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import request from "supertest";
 import { Readable } from "stream";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
+import { hashSharePassword } from "../utils/sharePasswords";
 
 // Folders, browsing, the public folder link and recursive delete, through the real routes and models.
 // Only storage is faked.
@@ -213,7 +214,7 @@ describe("a folder's public link", () => {
   it("hides an expired file, and ignores a file's own password because the whole folder was shared", async () => {
     const me = await createUser();
     const shared = await folder(me, "Mixed");
-    await addFile(me, "fresh.txt", shared._id, { password: "secret" });
+    await addFile(me, "fresh.txt", shared._id, { passwordHash: await hashSharePassword("secret") });
     await addFile(me, "stale.txt", shared._id, { expiry: new Date(Date.now() - 1000) });
     const token = (await api(me).post(`/folders/${shared._id}/share`)).body.data.folder.shareToken;
 

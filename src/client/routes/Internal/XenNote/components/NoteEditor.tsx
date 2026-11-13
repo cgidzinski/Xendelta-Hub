@@ -26,9 +26,13 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -48,12 +52,14 @@ import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { noteShareUrl, useXenNoteActions } from "../../../../hooks/xennote/useXenNote";
 import type { XenNote, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
+import NoteReminderMenu from "./NoteReminderMenu";
 import {
   changeType,
   draftFromNote,
   emptyDraft,
   isDirty,
   isEmptyDraft,
+  moveAmongActive,
   moveItem,
   toInput,
   type NoteDraft,
@@ -116,6 +122,7 @@ export default function NoteEditor({
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
   const [bookAnchor, setBookAnchor] = useState<HTMLElement | null>(null);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
+  const [reminderAnchor, setReminderAnchor] = useState<HTMLElement | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   // What the server holds for this note right now (photos and the link change it outside the draft).
@@ -155,6 +162,17 @@ export default function NoteEditor({
   useEffect(() => {
     if (open) setAutosave("idle");
   }, [open, initial]);
+  // My reminder on this note. Personal, so it works in a notebook I can only view too; it isn't part of the draft.
+  const setReminder = async (at: string | null) => {
+    if (!live) return;
+    try {
+      const saved = await actions.setReminder.mutateAsync({ id: live._id, at });
+      setLive((cur) => (cur && cur._id === saved._id ? { ...cur, reminder: saved.reminder } : cur));
+      enqueueSnackbar(at ? "Reminder set" : "Reminder removed", { variant: "success" });
+    } catch (e) {
+      enqueueSnackbar((e as Error).message || "Couldn't set the reminder", { variant: "error" });
+    }
+  };
   const writableNotebooks = notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor");
 
   const pendingUrls = useMemo(() => draft.pendingImages.map((f) => URL.createObjectURL(f)), [draft.pendingImages]);
@@ -372,8 +390,33 @@ export default function NoteEditor({
                         <DragIndicatorIcon
                           fontSize="small"
                           aria-label="Drag to reorder"
-                          sx={{ color: "text.disabled", cursor: "grab" }}
+                          // Dragging doesn't work on a touchscreen; there the arrows below take its place.
+                          sx={{
+                            color: "text.disabled",
+                            cursor: "grab",
+                            "@media (pointer: coarse)": { display: "none" },
+                          }}
                         />
+                      )}
+                      {!readOnly && !item.done && (
+                        <Box sx={{ display: "none", "@media (pointer: coarse)": { display: "flex" } }}>
+                          <IconButton
+                            size="small"
+                            aria-label={`Move ${item.text || "item"} up`}
+                            disabled={moveAmongActive(draft.checklist, i, -1) === draft.checklist}
+                            onClick={() => set({ checklist: moveAmongActive(draft.checklist, i, -1) })}
+                          >
+                            <KeyboardArrowUpIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            aria-label={`Move ${item.text || "item"} down`}
+                            disabled={moveAmongActive(draft.checklist, i, 1) === draft.checklist}
+                            onClick={() => set({ checklist: moveAmongActive(draft.checklist, i, 1) })}
+                          >
+                            <KeyboardArrowDownIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                       )}
                       <Checkbox
                         checked={item.done}
@@ -606,6 +649,22 @@ export default function NoteEditor({
               </Tooltip>
             </>
           )}
+          {live && (
+            <Tooltip title={live.reminder ? "Reminder" : "Remind me"}>
+              <IconButton
+                size="small"
+                aria-label="Reminder"
+                color={live.reminder && !live.reminder.sent ? "primary" : "default"}
+                onClick={(e) => setReminderAnchor(e.currentTarget)}
+              >
+                {live.reminder && !live.reminder.sent ? (
+                  <NotificationsActiveIcon fontSize="small" />
+                ) : (
+                  <NotificationsNoneIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
           <Box sx={{ flex: 1 }} />
           {autosave !== "idle" && (
             <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: 1 }}>
@@ -743,6 +802,13 @@ export default function NoteEditor({
           Delete
         </MenuItem>
       </Menu>
+
+      <NoteReminderMenu
+        anchor={reminderAnchor}
+        onClose={() => setReminderAnchor(null)}
+        reminder={live?.reminder ?? null}
+        onSet={setReminder}
+      />
 
       <ResponsiveDialog open={shareOpen} onClose={() => setShareOpen(false)} maxWidth="xs" title="Public link">
         {shareToken ? (

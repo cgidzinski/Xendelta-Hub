@@ -87,6 +87,12 @@ export const useXenNoteActions = () => {
       (await api.put<{ note: XenNote }>(`/api/xennote/notes/${v.id}`, v.input)).note,
     onSuccess: refresh,
   });
+  // A personal reminder: an ISO time, or null to remove it. Changes nothing about the note itself.
+  const setReminder = useMutation({
+    mutationFn: async (v: { id: string; at: string | null }) =>
+      (await api.put<{ note: XenNote }>(`/api/xennote/notes/${v.id}/reminder`, { at: v.at })).note,
+    onSuccess: refresh,
+  });
   const deleteNote = useMutation({
     mutationFn: (id: string) => api.delete(`/api/xennote/notes/${id}`),
     onSuccess: refresh,
@@ -173,6 +179,7 @@ export const useXenNoteActions = () => {
   return {
     createNote,
     updateNote,
+    setReminder,
     deleteNote,
     addImages,
     removeImage,

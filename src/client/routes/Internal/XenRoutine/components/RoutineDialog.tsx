@@ -5,6 +5,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -12,6 +13,8 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
 import { format } from "date-fns";
 import { addInterval } from "../../../../hooks/xenroutine/routineViews";
 import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenroutine/useRoutines";
@@ -22,6 +25,9 @@ interface Props {
   onClose: () => void;
   onSubmit: (input: RoutineInput) => Promise<void> | void;
 }
+
+// Matches the server (MAX_ROUTINE_STEPS, and 100 characters a step).
+const MAX_STEPS = 30;
 
 const UNITS: IntervalUnit[] = ["days", "weeks", "months", "years"];
 // <input type="date"> yields yyyy-MM-dd; anchoring at local noon keeps the calendar day
@@ -40,6 +46,8 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
   // Create only: was the job actually done on the start date?
   const [alreadyDone, setAlreadyDone] = useState(true);
   const [dueAt, setDueAt] = useState("");
+  // The checklist being edited; a step that has an _id is an existing one (it keeps its tick).
+  const [steps, setSteps] = useState<Array<{ key: number; _id?: string; text: string }>>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -52,6 +60,7 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
     setStartDate(format(new Date(), "yyyy-MM-dd"));
     setAlreadyDone(true);
     setDueAt(routine ? format(new Date(routine.due_at), "yyyy-MM-dd") : "");
+    setSteps((routine?.checklist ?? []).map((c, i) => ({ key: i, _id: c._id, text: c.text })));
   }, [open, routine]);
 
   const everyNum = Number(every);
@@ -76,6 +85,9 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
       await onSubmit({
         name: name.trim(),
         notes,
+        checklist: steps
+          .filter((st) => st.text.trim())
+          .map((st) => ({ ...(st._id ? { _id: st._id } : {}), text: st.text.trim() })),
         interval: { every: everyNum, unit },
         // Edit keeps whatever category it had; create has none for now.
         ...(routine ? { category: category.trim(), ...(dueAt ? { due_at: toIso(dueAt) } : {}) } : {}),
@@ -178,6 +190,51 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
               )}
             </>
           )}
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              Steps (optional): things to tick off each time, like a monthly car check
+            </Typography>
+            {steps.map((st, i) => (
+              <Stack key={st.key} direction="row" spacing={0.5} alignItems="center">
+                <TextField
+                  size="small"
+                  fullWidth
+                  value={st.text}
+                  placeholder={`Step ${i + 1}`}
+                  onChange={(e) =>
+                    setSteps((all) => all.map((x) => (x.key === st.key ? { ...x, text: e.target.value } : x)))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && steps.length < MAX_STEPS) {
+                      e.preventDefault();
+                      setSteps((all) => {
+                        const next = [...all];
+                        next.splice(i + 1, 0, { key: Math.max(0, ...all.map((x) => x.key)) + 1, text: "" });
+                        return next;
+                      });
+                    }
+                  }}
+                  slotProps={{ htmlInput: { maxLength: 100, "aria-label": `Step ${i + 1}` } }}
+                />
+                <IconButton
+                  size="small"
+                  aria-label={`Remove step ${i + 1}`}
+                  onClick={() => setSteps((all) => all.filter((x) => x.key !== st.key))}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            ))}
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              disabled={steps.length >= MAX_STEPS}
+              onClick={() => setSteps((all) => [...all, { key: Math.max(0, ...all.map((x) => x.key)) + 1, text: "" }])}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Add step
+            </Button>
+          </Stack>
           <TextField
             label="Notes (part numbers, spares…)"
             value={notes}
