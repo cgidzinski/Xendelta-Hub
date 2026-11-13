@@ -14,7 +14,8 @@ export type AuditAction =
   | "user_delete"
   | "notify_send"
   | "chats_delete_all"
-  | "task_toggle";
+  | "task_toggle"
+  | "feedback_update";
 
 /** Which filter chip each action sits under. */
 export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
@@ -28,6 +29,7 @@ export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
   notify_send: "Notify",
   chats_delete_all: "Danger",
   task_toggle: "System",
+  feedback_update: "System",
 };
 
 export interface AuditEntry {
@@ -36,7 +38,7 @@ export interface AuditEntry {
   admin: { _id: string; username: string };
   action: AuditAction;
   category: AuditCategory;
-  target: { type: "user" | "everyone" | "chats" | "task" | "group"; id?: string; label: string };
+  target: { type: "user" | "everyone" | "chats" | "task" | "group" | "feedback"; id?: string; label: string };
   /** One readable line: what changed. */
   detail: string;
   /** Structured extras (a broadcast's title and channels, a role change's before and after). */

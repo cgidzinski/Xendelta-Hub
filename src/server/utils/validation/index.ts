@@ -15,3 +15,4 @@ export * from "./xennote";
 export * from "./apiKeys";
 export * from "./chat";
 export * from "./feed";
+export * from "./feedback";

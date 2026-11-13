@@ -308,6 +308,7 @@ export default function BaseNavBar({
                     <ListItemButton onClick={() => handleNavItemClick(item.path)} selected={item.isSelected(pathname)}>
                       <ListItemIcon>{item.icon}</ListItemIcon>
                       <ListItemText primary={item.label} />
+                      {item.endAction}
                     </ListItemButton>
                   </ListItem>
                 ))}

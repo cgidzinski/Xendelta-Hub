@@ -14,6 +14,7 @@ import type {
   NotifyChannel,
   Paged,
 } from "@shared/admin";
+import type { AdminFeedback, FeedbackStatus } from "@shared/feedback";
 import { adminKeys, type UserListParams } from "./keys";
 
 // One hook per admin page, plus the changes an admin can make. Reads refresh after a change, so every screen stays true.
@@ -197,3 +198,26 @@ export const useAdminActions = () => {
 };
 
 export type { AuditAction };
+
+// ---------- feedback ----------
+
+export interface AdminFeedbackPage extends Paged<AdminFeedback> {
+  /** How many are still "new", whatever the filter. */
+  newCount: number;
+}
+
+export const useAdminFeedback = (status: FeedbackStatus | "", page: number) =>
+  useQuery({
+    queryKey: adminKeys.feedback(status, page),
+    queryFn: () => api.get<AdminFeedbackPage>("/api/admin/feedback", { params: { status: status || undefined, page } }),
+    placeholderData: keepPreviousData,
+  });
+
+export const useUpdateFeedback = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; status: FeedbackStatus }) =>
+      api.put(`/api/admin/feedback/${v.id}`, { status: v.status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.feedbackAll() }),
+  });
+};
