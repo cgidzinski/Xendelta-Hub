@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { routineStatusBucket, pendingOccurrences, projectOccurrences, recentCompletions } from "./routineViews";
+import {
+  checklistProgress,
+  pendingOccurrences,
+  projectOccurrences,
+  recentCompletions,
+  routineStatusBucket,
+  stepsLabel,
+} from "./routineViews";
 import type { Routine } from "./useRoutines";
 
 const now = new Date("2026-06-10T12:00:00Z");
@@ -10,6 +17,7 @@ const routine = (over: Partial<Routine> = {}): Routine => ({
   name: "Filter",
   category: "",
   notes: "",
+  checklist: [],
   interval: { every: 3, unit: "months" },
   last_done_at: null,
   due_at: iso(1),
@@ -125,5 +133,20 @@ describe("recentCompletions", () => {
     expect(out.map((c) => c.routineName)).toEqual(["B", "A"]);
     expect(out[1].by_username).toBe("sam");
     expect(out[0].note).toBe("new one");
+  });
+});
+
+describe("checklist helpers", () => {
+  it("counts the ticked steps", () => {
+    expect(checklistProgress([{ done: true }, { done: false }, { done: true }])).toEqual({ done: 2, total: 3 });
+    expect(checklistProgress([])).toEqual({ done: 0, total: 0 });
+    expect(checklistProgress(undefined)).toEqual({ done: 0, total: 0 });
+  });
+
+  it("words it, and says nothing when there were no steps", () => {
+    expect(stepsLabel(2, 5)).toBe("2 of 5 steps");
+    expect(stepsLabel(0, 1)).toBe("0 of 1 step");
+    expect(stepsLabel(3, 3)).toBe("3 of 3 steps");
+    expect(stepsLabel(0, 0)).toBeNull();
   });
 });

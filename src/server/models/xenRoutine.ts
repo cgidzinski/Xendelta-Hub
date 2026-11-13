@@ -20,6 +20,16 @@ const memberSchema = new Schema(
   { _id: false },
 );
 
+// A step on a routine's checklist (the monthly car check: tyres, oil, lights). `done` is the tick for the occurrence
+// that is due now, shared by everyone on the routine; completing the routine resets every tick.
+const checklistItemSchema = new Schema(
+  {
+    text: { type: String, required: true, maxlength: 100 },
+    done: { type: Boolean, default: false },
+  },
+  { _id: true },
+);
+
 const historySchema = new Schema(
   {
     action: { type: String, enum: ["done", "postponed"], required: true },
@@ -31,6 +41,9 @@ const historySchema = new Schema(
     occurrence_at: { type: Date },
     // For "postponed": the due date it was pushed to.
     due_at: { type: Date },
+    // For "done" on a routine with a checklist: what was ticked off, out of how many steps there were.
+    steps_done: { type: [String], default: undefined },
+    steps_total: { type: Number, min: 0 },
   },
   { _id: false },
 );
@@ -41,6 +54,7 @@ const xenRoutineSchema = new Schema({
   category: { type: String, default: "", maxlength: 50 },
   // Free text: part numbers, filter models, where the spare lives.
   notes: { type: String, default: "", maxlength: 1000 },
+  checklist: { type: [checklistItemSchema], default: [] },
   interval: {
     every: { type: Number, required: true, min: 1, max: 1000 },
     unit: { type: String, enum: ["days", "weeks", "months", "years"], required: true },

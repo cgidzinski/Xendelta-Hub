@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Collapse,
   MenuItem,
   Stack,
@@ -25,9 +26,12 @@ import {
   useCompleteRoutine,
   useInvalidateRoutines,
   useRoutines,
+  useToggleChecklistItem,
 } from "../../../hooks/xenroutine/useRoutines";
 import {
   bucketForDate,
+  checklistProgress,
+  stepsLabel,
   DEFAULT_HORIZON_DAYS,
   dueText,
   HORIZON_OPTIONS,
@@ -64,7 +68,23 @@ function PendingCard({ occ }: { occ: Occurrence }) {
   // Each occurrence is its own completion. Resolves once the server has recorded it, then
   // the card collapses and only afterwards is the list refetched, so the slid handle stays
   // put until the card is gone. Rejects on failure so the slider springs back.
+  const toggleStep = useToggleChecklistItem();
+  // The steps belong to the occurrence that is due now, so only that card shows them.
+  const steps = projected ? [] : routine.checklist;
+  const progress = checklistProgress(steps);
+  const unticked = progress.total - progress.done;
+
   const handleComplete = async () => {
+    // Some steps not ticked: ask first. Cancelling rejects, so the slider springs back without an error message.
+    if (unticked > 0) {
+      const ok = await confirm({
+        title: "Some steps aren't ticked",
+        message: `${unticked} of ${progress.total} ${progress.total === 1 ? "step isn't" : "steps aren't"} ticked off on “${routine.name}”. Mark it as done anyway?`,
+        confirmLabel: "Mark as done",
+        destructive: false,
+      });
+      if (!ok) throw new Error("cancelled");
+    }
     try {
       await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at });
     } catch (e: any) {
@@ -104,10 +124,47 @@ function PendingCard({ occ }: { occ: Occurrence }) {
           </Box>
           <RoutineMenu routine={routine} variant="overview" allowPostpone={!projected} />
         </Stack>
+        {steps.length > 0 && (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {stepsLabel(progress.done, progress.total)} ticked
+            </Typography>
+            {steps.map((step) => (
+              <Box
+                key={step._id}
+                component="label"
+                sx={{ display: "flex", alignItems: "center", gap: 0.5, cursor: "pointer" }}
+              >
+                <Checkbox
+                  size="small"
+                  checked={step.done}
+                  onChange={(e) =>
+                    toggleStep.mutate(
+                      { id: routine._id, itemId: step._id, done: e.target.checked },
+                      { onError: () => enqueueSnackbar("Couldn't save the step", { variant: "error" }) },
+                    )
+                  }
+                  sx={{ p: 0.5 }}
+                />
+                <Typography
+                  variant="body2"
+                  sx={{ textDecoration: step.done ? "line-through" : "none", opacity: step.done ? 0.6 : 1 }}
+                >
+                  {step.text}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
         <Box sx={{ mt: 1.5 }}>
           <SlideToComplete
             onComplete={handleComplete}
             onKeyboardActivate={async () => {
+              // With steps left unticked, handleComplete asks about that instead, so there is only one question.
+              if (unticked > 0) {
+                handleComplete().catch(() => {});
+                return;
+              }
               if (
                 await confirm({
                   title: "Mark as done",
