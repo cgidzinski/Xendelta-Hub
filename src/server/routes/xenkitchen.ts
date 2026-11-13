@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import sharp from "sharp";
 import { z } from "zod";
+import { rateLimit } from "express-rate-limit";
 import { XenKitchenBook, XenKitchenCategory, XenKitchenItem } from "../models/xenKitchen";
 import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
@@ -10,6 +11,8 @@ import { MAX_XENKITCHEN_IMAGES } from "../constants";
 import { storeAppFiles, copyAppFiles, removeAppFiles } from "../utils/appFiles";
 import { XENKITCHEN_SOURCE, removeKitchenPhotos, withPhotoUrls } from "../utils/xenKitchenFiles";
 import { AppError } from "../utils/http";
+import { fetchPublicImage, fetchPublicPage } from "../utils/safeFetch";
+import { extractRecipe } from "../utils/recipeImport";
 import { notify } from "../utils/notificationUtils";
 import {
   validate,
@@ -21,6 +24,7 @@ import {
   xenKitchenBulkCategorySchema,
   xenKitchenBulkDeleteSchema,
   xenKitchenIdParamSchema,
+  xenKitchenImportUrlSchema,
   xenKitchenImageParamSchema,
   xenKitchenTokenParamSchema,
   xenKitchenBookSchema,
@@ -72,6 +76,16 @@ const handle =
 const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
 
 const IMAGE_MAX_EDGE = 1600;
+// Importing makes this server fetch a page for the caller, so it is limited per person (not per address).
+const importLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 12,
+  keyGenerator: (req) => (req as AuthenticatedRequest).user?._id.toString() ?? "anonymous",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: false, message: "Too many imports. Wait a minute and try again." },
+});
+
 const validIcon = (icon?: string) => (CATEGORY_ICONS as readonly string[]).includes(icon ?? "");
 
 // ---------- books ----------
@@ -973,6 +987,69 @@ module.exports = function (app: any) {
         await item.save();
       }
       await respondItem(res, item, target.toObject(), uid);
+    }),
+  );
+
+  // ---------- import from a web address ----------
+
+  // Fetch a recipe page and read the recipe out of it. Nothing is saved: the editor shows the result for review.
+  app.post(
+    "/api/xenkitchen/import-url",
+    authenticateToken,
+    importLimiter,
+    validate(xenKitchenImportUrlSchema),
+    handle(async (req, res) => {
+      const { url } = xenKitchenImportUrlSchema.parse(req.body);
+      const page = await fetchPublicPage(url);
+      const recipe = extractRecipe(page.body.toString("utf8"), page.url);
+      if (!recipe) {
+        throw new AppError(
+          422,
+          "Couldn't find a recipe on that page. Some sites don't publish their recipes in a way that can be read.",
+        );
+      }
+      res.json({ status: true, message: "Recipe found", data: { recipe } });
+    }),
+  );
+
+  // Add a picture from a web address (the recipe's photo on the page it was imported from) to an item.
+  app.post(
+    "/api/xenkitchen/items/:id/images/from-url",
+    authenticateToken,
+    importLimiter,
+    validateParams(xenKitchenIdParamSchema),
+    validate(xenKitchenImportUrlSchema),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const loaded = await loadItem(req, res, "edit");
+      if (!loaded) return;
+      const { item, book } = loaded;
+      if (item.images.length >= MAX_XENKITCHEN_IMAGES) {
+        return fail(res, 400, `Up to ${MAX_XENKITCHEN_IMAGES} photos per item`);
+      }
+      const { url } = xenKitchenImportUrlSchema.parse(req.body);
+      const fetched = await fetchPublicImage(url);
+      const mimetype = fetched.contentType.split(";")[0].trim().toLowerCase();
+      let processed;
+      try {
+        // The same resizing as an uploaded photo; a picture that can't be decoded is refused.
+        processed = await processImage({ buffer: fetched.body, mimetype } as Express.Multer.File);
+      } catch {
+        throw new AppError(400, "Couldn't read that picture");
+      }
+      const name = renamed(new URL(fetched.url).pathname.split("/").pop() || "photo", processed.ext);
+      const stored = await storeAppFiles(uid, { app: XENKITCHEN_SOURCE, ref: String(item._id) }, [
+        { buffer: processed.buffer, mimeType: processed.contentType, name },
+      ]);
+      for (const file of stored) item.images.push({ file_id: file._id, uploaded_by: uid });
+      item.updated_by = uid;
+      try {
+        await item.save();
+      } catch (error) {
+        await removeAppFiles(stored.map((f) => f._id));
+        throw error;
+      }
+      await respondItem(res, item, book, uid);
     }),
   );
 
