@@ -118,7 +118,7 @@ function FileCard({
           justifyContent: "center",
         }}
       >
-        {kind === "image" && file.previewUrl ? (
+        {(kind === "image" || kind === "pdf") && file.previewUrl ? (
           <Box
             component="img"
             src={file.previewUrl}

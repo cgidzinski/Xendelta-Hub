@@ -2,9 +2,10 @@ import sharp from "sharp";
 import { privateBucket } from "../config/gcs";
 import { XenDriveFile } from "../models/xendriveFile";
 import { uploadToGCS } from "./gcsUtils";
-import { THUMB_EDGE, canThumbnail, thumbPathFor } from "./xendriveThumbPaths";
+import { THUMB_EDGE, canThumbnail, isPdf, thumbPathFor } from "./xendriveThumbPaths";
+import { renderPdfFirstPage } from "./pdfThumb";
 
-// Small pictures of image files, for the drive's grid. The grid used to show every image at full size (a folder of phone
+// Small pictures of image files and the first page of PDFs, for the drive's grid. The grid used to show every image at full size (a folder of phone
 // photos meant dozens of multi-megabyte downloads). A thumbnail is made once, in the background, and kept next to the file
 // in the private bucket under `xendrive/<user>/thumbs/`. Until it exists (or if it can't be made) the grid just uses the
 // original, so nothing ever waits on one.
@@ -17,7 +18,9 @@ async function make(file: ThumbJob): Promise<void> {
   const id = String(file._id);
   try {
     const [original] = await privateBucket.file(file.storage_path).download();
-    const thumb = await sharp(original)
+    // A PDF's thumbnail is its first page; everything else is the picture itself.
+    const bitmap = isPdf(file.mimeType) ? await renderPdfFirstPage(original) : original;
+    const thumb = await sharp(bitmap)
       .rotate()
       .resize(THUMB_EDGE, THUMB_EDGE, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: 70 })

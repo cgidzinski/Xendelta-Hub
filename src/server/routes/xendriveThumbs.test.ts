@@ -81,11 +81,89 @@ describe("thumbnail helpers", () => {
     for (const mimeType of ["image/jpeg", "image/png", "image/webp", "image/gif", "IMAGE/PNG", "image/avif"]) {
       expect(canThumbnail({ mimeType, size: 5_000 }), mimeType).toBe(true);
     }
-    for (const mimeType of ["image/svg+xml", "application/pdf", "text/plain", "video/mp4"]) {
+    for (const mimeType of ["image/svg+xml", "text/plain", "video/mp4"]) {
       expect(canThumbnail({ mimeType, size: 5_000 }), mimeType).toBe(false);
     }
+    // PDFs get one too (their first page), with a lower size limit.
+    expect(canThumbnail({ mimeType: "application/pdf", size: 5_000 })).toBe(true);
+    expect(canThumbnail({ mimeType: "application/pdf", size: 26 * 1024 * 1024 })).toBe(false);
     expect(canThumbnail({ mimeType: "image/png", size: 41 * 1024 * 1024 })).toBe(false);
     expect(canThumbnail({ mimeType: "image/png" })).toBe(true);
+  });
+});
+
+/** A one-page PDF with some text, written by hand (no PDF library needed). */
+function tinyPdf(text: string): Buffer {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 500] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    "",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  const stream = `BT /F1 36 Tf 40 420 Td (${text}) Tj ET`;
+  objects[3] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.forEach((o) => (out += `${String(o).padStart(10, "0")} 00000 n \n`));
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(out, "latin1");
+}
+
+describe("PDF thumbnails", () => {
+  it("draws the first page: no link until it is ready (the original can't stand in), then a WebP of the page", async () => {
+    const me = await createUser();
+    const pdf = tinyPdf("Hello thumbnail");
+    const file = await addFile(me, "report.pdf", pdf, { mimeType: "application/pdf" });
+    const original = `xendrive/${me.user._id}/report.pdf-stored`;
+
+    expect(await urlOf(me, "report.pdf")).toBeNull();
+    await thumbnailsIdle();
+
+    const thumb = store.get(thumbPathFor(original));
+    expect(thumb).toBeTruthy();
+    const meta = await sharp(thumb!).metadata();
+    expect(meta.format).toBe("webp");
+    expect(meta.height).toBe(360); // a 400x500 page, longest edge 360
+    expect(meta.width).toBe(288);
+    // The page is white with dark text on it, not a blank or black square.
+    const { channels } = await sharp(thumb!).removeAlpha().stats();
+    expect(channels[0].mean).toBeGreaterThan(200);
+    expect(channels[0].min).toBeLessThan(120);
+    expect((await record(file.id)).thumbnail).toBe("ready");
+
+    expect(await urlOf(me, "report.pdf")).toBe(`https://example.test/signed/${thumbPathFor(original)}`);
+  }, 60_000);
+
+  it("a PDF it can't read is marked failed, gets no link, and isn't retried", async () => {
+    const me = await createUser();
+    const bad = await addFile(me, "broken.pdf", Buffer.from("%PDF-1.4 this is not really a pdf"), {
+      mimeType: "application/pdf",
+    });
+    await browse(me);
+    await thumbnailsIdle();
+    expect((await record(bad.id)).thumbnail).toBe("failed");
+    expect(await urlOf(me, "broken.pdf")).toBeNull();
+    const reads = downloads.length;
+    await browse(me);
+    await thumbnailsIdle();
+    expect(downloads).toHaveLength(reads);
+  }, 60_000);
+
+  it("a PDF over the size limit is left alone, without downloading it", async () => {
+    const me = await createUser();
+    const big = await addFile(me, "huge.pdf", tinyPdf("x"), { mimeType: "application/pdf", size: 30 * 1024 * 1024 });
+    await browse(me);
+    await thumbnailsIdle();
+    // Marked in the background, with nothing queued to wait for, so poll for it.
+    await vi.waitFor(async () => expect((await record(big.id)).thumbnail).toBe("failed"));
+    expect(downloads).toHaveLength(0);
   });
 });
 

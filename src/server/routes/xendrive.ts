@@ -46,7 +46,7 @@ import {
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
 import { generateSignedUrl } from "../utils/gcsUtils";
-import { thumbPathFor } from "../utils/xendriveThumbPaths";
+import { isPdf, thumbPathFor } from "../utils/xendriveThumbPaths";
 import { scheduleThumbnails } from "../utils/xendriveThumbs";
 import { privateBucket } from "../config/gcs";
 import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
@@ -104,8 +104,10 @@ async function previewUrls(
     thumbnail?: string | null;
   }>,
 ): Promise<Map<string, string>> {
-  const images = files.filter((f) => isImage(f.mimeType)).slice(0, MAX_THUMBS);
-  scheduleThumbnails(images.filter((f) => !f.thumbnail));
+  // A PDF is only worth a link once its first page has been drawn: the original can't stand in for it in an <img>.
+  const pictured = files.filter((f) => isImage(f.mimeType) || isPdf(f.mimeType)).slice(0, MAX_THUMBS);
+  scheduleThumbnails(pictured.filter((f) => !f.thumbnail));
+  const images = pictured.filter((f) => isImage(f.mimeType) || f.thumbnail === "ready");
   const pairs = await Promise.all(
     images.map(
       async (f) =>
