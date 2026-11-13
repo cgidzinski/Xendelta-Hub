@@ -14,6 +14,8 @@ import { useXenBudgetSocket } from "../../../hooks/xenbudget/useXenBudgetSocket"
 import { useXenBudgetItemMutations } from "../../../hooks/xenbudget/useItems";
 import type { XenBudgetBook, XenBudgetItem, CreateItemInput, UpdateBookInput } from "../../../hooks/xenbudget/types";
 import ItemForm from "./components/ItemForm";
+import { MAX_RECEIPT_IMAGES } from "../Share/receipt";
+import { useSharedReceipt } from "../Share/useSharedReceipt";
 import ItemPreviewModal from "./components/ItemPreviewModal";
 import ImportWizard from "./components/ImportWizard";
 import { loadPeriod, savePeriod } from "./components/periodStorage";
@@ -118,6 +120,13 @@ export default function BookDetail() {
   // than being stored, so a deep link or the back button lands on the right one. See
   // navigation.ts for why this is a segment match and not a suffix.
   const activeTab = activeIndex(location.pathname, TAB_PATHS);
+
+  // A receipt photo shared from another app opens the new-item form with the photo attached.
+  useSharedReceipt(!!book, MAX_RECEIPT_IMAGES, (images) => {
+    setEditing(null);
+    setAddImages(images);
+    setFormOpen(true);
+  });
 
   if (isLoading && !book) return <LoadingSpinner message="Loading book..." />;
   if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;
