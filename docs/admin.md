@@ -46,7 +46,12 @@ a migration on a scratch database).
 - **Audit:** backup, restore and delete are logged. The restore row is written when the restore ends, because the restore
   replaces the audit log too (so it is the only entry from before that moment that is guaranteed to be there).
 - People who signed up after the backup was taken don't exist after a restore. Their uploaded files stay in the bucket.
-- Not built yet: scheduled automatic backups and retention.
+- **Scheduled backups (opt-in):** set `BACKUP_SCHEDULE_HOURS` (e.g. `24`) in the server's `.env` and a scheduler job checks hourly
+  and writes `scheduled-<time>.ndjson.gz` when the newest scheduled one is older than that. `BACKUP_KEEP` (default 14) is how
+  many scheduled backups to keep; older ones are deleted after each new one. Only `scheduled-` files are ever deleted
+  automatically: manual backups and pre-restore safety copies stay until an admin deletes them. A tick is skipped while an admin's
+  backup or restore is running. Scheduled backups aren't written to the audit log (no admin is involved); the server log has a line.
+  They show an "automatic" tag on the System page.
 
 ## Adding a page
 1. A route file in `src/server/routes/admin/` exporting `registerAdmin<Area>Routes(app)`, registered in `index.ts`. Writes call `recordAudit`.

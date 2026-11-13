@@ -185,13 +185,13 @@ export interface AdminSystemReport {
 export const BACKUP_PREFIX = "db-backups/";
 /** The only object names the backup routes accept: ours, never a path the caller made up. */
 export const BACKUP_NAME_PATTERN =
-  /^db-backups\/(xendelta-hub-backup|pre-restore)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.ndjson\.gz$/;
+  /^db-backups\/(xendelta-hub-backup|pre-restore|scheduled)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.ndjson\.gz$/;
 
 export interface AdminBackup {
   /** The object name, e.g. db-backups/xendelta-hub-backup-2026-01-01T00-00-00-000Z.ndjson.gz */
   name: string;
-  /** "pre-restore" files are the safety snapshot taken just before a restore. */
-  kind: "backup" | "pre-restore";
+  /** "pre-restore" files are the safety snapshot taken just before a restore; "scheduled" ones are the automatic backups. */
+  kind: "backup" | "pre-restore" | "scheduled";
   size: number;
   createdAt: string | null;
 }

@@ -106,6 +106,9 @@ export default function BackupsCard() {
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="body2" noWrap>
                 {label(b)}
+                {b.kind === "scheduled" && (
+                  <Chip size="small" label="automatic" variant="outlined" sx={{ ml: 1, height: 20 }} />
+                )}
                 {b.kind === "pre-restore" && (
                   <Chip size="small" label="safety copy" variant="outlined" sx={{ ml: 1, height: 20 }} />
                 )}

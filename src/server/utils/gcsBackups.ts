@@ -14,6 +14,13 @@ import { AppError } from "./http";
 
 const fileSafeStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
 
+const kindOf = (name: string): AdminBackup["kind"] =>
+  name.startsWith(`${BACKUP_PREFIX}pre-restore-`)
+    ? "pre-restore"
+    : name.startsWith(`${BACKUP_PREFIX}scheduled-`)
+      ? "scheduled"
+      : "backup";
+
 export const isBackupName = (name: string) => BACKUP_NAME_PATTERN.test(name);
 
 export async function backupExists(name: string): Promise<boolean> {
@@ -28,7 +35,7 @@ export async function listBackups(): Promise<AdminBackup[]> {
     .filter((f) => isBackupName(f.name))
     .map((f) => ({
       name: f.name,
-      kind: f.name.startsWith(`${BACKUP_PREFIX}pre-restore-`) ? ("pre-restore" as const) : ("backup" as const),
+      kind: kindOf(f.name),
       size: Number(f.metadata?.size ?? 0),
       createdAt: f.metadata?.timeCreated ? new Date(f.metadata.timeCreated as string).toISOString() : null,
     }))
@@ -40,8 +47,9 @@ export async function deleteBackup(name: string): Promise<void> {
 }
 
 /** Streams the whole database to a new object and returns its name. A half-written object is removed. */
-export async function createBackup(db: Db, by: string, kind: "backup" | "pre-restore" = "backup"): Promise<string> {
-  const name = `${BACKUP_PREFIX}${kind === "backup" ? "xendelta-hub-backup" : "pre-restore"}-${fileSafeStamp()}.ndjson.gz`;
+export async function createBackup(db: Db, by: string, kind: AdminBackup["kind"] = "backup"): Promise<string> {
+  const prefix = { backup: "xendelta-hub-backup", "pre-restore": "pre-restore", scheduled: "scheduled" }[kind];
+  const name = `${BACKUP_PREFIX}${prefix}-${fileSafeStamp()}.ndjson.gz`;
   const file = privateBucket.file(name);
   try {
     // streamExport resolves when the destination finishes, which for a GCS write stream is when the upload is complete.
@@ -140,4 +148,58 @@ export function startJob(
 /** Test helper: forget the last job. */
 export function resetJobsForTests() {
   current = null;
+}
+
+// --- Scheduled backups --------------------------------------------------------------------------------------------
+// Off unless BACKUP_SCHEDULE_HOURS is set. The scheduler calls runScheduledBackup every hour; it only writes a new backup
+// when the newest scheduled one is older than the interval, so a server restart doesn't cause a backup each time. Only
+// "scheduled" backups are ever deleted automatically: manual backups and pre-restore safety copies are never touched.
+
+export interface BackupSchedule {
+  everyHours: number;
+  keep: number;
+}
+
+const DEFAULT_KEEP = 14;
+
+/** Reads BACKUP_SCHEDULE_HOURS and BACKUP_KEEP. Returns null (no schedule) unless the hours are a positive number. */
+export function scheduleFromEnv(env: NodeJS.ProcessEnv = process.env): BackupSchedule | null {
+  const everyHours = Number(env.BACKUP_SCHEDULE_HOURS);
+  if (!Number.isFinite(everyHours) || everyHours <= 0) return null;
+  const keep = Number(env.BACKUP_KEEP);
+  return { everyHours, keep: Number.isInteger(keep) && keep >= 1 ? keep : DEFAULT_KEEP };
+}
+
+/** Deletes the oldest scheduled backups beyond `keep`. Returns the names removed. */
+export async function pruneScheduledBackups(keep: number): Promise<string[]> {
+  const scheduled = (await listBackups()).filter((b) => b.kind === "scheduled"); // newest first
+  const stale = scheduled.slice(keep).map((b) => b.name);
+  for (const name of stale) await deleteBackup(name);
+  return stale;
+}
+
+/**
+ * One tick of the schedule. Writes a scheduled backup if the newest is older than the interval (or there is none), then
+ * prunes. Skips quietly while an admin's backup or restore is running. Returns what it did, for logs and tests.
+ */
+export async function runScheduledBackup(
+  db: Db,
+  schedule: BackupSchedule,
+  now: number = Date.now(),
+): Promise<"skipped-running" | "skipped-recent" | "backed-up"> {
+  if (current?.status === "running") return "skipped-running";
+  const newest = (await listBackups()).find((b) => b.kind === "scheduled");
+  if (newest?.createdAt && now - new Date(newest.createdAt).getTime() < schedule.everyHours * 3_600_000) {
+    return "skipped-recent";
+  }
+  const job = startJob(
+    "backup",
+    async () => ({ name: await createBackup(db, "scheduled", "scheduled") }),
+    async () => undefined,
+  );
+  while (job.status === "running") await new Promise((resolve) => setTimeout(resolve, 250));
+  if (job.status === "error") throw new Error(job.error);
+  const removed = await pruneScheduledBackups(schedule.keep);
+  console.log(`>>> Scheduled backup written: ${job.name}${removed.length ? ` (removed ${removed.length} old)` : ""}`);
+  return "backed-up";
 }
