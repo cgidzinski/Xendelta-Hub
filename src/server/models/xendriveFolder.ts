@@ -9,6 +9,12 @@ const xendriveFolderSchema = new Schema({
   share: {
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },
+    // Optional extras on the link: a password (bcrypt hash, never sent out), when it stops working, and a tally of
+    // downloads made through it.
+    passwordHash: { type: String, default: undefined },
+    expiry: { type: Date, default: undefined },
+    downloads: { type: Number, default: 0 },
+    lastDownloadedAt: { type: Date, default: undefined },
   },
   created_at: { type: Date, default: Date.now },
 });

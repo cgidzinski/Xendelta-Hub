@@ -58,13 +58,22 @@ export const xenDriveAppFilesQuerySchema = z.object({
 });
 export const xenDriveFileUrlQuerySchema = z.object({ download: z.enum(["1"]).optional() });
 // A public folder link: optionally a sub-folder of the shared one.
-export const xenDrivePublicFolderQuerySchema = z.object({ folder: objectIdSchema.optional() });
+export const xenDrivePublicFolderQuerySchema = z.object({
+  folder: objectIdSchema.optional(),
+  password: z.string().max(200).optional(),
+});
 
 export const xenDriveSettingsSchema = z.object({
   password: z.string().max(200).nullish(),
   expiry: z.string().max(64).nullish(),
   name: z.string().trim().min(1).max(255).optional(),
   shareEnabled: z.boolean().optional(),
+});
+
+// A folder link's password and expiry; null or "" clears one, leaving it out keeps it.
+export const xenDriveFolderShareSettingsSchema = z.object({
+  password: z.string().max(200).nullish(),
+  expiry: z.string().max(64).nullish(),
 });
 
 export const xenDriveFolderCreateSchema = z.object({
