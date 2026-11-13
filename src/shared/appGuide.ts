@@ -36,7 +36,7 @@ export interface AppGuideEntry {
 export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   hub: {
     about:
-      "Xendelta Hub is one place for the small apps you share with the people around you. Your Home page shows what needs attention and what your people have been up to.",
+      "XenSuite is one place for the apps you share with the people around you. Your Home page shows what needs attention and what your people have been up to.",
     tips: [
       {
         text: "Press Edit under All apps on Home to pin the apps you use. They show up at the top with a count of what is waiting.",
@@ -47,10 +47,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/messages",
       },
       {
-        text: "Install the hub on your phone from your browser's menu to get it as an app, with reminders as notifications.",
+        text: "Install XenSuite on your phone from your browser's menu to get it as an app, with reminders as notifications.",
         link: "/internal/profile",
       },
-      { text: "Use your phone's Share button to send a link, some text or a photo straight to the hub." },
+      { text: "Use your phone's Share button to send a link, some text or a photo straight to XenSuite." },
     ],
   },
   recipaint: {

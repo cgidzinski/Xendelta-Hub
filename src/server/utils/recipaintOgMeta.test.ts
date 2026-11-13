@@ -12,7 +12,7 @@ const SHELL = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Xendelta Hub</title>
+    <title>XenSuite</title>
   </head>
   <body><div id="root"></div></body>
 </html>`;
@@ -97,7 +97,7 @@ describe("injectMetaTags", () => {
   it("inserts before </head> and retitles the document", () => {
     const out = injectMetaTags(SHELL, '<meta property="og:title" content="X" />', "Necron Warrior");
     expect(out).toContain("<title>Necron Warrior</title>");
-    expect(out).not.toContain("<title>Xendelta Hub</title>");
+    expect(out).not.toContain("<title>XenSuite</title>");
     expect(out.indexOf("og:title")).toBeLessThan(out.indexOf("</head>"));
     expect(out).toContain('<div id="root">');
   });

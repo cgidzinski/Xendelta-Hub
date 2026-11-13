@@ -143,7 +143,7 @@ export default function GroupDetail() {
     uploadGroupImage,
     isUploadingImage,
   } = useXenSplit(groupId!);
-  useTitle("Xensplit");
+  useTitle("XenSplit");
   const { deleteGroup } = useXenSplits();
   const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(
     groupId!,

@@ -1,6 +1,6 @@
 {
-  "name": "Xendelta Hub",
-  "short_name": "XenDelta",
+  "name": "XenSuite",
+  "short_name": "XenSuite",
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#1976d2",

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Box, Button, Typography } from "@mui/material";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { BRAND_NAME } from "@shared/brand";
 import type { GuideApp } from "@shared/appGuide";
 import { CHANGELOG } from "@shared/changelog";
 import PageContainer from "../../../components/ui/PageContainer";
@@ -13,7 +14,7 @@ import { useWhatsNew } from "../../../hooks/useWhatsNew";
 import { changesByApp } from "./changesByApp";
 import { entryKey, newKeys } from "./seen";
 
-const HUB = { label: "The hub", description: "Home, sharing from your phone, and everything that isn't one app." };
+const HUB = { label: BRAND_NAME, description: "Home, sharing from your phone, and everything that isn't one app." };
 
 const about = (app: GuideApp) => {
   if (app === "hub") return { ...HUB, path: null as string | null };

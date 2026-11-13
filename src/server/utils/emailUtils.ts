@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { BRAND_NAME } from "@shared/brand";
 
 export interface PasswordResetEmailData {
   username: string;
@@ -17,13 +18,13 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
   const emailConfig = {
     to: email,
     from: "no-reply@xendelta.com",
-    subject: "Xendelta Hub - Password Reset",
+    subject: `${BRAND_NAME} - Password Reset`,
     text: `Click the link below to reset your password. This link will expire in 1 hour.\n\n${resetUrl}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Password Reset Request</h2>
         <p>Hello ${username},</p>
-        <p>You requested a password reset for your Xendelta Hub account. Click the button below to reset your password:</p>
+        <p>You requested a password reset for your ${BRAND_NAME} account. Click the button below to reset your password:</p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${resetUrl}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
         </div>
@@ -32,7 +33,7 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
         <p><strong>This link will expire in 1 hour for security reasons.</strong></p>
         <p>If you didn't request this password reset, please ignore this email.</p>
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-        <p style="color: #666; font-size: 12px;">This is an automated message from Xendelta Hub.</p>
+        <p style="color: #666; font-size: 12px;">This is an automated message from ${BRAND_NAME}.</p>
       </div>
     `,
   };
@@ -72,7 +73,7 @@ export async function sendNotificationEmail(data: NotificationEmailData): Promis
   const emailConfig = {
     to: email,
     from: "no-reply@xendelta.com",
-    subject: `Xendelta Hub - ${title}`,
+    subject: `${BRAND_NAME} - ${title}`,
     text: `${title}\n\n${message}${absoluteLink ? `\n\n${absoluteLink}` : ""}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -82,12 +83,12 @@ export async function sendNotificationEmail(data: NotificationEmailData): Promis
         ${
           absoluteLink
             ? `<div style="text-align: center; margin: 30px 0;">
-          <a href="${absoluteLink}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View in Xendelta Hub</a>
+          <a href="${absoluteLink}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View in ${BRAND_NAME}</a>
         </div>`
             : ""
         }
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-        <p style="color: #666; font-size: 12px;">This is an automated message from Xendelta Hub.</p>
+        <p style="color: #666; font-size: 12px;">This is an automated message from ${BRAND_NAME}.</p>
       </div>
     `,
   };

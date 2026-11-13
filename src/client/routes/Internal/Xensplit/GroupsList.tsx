@@ -33,7 +33,7 @@ import { ALL_CURRENCIES, withoutCurrency, STABLE_CURRENCY_MENU_PROPS } from "../
 import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 
 export default function GroupsList() {
-  useTitle("Xensplit");
+  useTitle("XenSplit");
   useXenSplitGroupsSocket();
   const { groups, isLoading, isError, error, refetch, createGroup, isCreating } = useXenSplits();
   const { user } = useAuth();

@@ -8,6 +8,8 @@ import PasswordField from "../../../components/PasswordField";
 import FormErrorAlert from "../../../components/forms/FormErrorAlert";
 import FormLoadingButton from "../../../components/forms/FormLoadingButton";
 import { validateEmail, validatePassword } from "../../../utils/formValidation";
+import { BRAND_NAME } from "@shared/brand";
+import { useTitle } from "../../../hooks/useTitle";
 
 interface LoginFormData {
   email: string;
@@ -21,6 +23,7 @@ interface LoginErrors {
 }
 
 export default function Login() {
+  useTitle("Sign in");
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
@@ -89,8 +92,8 @@ export default function Login() {
     <AuthSplitLayout
       icon={<LoginIcon sx={{ fontSize: 40 }} />}
       title="Welcome Back"
-      subtitle="Sign in to your Xendelta Hub account and continue your journey"
-      footnote="We're not sure why you're here, but we're glad you're here."
+      subtitle={`Sign in to your ${BRAND_NAME} account`}
+      footnote="Your apps, shared with the people you choose."
       heroOnMobile={false}
     >
       <Box component="form" onSubmit={handleSubmit}>

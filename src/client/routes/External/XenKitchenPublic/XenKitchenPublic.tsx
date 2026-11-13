@@ -14,6 +14,7 @@ import {
   usePublicKitchenItem,
 } from "../../../hooks/xenkitchen/useKitchen";
 import ItemView from "../../Internal/XenKitchen/components/ItemView";
+import { BRAND_NAME } from "@shared/brand";
 
 /** Read-only page behind /k/:token (one shared item) or /k/b/:token/:itemId (an item in a shared book). Works signed out. */
 export default function XenKitchenPublic() {
@@ -81,7 +82,7 @@ export default function XenKitchenPublic() {
             </Typography>
           </Stack>
           <Button size="small" onClick={() => navigate(isAuthenticated ? "/internal/xenkitchen" : "/")}>
-            {isAuthenticated ? "My kitchen" : "Xendelta Hub"}
+            {isAuthenticated ? "My kitchen" : BRAND_NAME}
           </Button>
         </Stack>
       </Box>

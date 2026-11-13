@@ -17,6 +17,16 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     app: "hub",
+    title: "Xendelta Hub is now called XenSuite",
+  },
+  {
+    date: "2026-11-13",
+    app: "hub",
+    title: "Refreshed the welcome and features pages, so they show every app",
+  },
+  {
+    date: "2026-11-13",
+    app: "hub",
     title: "You can now pin as many apps as you like, from the new All apps block on Home",
   },
   {
@@ -27,7 +37,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     app: "hub",
-    title: "Added sharing to the hub from your phone",
+    title: "Added sharing to XenSuite from your phone",
   },
   {
     date: "2026-11-13",

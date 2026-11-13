@@ -49,7 +49,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
   },
   {
     key: "xensplit",
-    label: "Xensplit",
+    label: "XenSplit",
     icon: ReceiptLongIcon,
     path: "/internal/xensplit",
     description: "Split expenses with friends",

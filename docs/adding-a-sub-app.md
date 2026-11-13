@@ -1,6 +1,6 @@
 # Adding a sub-app
 
-How to add a new app to Xendelta Hub (like XenSplit, XenBudget or XenKitchen) so it matches the existing
+How to add a new app to XenSuite (like XenSplit, XenBudget or XenKitchen) so it matches the existing
 ones. Read `CLAUDE.md` first for the repo-wide rules (checks, Prettier, migrations, Windows npm quirks) and
 `src/client/components/ui/DESIGN.md` for the look.
 
@@ -50,6 +50,10 @@ A new app, `myapp`, has to appear in all of these. Each is explained in the sect
 | 21 | `src/client/routes/Internal/Share/` | accept shared photos/links, if it makes sense | 10 |
 | 22 | a flow test next to `routes/coreFlows.test.ts` | create, edit and delete through the real routes (**required**) | 6 |
 | 23 | `migrations/` | only if stored data changes shape | 7 |
+
+The public pages (the landing page and Features) list every app from `APPS_REGISTRY` and `APP_GUIDE`, so a new app appears on them
+with no extra edit. Say the product's name with `BRAND_NAME` (`src/shared/brand.ts`), never by typing it; a test fails on the old
+spellings.
 
 ## Checklist
 

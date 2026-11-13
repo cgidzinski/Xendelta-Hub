@@ -12,6 +12,7 @@ import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx } from "../../../components/ui/surfaceStyles";
 import RecipeView from "../../Internal/Recipaint/components/RecipeView";
+import { BRAND_NAME } from "@shared/brand";
 
 export default function RecipaintPublic() {
   const { id } = useParams<{ id: string }>();
@@ -91,7 +92,7 @@ export default function RecipaintPublic() {
             </Typography>
           </Stack>
           <Button size="small" onClick={() => navigate(isAuthenticated ? "/internal/recipaint" : "/")}>
-            {isAuthenticated ? "My recipes" : "Xendelta Hub"}
+            {isAuthenticated ? "My recipes" : BRAND_NAME}
           </Button>
         </Stack>
       </Box>

@@ -1,4 +1,4 @@
-# Xendelta Hub
+# XenSuite
 
 ## UI work
 Before changing or adding any client UI, read `src/client/components/ui/DESIGN.md`. It is the

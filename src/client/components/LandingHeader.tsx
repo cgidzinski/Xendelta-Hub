@@ -1,123 +1,70 @@
-import { Box, Typography, Button } from "@mui/material";
-import { useTheme, alpha } from "@mui/material/styles";
-import { Login as LoginIcon } from "@mui/icons-material";
+import { Box, Button, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { BRAND_NAME } from "@shared/brand";
 
+const NAV = [
+  { label: "Features", to: "/features" },
+  { label: "Blog", to: "/blog" },
+];
+
+/** The top of every public page: the name, two links, and the ways in. Wraps instead of squeezing on a phone. */
 export default function LandingHeader() {
   const navigate = useNavigate();
-  const theme = useTheme();
 
   return (
-    <>
+    <Box
+      component="header"
+      sx={{
+        position: "sticky",
+        top: 0,
+        zIndex: 1000,
+        borderBottom: 1,
+        borderColor: "divider",
+        bgcolor: "background.paper",
+      }}
+    >
       <Box
-        component="header"
         sx={{
-          position: "sticky",
-          top: 0,
-          zIndex: 1000,
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          backdropFilter: "blur(10px)",
-          backgroundColor: alpha(theme.palette.background.paper, 0.8),
+          maxWidth: 1200,
+          mx: "auto",
+          px: { xs: 2, md: 4 },
+          py: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          columnGap: 2,
+          rowGap: 0.5,
         }}
       >
-        <Box
-          sx={{
-            maxWidth: "1200px",
-            mx: "auto",
-            px: { xs: 2, sm: 3, md: 4 },
-            py: 2,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: { xs: 1, md: 2 },
-            flexWrap: { xs: "wrap", md: "nowrap" },
-          }}
+        <Typography
+          component="div"
+          variant="h6"
+          onClick={() => navigate("/")}
+          sx={{ fontWeight: 700, cursor: "pointer", letterSpacing: "-0.01em" }}
         >
-          <Typography
-            variant="h5"
-            component="div"
-            onClick={() => navigate("/")}
-            sx={{
-              fontWeight: 700,
-              background: `linear-gradient(90deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              cursor: "pointer",
-              "&:hover": {
-                opacity: 0.8,
-              },
-              transition: "opacity 0.2s ease",
-              flexShrink: 0,
-            }}
-          >
-            XenDelta Hub
-          </Typography>
-          <Box
-            sx={{
-              display: "flex",
-              gap: { xs: 1, sm: 2, md: 4 },
-              alignItems: "center",
-              flex: { xs: "1 1 100%", md: "0 0 auto" },
-              justifyContent: { xs: "center", md: "flex-start" },
-              order: { xs: 3, md: 2 },
-              width: { xs: "100%", md: "auto" },
-              mt: { xs: 1, md: 0 },
-            }}
-          >
+          {BRAND_NAME}
+        </Typography>
+        <Box component="nav" sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
+          {NAV.map((l) => (
             <Button
+              key={l.to}
               color="inherit"
-              onClick={() => navigate("/blog")}
-              sx={{
-                color: "text.secondary",
-                textTransform: "none",
-                fontWeight: 500,
-                fontSize: { xs: "0.875rem", md: "1rem" },
-                px: { xs: 1.5, md: 2 },
-                "&:hover": {
-                  color: "primary.main",
-                },
-              }}
+              size="small"
+              onClick={() => navigate(l.to)}
+              sx={{ color: "text.secondary" }}
             >
-              Blog
+              {l.label}
             </Button>
-            <Button
-              color="inherit"
-              onClick={() => navigate("/features")}
-              sx={{
-                color: "text.secondary",
-                textTransform: "none",
-                fontWeight: 500,
-                fontSize: { xs: "0.875rem", md: "1rem" },
-                px: { xs: 1.5, md: 2 },
-                "&:hover": {
-                  color: "primary.main",
-                },
-              }}
-            >
-              Features
-            </Button>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<LoginIcon />}
-            onClick={() => navigate("/login")}
-            sx={{
-              px: { xs: 2, md: 3 },
-              py: 1,
-              fontWeight: 600,
-              fontSize: { xs: "0.875rem", md: "1rem" },
-              backgroundColor: "primary.main",
-              flexShrink: 0,
-              order: { xs: 2, md: 3 },
-              "&:hover": { backgroundColor: "primary.dark" },
-            }}
-          >
-            Sign In
+          ))}
+          <Button color="inherit" size="small" onClick={() => navigate("/login")} sx={{ color: "text.secondary" }}>
+            Sign in
+          </Button>
+          <Button variant="contained" size="small" onClick={() => navigate("/signup")} sx={{ ml: 0.5 }}>
+            Sign up
           </Button>
         </Box>
       </Box>
-    </>
+    </Box>
   );
 }

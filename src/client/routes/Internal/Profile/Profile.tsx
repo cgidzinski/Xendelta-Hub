@@ -46,6 +46,7 @@ import ETransferSection from "./components/ETransferSection";
 import ApiKeysSection from "./components/ApiKeysSection";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import { usePushNotifications } from "../../../pwa/hooks/usePushNotifications";
+import { BRAND_NAME } from "@shared/brand";
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
@@ -365,11 +366,11 @@ export default function Profile() {
                     label="Push notifications on this device"
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Get alerts on your phone or desktop even when Xendelta Hub is closed
+                    Get alerts on your phone or desktop even when {BRAND_NAME} is closed
                   </Typography>
                   {pushNeedsInstall && (
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                      On iPhone, tap Share → Add to Home Screen, then open Xendelta Hub from that icon to turn on
+                      On iPhone, tap Share → Add to Home Screen, then open {BRAND_NAME} from that icon to turn on
                       notifications.
                     </Typography>
                   )}

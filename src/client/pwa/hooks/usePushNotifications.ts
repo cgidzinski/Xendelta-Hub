@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiClient, reportApiError } from "../../config/api";
 import { ApiResponse } from "../../types/api";
+import { BRAND_NAME } from "@shared/brand";
 
 // Web Push subscribe/unsubscribe for the current device.
 //
@@ -91,7 +92,7 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       return false;
     }
     if (needsInstall) {
-      setError("On iPhone, add Xendelta Hub to your Home Screen first.");
+      setError(`On iPhone, add ${BRAND_NAME} to your Home Screen first.`);
       return false;
     }
 
