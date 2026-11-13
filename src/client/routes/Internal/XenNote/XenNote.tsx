@@ -35,6 +35,7 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
 import { useSnackbar } from "notistack";
 import type { NoteType } from "@shared/xennote/notes";
+import { normalizeTitle } from "@shared/xennote/wikiLinks";
 import { matchesKind, type NoteKind } from "./noteDraft";
 import { railPanelSx } from "../../../components/ui/railStyles";
 import { sectionLabelSx } from "../../../components/ui/surfaceStyles";
@@ -120,6 +121,23 @@ export default function XenNote() {
     q,
   };
   const { data: allNotes, isLoading, isError, error, refetch } = useXenNotes(filters);
+  // Every note the person can see (not just what the board is filtered to): what a [[title]] is looked up in.
+  const { data: everyNote } = useXenNotes({});
+  const titles = useMemo(
+    () => (everyNote ?? []).filter((n) => n.title.trim()).map((n) => ({ _id: n._id, title: n.title.trim() })),
+    [everyNote],
+  );
+  // A title means the most recently changed note called that (the list is newest first), ignoring case and extra spaces.
+  const resolveTitle = useMemo(() => {
+    const byTitle = new Map<string, string>();
+    for (const t of titles) if (!byTitle.has(normalizeTitle(t.title))) byTitle.set(normalizeTitle(t.title), t._id);
+    return (title: string) => byTitle.get(normalizeTitle(title)) ?? null;
+  }, [titles]);
+  const openNoteById = (id: string) => {
+    const found = everyNote?.find((n) => n._id === id);
+    if (found) setEditor({ note: found });
+    else enqueueSnackbar("That note isn't available", { variant: "info" });
+  };
   const { data: notebooks = [] } = useXenNotebooks();
   const { data: labels = [] } = useXenNoteLabels();
   const { data: counts } = useXenNoteCounts();
@@ -164,6 +182,8 @@ export default function XenNote() {
           onOpen={() => setEditor({ note: n })}
           onToggleItem={n.can_edit ? (i) => toggleItem(n, i) : undefined}
           onTogglePin={() => save(n._id, { pinned: !n.pinned })}
+          resolveTitle={resolveTitle}
+          onOpenLinked={openNoteById}
         />
       ))}
     </Box>
@@ -474,6 +494,8 @@ export default function XenNote() {
         startNotebookId={startNotebookId}
         notebooks={notebooks}
         labelSuggestions={labels.map((l) => l.name)}
+        titles={titles}
+        onOpenNote={openNoteById}
       />
       <NotebookDialog
         open={!!notebookDialog}
