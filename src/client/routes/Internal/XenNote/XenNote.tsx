@@ -33,6 +33,10 @@ import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
 import { useSnackbar } from "notistack";
+import { api } from "../../../config/api";
+import { useAuth } from "../../../contexts/AuthContext";
+import { isNetworkError } from "../../../offline/offlineQueue";
+import { offlineQueue } from "../../../offline/offlineRuntime";
 import type { NoteType } from "@shared/xennote/notes";
 import { matchesKind, type NoteKind } from "./noteDraft";
 import { railPanelSx } from "../../../components/ui/railStyles";
@@ -74,6 +78,8 @@ export default function XenNote() {
   const { enqueueSnackbar } = useSnackbar();
   const { updateNote } = useXenNoteActions();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up("md"));
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
@@ -116,21 +122,36 @@ export default function XenNote() {
       { onError: (e: Error) => enqueueSnackbar(e.message || "Couldn't save", { variant: "error" }) },
     );
 
-  // Ticking a box shows at once; the server catches up (and a failure puts everything back).
-  const toggleItem = (note: Note, index: number) => {
-    const checklist = note.checklist.map((c, i) => (i === index ? { ...c, done: !c.done } : c));
+  // Ticking a box shows at once and is saved as "this item is done/not done" (so it can't undo someone else's edit).
+  // With no connection it is kept on the device and sent later; any other failure puts everything back.
+  const toggleItem = async (note: Note, index: number) => {
+    const item = note.checklist[index];
+    const done = !item.done;
+    const checklist = note.checklist.map((c, i) => (i === index ? { ...c, done } : c));
     queryClient.setQueriesData<Note[]>({ queryKey: xennoteKeys.notesAll() }, (old) =>
       old?.map((n) => (n._id === note._id ? { ...n, checklist } : n)),
     );
-    updateNote.mutate(
-      { id: note._id, input: { checklist } },
-      {
-        onError: (e: Error) => {
-          enqueueSnackbar(e.message || "Couldn't save", { variant: "error" });
-          queryClient.invalidateQueries({ queryKey: xennoteKeys.all });
-        },
-      },
-    );
+    if (!item._id) {
+      updateNote.mutate(
+        { id: note._id, input: { checklist } },
+        { onError: () => queryClient.invalidateQueries({ queryKey: xennoteKeys.all }) },
+      );
+      return;
+    }
+    try {
+      await api.put(`/api/xennote/notes/${note._id}/checklist/${item._id}`, { done });
+    } catch (e) {
+      if (userId && isNetworkError(e)) {
+        await offlineQueue.add(
+          userId,
+          { kind: "note-tick", noteId: note._id, itemId: item._id, done },
+          `${done ? "Tick" : "Untick"} “${item.text || "item"}”`,
+        );
+        return;
+      }
+      enqueueSnackbar((e as Error).message || "Couldn't save", { variant: "error" });
+      void queryClient.invalidateQueries({ queryKey: xennoteKeys.all });
+    }
   };
 
   const renderNotes = (list: Note[]) => (

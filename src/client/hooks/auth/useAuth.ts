@@ -5,6 +5,10 @@ export type { AuthUser };
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { tokenStore } from "../../config/tokenStore";
 import { apiClient } from "../../config/api";
+import { isNetworkError } from "../../offline/offlineQueue";
+import { offlineStore } from "../../offline/offlineRuntime";
+
+const LAST_USER_KEY = "last-user";
 
 // Types
 interface SignupData {
@@ -57,7 +61,15 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
 
   // Note: Auth verify endpoint doesn't use standard ApiResponse format
   // It returns { status, user, token } directly
-  const response = await apiClient.post<AuthVerifyResponse>("/api/auth/verify");
+  let response;
+  try {
+    response = await apiClient.post<AuthVerifyResponse>("/api/auth/verify");
+  } catch (error) {
+    // No connection: stay signed in as the last person verified on this device (their token is still held), so the
+    // offline copy of their notes, routines and recipes opens. Anything the server answered is handled as before.
+    if (isNetworkError(error)) return (await offlineStore.get<AuthUser>(LAST_USER_KEY)) ?? null;
+    throw error;
+  }
   const data = response.data;
 
   if (data.status && data.user) {
@@ -67,12 +79,14 @@ const checkAuthStatus = async (): Promise<AuthUser | null> => {
     }
     // Convert user from API format (may have _id) to AuthUser format (id)
     const user = data.user;
-    return {
+    const authUser: AuthUser = {
       id: user.id || (user as any)._id || "",
       username: user.username || "",
       email: user.email || "",
       avatar: user.avatar || "",
     };
+    void offlineStore.set(LAST_USER_KEY, authUser);
+    return authUser;
   } else {
     // The 401 interceptor in api.ts handles token removal for genuine
     // invalid tokens. Server errors (503, network failures, etc.) should
@@ -244,12 +258,16 @@ export const useAuthHook = () => {
   useEffect(
     () =>
       tokenStore.subscribe((token) => {
-        if (token === null) resetSession();
+        if (token === null) {
+          void offlineStore.delete(LAST_USER_KEY);
+          resetSession();
+        }
       }),
     [resetSession],
   );
 
   const logout = () => {
+    void offlineStore.delete(LAST_USER_KEY);
     tokenStore.clear();
   };
 

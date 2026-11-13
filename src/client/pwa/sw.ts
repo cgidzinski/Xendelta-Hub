@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
+import { precacheAndRoute, cleanupOutdatedCaches, matchPrecache } from "workbox-precaching";
 import { clientsClaim } from "workbox-core";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -11,13 +11,13 @@ declare const self: ServiceWorkerGlobalScope;
 // below — read the comments before changing any of it, they encode real bug fixes.
 
 // Precache hashed static assets so repeat loads are fast and the app is installable.
-// This app requires a network connection to be useful, so there is intentionally NO offline
-// navigation fallback and no runtime caching of API/data requests — navigations and /api/
-// calls always go straight to the server.
+// There is no runtime caching of API/data requests: /api/ calls always go straight to the server (the app keeps its own
+// copy of the data it needs offline, see src/client/offline). Navigations also go to the network first.
 //
-// Critically, we register no NavigationRoute at all. A SPA navigation fallback would serve
-// cached index.html for ALL navigations, hijacking full-page navigations to /api/auth/* and
-// breaking OAuth.
+// Critically, we register no NavigationRoute. A SPA navigation fallback would serve cached
+// index.html for ALL navigations, hijacking full-page navigations to /api/auth/* and
+// breaking OAuth. The only fallback is the one below: when the network is down, a page under
+// /internal opens the cached app shell.
 //
 // One exception is worth knowing about: precacheAndRoute's own route still resolves a
 // request for "/" to the precached index.html, via Workbox's directoryIndex default. So the
@@ -25,6 +25,15 @@ declare const self: ServiceWorkerGlobalScope;
 // which is why swUpdate.ts waits for the new worker to activate before reloading.
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// Offline: a page load under /internal that cannot reach the server opens the cached app shell, which then shows the
+// copy of the data kept on the device. Only after the network has failed, only for /internal pages, never for /api/.
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.mode !== "navigate" || request.method !== "GET") return;
+  if (!new URL(request.url).pathname.startsWith("/internal")) return;
+  event.respondWith(fetch(request).catch(async () => (await matchPrecache("/index.html")) ?? Response.error()));
+});
 
 // Immediately claim existing clients after skipWaiting so the controllerchange event fires on
 // the open tab — required for the iOS-compatible reload in swUpdate.ts.

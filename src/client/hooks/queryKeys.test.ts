@@ -104,9 +104,9 @@ describe("query keys", () => {
       }
     };
     walk(root);
-    // constants/apps.ts holds app ids, not query keys.
+    // constants/apps.ts holds app ids, and queryPersistence.ts the list of apps kept offline: not query keys.
     expect(
-      bad.filter((f) => !f.endsWith("apps.ts")),
+      bad.filter((f) => !f.endsWith("apps.ts") && !f.endsWith("queryPersistence.ts")),
       "use the keys.ts factory for the app",
     ).toEqual([]);
   });

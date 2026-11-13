@@ -5,6 +5,8 @@ import {
   validate,
   validateParams,
   validateQuery,
+  xenNoteChecklistItemParamSchema,
+  xenNoteChecklistTickSchema,
   xenNoteCreateSchema,
   xenNoteIdParamSchema,
   xenNoteListQuerySchema,
@@ -202,6 +204,32 @@ export function registerNoteRoutes(app: any) {
         message: "Note saved",
         data: {
           note: await serializeNote(note, { uid, role: destination ? roleOf(destination.toObject(), uid) : "owner" }),
+        },
+      });
+    },
+  );
+
+  // Set one checklist item's tick, and nothing else. "Set", not "toggle", and one item rather than the whole list: it can be
+  // sent twice (a retry after a dropped connection, a queued tick sent when the phone is back online) with the same
+  // result, and it can't undo what someone else ticked in the meantime, which replacing the whole checklist would.
+  app.put(
+    "/api/xennote/notes/:id/checklist/:itemId",
+    validateParams(xenNoteChecklistItemParamSchema),
+    validate(xenNoteChecklistTickSchema),
+    async (req: Request, res: Response) => {
+      const uid = callerId(req);
+      const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
+      const result = await XenNote.updateOne(
+        { _id: note._id, type: "checklist", "checklist._id": req.params.itemId },
+        { $set: { "checklist.$.done": req.body.done, updated_by: uid, updated_at: new Date() } },
+      );
+      if (result.matchedCount === 0) throw new AppError(404, "That item isn't on this note any more");
+      notifyChange(notebook, note.owner_id);
+      const fresh = await XenNote.findById(note._id);
+      res.json({
+        status: true,
+        data: {
+          note: await serializeNote(fresh!, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }),
         },
       });
     },

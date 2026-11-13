@@ -15,6 +15,7 @@ import { reportApiError } from "./config/api";
 import ErrorPage from "./components/ErrorPage";
 import NavBar from "./components/navbars/NavBar";
 import PWA from "./pwa/PWA";
+import OfflineSync from "./offline/OfflineSync";
 import ConfirmProvider from "./components/ui/ConfirmProvider";
 import ProtectedRoute from "./components/routeguards/ProtectedRoute";
 import UnprotectedRoute from "./components/routeguards/UnprotectedRoute";
@@ -269,6 +270,7 @@ ReactDOM.createRoot(rootElement).render(
                 >
                   <ConfirmProvider>
                     <RouterProvider router={router} />
+                    <OfflineSync />
                     <PWA />
                   </ConfirmProvider>
                 </SnackbarProvider>

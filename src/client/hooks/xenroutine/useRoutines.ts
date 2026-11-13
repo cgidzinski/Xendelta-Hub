@@ -98,6 +98,8 @@ export const useDeleteRoutine = () => useRoutineMutation((id: string) => apiClie
 // first and then calls useInvalidateRoutines, otherwise the card would vanish mid-slide.
 export const useCompleteRoutine = () =>
   useMutation({
+    // "always": with no connection this must fail at once (so the caller can queue it), not wait for one.
+    networkMode: "always",
     mutationFn: (v: { id: string; note?: string; done_at?: string; occurrence?: number; expected_due_at?: string }) =>
       apiClient.post(`${base}/${v.id}/complete`, {
         note: v.note,

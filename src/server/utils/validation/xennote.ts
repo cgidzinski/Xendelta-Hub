@@ -21,6 +21,8 @@ const shareToken = z.string().regex(/^[A-Za-z0-9_-]{22}$/, "Invalid link");
 export const xenNoteIdParamSchema = z.object({ id: objectIdSchema });
 export const xenNoteMemberParamSchema = z.object({ id: objectIdSchema, userId: objectIdSchema });
 export const xenNoteImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });
+export const xenNoteChecklistItemParamSchema = z.object({ id: objectIdSchema, itemId: objectIdSchema });
+export const xenNoteChecklistTickSchema = z.object({ done: z.boolean() });
 export const xenNoteTokenParamSchema = z.object({ token: shareToken });
 
 export const xenNotebookSchema = z.object({

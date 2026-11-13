@@ -37,6 +37,9 @@ import {
   type Occurrence,
 } from "../../../hooks/xenroutine/routineViews";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
+import { useAuth } from "../../../contexts/AuthContext";
+import { isNetworkError } from "../../../offline/offlineQueue";
+import { offlineQueue, useQueuedDoneKeys } from "../../../offline/offlineRuntime";
 import SlideToComplete from "./components/SlideToComplete";
 import RoutineMenu from "./components/RoutineMenu";
 import type { XenRoutineOutletContext } from "./outletContext";
@@ -52,7 +55,7 @@ const BUCKETS: { bucket: Exclude<Bucket, "later">; title: string }[] = [
 // How long the exit animation runs before the list is refetched; must cover Collapse's timeout.
 const EXIT_MS = 350;
 
-function PendingCard({ occ }: { occ: Occurrence }) {
+function PendingCard({ occ, userId }: { occ: Occurrence; userId?: string }) {
   const { routine, index, date } = occ;
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
@@ -68,6 +71,19 @@ function PendingCard({ occ }: { occ: Occurrence }) {
     try {
       await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at });
     } catch (e: any) {
+      if (userId && isNetworkError(e)) {
+        // No connection: keep it on the device and send it when back online (the server checks the due date then).
+        // The card disappears because the list hides queued occurrences.
+        await offlineQueue.add(
+          userId,
+          { kind: "routine-done", routineId: routine._id, occurrence: index, expectedDueAt: routine.due_at },
+          `Mark “${routine.name}” as done`,
+        );
+        enqueueSnackbar(`“${routine.name}” marked as done. It will be saved when you're back online.`, {
+          variant: "info",
+        });
+        return;
+      }
       enqueueSnackbar(e?.response?.data?.message ?? "Couldn't mark as done", { variant: "error" });
       if (e?.response?.status === 409) void invalidate();
       throw e;
@@ -129,6 +145,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
 export default function Overview() {
   const { openCreate } = useOutletContext<XenRoutineOutletContext>();
   const { routines, isLoading, isError, error, refetch } = useRoutines();
+  const { user } = useAuth();
   // The three view settings are remembered per browser (localStorage), and a stored value
   // is only used if it is still one of the choices on offer.
   const [filter, setFilter] = useLocalStorageState<Filter>(
@@ -148,9 +165,13 @@ export default function Overview() {
     false,
     (v): v is boolean => typeof v === "boolean",
   );
+  const queuedDone = useQueuedDoneKeys(user?.id);
   const pending = useMemo(
-    () => pendingOccurrences(routines, new Date(), horizonDays, simplified),
-    [routines, horizonDays, simplified],
+    () =>
+      pendingOccurrences(routines, new Date(), horizonDays, simplified).filter(
+        (o) => !queuedDone.has(`${o.routine._id}:${o.routine.due_at}:${o.index}`),
+      ),
+    [routines, horizonDays, simplified, queuedDone],
   );
   const completions = useMemo(() => recentCompletions(routines), [routines]);
 
@@ -179,7 +200,7 @@ export default function Overview() {
     items.map((o) => (
       // Keyed by due date and index: after a completion a routine comes back with a new
       // due_at and must mount as fresh, unlocked cards.
-      <PendingCard key={`${o.routine._id}:${o.routine.due_at}:${o.index}`} occ={o} />
+      <PendingCard key={`${o.routine._id}:${o.routine.due_at}:${o.index}`} occ={o} userId={user?.id} />
     ));
 
   // Beyond the first 30 days, group by calendar month rather than one long list.
