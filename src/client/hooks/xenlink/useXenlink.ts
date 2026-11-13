@@ -12,6 +12,29 @@ export interface XenLink {
   slug: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Times the link was followed. */
+  clicks?: number;
+  last_clicked_at?: string | null;
+  /** ISO time after which the link stops working; absent = never. */
+  expires_at?: string | null;
+}
+
+/** What is sent to create or change a link. */
+export interface XenLinkInput {
+  _id?: string;
+  name: string;
+  url: string;
+  /** A short name of your own ("" or absent = random on create, unchanged on edit). */
+  slug?: string;
+  /** ISO time, or null to remove the expiry; absent leaves it as it is. */
+  expiresAt?: string | null;
+}
+
+export interface XenLinkStats {
+  clicks: number;
+  lastClickedAt: string | null;
+  /** The last 30 days, oldest first, days with none included. */
+  days: Array<{ day: string; n: number }>;
 }
 
 interface XenLinksResponse {
@@ -23,6 +46,7 @@ export const xenLinkKeys = {
   all: ["xenLink"] as const,
   // The search text is part of the key: results for different searches must not share a cache entry.
   list: (search?: string) => [...xenLinkKeys.all, "list", search ?? ""] as const,
+  stats: (linkId: string) => [...xenLinkKeys.all, "stats", linkId] as const,
 };
 
 // API functions
@@ -31,11 +55,11 @@ const fetchXenLink = async (search?: string): Promise<XenLink[]> => {
   return (await api.get<XenLinksResponse>("/api/xenlink/list", { params })).links;
 };
 
-const createXenLink = async (link: XenLink): Promise<XenLink> => {
+const createXenLink = async (link: XenLinkInput): Promise<XenLink> => {
   return api.post<XenLink>(`/api/xenlink`, link);
 };
 
-const updateXenLink = async (link: XenLink): Promise<XenLink> => {
+const updateXenLink = async (link: XenLinkInput): Promise<XenLink> => {
   return api.put<XenLink>(`/api/xenlink`, link);
 };
 
@@ -72,14 +96,15 @@ export const useXenLink = (search?: string) => {
 export const useUpdateXenLink = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (link: XenLink) => updateXenLink(link),
+    mutationFn: (link: XenLinkInput) => updateXenLink(link),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: xenLinkKeys.list() });
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
       enqueueSnackbar("Link updated successfully", { variant: "success" });
     },
-    onError: () => {
-      enqueueSnackbar("Failed to update link", { variant: "error" });
+    // The server says what was wrong (a short name that's taken, an address that isn't a web address).
+    onError: (e: Error) => {
+      enqueueSnackbar(e.message || "Failed to update link", { variant: "error" });
     },
   });
 };
@@ -87,14 +112,14 @@ export const useUpdateXenLink = () => {
 export const useCreateXenLink = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (link: XenLink) => createXenLink(link),
+    mutationFn: (link: XenLinkInput) => createXenLink(link),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: xenLinkKeys.list() });
       queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
       enqueueSnackbar("Link created successfully", { variant: "success" });
     },
-    onError: () => {
-      enqueueSnackbar("Failed to create link", { variant: "error" });
+    onError: (e: Error) => {
+      enqueueSnackbar(e.message || "Failed to create link", { variant: "error" });
     },
   });
 };
@@ -113,3 +138,12 @@ export const useDeleteXenLink = () => {
     },
   });
 };
+
+/** A link's clicks: total, last time, and per day for the last 30 days. Only fetched while `linkId` is set. */
+export const useXenLinkStats = (linkId: string | undefined) =>
+  useQuery({
+    queryKey: xenLinkKeys.stats(linkId ?? ""),
+    queryFn: () => api.get<XenLinkStats>(`/api/xenlink/${linkId}/stats`),
+    enabled: !!linkId,
+    staleTime: 30_000,
+  });

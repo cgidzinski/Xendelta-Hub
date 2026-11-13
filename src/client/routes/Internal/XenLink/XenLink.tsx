@@ -23,9 +23,14 @@ import {
   useDeleteXenLink,
   useUpdateXenLink,
   useXenLink,
+  useXenLinkStats,
   XenLink,
+  type XenLinkInput,
 } from "../../../hooks/xenlink/useXenlink";
+import { SLUG_PATTERN } from "@shared/xenlink";
 import LinkList from "./components/LinkList";
+import LinkQrCode from "./components/LinkQrCode";
+import LinkStatsChart from "./components/LinkStatsChart";
 import { format } from "date-fns";
 import { useSnackbar } from "notistack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -59,15 +64,28 @@ export default function XenDrive() {
     }
   };
 
+  const original = selectedLink._id ? links.find((l) => l._id === selectedLink._id) : undefined;
+  const { data: stats } = useXenLinkStats(EditLinkDialogOpen ? selectedLink._id || undefined : undefined);
+  // A short name you chose has to be a readable one; empty means "pick one for me" (or "keep it").
+  const slugProblem =
+    !!selectedLink.slug && selectedLink.slug !== original?.slug && !SLUG_PATTERN.test(selectedLink.slug);
+
   const handleCreateLinkDialog = async () => {
-    if (selectedLink) {
-      if (selectedLink._id) {
-        await updateXenLink(selectedLink);
-        handleCloseEditLinkDialog();
-      } else {
-        await createXenLink(selectedLink);
-        handleCloseEditLinkDialog();
-      }
+    if (!selectedLink) return;
+    const input: XenLinkInput = {
+      name: selectedLink.name,
+      url: selectedLink.url,
+      // The slug is only sent when it is one the person chose: typed on a new link, or changed on an existing one.
+      ...(selectedLink.slug && selectedLink.slug !== original?.slug ? { slug: selectedLink.slug } : {}),
+      // New links without an expiry send nothing; an edit sends the current value, null meaning "never".
+      ...(selectedLink._id || selectedLink.expires_at ? { expiresAt: selectedLink.expires_at ?? null } : {}),
+    };
+    try {
+      if (selectedLink._id) await updateXenLink({ ...input, _id: selectedLink._id });
+      else await createXenLink(input);
+      handleCloseEditLinkDialog();
+    } catch {
+      // The dialog stays open and the failure (a short name that's taken, an address that isn't one) is already shown.
     }
   };
 
@@ -125,6 +143,50 @@ export default function XenDrive() {
               value={selectedLink?.url || ""}
               onChange={(e) => setSelectedLink((prev) => (prev ? { ...prev, url: e.target.value } : emptyXenLink))}
             />
+            <TextField
+              fullWidth
+              label="Short name"
+              placeholder="Leave empty for a random one"
+              value={selectedLink.slug || ""}
+              onChange={(e) => setSelectedLink((prev) => ({ ...prev, slug: e.target.value.toLowerCase() }))}
+              error={slugProblem}
+              helperText={
+                slugProblem
+                  ? "Use 3 to 40 letters, numbers, - or _"
+                  : `${window.location.origin}/x/${selectedLink.slug || "…"}${selectedLink._id ? "  (changing it stops the old link working)" : ""}`
+              }
+              slotProps={{
+                htmlInput: { maxLength: 40, autoCapitalize: "none", autoCorrect: "off", spellCheck: false },
+              }}
+            />
+            <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+              <TextField
+                fullWidth
+                type="datetime-local"
+                label="Stops working on"
+                value={selectedLink.expires_at ? format(new Date(selectedLink.expires_at), "yyyy-MM-dd'T'HH:mm") : ""}
+                onChange={(e) => {
+                  const when = e.target.value ? new Date(e.target.value) : null;
+                  setSelectedLink((prev) => ({
+                    ...prev,
+                    expires_at: when && !Number.isNaN(when.getTime()) ? when.toISOString() : null,
+                  }));
+                }}
+                helperText={selectedLink.expires_at ? undefined : "Never, unless you pick a time"}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              {selectedLink.expires_at && (
+                <Button
+                  size="small"
+                  sx={{ mt: 1.25, whiteSpace: "nowrap" }}
+                  onClick={() => setSelectedLink((prev) => ({ ...prev, expires_at: null }))}
+                >
+                  Never expire
+                </Button>
+              )}
+            </Box>
+            {selectedLink._id && stats && <LinkStatsChart stats={stats} />}
+            {selectedLink._id && shareUrl && <LinkQrCode url={shareUrl} name={selectedLink.name} />}
             {selectedLink._id && (
               <Box>
                 <Typography variant="body2" color="text.secondary">
@@ -165,7 +227,7 @@ export default function XenDrive() {
               <Button
                 variant="contained"
                 onClick={handleCreateLinkDialog}
-                disabled={!selectedLink.name || !selectedLink.url || isUpdating}
+                disabled={!selectedLink.name || !selectedLink.url || isUpdating || slugProblem}
               >
                 {selectedLink._id ? "Save" : "Create"}
               </Button>
