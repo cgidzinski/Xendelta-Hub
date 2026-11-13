@@ -127,6 +127,19 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
+/**
+ * Move an unticked checklist item one place up (-1) or down (+1) among the unticked ones, which are what the editor
+ * lists (ticked items sit in the collapsed "completed" group and keep their own order). `index` is the item's place in
+ * the whole list. Returns the list unchanged when the item is already first or last, or is itself ticked.
+ */
+export function moveAmongActive<T extends { done: boolean }>(items: T[], index: number, direction: -1 | 1): T[] {
+  if (!items[index] || items[index].done) return items;
+  for (let target = index + direction; target >= 0 && target < items.length; target += direction) {
+    if (!items[target].done) return moveItem(items, index, target);
+  }
+  return items;
+}
+
 /** Ticked items out of those with text, for the card's progress bar. */
 export function checklistProgress(items: Array<{ text: string; done: boolean }>): { done: number; total: number } {
   const real = items.filter((i) => i.text.trim());

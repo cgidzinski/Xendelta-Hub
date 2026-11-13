@@ -26,6 +26,8 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
@@ -54,6 +56,7 @@ import {
   emptyDraft,
   isDirty,
   isEmptyDraft,
+  moveAmongActive,
   moveItem,
   toInput,
   type NoteDraft,
@@ -372,8 +375,33 @@ export default function NoteEditor({
                         <DragIndicatorIcon
                           fontSize="small"
                           aria-label="Drag to reorder"
-                          sx={{ color: "text.disabled", cursor: "grab" }}
+                          // Dragging doesn't work on a touchscreen; there the arrows below take its place.
+                          sx={{
+                            color: "text.disabled",
+                            cursor: "grab",
+                            "@media (pointer: coarse)": { display: "none" },
+                          }}
                         />
+                      )}
+                      {!readOnly && !item.done && (
+                        <Box sx={{ display: "none", "@media (pointer: coarse)": { display: "flex" } }}>
+                          <IconButton
+                            size="small"
+                            aria-label={`Move ${item.text || "item"} up`}
+                            disabled={moveAmongActive(draft.checklist, i, -1) === draft.checklist}
+                            onClick={() => set({ checklist: moveAmongActive(draft.checklist, i, -1) })}
+                          >
+                            <KeyboardArrowUpIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            aria-label={`Move ${item.text || "item"} down`}
+                            disabled={moveAmongActive(draft.checklist, i, 1) === draft.checklist}
+                            onClick={() => set({ checklist: moveAmongActive(draft.checklist, i, 1) })}
+                          >
+                            <KeyboardArrowDownIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                       )}
                       <Checkbox
                         checked={item.done}
