@@ -1,6 +1,6 @@
 import express = require("express");
 import { totalSpaceAllowed, usageFor } from "../utils/xendriveUtils";
-import { loadCaller, AppError } from "../utils/http";
+import { AppError, callerId, loadCaller } from "../utils/http";
 import { User } from "../models/user";
 import { Notification } from "../models/notification";
 import { ITEMS } from "../constants/items";
@@ -40,7 +40,7 @@ function etransferPayload(user: any) {
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/profile", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
     const user = await User.findOne({ _id: userId }).exec();
     if (!user) throw new AppError(404, "User not found");
 
@@ -93,7 +93,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { username, timezone, emailNotifications, etransfer, theme } = req.body;
       // Which fields this request actually changed. A preference toggle should not
       // announce itself as "Profile updated" in the notification centre.
@@ -505,7 +505,7 @@ module.exports = function (app: express.Application) {
 
   // Get user's pinned apps
   app.get("/api/user/pinned-apps", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
     const user = await User.findById(userId).exec();
     if (!user) throw new AppError(404, "User not found");
     return res.json({
@@ -520,7 +520,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(pinnedAppsSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { pinnedApps } = req.body;
       const user = await User.findById(userId).exec();
       if (!user) throw new AppError(404, "User not found");
@@ -535,7 +535,7 @@ module.exports = function (app: express.Application) {
 
   // Get user's inventory
   app.get("/api/user/inventory", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
     const user = await User.findById(userId).exec();
     if (!user) throw new AppError(404, "User not found");
     return res.json({
@@ -550,7 +550,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(inventoryItemIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { inventoryItemId } = req.params;
       // Claim the item first with one conditional update: of two simultaneous redeems only one matches
       // `used: false`, so the effect below can't be applied twice.
@@ -598,7 +598,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(inventoryItemIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { inventoryItemId } = req.params;
       const owner = await User.findOne({ _id: userId }, { inventory: { $elemMatch: { _id: inventoryItemId } } }).exec();
       if (!owner) throw new AppError(404, "User not found");
@@ -618,7 +618,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(inventoryItemIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { inventoryItemId } = req.params;
       const owner = await User.findOne({ _id: userId }, { inventory: { $elemMatch: { _id: inventoryItemId } } }).exec();
       if (!owner) throw new AppError(404, "User not found");
@@ -642,7 +642,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(inventoryItemIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { inventoryItemId } = req.params;
       const user = await User.findById(userId).exec();
       if (!user) throw new AppError(404, "User not found");

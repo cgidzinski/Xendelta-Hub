@@ -1,10 +1,10 @@
 import express = require("express");
 import { paintBodySchema, paintIdParamSchema, validate, validateParams } from "../utils/validation";
 import { authenticateToken } from "../middleware/auth";
-import { AuthenticatedRequest } from "../types";
 import { isSameId } from "../utils/objectId";
 import { normalizePaintInput } from "@shared/recipaint/paints";
 import { Paint } from "../models/paint";
+import { AppError, callerId } from "../utils/http";
 const mongoose = require("mongoose");
 const {
   Types: { ObjectId },
@@ -23,7 +23,7 @@ const DUPLICATE_KEY = 11000;
 module.exports = function (app: express.Application) {
   // List the caller's paints, newest brands grouped naturally by brand then name.
   app.get("/api/paints", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
 
     const paints = await Paint.find({ owner: new ObjectId(userId) })
       .sort({ brand: 1, name: 1 })
@@ -42,16 +42,13 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(paintBodySchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       // normalizePaintInput takes brand/name/range/hex/type/quantity/catalogueKey and derives
       // the range-aware dedupe key; anything else in the body is ignored.
       const normalized = normalizePaintInput(req.body);
       if (!normalized) {
-        return res.status(400).json({
-          status: false,
-          message: "A paint needs a name",
-        });
+        throw new AppError(400, "A paint needs a name");
       }
 
       try {
@@ -66,10 +63,7 @@ module.exports = function (app: express.Application) {
         // The unique index is the only thing enforcing "one entry per paint"; a race between
         // two adds lands here rather than creating a duplicate.
         if (error?.code === DUPLICATE_KEY) {
-          return res.status(409).json({
-            status: false,
-            message: "That paint is already in your collection",
-          });
+          throw new AppError(409, "That paint is already in your collection");
         }
         throw error;
       }
@@ -83,14 +77,14 @@ module.exports = function (app: express.Application) {
     validateParams(paintIdParamSchema),
     validate(paintBodySchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       const paint = await Paint.findById(req.params.paintId).exec();
       if (!paint) {
-        return res.status(404).json({ status: false, message: "Paint not found" });
+        throw new AppError(404, "Paint not found");
       }
       if (!isSameId(paint.owner, userId)) {
-        return res.status(403).json({ status: false, message: "Access denied" });
+        throw new AppError(403, "Access denied");
       }
 
       // Merge onto the stored values so a partial update (e.g. quantity only) keeps the rest,
@@ -105,7 +99,7 @@ module.exports = function (app: express.Application) {
         catalogueKey: req.body.catalogueKey ?? paint.catalogueKey,
       });
       if (!normalized) {
-        return res.status(400).json({ status: false, message: "A paint needs a name" });
+        throw new AppError(400, "A paint needs a name");
       }
 
       Object.assign(paint, normalized);
@@ -114,10 +108,7 @@ module.exports = function (app: express.Application) {
         await paint.save();
       } catch (error: any) {
         if (error?.code === DUPLICATE_KEY) {
-          return res.status(409).json({
-            status: false,
-            message: "Another paint in your collection already has that brand, range and name",
-          });
+          throw new AppError(409, "Another paint in your collection already has that brand, range and name");
         }
         throw error;
       }
@@ -137,14 +128,14 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(paintIdParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       const paint = await Paint.findById(req.params.paintId).exec();
       if (!paint) {
-        return res.status(404).json({ status: false, message: "Paint not found" });
+        throw new AppError(404, "Paint not found");
       }
       if (!isSameId(paint.owner, userId)) {
-        return res.status(403).json({ status: false, message: "Access denied" });
+        throw new AppError(403, "Access denied");
       }
 
       await Paint.findByIdAndDelete(paint._id).exec();
