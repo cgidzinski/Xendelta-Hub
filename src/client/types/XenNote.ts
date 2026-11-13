@@ -33,6 +33,8 @@ export interface XenNote {
   pinned: boolean;
   archived: boolean;
   labels: string[];
+  /** My own reminder on this note (other people's aren't shown). `sent` once it has gone out. */
+  reminder: { at: string; sent: boolean } | null;
   can_edit: boolean;
   share: { enabled: boolean; token: string | null } | null; // only for people who can edit
   updated_by_name: string | null; // who last changed it, in a shared notebook

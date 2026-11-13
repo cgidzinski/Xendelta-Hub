@@ -8,6 +8,7 @@ import {
   xenNoteCreateSchema,
   xenNoteIdParamSchema,
   xenNoteListQuerySchema,
+  xenNoteReminderSchema,
   xenNoteUpdateSchema,
 } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
@@ -253,6 +254,47 @@ export function registerNoteRoutes(app: any) {
     notifyChange(notebook, owner);
     res.json({ status: true, message: "Note deleted" });
   });
+
+  // ---- my reminder on a note. Personal, so anyone who can see the note (a viewer too) may set one for themselves, and it
+  // changes nothing about the note: no save(), so the note's updated time and its place on the board stay as they are.
+  app.put(
+    "/api/xennote/notes/:id/reminder",
+    validateParams(xenNoteIdParamSchema),
+    validate(xenNoteReminderSchema),
+    async (req: Request, res: Response) => {
+      const uid = callerId(req);
+      const { note, notebook } = await loadNote(req, req.params.id as string, "view");
+      const at: string | null = req.body.at;
+
+      if (at === null) {
+        await XenNote.updateOne({ _id: note._id }, { $pull: { reminders: { user_id: uid } } });
+      } else {
+        const when = new Date(at);
+        // Replace my reminder if I have one (and make it unsent again), otherwise add it. The second filter keeps two
+        // quick requests from adding two.
+        const replaced = await XenNote.updateOne(
+          { _id: note._id, "reminders.user_id": uid },
+          { $set: { "reminders.$.at": when, "reminders.$.notified_at": null } },
+        );
+        if (replaced.matchedCount === 0) {
+          await XenNote.updateOne(
+            { _id: note._id, "reminders.user_id": { $ne: uid } },
+            { $push: { reminders: { user_id: uid, at: when, notified_at: null } } },
+          );
+        }
+      }
+
+      const fresh = await XenNote.findById(note._id);
+      if (!fresh) throw new AppError(404, "Note not found");
+      res.json({
+        status: true,
+        message: at === null ? "Reminder removed" : "Reminder set",
+        data: {
+          note: await serializeNote(fresh, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }),
+        },
+      });
+    },
+  );
 
   // ---- a single note's public link: enable (keeps the current link), rotate, disable
   const share = (action: "enable" | "rotate" | "disable") => async (req: Request, res: Response) => {

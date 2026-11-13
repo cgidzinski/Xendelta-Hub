@@ -1,37 +1,13 @@
-import { useEffect, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  InputAdornment,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Box, Button, InputAdornment, Stack, Switch, TextField, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import ScheduleIcon from "@mui/icons-material/Schedule";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import { addDays, addHours, addMonths, addWeeks, format } from "date-fns";
 import { useSnackbar } from "notistack";
 import SectionLabel from "../../../../components/ui/SectionLabel";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { fileShareUrl, useXendriveActions } from "../../../../hooks/xendrive/useXendrive";
 import type { XenDriveFile } from "../../../../types/XenDriveFile";
-
-const PRESETS: Array<{ label: string; at: (now: Date) => Date }> = [
-  { label: "1 hour", at: (n) => addHours(n, 1) },
-  { label: "1 day", at: (n) => addDays(n, 1) },
-  { label: "1 week", at: (n) => addWeeks(n, 1) },
-  { label: "1 month", at: (n) => addMonths(n, 1) },
-];
-
-/** The `datetime-local` input's value for a date, in the person's own time zone. */
-const toLocalInput = (d: Date) => format(d, "yyyy-MM-dd'T'HH:mm");
+import DownloadTally from "./DownloadTally";
+import LinkExpiryPicker from "./LinkExpiryPicker";
+import LinkPasswordField from "./LinkPasswordField";
 
 /**
  * Everything about a file's public link: the on/off switch, the address, a password, and when it stops
@@ -41,13 +17,7 @@ export default function FileSharePanel({ file }: { file: XenDriveFile }) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const { updateFileSettings, rotateFileLink } = useXendriveActions();
-  const [password, setPassword] = useState(file.password ?? "");
-  const [showPassword, setShowPassword] = useState(false);
-  const [picking, setPicking] = useState(false);
   const busy = updateFileSettings.isPending || rotateFileLink.isPending;
-
-  // Follow the file when it changes underneath (another tab, a new link)
-  useEffect(() => setPassword(file.password ?? ""), [file._id, file.password]);
 
   const save = (settings: Parameters<typeof updateFileSettings.mutate>[0]["settings"], message?: string) =>
     updateFileSettings.mutate(
@@ -59,8 +29,6 @@ export default function FileSharePanel({ file }: { file: XenDriveFile }) {
     );
 
   const url = file.shareToken ? fileShareUrl(file.shareToken) : "";
-  const expiry = file.expiry ? new Date(file.expiry) : null;
-  const expired = !!expiry && expiry <= new Date();
 
   const newLink = async () => {
     const ok = await confirm({
@@ -132,120 +100,17 @@ export default function FileSharePanel({ file }: { file: XenDriveFile }) {
         )}
       </Box>
 
-      <Box>
-        <SectionLabel>Password</SectionLabel>
-        <TextField
-          fullWidth
-          size="small"
-          type={showPassword ? "text" : "password"}
-          value={password}
-          placeholder={file.hasPassword ? "Enter a new password" : "Set a password"}
-          onChange={(e) => setPassword(e.target.value)}
-          slotProps={{
-            htmlInput: { "aria-label": "Password", maxLength: 200 },
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <LockOutlinedIcon fontSize="small" color={file.hasPassword ? "success" : "inherit"} />
-                </InputAdornment>
-              ),
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    onClick={() => setShowPassword((v) => !v)}
-                  >
-                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center", mt: 1, flexWrap: "wrap" }}>
-          <Button
-            size="small"
-            variant="outlined"
-            disabled={busy || password === (file.password ?? "") || password === ""}
-            onClick={() => save({ password }, "Password saved")}
-          >
-            Save password
-          </Button>
-          {file.hasPassword && (
-            <Button
-              size="small"
-              color="error"
-              disabled={busy}
-              onClick={() => {
-                setPassword("");
-                save({ password: null }, "Password removed");
-              }}
-            >
-              Remove password
-            </Button>
-          )}
-          <Typography variant="body2" color="text.secondary">
-            People need it to download.
-          </Typography>
-        </Box>
-      </Box>
+      <LinkPasswordField
+        resetKey={file._id}
+        hasPassword={!!file.hasPassword}
+        busy={busy}
+        onSave={(password) => save({ password }, "Password saved")}
+        onRemove={() => save({ password: null }, "Password removed")}
+      />
 
-      <Box>
-        <SectionLabel>Link expires</SectionLabel>
-        <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: "wrap", mb: 1.5 }}>
-          <Chip
-            label="Never"
-            clickable
-            color={!expiry ? "primary" : "default"}
-            variant={!expiry ? "filled" : "outlined"}
-            onClick={() => {
-              setPicking(false);
-              save({ expiry: null }, "Link no longer expires");
-            }}
-          />
-          {PRESETS.map((p) => (
-            <Chip
-              key={p.label}
-              label={p.label}
-              clickable
-              variant="outlined"
-              onClick={() => {
-                setPicking(false);
-                save({ expiry: p.at(new Date()).toISOString() }, `Link expires in ${p.label}`);
-              }}
-            />
-          ))}
-          <Chip
-            label="Pick a date…"
-            clickable
-            variant={picking ? "filled" : "outlined"}
-            color={picking ? "primary" : "default"}
-            onClick={() => setPicking((v) => !v)}
-          />
-        </Stack>
+      <LinkExpiryPicker expiry={file.expiry} onChange={(expiry, message) => save({ expiry }, message)} />
 
-        {picking && (
-          <TextField
-            type="datetime-local"
-            size="small"
-            fullWidth
-            defaultValue={toLocalInput(expiry ?? addDays(new Date(), 1))}
-            slotProps={{ htmlInput: { "aria-label": "Expiry date and time", min: toLocalInput(new Date()) } }}
-            onChange={(e) => {
-              const when = new Date(e.target.value);
-              if (!Number.isNaN(when.getTime())) save({ expiry: when.toISOString() });
-            }}
-            sx={{ mb: 1.5 }}
-          />
-        )}
-
-        {expiry && (
-          <Alert severity={expired ? "error" : "warning"} icon={<ScheduleIcon fontSize="small" />} sx={{ py: 0.5 }}>
-            {expired ? "This link has expired" : `Stops working on ${format(expiry, "MMM d, h:mm a")}`}
-          </Alert>
-        )}
-      </Box>
+      {file.shared && <DownloadTally downloads={file.downloads} last={file.lastDownloadedAt} />}
     </Stack>
   );
 }
