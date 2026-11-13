@@ -84,7 +84,12 @@ export default function ItemDetail() {
       }))
     )
       return;
-    await remove.mutateAsync(item._id);
+    try {
+      await remove.mutateAsync(item._id);
+    } catch (e) {
+      err(e);
+      return;
+    }
     enqueueSnackbar("Deleted", { variant: "success" });
     navigate("/internal/xenkitchen", { replace: true });
   };

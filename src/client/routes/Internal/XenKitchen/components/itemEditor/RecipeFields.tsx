@@ -53,139 +53,142 @@ export function RecipeFields({
   const removeAt = (i: number) => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [blankIngredient()]);
 
   return (
-    <>
-      <SectionTitle
-        action={
+    <Box sx={{ display: "grid", columnGap: 4, gridTemplateColumns: { md: "minmax(0, 1fr) minmax(0, 1.25fr)" } }}>
+      <Box sx={{ minWidth: 0 }}>
+        <SectionTitle
+          action={
+            <Button
+              size="small"
+              color="inherit"
+              startIcon={<ContentPasteIcon fontSize="small" />}
+              onClick={() => setPasteOpen(true)}
+              sx={{ opacity: 0.7 }}
+            >
+              Paste list
+            </Button>
+          }
+        >
+          Ingredients
+        </SectionTitle>
+        <Stack spacing={0.25}>
+          {rows.map((row, i) =>
+            row.kind === "section" ? (
+              <Stack key={row.key} direction="row" alignItems="center" sx={{ pt: i ? 1 : 0 }}>
+                <TextField
+                  variant="standard"
+                  placeholder="Section, e.g. Sauce"
+                  value={row.name}
+                  fullWidth
+                  onChange={(e) => patchRow(i, { name: e.target.value })}
+                  sx={quietInput}
+                  slotProps={{
+                    htmlInput: {
+                      maxLength: 60,
+                      style: { fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, fontSize: 13 },
+                    },
+                  }}
+                />
+                <IconButton size="small" onClick={() => removeAt(i)} aria-label="Remove section">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            ) : (
+              <Stack
+                key={row.key}
+                direction="row"
+                alignItems="center"
+                spacing={1}
+                sx={{
+                  "& .row-more": { opacity: { sm: 0 } },
+                  "&:hover .row-more, &:focus-within .row-more": { opacity: 1 },
+                }}
+              >
+                <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: accent, flexShrink: 0, opacity: 0.7 }} />
+                <IngredientLineField
+                  value={row.text}
+                  autoFocus={focusKey === row.key}
+                  onChange={(text) => patchRow(i, { text })}
+                  onEnter={() => insertAfter(i)}
+                  onBackspaceEmpty={() => {
+                    if (rows.length > 1) removeAt(i);
+                  }}
+                />
+                <IconButton
+                  className="row-more"
+                  size="small"
+                  onClick={(e) => setMenu({ el: e.currentTarget, i })}
+                  aria-label="Ingredient options"
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            ),
+          )}
+        </Stack>
+        <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+          <Button size="small" startIcon={<AddIcon />} onClick={() => insertAfter(rows.length - 1)}>
+            Ingredient
+          </Button>
           <Button
             size="small"
             color="inherit"
-            startIcon={<ContentPasteIcon fontSize="small" />}
-            onClick={() => setPasteOpen(true)}
+            startIcon={<TitleIcon />}
             sx={{ opacity: 0.7 }}
+            onClick={() => {
+              const row = blankIngredient();
+              setRows([...rows, { key: newKey(), kind: "section", name: "" }, row]);
+            }}
           >
-            Paste list
+            Section
           </Button>
-        }
-      >
-        Ingredients
-      </SectionTitle>
-      <Stack spacing={0.25}>
-        {rows.map((row, i) =>
-          row.kind === "section" ? (
-            <Stack key={row.key} direction="row" alignItems="center" sx={{ pt: i ? 1 : 0 }}>
-              <TextField
-                variant="standard"
-                placeholder="Section, e.g. Sauce"
-                value={row.name}
-                fullWidth
-                onChange={(e) => patchRow(i, { name: e.target.value })}
-                sx={quietInput}
-                slotProps={{
-                  htmlInput: {
-                    maxLength: 60,
-                    style: { fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, fontSize: 13 },
-                  },
-                }}
-              />
-              <IconButton size="small" onClick={() => removeAt(i)} aria-label="Remove section">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-          ) : (
-            <Stack
-              key={row.key}
-              direction="row"
-              alignItems="center"
-              spacing={1}
-              sx={{
-                "& .row-more": { opacity: { sm: 0 } },
-                "&:hover .row-more, &:focus-within .row-more": { opacity: 1 },
-              }}
-            >
-              <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: accent, flexShrink: 0, opacity: 0.7 }} />
-              <IngredientLineField
-                value={row.text}
-                autoFocus={focusKey === row.key}
-                onChange={(text) => patchRow(i, { text })}
-                onEnter={() => insertAfter(i)}
-                onBackspaceEmpty={() => {
-                  if (rows.length > 1) removeAt(i);
-                }}
-              />
-              <IconButton
-                className="row-more"
-                size="small"
-                onClick={(e) => setMenu({ el: e.currentTarget, i })}
-                aria-label="Ingredient options"
-              >
-                <MoreVertIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-          ),
-        )}
-      </Stack>
-      <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-        <Button size="small" startIcon={<AddIcon />} onClick={() => insertAfter(rows.length - 1)}>
-          Ingredient
-        </Button>
-        <Button
-          size="small"
-          color="inherit"
-          startIcon={<TitleIcon />}
-          sx={{ opacity: 0.7 }}
-          onClick={() => {
-            const row = blankIngredient();
-            setRows([...rows, { key: newKey(), kind: "section", name: "" }, row]);
+        </Stack>
+        <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
+          <MenuItem
+            disabled={!menu || menu.i === 0}
+            onClick={() => {
+              if (menu) setRows(moveIn(rows, menu.i, -1));
+              setMenu(null);
+            }}
+          >
+            <ArrowUpwardIcon fontSize="small" sx={{ mr: 1 }} />
+            Move up
+          </MenuItem>
+          <MenuItem
+            disabled={!menu || menu.i === rows.length - 1}
+            onClick={() => {
+              if (menu) setRows(moveIn(rows, menu.i, 1));
+              setMenu(null);
+            }}
+          >
+            <ArrowDownwardIcon fontSize="small" sx={{ mr: 1 }} />
+            Move down
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              if (menu) removeAt(menu.i);
+              setMenu(null);
+            }}
+          >
+            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />
+            Remove
+          </MenuItem>
+        </Menu>
+        <PasteDialog
+          open={pasteOpen}
+          onClose={() => setPasteOpen(false)}
+          onAdd={(parsed) => {
+            const kept = rows.filter((r) => r.kind === "section" || r.text.trim());
+            setRows([
+              ...kept,
+              ...parsed.map((p) => ({ key: newKey(), kind: "ingredient" as const, text: ingredientLine(p) })),
+            ]);
           }}
-        >
-          Section
-        </Button>
-      </Stack>
-      <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
-        <MenuItem
-          disabled={!menu || menu.i === 0}
-          onClick={() => {
-            if (menu) setRows(moveIn(rows, menu.i, -1));
-            setMenu(null);
-          }}
-        >
-          <ArrowUpwardIcon fontSize="small" sx={{ mr: 1 }} />
-          Move up
-        </MenuItem>
-        <MenuItem
-          disabled={!menu || menu.i === rows.length - 1}
-          onClick={() => {
-            if (menu) setRows(moveIn(rows, menu.i, 1));
-            setMenu(null);
-          }}
-        >
-          <ArrowDownwardIcon fontSize="small" sx={{ mr: 1 }} />
-          Move down
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menu) removeAt(menu.i);
-            setMenu(null);
-          }}
-        >
-          <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />
-          Remove
-        </MenuItem>
-      </Menu>
-      <PasteDialog
-        open={pasteOpen}
-        onClose={() => setPasteOpen(false)}
-        onAdd={(parsed) => {
-          const kept = rows.filter((r) => r.kind === "section" || r.text.trim());
-          setRows([
-            ...kept,
-            ...parsed.map((p) => ({ key: newKey(), kind: "ingredient" as const, text: ingredientLine(p) })),
-          ]);
-        }}
-      />
-
-      <StepsEditor steps={draft.steps} onChange={(steps) => set({ steps })} accent={accent} />
-    </>
+        />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <StepsEditor steps={draft.steps} onChange={(steps) => set({ steps })} accent={accent} />
+      </Box>
+    </Box>
   );
 }
 
