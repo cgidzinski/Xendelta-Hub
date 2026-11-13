@@ -7,6 +7,7 @@ import NotesIcon from "@mui/icons-material/Notes";
 import PhotoLibraryOutlinedIcon from "@mui/icons-material/PhotoLibraryOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import ShareIcon from "@mui/icons-material/Share";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import { useSnackbar } from "notistack";
 import PageContainer from "../../../components/ui/PageContainer";
@@ -19,6 +20,9 @@ import { uploadOne } from "../../../hooks/xendrive/useXendrive";
 import { xendriveKeys } from "../../../hooks/xendrive/keys";
 import { xenLinkKeys } from "../../../hooks/xenlink/useXenlink";
 import { clearShare, peekShare } from "../../../pwa/shareStash";
+import { useXenSplits } from "../../../hooks/xensplit/useGroups";
+import { useXenBudgetBooks } from "../../../hooks/xenbudget/useBooks";
+import { receiptPath, type ReceiptApp } from "./receipt";
 import { describeShare, interpretShare } from "./shareContent";
 
 interface Option {
@@ -71,6 +75,12 @@ export default function Share() {
   );
   const what = describeShare(shared, files);
   const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+
+  // "Add as a receipt": pick the group or book, then that page opens its new-expense form with the photos attached.
+  const [receiptApp, setReceiptApp] = useState<ReceiptApp | null>(null);
+  const { groups } = useXenSplits();
+  const { books } = useXenBudgetBooks();
+  const goToReceipt = (app: ReceiptApp, id: string) => navigate(receiptPath(app, id), { replace: true });
 
   const [busy, setBusy] = useState(false);
   const [percent, setPercent] = useState<number | null>(null);
@@ -137,6 +147,29 @@ export default function Share() {
       },
     });
   }
+  if (what.hasImages) {
+    // These two don't save anything here: they ask where, and the page they lead to takes the photos.
+    options.push({
+      key: "receipt-split",
+      icon: <ReceiptLongOutlinedIcon />,
+      title: "Add as a receipt in XenSplit",
+      description: "Start a new expense in one of your groups with the photo attached.",
+      run: async () => {
+        setReceiptApp("xensplit");
+        return "";
+      },
+    });
+    options.push({
+      key: "receipt-budget",
+      icon: <ReceiptLongOutlinedIcon />,
+      title: "Add as a receipt in XenBudget",
+      description: "Start a new item in one of your books with the photo attached.",
+      run: async () => {
+        setReceiptApp("xenbudget");
+        return "";
+      },
+    });
+  }
   if (what.hasFiles) {
     options.push({
       key: "drive",
@@ -162,6 +195,10 @@ export default function Share() {
     setPercent(option.key === "drive" ? 0 : null);
     try {
       const to = await option.run();
+      if (!to) {
+        setBusy(false); // a choice of where, not a save
+        return;
+      }
       await finish("Saved", to);
     } catch (e) {
       // Stay here with what was shared still kept, so another try (or another place) is one tap.
@@ -215,23 +252,46 @@ export default function Share() {
             Save it as
           </Typography>
           <Stack spacing={1}>
-            {options.map((o) => (
-              <Card key={o.key} variant="outlined">
-                <CardActionArea
-                  disabled={busy}
-                  onClick={() => choose(o)}
-                  sx={{ p: 2, display: "flex", alignItems: "center", gap: 2, justifyContent: "flex-start" }}
-                >
-                  <Box sx={{ color: "primary.main", display: "flex" }}>{o.icon}</Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 600 }}>{o.title}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {o.description}
-                    </Typography>
-                  </Box>
-                </CardActionArea>
-              </Card>
-            ))}
+            {receiptApp && (
+              <>
+                <Typography sx={{ fontWeight: 600 }}>
+                  {receiptApp === "xensplit" ? "Which group is it for?" : "Which book is it for?"}
+                </Typography>
+                {(receiptApp === "xensplit" ? groups : books).length === 0 && (
+                  <Alert severity="info">
+                    {receiptApp === "xensplit" ? "You aren't in any groups yet." : "You don't have any books yet."}
+                  </Alert>
+                )}
+                {(receiptApp === "xensplit" ? groups : books).map((g) => (
+                  <Card key={g._id} variant="outlined">
+                    <CardActionArea onClick={() => goToReceipt(receiptApp, g._id)} sx={{ p: 2 }}>
+                      <Typography sx={{ fontWeight: 600 }}>{g.name}</Typography>
+                    </CardActionArea>
+                  </Card>
+                ))}
+                <Button onClick={() => setReceiptApp(null)} sx={{ alignSelf: "flex-start" }}>
+                  Back
+                </Button>
+              </>
+            )}
+            {!receiptApp &&
+              options.map((o) => (
+                <Card key={o.key} variant="outlined">
+                  <CardActionArea
+                    disabled={busy}
+                    onClick={() => choose(o)}
+                    sx={{ p: 2, display: "flex", alignItems: "center", gap: 2, justifyContent: "flex-start" }}
+                  >
+                    <Box sx={{ color: "primary.main", display: "flex" }}>{o.icon}</Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 600 }}>{o.title}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {o.description}
+                      </Typography>
+                    </Box>
+                  </CardActionArea>
+                </Card>
+              ))}
           </Stack>
           <UploadProgress percent={percent} label="files" />
           <Button onClick={dismiss} disabled={busy} sx={{ alignSelf: "flex-start" }}>
