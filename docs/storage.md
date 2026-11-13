@@ -12,6 +12,7 @@ with where they came from and are **exempt from the quota for now** (`counted: f
 | XenSplit expense photos | tagged file, `ref` = group id | private | 10 MB each, 10 per expense | no |
 | XenBudget item photos | tagged file, `ref` = book id | private | 10 MB each, 10 per item | no |
 | XenNote photos | tagged file, `ref` = note id | private | 15 MB each (resized), 10 per note | no |
+| XenRoutine "done" photos | tagged file, `ref` = routine id, on a history entry | private | 15 MB each (resized), 5 per "done" | no |
 | XenKitchen photos | tagged file, `ref` = item id | private (was public) | 15 MB each (resized), 10 per item | no |
 | XenSplit group image | `mediaUtils.uploadXenSplitGroupImageFile` | public | resized, one per group | exempt |
 | Avatars | `mediaUtils.uploadAvatarFile` | public | 5 MB, resized, one per person | exempt |
@@ -88,6 +89,23 @@ private one; the public original is deleted only after the item points at the co
 
 It ties to the ongoing-cost plan in `docs/monetization.md` ("Gems to keep files stored or shared"): once counting is on, the
 quota is what gems extend.
+
+## Share links: passwords, expiry and download counts
+- A file's own link and a folder's link can each have a **password** and an **expiry**. Passwords are bcrypt hashes
+  (`utils/sharePasswords.ts`): the owner can set, replace or remove one but never read it back, and no API returns it
+  (`hasPassword` only). A visitor sends it as `?password=`, for a file (`/api/xendrive/download/:token`) and for a folder
+  (`/api/xendrive/public/folder/:token`, and its `/files/:fileId`).
+- A folder link answers a wrong or missing password with **403**, never 401: the client treats any 401 as an expired
+  sign-in and clears the token, which would sign the owner out when they open their own link in the same browser.
+  `GET /api/xendrive/public/folder/:token/info` tells a visitor whether a password is needed without failing.
+- A folder link's password, expiry and tally live under `share` on the folder and survive turning the link off and on, and
+  replacing it. A file inside a shared folder is still served with the folder's password only, not its own.
+- Every public download counts (`downloads`, `lastDownloadedAt` on the file; `share.downloads` and
+  `share.lastDownloadedAt` on the folder for downloads made through its link). Only a download that is actually sent
+  counts, not one refused for a password or expiry.
+- `XenDriveFile.password` is the old plain-text field. It is kept in the schema only so a link keeps its password in the
+  moments between a deploy and `migrations/1794900000000-xendrive-password-hash.ts`, which hashes it and removes it. The
+  migration can't be reversed; restore from a backup to go back.
 
 ## Database backups
 Admin-made database backups live in the private bucket under `db-backups/` (`docs/admin.md`). They are not XenDrive files and don't

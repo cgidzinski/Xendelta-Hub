@@ -84,6 +84,7 @@ mongoConnection.on("connected", async () => {
     const { registerXenSplitRecurringHandler } = require("./utils/xensplitRecurringHandler");
     const { cleanupOldSessions } = require("./utils/xendriveUtils");
     const { runRoutineReminders } = require("./utils/xenRoutineReminders");
+    const { runNoteReminders } = require("./utils/xenNoteReminders");
     const { runPendingMigrations } = require("./infrastructure/migrations");
 
     // Safety net for a deploy that skipped `npm run db:migrate`. Runs before the
@@ -106,6 +107,12 @@ mongoConnection.on("connected", async () => {
       everyMs: 60 * 60 * 1000,
       runOnStart: true,
       handler: () => runRoutineReminders(),
+    });
+    scheduler.register({
+      name: "xennote-reminders",
+      everyMs: 60 * 1000,
+      runOnStart: true,
+      handler: () => runNoteReminders(),
     });
     // Automatic database backups to the private bucket, only when BACKUP_SCHEDULE_HOURS is set (docs/admin.md).
     const { scheduleFromEnv, runScheduledBackup } = require("./utils/gcsBackups");
@@ -205,6 +212,7 @@ require("./routes/xensplit")(app);
 require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
+require("./routes/xenkitchenPlan.ts")(app);
 require("./routes/xennote")(app);
 require("./routes/feed")(app);
 
