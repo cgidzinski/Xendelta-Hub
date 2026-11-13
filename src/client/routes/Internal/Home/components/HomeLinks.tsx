@@ -1,4 +1,4 @@
-import { Box, Button } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import FeedbackOutlinedIcon from "@mui/icons-material/FeedbackOutlined";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +8,9 @@ export default function HomeLinks() {
   const navigate = useNavigate();
   return (
     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "center", pt: 1 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ width: "100%", textAlign: "center" }}>
+        Found a bug? Report it and earn gems when it's fixed.
+      </Typography>
       <Button
         color="inherit"
         size="small"

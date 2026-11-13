@@ -18,7 +18,8 @@ export type AuditAction =
   | "backup_create"
   | "backup_restore"
   | "backup_delete"
-  | "feedback_update";
+  | "feedback_update"
+  | "feedback_reward";
 
 /** Which filter chip each action sits under. */
 export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
@@ -36,6 +37,7 @@ export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
   backup_restore: "Danger",
   backup_delete: "System",
   feedback_update: "System",
+  feedback_reward: "Gems",
 };
 
 export interface AuditEntry {

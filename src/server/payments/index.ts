@@ -1,4 +1,3 @@
-import { dummyProvider } from "./dummyProvider";
 import type { PaymentProvider } from "./types";
 
 export type { CheckoutOrder, CheckoutResult, PaymentProvider } from "./types";
@@ -7,14 +6,11 @@ export { fulfilGemPurchase } from "./fulfil";
 /**
  * The configured provider, or null when buying gems is switched off.
  *
- * PAYMENTS_PROVIDER: "dummy" | "none". Unset means "dummy" in development and "none" in production, so a
- * deployment can never hand out free gems by accident. Setting "dummy" in production is allowed (for trying the
- * shop on a real server) but only admins may check out; see `canUseProvider`.
+ * Buying gems is switched off everywhere for now: the only provider is a dummy that takes no real payment, so it
+ * must not hand out gems, not even to admins or in development. To turn it back on, return a real provider here
+ * (see docs/monetization.md). `dummyProvider.ts` is kept for that purpose.
  */
 export function getPaymentProvider(): PaymentProvider | null {
-  const configured = (process.env.PAYMENTS_PROVIDER || "").trim().toLowerCase();
-  const name = configured || (process.env.NODE_ENV === "production" ? "none" : "dummy");
-  if (name === "dummy") return dummyProvider;
   return null;
 }
 

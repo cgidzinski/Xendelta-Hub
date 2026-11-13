@@ -88,21 +88,24 @@ describe("new accounts", () => {
 });
 
 describe("buying gems", () => {
-  it("credits the pack and records the purchase (dummy provider)", async () => {
-    delete process.env.PAYMENTS_PROVIDER;
+  it("grants nothing while buying gems is switched off, whatever the environment says", async () => {
     const { user, token } = await createUser();
-    const pack = GEM_PACKS[1];
+    const admin = await createUser({ roles: ["admin"] });
+    for (const provider of [undefined, "dummy", "none"]) {
+      for (const node of ["test", "production"]) {
+        process.env.NODE_ENV = node;
+        if (provider === undefined) delete process.env.PAYMENTS_PROVIDER;
+        else process.env.PAYMENTS_PROVIDER = provider;
 
-    const shop = await request(t.app).get("/api/shop").set(auth(token));
-    expect(shop.body.data.payments).toMatchObject({ available: true, testMode: true });
-
-    const res = await buyItem(token, { itemId: pack.id });
-    expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ result: "completed", gems: pack.gems });
-    expect((await reload(user._id)).gems).toBe(pack.gems);
-
-    const purchase: any = await mongoose.model("GemPurchase").findOne({ user: user._id });
-    expect(purchase).toMatchObject({ status: "completed", gems: pack.gems, amountCents: pack.priceCents });
+        const shop = await request(t.app).get("/api/shop").set(auth(token));
+        expect(shop.body.data.payments.available).toBe(false);
+        expect((await buyItem(token, { itemId: GEM_PACKS[1].id })).status).toBe(503);
+        expect((await buyItem(admin.token, { itemId: GEM_PACKS[1].id })).status).toBe(503);
+      }
+    }
+    expect((await reload(user._id)).gems).toBe(0);
+    expect((await reload(admin.user._id)).gems).toBe(0);
+    expect(await mongoose.model("GemPurchase").countDocuments({ user: { $in: [user._id, admin.user._id] } })).toBe(0);
   });
 
   it("credits a purchase only once, however often it is fulfilled", async () => {
@@ -121,27 +124,6 @@ describe("buying gems", () => {
     expect((await reload(user._id)).gems).toBe(1000);
   });
 
-  it("is switched off when no provider is configured", async () => {
-    process.env.PAYMENTS_PROVIDER = "none";
-    const { user, token } = await createUser();
-    expect((await request(t.app).get("/api/shop").set(auth(token))).body.data.payments.available).toBe(false);
-    expect((await buyItem(token)).status).toBe(503);
-    expect((await reload(user._id)).gems).toBe(0);
-  });
-
-  it("defaults to off in production, and the test provider there is for admins only", async () => {
-    process.env.NODE_ENV = "production";
-    delete process.env.PAYMENTS_PROVIDER;
-    const player = await createUser();
-    expect((await buyItem(player.token)).status).toBe(503);
-
-    process.env.PAYMENTS_PROVIDER = "dummy";
-    expect((await buyItem(player.token)).status).toBe(503);
-    const admin = await createUser({ roles: ["admin"] });
-    expect((await buyItem(admin.token)).status).toBe(200);
-    expect((await reload(player.user._id)).gems).toBe(0);
-  });
-
   it("rejects an unknown item and a malformed id", async () => {
     const { token } = await createUser();
     expect((await buyItem(token, { itemId: "gems-999999" })).status).toBe(404);
@@ -151,9 +133,8 @@ describe("buying gems", () => {
   });
 
   it("does not put a gem pack in the inventory", async () => {
-    delete process.env.PAYMENTS_PROVIDER;
     const { user, token } = await createUser();
-    expect((await buyItem(token)).status).toBe(200);
+    await buyItem(token);
     expect((await reload(user._id)).inventory).toHaveLength(0);
   });
 });

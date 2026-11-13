@@ -221,3 +221,13 @@ export const useUpdateFeedback = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.feedbackAll() }),
   });
 };
+
+/** Thank the person for a bug report with gems and a message (once per feedback). */
+export const useRewardFeedback = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; gems: number; message: string }) =>
+      api.post(`/api/admin/feedback/${v.id}/reward`, { gems: v.gems, message: v.message }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.feedbackAll() }),
+  });
+};

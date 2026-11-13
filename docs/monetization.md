@@ -26,10 +26,10 @@ thinking is not lost. Only the "built" section exists in code today.
   the balance.
 - **Buying gems.** `src/shared/monetization.ts` lists the packs (1,000 / 2,200 / 6,000 / 13,000 gems for $5 / $10 /
   $25 / $50, so 200 gems to the dollar plus a bonus on the bigger packs). Checkout goes through a payment
-  provider interface (`src/server/payments/`). Only a **dummy provider** exists: it takes no money and credits the
-  gems at once. Every purchase is recorded in `GemPurchase` (the audit trail of gems bought).
-  - `PAYMENTS_PROVIDER` is `dummy` or `none`. Unset means `dummy` in development and `none` in production, so a
-    deployment cannot hand out free gems by accident. `dummy` in production works for admins only.
+  provider interface (`src/server/payments/`). Only a **dummy provider** exists: it takes no money and would credit
+  the gems at once, so **buying gems is switched off everywhere** (`getPaymentProvider()` returns null; the Shop shows
+  "Buying gems is not available yet"). Every purchase is recorded in `GemPurchase` (the audit trail of gems bought).
+  - To turn it back on, return a real provider from `getPaymentProvider()`. `PAYMENTS_PROVIDER` is currently ignored.
 - **Shop and Inventory** were redesigned on the shared UI components, and the Inventory link is back in the menu.
 - **Free XenDrive tier.** Everyone gets 1 GB (`FREE_STORAGE_BYTES`). Before, new users had 0 bytes and relied on the
   1,000 starting points to buy space. `xendrive.spaceAllowed` is now the extra space on top of the free tier (admin

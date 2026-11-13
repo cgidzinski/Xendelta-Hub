@@ -139,3 +139,81 @@ describe("the admin inbox", () => {
     ).toBe(400);
   });
 });
+
+describe("rewarding a bug report with gems", () => {
+  const reward = (who: { token: string }, id: string, body: object) =>
+    request(t.app).post(`/api/admin/feedback/${id}/reward`).set(auth(who)).send(body);
+  const gemsOf = async (who: { user: { _id: unknown } }) =>
+    ((await mongoose.model("User").findById(who.user._id)) as any).gems;
+  const sendAndGetId = async (who: { token: string }) => {
+    await send(who, { message: "The timer didn't ring" });
+    return String((await mongoose.model("Feedback").findOne({}))!._id);
+  };
+
+  it("credits the gems once, tells the person with the admin's message, marks it done and audits it", async () => {
+    const id = await sendAndGetId(ann);
+    const before = await gemsOf(ann);
+    const res = await reward(boss, id, { gems: 50, message: "Thanks, it's fixed!" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.feedback).toMatchObject({ status: "done", rewardedGems: 50 });
+    expect(await gemsOf(ann)).toBe(before + 50);
+
+    const notes = await mongoose
+      .model("Notification")
+      .find({ userId: String(ann.user._id) })
+      .lean<any[]>();
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({
+      title: "You earned 50 gems",
+      message: "Thanks, it's fixed!",
+      link: "/internal/shop",
+    });
+
+    const audit = await mongoose.model("AdminAudit").find({ action: "feedback_reward" }).lean<any[]>();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ admin_name: "boss", category: "Gems" });
+    expect(audit[0].meta).toMatchObject({ gems: 50 });
+  });
+
+  it("refuses a second reward and never pays twice, even at the same moment", async () => {
+    const id = await sendAndGetId(ann);
+    const before = await gemsOf(ann);
+    const results = await Promise.all([
+      reward(boss, id, { gems: 25, message: "Thanks!" }),
+      reward(otherAdmin, id, { gems: 25, message: "Thanks!" }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await gemsOf(ann)).toBe(before + 25);
+  });
+
+  it("is for admins only, and checks the amount, the message and the id", async () => {
+    const id = await sendAndGetId(ann);
+    const before = await gemsOf(ann);
+    expect((await reward(ann, id, { gems: 50, message: "Thanks" })).status).toBe(403);
+    for (const body of [
+      { gems: 0, message: "x" },
+      { gems: -5, message: "x" },
+      { gems: 1.5, message: "x" },
+      { gems: 10_001, message: "x" },
+      { gems: 50, message: "  " },
+      { gems: 50, message: "x".repeat(501) },
+      { message: "x" },
+    ]) {
+      expect((await reward(boss, id, body)).status).toBe(400);
+    }
+    expect((await reward(boss, "nope", { gems: 50, message: "x" })).status).toBe(400);
+    const missing = new mongoose.Types.ObjectId().toString();
+    expect((await reward(boss, missing, { gems: 50, message: "x" })).status).toBe(404);
+    expect(await gemsOf(ann)).toBe(before);
+  });
+
+  it("releases the claim when the sender no longer exists", async () => {
+    const row = await mongoose
+      .model("Feedback")
+      .create({ user_id: String(new mongoose.Types.ObjectId()), username: "ghost", message: "hi there" });
+    const res = await reward(boss, String(row._id), { gems: 50, message: "Thanks" });
+    expect(res.status).toBe(404);
+    const after: any = await mongoose.model("Feedback").findById(row._id).lean();
+    expect(after.rewardedGems).toBeUndefined();
+  });
+});
