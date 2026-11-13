@@ -4,17 +4,13 @@ import { join, relative } from "path";
 
 // Routes refuse a request by throwing AppError(status, message) (utils/http.ts); the errorHandler in server.ts turns it into
 // { status: false, message }. Writing that body by hand in each route is what this keeps from coming back. The files below
-// still do it and are being moved over one area at a time; a file leaves the list when it no longer matches, and nothing new
-// can join it. (A route that wraps its whole body in try/catch has to be moved by hand: a thrown AppError would land in its
+// would still do it; every route file has been moved over, so the lists are empty, and nothing new can join them without a
+// written reason. A file leaves a list when it no longer matches. (A route that wraps its whole body in try/catch has to be moved by hand: a thrown AppError would land in its
 // own catch and become a 500, so a mechanical rewrite is not safe there.)
-const STILL_HAND_WRITTEN: Record<string, string> = {
-  "xenlink.ts": "moved in the owner_id change (#258)",
-};
+const STILL_HAND_WRITTEN: Record<string, string> = {};
 
 // Files that still read the caller's id by casting the request.
-const STILL_CASTING: Record<string, string> = {
-  "xenlink.ts": "moved in the owner_id change (#258)",
-};
+const STILL_CASTING: Record<string, string> = {};
 
 // A hand-written refusal: res.status(4xx or 5xx).json(...) or the kitchen/routine helper fail(res, 4xx, ...).
 const HAND_WRITTEN = /\.status\([45]\d\d\)\s*\.json\(|\bfail\(res,\s*[45]\d\d/;
