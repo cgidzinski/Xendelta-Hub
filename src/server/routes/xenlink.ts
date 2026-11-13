@@ -10,7 +10,7 @@ import {
 } from "../utils/validation";
 import { authenticateToken } from "../middleware/auth";
 import { AppError, callerId } from "../utils/http";
-import { XenLink, XenLinkDay, utcDay } from "../models/xenlink";
+import { XenLink, XenLinkDay, createXenLink, utcDay } from "../models/xenlink";
 import { STATS_DAYS, normalizeDestination } from "../../shared/xenlink";
 
 // A link belongs to the person in its `owner_id`. Looking a link up by `{ _id, owner_id }` answers "not yours"
@@ -50,13 +50,15 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const link = xenLinkCreateSchema.parse(req.body);
       try {
-        await new XenLink({
+        const fields = {
           name: link.name,
           url: link.url,
           owner_id: callerId(req),
-          ...(link.slug ? { slug: link.slug } : {}),
           ...(link.expiresAt ? { expires_at: expiry(link.expiresAt) } : {}),
-        }).save();
+        };
+        // A name the owner chose is used as it is (and refused if taken); otherwise a random one is made, retrying a clash.
+        if (link.slug) await new XenLink({ ...fields, slug: link.slug }).save();
+        else await createXenLink(fields);
       } catch (err) {
         if (isDuplicate(err)) throw new AppError(409, "That short name is already taken");
         throw err;

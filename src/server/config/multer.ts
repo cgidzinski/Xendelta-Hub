@@ -14,6 +14,7 @@ import {
   MAX_XENBUDGET_IMAGE_SIZE,
   MAX_XENKITCHEN_IMAGE_SIZE,
   MAX_XENNOTE_IMAGE_SIZE,
+  MAX_XENROUTINE_IMAGE_SIZE,
   ALLOWED_IMAGE_MIMES,
 } from "../constants";
 
@@ -84,6 +85,13 @@ export const uploadXenBudgetImages = multer({
 export const uploadXenNoteImages = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_XENNOTE_IMAGE_SIZE },
+  fileFilter: (req, file, cb) => (file.mimetype === "image/webp" ? cb(null, true) : imageFileFilter(req, file, cb)),
+});
+
+// Photos attached when marking a routine done: images only, resized server-side before storage.
+export const uploadXenRoutineImages = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_XENROUTINE_IMAGE_SIZE },
   fileFilter: (req, file, cb) => (file.mimetype === "image/webp" ? cb(null, true) : imageFileFilter(req, file, cb)),
 });
 

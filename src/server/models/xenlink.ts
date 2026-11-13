@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import { randomToken } from "../utils/tokens";
 
 // XENLINK SCHEMA
 const xenlinkSchema = new Schema({
@@ -15,29 +16,6 @@ const xenlinkSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
-
-xenlinkSchema.pre("save", async function (next) {
-  if (!this.slug) {
-    // Get the count of existing documents
-    const count = await (this.constructor as mongoose.Model<unknown>).countDocuments();
-
-    // Convert count to base62 (alphanumeric) for shorter strings
-    this.slug = toBase62(count + 1);
-  }
-  next();
-});
-
-function toBase62(num: number): string {
-  const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let result = "";
-
-  while (num > 0) {
-    result = chars[num % 62] + result;
-    num = Math.floor(num / 62);
-  }
-
-  return result || "0";
-}
 
 export type XenLinkAttrs = InferSchemaType<typeof xenlinkSchema>;
 
@@ -56,5 +34,28 @@ const XenLinkDay = mongoose.model("XenLinkDay", xenlinkDaySchema);
 
 /** Midnight UTC of the day `at` falls in. */
 export const utcDay = (at: Date) => new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
+
+const DUPLICATE_KEY = 11000;
+const SLUG_ATTEMPTS = 5;
+
+/** A short random slug (8 URL-safe characters). Older links keep their counter-style slugs; the unique index keeps both apart. */
+export function newSlug(): string {
+  return randomToken(6);
+}
+
+/**
+ * Create a link with a fresh random slug. A collision with an existing slug (the unique index answers with
+ * E11000) is retried with a new slug, so concurrent creates and deletes can never wedge link creation.
+ */
+export async function createXenLink(fields: { name: string; url: string; owner_id?: string; expires_at?: Date }) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await new XenLink({ ...fields, slug: newSlug() }).save();
+    } catch (err) {
+      const duplicateSlug = (err as { code?: number }).code === DUPLICATE_KEY;
+      if (!duplicateSlug || attempt >= SLUG_ATTEMPTS) throw err;
+    }
+  }
+}
 
 export { XenLink, XenLinkDay };
