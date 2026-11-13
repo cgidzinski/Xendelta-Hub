@@ -16,6 +16,7 @@ import { randomToken } from "../../utils/tokens";
 import { removeNotePhotos } from "../../utils/xenNoteFiles";
 import { roleOf } from "../../utils/membership";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
+import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
   escapeRegex,
   loadNote,
@@ -165,6 +166,43 @@ export function registerNoteRoutes(app: any) {
       data: { note: await serializeNote(note, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }) },
     });
   });
+
+  // The notes that link to this one with [[its title]]: what the note editor shows as "Linked from". Only notes the
+  // caller can see, not archived, newest first. A note with no title can't be linked to, so it has none.
+  app.get(
+    "/api/xennote/notes/:id/backlinks",
+    validateParams(xenNoteIdParamSchema),
+    async (req: Request, res: Response) => {
+      const uid = callerId(req);
+      const { note } = await loadNote(req, req.params.id as string, "view");
+      const title = note.title.trim();
+      if (!title) return res.json({ status: true, data: { notes: [] } });
+
+      const books = await myNotebooks(uid);
+      // A cheap filter in the database (the words between brackets, spaces matched loosely), then the exact check below.
+      const words = title.split(/\s+/).map(escapeRegex).join("\\s+");
+      const candidates = await XenNote.find({
+        _id: { $ne: note._id },
+        archived: { $ne: true },
+        $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }],
+        body: { $regex: `\\[\\[\\s*${words}\\s*(\\||\\]\\])`, $options: "i" },
+      })
+        .sort({ updated_at: -1 })
+        .limit(100)
+        .select("title type notebook_id body updated_at");
+      const notes = candidates
+        .filter((n) => linksTo(n.body, title))
+        .slice(0, 50)
+        .map((n) => ({
+          _id: n.id as string,
+          title: n.title,
+          type: n.type,
+          notebook_id: n.notebook_id ? String(n.notebook_id) : null,
+          updated_at: n.updated_at.toISOString(),
+        }));
+      res.json({ status: true, data: { notes } });
+    },
+  );
 
   app.put(
     "/api/xennote/notes/:id",

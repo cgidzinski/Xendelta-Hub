@@ -4,6 +4,7 @@ import type {
   NoteFilters,
   PublicXenNote,
   XenNote,
+  XenNoteBacklink,
   XenNoteCounts,
   XenNoteInput,
   XenNotebook,
@@ -48,6 +49,14 @@ export const useXenNoteLabels = () =>
     queryKey: xennoteKeys.labels(),
     queryFn: async () =>
       (await api.get<{ labels: Array<{ name: string; count: number }> }>("/api/xennote/labels")).labels,
+  });
+
+/** The notes that link to this one with [[its title]]. Only fetched while `noteId` is set. */
+export const useXenNoteBacklinks = (noteId: string | undefined) =>
+  useQuery({
+    queryKey: xennoteKeys.backlinks(noteId ?? ""),
+    queryFn: async () => (await api.get<{ notes: XenNoteBacklink[] }>(`/api/xennote/notes/${noteId}/backlinks`)).notes,
+    enabled: !!noteId,
   });
 
 export const usePublicNote = (token: string | undefined) =>

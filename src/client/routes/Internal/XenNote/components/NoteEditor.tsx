@@ -29,6 +29,8 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -45,9 +47,11 @@ import { useSnackbar } from "notistack";
 import { NOTE_COLORS, isSafeUrl, type NoteType } from "@shared/xennote/notes";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
-import { noteShareUrl, useXenNoteActions } from "../../../../hooks/xennote/useXenNote";
+import { noteShareUrl, useXenNoteActions, useXenNoteBacklinks } from "../../../../hooks/xennote/useXenNote";
+import { completeWikiLink, normalizeTitle, openWikiLink } from "@shared/xennote/wikiLinks";
 import type { XenNote, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
+import NoteMarkdown from "./NoteMarkdown";
 import {
   changeType,
   draftFromNote,
@@ -72,6 +76,10 @@ interface NoteEditorProps {
   startNotebookId?: string | null;
   notebooks: XenNotebook[];
   labelSuggestions: string[];
+  /** Every note with a title, newest first: what a [[link]] can point to and what typing "[[" suggests. */
+  titles?: Array<{ _id: string; title: string }>;
+  /** Open another note (a [[link]] in the preview, or one under "Linked from"). */
+  onOpenNote?: (id: string) => void;
 }
 
 /**
@@ -86,6 +94,8 @@ export default function NoteEditor({
   startNotebookId,
   notebooks,
   labelSuggestions,
+  titles = [],
+  onOpenNote,
 }: NoteEditorProps) {
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
@@ -112,6 +122,12 @@ export default function NoteEditor({
   const [autosave, setAutosave] = useState<"idle" | "saving" | "saved">("idle");
   const [showDone, setShowDone] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  // A text note is written as Markdown; "Preview" shows it as it will look. Typing "[[" offers titles of other notes.
+  const [mode, setMode] = useState<"write" | "preview">("write");
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const [caret, setCaret] = useState(0);
+  const [suggestIndex, setSuggestIndex] = useState(0);
+  const [suggestDismissed, setSuggestDismissed] = useState(false);
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
   const [bookAnchor, setBookAnchor] = useState<HTMLElement | null>(null);
@@ -127,6 +143,8 @@ export default function NoteEditor({
     if (open) {
       setDraft(initial);
       setLive(note);
+      setMode("write");
+      setCaret(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
@@ -160,8 +178,9 @@ export default function NoteEditor({
   const pendingUrls = useMemo(() => draft.pendingImages.map((f) => URL.createObjectURL(f)), [draft.pendingImages]);
   useEffect(() => () => pendingUrls.forEach((u) => URL.revokeObjectURL(u)), [pendingUrls]);
 
-  const saveAndClose = async () => {
-    if (readOnly) return onClose();
+  // Save what is in the editor (a new note is created, a changed one updated). False if it couldn't be saved, in which
+  // case the editor stays as it is so nothing typed is lost.
+  const persist = async (): Promise<boolean> => {
     try {
       setSaving(true);
       if (!live) {
@@ -173,13 +192,59 @@ export default function NoteEditor({
       } else if (isDirty(draft, draftFromNote(live))) {
         await actions.updateNote.mutateAsync({ id: live._id, input: toInput(draft) });
       }
-      onClose();
+      return true;
     } catch (e) {
       // Stay open so nothing typed is lost; say what to fix
       enqueueSnackbar((e as Error).message || "Couldn't save the note", { variant: "error" });
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveAndClose = async () => {
+    if (readOnly) return onClose();
+    if (await persist()) onClose();
+  };
+
+  // Go to another note (a [[link]], or one under "Linked from"), saving this one first.
+  const openLinked = async (id: string) => {
+    if (id === live?._id) return;
+    if (readOnly || (await persist())) onOpenNote?.(id);
+  };
+
+  const { data: backlinks = [] } = useXenNoteBacklinks(open ? live?._id : undefined);
+  const resolveTitle = useMemo(() => {
+    const byTitle = new Map<string, string>();
+    for (const t of titles) if (!byTitle.has(normalizeTitle(t.title))) byTitle.set(normalizeTitle(t.title), t._id);
+    return (title: string) => byTitle.get(normalizeTitle(title)) ?? null;
+  }, [titles]);
+
+  // Titles to suggest while a "[[" is open at the caret: those containing what was typed, starting with it first.
+  const openLink = draft.type === "text" && mode === "write" && !readOnly ? openWikiLink(draft.body, caret) : null;
+  const suggestions = useMemo(() => {
+    if (!openLink || suggestDismissed) return [];
+    const q = normalizeTitle(openLink.query);
+    return titles
+      .filter((t) => t._id !== live?._id && normalizeTitle(t.title).includes(q))
+      .sort((a, b) => Number(normalizeTitle(b.title).startsWith(q)) - Number(normalizeTitle(a.title).startsWith(q)))
+      .slice(0, 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLink?.query, openLink?.start, suggestDismissed, titles, live?._id]);
+  useEffect(() => {
+    setSuggestIndex(0);
+    setSuggestDismissed(false);
+  }, [openLink?.query, openLink?.start]);
+
+  const chooseTitle = (title: string) => {
+    const done = completeWikiLink(draft.body, caret, title);
+    if (!done) return;
+    set({ body: done.text });
+    setCaret(done.caret);
+    requestAnimationFrame(() => {
+      bodyRef.current?.focus();
+      bodyRef.current?.setSelectionRange(done.caret, done.caret);
+    });
   };
 
   const remove = async () => {
@@ -336,20 +401,116 @@ export default function NoteEditor({
                 </ToggleButton>
               </ToggleButtonGroup>
             )}
-            {(draft.type === "text" || draft.type === "image") && (
-              <InputBase
-                fullWidth
-                multiline
-                minRows={draft.type === "image" ? 4 : 9}
-                maxRows={22}
-                sx={fieldSx}
-                autoFocus={!live && draft.type === "text"}
-                placeholder={draft.type === "image" ? "Add a caption" : "Take a note…"}
-                value={draft.body}
-                onChange={(e) => set({ body: e.target.value })}
-                disabled={readOnly}
-                slotProps={{ input: { maxLength: 20000, "aria-label": draft.type === "image" ? "Caption" : "Note" } }}
-              />
+            {draft.type === "text" && !readOnly && (
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={mode}
+                onChange={(_, v: "write" | "preview" | null) => v && setMode(v)}
+                aria-label="Write or preview"
+                sx={{ alignSelf: "flex-end" }}
+              >
+                <ToggleButton value="write" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
+                  <EditOutlinedIcon fontSize="small" />
+                  Write
+                </ToggleButton>
+                <ToggleButton value="preview" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
+                  <VisibilityOutlinedIcon fontSize="small" />
+                  Preview
+                </ToggleButton>
+              </ToggleButtonGroup>
+            )}
+            {draft.type === "text" && (mode === "preview" || readOnly) ? (
+              <Box sx={{ ...fieldSx, display: "block", minHeight: 160 }}>
+                {draft.body.trim() ? (
+                  <NoteMarkdown text={draft.body} resolve={resolveTitle} onOpenNote={openLinked} />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Nothing to preview yet.
+                  </Typography>
+                )}
+              </Box>
+            ) : (
+              (draft.type === "text" || draft.type === "image") && (
+                <>
+                  <InputBase
+                    fullWidth
+                    multiline
+                    minRows={draft.type === "image" ? 4 : 9}
+                    maxRows={22}
+                    sx={fieldSx}
+                    autoFocus={!live && draft.type === "text"}
+                    placeholder={
+                      draft.type === "image"
+                        ? "Add a caption"
+                        : "Take a note… (Markdown works; [[ links to another note)"
+                    }
+                    value={draft.body}
+                    onChange={(e) => {
+                      set({ body: e.target.value });
+                      setCaret(e.target.selectionStart ?? e.target.value.length);
+                    }}
+                    onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
+                    onKeyDown={(e) => {
+                      if (suggestions.length === 0) return;
+                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSuggestIndex(
+                          (i) => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length,
+                        );
+                      } else if (e.key === "Enter" || e.key === "Tab") {
+                        e.preventDefault();
+                        chooseTitle(suggestions[Math.min(suggestIndex, suggestions.length - 1)].title);
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.stopPropagation(); // closes the suggestions, not the whole note
+                        setSuggestDismissed(true);
+                      }
+                    }}
+                    inputRef={bodyRef}
+                    disabled={readOnly}
+                    slotProps={{
+                      input: { maxLength: 20000, "aria-label": draft.type === "image" ? "Caption" : "Note" },
+                    }}
+                  />
+                  {suggestions.length > 0 && (
+                    <Box
+                      role="listbox"
+                      aria-label="Notes to link to"
+                      sx={{
+                        border: 1,
+                        borderColor: "divider",
+                        borderRadius: 1,
+                        bgcolor: "background.paper",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {suggestions.map((t, i) => (
+                        <Box
+                          key={t._id}
+                          role="option"
+                          aria-selected={i === suggestIndex}
+                          // mouse-down (not click) so the text field keeps focus and the caret
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            chooseTitle(t.title);
+                          }}
+                          sx={{
+                            px: 1.5,
+                            py: 0.75,
+                            cursor: "pointer",
+                            typography: "body2",
+                            bgcolor: i === suggestIndex ? "action.selected" : "transparent",
+                            "&:hover": { bgcolor: "action.hover" },
+                          }}
+                        >
+                          {t.title}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </>
+              )
             )}
 
             {draft.type === "checklist" && (
@@ -552,6 +713,25 @@ export default function NoteEditor({
                     onDelete={readOnly ? undefined : () => set({ labels: draft.labels.filter((l) => l !== label) })}
                   />
                 ))}
+              </Box>
+            )}
+            {live && backlinks.length > 0 && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Linked from
+                </Typography>
+                <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 0.5 }}>
+                  {backlinks.map((b) => (
+                    <Chip
+                      key={b._id}
+                      size="small"
+                      variant="outlined"
+                      icon={<LinkIcon />}
+                      label={b.title.trim() || "Untitled note"}
+                      onClick={() => openLinked(b._id)}
+                    />
+                  ))}
+                </Box>
               </Box>
             )}
           </Stack>
