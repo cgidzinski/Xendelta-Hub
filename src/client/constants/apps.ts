@@ -15,10 +15,15 @@ export interface AppRegistryItem {
   description: string;
 }
 
-// TEMP: default xensplit to pinned for existing users with no pins yet.
-// Remove this (and its call sites) once a proper default is in place.
-export const resolvePinnedApps = (pinnedApps: string[] | undefined): string[] =>
-  pinnedApps && pinnedApps.length > 0 ? pinnedApps : ["xensplit"];
+/** What is pinned when nothing is: someone who has pinned nothing (or everything was unpinned) still sees these two. */
+export const DEFAULT_PINNED_APPS = ["xensplit", "xennote"];
+
+export const resolvePinnedApps = (pinnedApps: string[] | null | undefined): string[] =>
+  pinnedApps && pinnedApps.length > 0 ? pinnedApps : DEFAULT_PINNED_APPS;
+
+/** The pinned list after pinning an app that isn't pinned (added at the end) or unpinning one that is. */
+export const toggledPins = (pinned: string[], key: string): string[] =>
+  pinned.includes(key) ? pinned.filter((k) => k !== key) : [...pinned, key];
 
 export const APPS_REGISTRY: AppRegistryItem[] = [
   {

@@ -5,6 +5,7 @@ import CompactHomeHeader from "./components/CompactHomeHeader";
 import QuickPanel from "./components/QuickPanel";
 import AttentionStrip from "./components/AttentionStrip";
 import ActivityFeed from "./components/ActivityFeed";
+import AllApps from "./components/AllApps";
 import HomeLinks from "./components/HomeLinks";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { useAttention } from "../../../hooks/feed/useFeed";
@@ -30,6 +31,7 @@ export default function Home() {
         <QuickPanel pinnedApps={resolvePinnedApps(profile.pinnedApps)} counts={attention.data?.counts ?? {}} />
         <AttentionStrip cards={attention.data?.cards ?? []} />
         <ActivityFeed />
+        <AllApps pinnedApps={resolvePinnedApps(profile.pinnedApps)} counts={attention.data?.counts ?? {}} />
         <HomeLinks />
       </Box>
     </PageContainer>

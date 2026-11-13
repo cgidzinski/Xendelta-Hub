@@ -17,6 +17,11 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-13",
     app: "hub",
+    title: "You can now pin as many apps as you like, from the new All apps block on Home",
+  },
+  {
+    date: "2026-11-13",
+    app: "hub",
     title: "Added a What's new page, tips on Home, and a way to send feedback",
   },
   {
