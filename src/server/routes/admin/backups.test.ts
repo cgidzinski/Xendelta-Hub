@@ -66,8 +66,15 @@ const as = (token: string) => ({ Authorization: `Bearer ${token}` });
 const get = (url: string) => request(t.app).get(`/api/admin${url}`).set(as(adminUser.token));
 const send = (method: "post" | "delete", url: string, body?: object) =>
   request(t.app)[method](`/api/admin${url}`).set(as(adminUser.token)).send(body);
-const audit = async (filter: object = {}) =>
+const auditNow = async (filter: object = {}) =>
   mongoose.model("AdminAudit").find(filter).sort({ createdAt: 1 }).lean<any[]>();
+/** The audit row is written just after the job reports done, so wait for it to appear. */
+const audit = async (filter: object = {}) => {
+  await vi
+    .waitFor(async () => expect(await auditNow(filter)).not.toHaveLength(0), { timeout: 3000, interval: 25 })
+    .catch(() => undefined);
+  return auditNow(filter);
+};
 
 /** Poll the job until it stops running; a 401/503 during a restore counts as still running. */
 async function finished() {
