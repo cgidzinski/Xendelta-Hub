@@ -63,6 +63,7 @@ const InternalBlog = lazyPage(() => import("./routes/Internal/Blog/InternalBlog"
 const InternalBlogPostDetail = lazyPage(() => import("./routes/Internal/Blog/InternalBlogPostDetail"));
 const Shop = lazyPage(() => import("./routes/Internal/Shop/Shop"));
 const Inventory = lazyPage(() => import("./routes/Internal/Inventory/Inventory"));
+const Share = lazyPage(() => import("./routes/Internal/Share/Share"));
 const XenLinkRedirect = lazyPage(() => import("./routes/External/XenLinkRedirect/XenLinkRedirect"));
 // Routes - Xensplit
 // Routes - XenRoutine
@@ -180,6 +181,8 @@ const router = createBrowserRouter(
         <Route path="messages" element={<Messages />} />
         <Route path="messages/:conversationId" element={<Messages />} />
         <Route path="notifications" element={<Notifications />} />
+        {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
+        <Route path="share" element={<Share />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         {recipaintRoutes}
