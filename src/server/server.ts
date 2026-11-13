@@ -107,6 +107,19 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: () => runRoutineReminders(),
     });
+    // Automatic database backups to the private bucket, only when BACKUP_SCHEDULE_HOURS is set (docs/admin.md).
+    const { scheduleFromEnv, runScheduledBackup } = require("./utils/gcsBackups");
+    const backupSchedule = scheduleFromEnv();
+    if (backupSchedule) {
+      scheduler.register({
+        name: "database-backup",
+        everyMs: 60 * 60 * 1000,
+        handler: async () => {
+          const db = require("mongoose").connection.db;
+          if (db) await runScheduledBackup(db, backupSchedule);
+        },
+      });
+    }
     scheduler.start();
   } catch (e) {
     // An error thrown from an event handler would crash the process as an
