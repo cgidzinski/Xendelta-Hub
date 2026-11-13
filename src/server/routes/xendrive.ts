@@ -15,6 +15,7 @@ import {
   xenDriveFolderCreateSchema,
   xenDriveFolderIdParamSchema,
   xenDriveFolderRenameSchema,
+  xenDriveFolderShareSettingsSchema,
   xenDriveFolderTokenFileParamSchema,
   xenDriveFolderTokenParamSchema,
   xenDriveInitiateSchema,
@@ -45,6 +46,7 @@ import {
   isInside,
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
+import { checkSharePassword, hashSharePassword, isUnset } from "../utils/sharePasswords";
 import { generateSignedUrl } from "../utils/gcsUtils";
 import { thumbPathFor } from "../utils/xendriveThumbPaths";
 import { scheduleThumbnails } from "../utils/xendriveThumbs";
@@ -64,9 +66,11 @@ const serializeFile = (file: XenDriveFileDocument | any) => ({
   createdAt: file.createdAt.toISOString(),
   shared: !!file.shareEnabled,
   shareToken: file.shareToken,
-  hasPassword: !!file.password,
-  password: file.password || null, // returned to the owner in plain text, as it always has been
+  // Whether there is one, never the password itself: it is stored as a hash.
+  hasPassword: !!(file.passwordHash || file.password),
   expiry: file.expiry ? file.expiry.toISOString() : null,
+  downloads: file.downloads ?? 0,
+  lastDownloadedAt: file.lastDownloadedAt ? file.lastDownloadedAt.toISOString() : null,
   // Set when an app stored the file for the person; `counted: false` means it doesn't use their storage.
   source: file.source?.app
     ? { app: file.source.app as string, label: driveSourceApp(file.source.app)?.label ?? file.source.app }
@@ -81,6 +85,12 @@ const serializeFolder = (folder: any, itemCount = 0) => ({
   parent_id: folder.parent_id ? folder.parent_id.toString() : null,
   shared: !!folder.share?.enabled,
   shareToken: folder.share?.enabled ? folder.share.token : null,
+  // The link's own extras, for the owner: whether it has a password (never the password), when it stops working, and
+  // how many files have been downloaded through it.
+  hasPassword: !!folder.share?.passwordHash,
+  expiry: folder.share?.expiry ? folder.share.expiry.toISOString() : null,
+  downloads: folder.share?.downloads ?? 0,
+  lastDownloadedAt: folder.share?.lastDownloadedAt ? folder.share.lastDownloadedAt.toISOString() : null,
   created_at: folder.created_at.toISOString(),
 });
 
@@ -174,6 +184,24 @@ async function assertNameFree(userId: string, parentId: string | null, name: str
 async function sharedFolder(token: string) {
   const folder = await XenDriveFolder.findOne({ "share.token": token, "share.enabled": true }).exec();
   if (!folder) throw new AppError(404, "Link not found");
+  return folder;
+}
+
+const folderLinkExpired = (folder: { share?: { expiry?: Date | null } | null }) =>
+  !!folder.share?.expiry && new Date() > folder.share.expiry;
+
+/**
+ * A shared folder that this request may open: its link is on, hasn't expired, and the password (when there is one,
+ * sent as ?password=, the same way a file's link takes it) is right. A wrong or missing password is a 403, not a
+ * 401: the client treats every 401 as "your sign-in expired" and would sign the owner out of their own browser.
+ */
+async function openSharedFolder(token: string, password: unknown) {
+  const folder = await sharedFolder(token);
+  if (folderLinkExpired(folder)) throw new AppError(403, "Link expired");
+  const hash = folder.share?.passwordHash;
+  if (hash && !(typeof password === "string" && password && (await checkSharePassword(password, { hash })))) {
+    throw new AppError(403, password ? "Incorrect password" : "Password required");
+  }
   return folder;
 }
 
@@ -487,15 +515,17 @@ module.exports = function (app: express.Application) {
     },
   );
 
-  // Public link for a folder: enable (or fetch the current one), rotate, disable
+  // Public link for a folder: enable (or fetch the current one), rotate, disable. The link's password, expiry and download
+  // tally belong to the folder's sharing, so they survive all three.
   const folderShare = (action: "enable" | "rotate" | "disable") =>
     async function (req: express.Request, res: express.Response) {
       const folder = await ownFolder(req.params.folderId as string, callerId(req));
       if (action === "disable") {
-        folder.share = { enabled: false, token: folder.share?.token };
+        folder.set("share.enabled", false);
       } else {
         const keep = action === "enable" && folder.share?.token;
-        folder.share = { enabled: true, token: keep ? folder.share!.token : randomToken(16) };
+        folder.set("share.enabled", true);
+        if (!keep) folder.set("share.token", randomToken(16));
       }
       await folder.save();
       return res.json({ status: true, data: { folder: serializeFolder(folder) } });
@@ -517,6 +547,24 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(xenDriveFolderIdParamSchema),
     folderShare("disable"),
+  );
+
+  // Set or clear the folder link's password and expiry (a field left out stays as it is).
+  app.put(
+    "/api/xendrive/folders/:folderId/share/settings",
+    authenticateToken,
+    validateParams(xenDriveFolderIdParamSchema),
+    validate(xenDriveFolderShareSettingsSchema),
+    async function (req: express.Request, res: express.Response) {
+      const folder = await ownFolder(req.params.folderId as string, callerId(req));
+      const { password, expiry } = req.body;
+      if (password !== undefined) {
+        folder.set("share.passwordHash", isUnset(password) ? undefined : await hashSharePassword(password));
+      }
+      if (expiry !== undefined) folder.set("share.expiry", isUnset(expiry) ? undefined : new Date(expiry));
+      await folder.save();
+      return res.json({ status: true, message: "Link settings saved", data: { folder: serializeFolder(folder) } });
+    },
   );
 
   // ---------------------------------------------------------------------------------------------
@@ -595,8 +643,11 @@ module.exports = function (app: express.Application) {
 
       if (name !== undefined) file.name = name;
       if (shareEnabled !== undefined) file.shareEnabled = shareEnabled;
-      if (password !== undefined) file.password = password === "" || password === null ? undefined : password;
-      if (expiry !== undefined) file.expiry = expiry === "" || expiry === null ? undefined : new Date(expiry);
+      if (password !== undefined) {
+        file.passwordHash = isUnset(password) ? undefined : await hashSharePassword(password);
+        file.password = undefined; // drops any old plain-text copy
+      }
+      if (expiry !== undefined) file.expiry = isUnset(expiry) ? undefined : new Date(expiry);
 
       await file.save();
 
@@ -606,8 +657,7 @@ module.exports = function (app: express.Application) {
         data: {
           name: file.name,
           shared: !!file.shareEnabled,
-          hasPassword: !!file.password,
-          password: file.password || null,
+          hasPassword: file.hasPassword(),
           expiry: file.expiry ? file.expiry.toISOString() : null,
           shareUrl: `${req.protocol}://${req.get("host")}/xendrive/${file.shareToken}`,
         },
@@ -666,7 +716,7 @@ module.exports = function (app: express.Application) {
           name: file.name,
           size: file.size,
           mimeType: file.mimeType,
-          requiresPassword: !!file.password,
+          requiresPassword: file.hasPassword(),
           expiry: file.expiry ? file.expiry.toISOString() : null,
         },
       });
@@ -687,8 +737,8 @@ module.exports = function (app: express.Application) {
         return res.status(403).json({ status: false, message: "Link expired" });
       }
 
-      if (file.password) {
-        const wrong = !password || typeof password !== "string" || !file.validPassword(password);
+      if (file.hasPassword()) {
+        const wrong = !password || typeof password !== "string" || !(await file.checkPassword(password));
         if (wrong) {
           return res.status(401).json({
             status: false,
@@ -714,7 +764,7 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFolderTokenParamSchema),
     validateQuery(xenDrivePublicFolderQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const root = await sharedFolder(req.params.token as string);
+      const root = await openSharedFolder(req.params.token as string, req.query.password);
       const requested = (req.query.folder as string | undefined) || root.id;
 
       if (!(await isInside(requested, root.id))) throw new AppError(404, "Folder not found");
@@ -758,23 +808,58 @@ module.exports = function (app: express.Application) {
   app.get(
     "/api/xendrive/public/folder/:token/files/:fileId",
     validateParams(xenDriveFolderTokenFileParamSchema),
+    validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const root = await sharedFolder(req.params.token as string);
+      const root = await openSharedFolder(req.params.token as string, req.query.password);
       const file = await XenDriveFile.findOne({ _id: req.params.fileId, owner_id: root.owner_id }).exec();
       if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
         throw new AppError(404, "File not found");
       }
       if (file.isExpired()) throw new AppError(403, "Link expired");
-      return streamFile(res, file);
+      return streamFile(res, file, root.id);
+    },
+  );
+
+  // What a visitor needs to know before opening a folder link: its name, and whether it wants a password. Answers 200
+  // for a working link (even a locked one) so the page can show the right prompt without a failed request.
+  app.get(
+    "/api/xendrive/public/folder/:token/info",
+    validateParams(xenDriveFolderTokenParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const folder = await sharedFolder(req.params.token as string);
+      if (folderLinkExpired(folder))
+        return res.status(403).json({ status: false, message: "Link expired", isExpired: true });
+      return res.json({
+        status: true,
+        data: {
+          name: folder.name,
+          requiresPassword: !!folder.share?.passwordHash,
+          expiry: folder.share?.expiry ? folder.share.expiry.toISOString() : null,
+        },
+      });
     },
   );
 };
 
-/** Send a stored file to the response, under its own name. */
-async function streamFile(res: express.Response, file: XenDriveFileDocument) {
+/**
+ * Send a stored file to the response, under its own name, and count it as a download of the file (and of the folder
+ * link it came through, when there is one).
+ */
+async function streamFile(res: express.Response, file: XenDriveFileDocument, viaFolderId?: string) {
   const gcsFile = privateBucket.file(file.storage_path);
   const [exists] = await gcsFile.exists();
   if (!exists) throw new AppError(404, "File not found in storage");
+
+  const at = new Date();
+  await Promise.all([
+    XenDriveFile.updateOne({ _id: file._id }, { $inc: { downloads: 1 }, $set: { lastDownloadedAt: at } }),
+    viaFolderId
+      ? XenDriveFolder.updateOne(
+          { _id: viaFolderId },
+          { $inc: { "share.downloads": 1 }, $set: { "share.lastDownloadedAt": at } },
+        )
+      : null,
+  ]).catch(() => undefined); // a tally that can't be kept must not stop the download
 
   res.setHeader("Content-Type", file.mimeType);
   res.setHeader("Content-Disposition", attachment(file.name));
