@@ -88,3 +88,15 @@ export const xenNoteListQuerySchema = z.object({
     .optional(),
   q: z.string().max(200).optional(),
 });
+
+// A reminder time (ISO), or null to remove it. It must be a real time in the future, within five years.
+const FIVE_YEARS_MS = 5 * 365 * 86_400_000;
+export const xenNoteReminderSchema = z.object({
+  at: z
+    .string()
+    .max(64)
+    .nullable()
+    .refine((v) => v === null || !Number.isNaN(new Date(v).getTime()), "Pick a valid date and time")
+    .refine((v) => v === null || new Date(v).getTime() > Date.now(), "Pick a time in the future")
+    .refine((v) => v === null || new Date(v).getTime() < Date.now() + FIVE_YEARS_MS, "That is too far away"),
+});

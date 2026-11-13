@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Collapse,
   MenuItem,
   Stack,
@@ -13,6 +14,7 @@ import {
 } from "@mui/material";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import type { AxiosProgressEvent } from "axios";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { useSnackbar } from "notistack";
 import { useOutletContext } from "react-router-dom";
@@ -25,9 +27,12 @@ import {
   useCompleteRoutine,
   useInvalidateRoutines,
   useRoutines,
+  useToggleChecklistItem,
 } from "../../../hooks/xenroutine/useRoutines";
 import {
   bucketForDate,
+  checklistProgress,
+  stepsLabel,
   DEFAULT_HORIZON_DAYS,
   dueText,
   HORIZON_OPTIONS,
@@ -40,7 +45,9 @@ import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { isNetworkError } from "../../../offline/offlineQueue";
 import { offlineQueue, useQueuedDoneKeys } from "../../../offline/offlineRuntime";
+import CompleteDialog from "./components/CompleteDialog";
 import SlideToComplete from "./components/SlideToComplete";
+import AddAPhotoOutlinedIcon from "@mui/icons-material/AddAPhotoOutlined";
 import RoutineMenu from "./components/RoutineMenu";
 import type { XenRoutineOutletContext } from "./outletContext";
 
@@ -62,18 +69,40 @@ function PendingCard({ occ, userId }: { occ: Occurrence; userId?: string }) {
   const complete = useCompleteRoutine();
   const invalidate = useInvalidateRoutines();
   const [leaving, setLeaving] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const projected = index > 1;
 
   // Each occurrence is its own completion. Resolves once the server has recorded it, then
   // the card collapses and only afterwards is the list refetched, so the slid handle stays
   // put until the card is gone. Rejects on failure so the slider springs back.
-  const handleComplete = async () => {
+  const toggleStep = useToggleChecklistItem();
+  // The steps belong to the occurrence that is due now, so only that card shows them.
+  const steps = projected ? [] : routine.checklist;
+  const progress = checklistProgress(steps);
+  const unticked = progress.total - progress.done;
+
+  // Mark this occurrence done, with a note and photos when they were added in the dialog. Resolves once the server has
+  // recorded it. Rejects on failure (so the slider springs back, or the dialog stays open), with a message shown.
+  const handleComplete = async (
+    extra: { note?: string; images?: File[]; onUploadProgress?: (e: AxiosProgressEvent) => void } = {},
+  ) => {
+    // Some steps not ticked: ask first. Cancelling rejects, so the slider springs back without an error message.
+    if (unticked > 0) {
+      const ok = await confirm({
+        title: "Some steps aren't ticked",
+        message: `${unticked} of ${progress.total} ${progress.total === 1 ? "step isn't" : "steps aren't"} ticked off on “${routine.name}”. Mark it as done anyway?`,
+        confirmLabel: "Mark as done",
+        destructive: false,
+      });
+      if (!ok) throw new Error("cancelled");
+    }
     try {
-      await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at });
+      await complete.mutateAsync({ id: routine._id, occurrence: index, expected_due_at: routine.due_at, ...extra });
     } catch (e: any) {
-      if (userId && isNetworkError(e)) {
-        // No connection: keep it on the device and send it when back online (the server checks the due date then).
-        // The card disappears because the list hides queued occurrences.
+      // No connection: keep a plain "done" on the device and send it when back online (the server checks the due date then).
+      // One with a note or photos needs a connection, so it fails as usual. The card disappears because the list hides
+      // queued occurrences.
+      if (userId && isNetworkError(e) && !extra.note && !extra.images?.length) {
         await offlineQueue.add(
           userId,
           { kind: "routine-done", routineId: routine._id, occurrence: index, expectedDueAt: routine.due_at },
@@ -84,7 +113,7 @@ function PendingCard({ occ, userId }: { occ: Occurrence; userId?: string }) {
         });
         return;
       }
-      enqueueSnackbar(e?.response?.data?.message ?? "Couldn't mark as done", { variant: "error" });
+      enqueueSnackbar(e?.response?.data?.message ?? e?.message ?? "Couldn't mark as done", { variant: "error" });
       if (e?.response?.status === 409) void invalidate();
       throw e;
     }
@@ -120,10 +149,47 @@ function PendingCard({ occ, userId }: { occ: Occurrence; userId?: string }) {
           </Box>
           <RoutineMenu routine={routine} variant="overview" allowPostpone={!projected} />
         </Stack>
+        {steps.length > 0 && (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {stepsLabel(progress.done, progress.total)} ticked
+            </Typography>
+            {steps.map((step) => (
+              <Box
+                key={step._id}
+                component="label"
+                sx={{ display: "flex", alignItems: "center", gap: 0.5, cursor: "pointer" }}
+              >
+                <Checkbox
+                  size="small"
+                  checked={step.done}
+                  onChange={(e) =>
+                    toggleStep.mutate(
+                      { id: routine._id, itemId: step._id, done: e.target.checked },
+                      { onError: () => enqueueSnackbar("Couldn't save the step", { variant: "error" }) },
+                    )
+                  }
+                  sx={{ p: 0.5 }}
+                />
+                <Typography
+                  variant="body2"
+                  sx={{ textDecoration: step.done ? "line-through" : "none", opacity: step.done ? 0.6 : 1 }}
+                >
+                  {step.text}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
         <Box sx={{ mt: 1.5 }}>
           <SlideToComplete
-            onComplete={handleComplete}
+            onComplete={() => handleComplete()}
             onKeyboardActivate={async () => {
+              // With steps left unticked, handleComplete asks about that instead, so there is only one question.
+              if (unticked > 0) {
+                handleComplete().catch(() => {});
+                return;
+              }
               if (
                 await confirm({
                   title: "Mark as done",
@@ -137,6 +203,25 @@ function PendingCard({ occ, userId }: { occ: Occurrence; userId?: string }) {
             }}
           />
         </Box>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.5 }}>
+          <Button
+            size="small"
+            startIcon={<AddAPhotoOutlinedIcon />}
+            onClick={() => setNoteOpen(true)}
+            sx={{ textTransform: "none" }}
+          >
+            Done with a note or photos
+          </Button>
+        </Box>
+        <CompleteDialog
+          open={noteOpen}
+          routineName={routine.name}
+          onClose={() => setNoteOpen(false)}
+          onSubmit={async ({ note, files, onUploadProgress }) => {
+            await handleComplete({ note: note || undefined, images: files, onUploadProgress });
+            setNoteOpen(false);
+          }}
+        />
       </Card>
     </Collapse>
   );
@@ -323,6 +408,7 @@ export default function Overview() {
                       {format(new Date(c.at), "PP")}
                       {c.occurrenceAt ? ` (for ${format(new Date(c.occurrenceAt), "PP")})` : ""}
                       {c.by_username ? ` · ${c.by_username}` : ""}
+                      {c.photos > 0 ? ` · ${c.photos} ${c.photos === 1 ? "photo" : "photos"}` : ""}
                       {c.note ? ` · ${c.note}` : ""}
                     </Typography>
                   </Box>

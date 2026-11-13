@@ -1,4 +1,5 @@
-import { useDeferredValue, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Avatar,
@@ -96,6 +97,26 @@ export default function XenNote() {
     id: string | null;
     tab?: "general" | "people" | "link";
   } | null>(null);
+
+  // A link to a note (a reminder's notification) opens it: /internal/xennote?note=<id>. The address is tidied once
+  // the note has loaded, so closing it and reloading doesn't reopen it. `handled` stops a re-render from fetching twice,
+  // and is cleared with the address so the same link works again later.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedNoteId = searchParams.get("note");
+  const handled = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedNoteId) {
+      handled.current = null;
+      return;
+    }
+    if (handled.current === linkedNoteId) return;
+    handled.current = linkedNoteId;
+    api
+      .get<{ note: Note }>(`/api/xennote/notes/${encodeURIComponent(linkedNoteId)}`)
+      .then((r) => setEditor({ note: r.note }))
+      .catch(() => enqueueSnackbar("That note isn't available any more", { variant: "info" }))
+      .finally(() => setSearchParams({}, { replace: true }));
+  }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
 
   const filters: NoteFilters = {
     notebook: scope === "all" || scope === "archive" ? undefined : scope,

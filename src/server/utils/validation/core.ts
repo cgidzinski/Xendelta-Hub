@@ -823,10 +823,22 @@ const xenRoutineIntervalSchema = z.object({
   unit: z.enum(["days", "weeks", "months", "years"]),
 });
 
+// The steps of a routine's checklist: up to 30, each a short line. An existing step keeps its _id (and so its tick).
+export const MAX_ROUTINE_STEPS = 30;
+const xenRoutineChecklistSchema = z
+  .array(
+    z.object({ _id: objectIdSchema.optional(), text: z.string().trim().min(1, "A step needs some text").max(100) }),
+  )
+  .max(MAX_ROUTINE_STEPS, `Up to ${MAX_ROUTINE_STEPS} steps`);
+
+export const xenRoutineChecklistItemParamSchema = z.object({ id: objectIdSchema, itemId: objectIdSchema });
+export const xenRoutineChecklistTickSchema = z.object({ done: z.boolean() });
+
 export const createXenRoutineSchema = z.object({
   name: z.string().trim().min(1, "A name is required").max(100),
   category: z.string().trim().max(50).optional(),
   notes: z.string().max(1000).optional(),
+  checklist: xenRoutineChecklistSchema.optional(),
   interval: xenRoutineIntervalSchema,
   // When it's next due. Omitted = one interval from now (or from last_done_at if given).
   due_at: z.string().datetime({ offset: true }).optional(),
@@ -838,6 +850,7 @@ export const updateXenRoutineSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   category: z.string().trim().max(50).optional(),
   notes: z.string().max(1000).optional(),
+  checklist: xenRoutineChecklistSchema.optional(),
   interval: xenRoutineIntervalSchema.optional(),
   due_at: z.string().datetime({ offset: true }).optional(),
   enabled: z.boolean().optional(),
@@ -848,7 +861,8 @@ export const completeXenRoutineSchema = z.object({
   done_at: z.string().datetime({ offset: true }).optional(),
   // Which upcoming occurrence is being completed (1 = the current due date). Sent with the
   // due_at the client saw so a stale view can't complete the wrong occurrence.
-  occurrence: z.number().int().min(1).max(400).optional(),
+  // Coerced: a "done" with photos is sent as a form, where every field is text.
+  occurrence: z.coerce.number().int().min(1).max(400).optional(),
   expected_due_at: z.string().datetime({ offset: true }).optional(),
   note: z.string().trim().max(500).optional(),
 });

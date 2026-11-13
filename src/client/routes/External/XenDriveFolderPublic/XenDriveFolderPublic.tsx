@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useParams, useSearchParams, Link as RouterLink } from "react-router-dom";
 import {
   Alert,
@@ -9,22 +9,42 @@ import {
   Container,
   IconButton,
   Link as MuiLink,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import CloudOutlinedIcon from "@mui/icons-material/CloudOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ViewListIcon from "@mui/icons-material/ViewList";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import { format } from "date-fns";
 import { useTitle } from "../../../hooks/useTitle";
-import { usePublicFolder } from "../../../hooks/xendrive/useXendrive";
+import { usePublicFolder, usePublicFolderInfo } from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import FileTypeIcon from "../../Internal/XenDrive/components/FileTypeIcon";
 import { fileKindOf } from "../../Internal/XenDrive/lib/fileKind";
 
 type Mode = "list" | "grid";
+
+// The folder link's password is kept for this tab only, so moving between folders and reloading doesn't ask again.
+const passwordKey = (token: string) => `xendrive-folder-password:${token}`;
+const readPassword = (token: string | undefined) => {
+  try {
+    return (token && sessionStorage.getItem(passwordKey(token))) || "";
+  } catch {
+    return "";
+  }
+};
+const storePassword = (token: string, password: string) => {
+  try {
+    if (password) sessionStorage.setItem(passwordKey(token), password);
+    else sessionStorage.removeItem(passwordKey(token));
+  } catch {
+    // private window or blocked storage: the password just isn't remembered
+  }
+};
 
 /** A shared folder, opened from its public link: browse it and everything inside, download files. Read-only. */
 export default function XenDriveFolderPublic() {
@@ -32,14 +52,78 @@ export default function XenDriveFolderPublic() {
   const [params] = useSearchParams();
   const folderId = params.get("folder");
   const [mode, setMode] = useState<Mode>("list");
-  const { data, isLoading, isError, error } = usePublicFolder(token, folderId);
+  const [password, setPassword] = useState(() => readPassword(token));
+  const [typed, setTyped] = useState("");
+  const info = usePublicFolderInfo(token);
+  // Wait to learn whether there's a password; a folder without one opens straight away.
+  const locked = !!info.data?.requiresPassword;
+  const { data, isLoading, isError, error } = usePublicFolder(
+    token,
+    folderId,
+    locked ? password : undefined,
+    !!info.data && (!locked || !!password),
+  );
 
   useTitle(data ? `${data.root.name} - XenDrive` : "Shared folder - XenDrive");
 
   const here = (id: string) => `/xendrive/f/${token}${id === data?.root._id ? "" : `?folder=${id}`}`;
-  const fileHref = (id: string) => `/api/xendrive/public/folder/${token}/files/${id}`;
+  const fileHref = (id: string) =>
+    `/api/xendrive/public/folder/${token}/files/${id}${locked && password ? `?password=${encodeURIComponent(password)}` : ""}`;
 
-  if (isLoading) {
+  const wrongPassword = locked && !!password && isError && (error as Error | null)?.message === "Incorrect password";
+  const unlock = (event: FormEvent) => {
+    event.preventDefault();
+    if (!token || !typed) return;
+    storePassword(token, typed);
+    setPassword(typed);
+    setTyped("");
+  };
+
+  if (info.isError) {
+    const message = (info.error as Error | null)?.message;
+    return (
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <Alert severity="error">
+          {message === "Link expired"
+            ? "This link has expired. Ask the person who shared it for a new one."
+            : "This link doesn't work any more. Ask the person who shared it for a new one."}
+        </Alert>
+      </Container>
+    );
+  }
+
+  if (locked && (!password || wrongPassword)) {
+    return (
+      <Container maxWidth="xs" sx={{ py: 8 }}>
+        <Box component="form" onSubmit={unlock} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <LockOutlinedIcon color="primary" />
+            <Typography variant="h6" component="h1" sx={{ fontWeight: 600 }} noWrap>
+              {info.data?.name}
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            This folder needs a password.
+          </Typography>
+          <TextField
+            autoFocus
+            type="password"
+            label="Password"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            error={wrongPassword}
+            helperText={wrongPassword ? "That password isn't right." : undefined}
+            slotProps={{ htmlInput: { maxLength: 200, autoComplete: "off" } }}
+          />
+          <Button type="submit" variant="contained" disabled={!typed}>
+            Open folder
+          </Button>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (info.isLoading || isLoading) {
     return (
       <Container maxWidth="md" sx={{ py: 8 }}>
         <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -55,7 +139,9 @@ export default function XenDriveFolderPublic() {
         <Alert severity="error">
           {(error as Error | null)?.message === "Link not found" || !error
             ? "This link doesn't work any more. Ask the person who shared it for a new one."
-            : (error as Error).message}
+            : (error as Error).message === "Link expired"
+              ? "This link has expired. Ask the person who shared it for a new one."
+              : (error as Error).message}
         </Alert>
       </Container>
     );
