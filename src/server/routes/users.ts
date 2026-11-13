@@ -134,10 +134,7 @@ module.exports = function (app: express.Application) {
         // Check uniqueness — reject if another user already has this username
         const existing = await User.findOne({ username, _id: { $ne: userId } }).exec();
         if (existing) {
-          return res.status(400).json({
-            status: false,
-            message: "Username is already taken",
-          });
+          throw new AppError(400, "Username is already taken");
         }
         user.username = username;
         await user.save();
@@ -193,10 +190,7 @@ module.exports = function (app: express.Application) {
       const user = await loadCaller(req);
 
       if (!req.file) {
-        return res.status(400).json({
-          status: false,
-          message: "No file uploaded",
-        });
+        throw new AppError(400, "No file uploaded");
       }
 
       const userId = user._id.toString();
@@ -218,10 +212,7 @@ module.exports = function (app: express.Application) {
         const uploadResult = await uploadAvatarFile(req.file, userId);
         if (!uploadResult || !uploadResult.url) {
           console.error("Avatar upload failed: Invalid response from uploadAvatarFile", uploadResult);
-          return res.status(500).json({
-            status: false,
-            message: "Failed to upload avatar: Invalid response from upload service",
-          });
+          throw new AppError(500, "Failed to upload avatar: Invalid response from upload service");
         }
         url = uploadResult.url;
         console.log("Avatar uploaded successfully:", url);
@@ -233,10 +224,7 @@ module.exports = function (app: express.Application) {
           mimetype: req.file?.mimetype,
           size: req.file?.size,
         });
-        return res.status(500).json({
-          status: false,
-          message: error.message || "Failed to upload avatar",
-        });
+        throw new AppError(500, error.message || "Failed to upload avatar");
       }
 
       // Store direct URL in user model
@@ -649,10 +637,7 @@ module.exports = function (app: express.Application) {
 
       const item = user.inventory.id(inventoryItemId);
       if (!item) {
-        return res.status(404).json({
-          status: false,
-          message: "Item not found in inventory",
-        });
+        throw new AppError(404, "Item not found in inventory");
       }
 
       user.inventory.pull({ _id: inventoryItemId });

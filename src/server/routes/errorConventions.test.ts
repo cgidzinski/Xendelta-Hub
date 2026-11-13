@@ -8,16 +8,11 @@ import { join, relative } from "path";
 // can join it. (A route that wraps its whole body in try/catch has to be moved by hand: a thrown AppError would land in its
 // own catch and become a 500, so a mechanical rewrite is not safe there.)
 const STILL_HAND_WRITTEN: Record<string, string> = {
-  "auth.ts": "sign-in answers carry their own fields",
-  "users.ts": "profile routes wrap their bodies in try/catch",
-  "xendrive.ts": "a few answers carry extra fields (password prompts)",
   "xenlink.ts": "moved in the owner_id change (#258)",
-  "admin/blog.ts": "content editing, left as it was",
 };
 
 // Files that still read the caller's id by casting the request.
 const STILL_CASTING: Record<string, string> = {
-  "admin/blog.ts": "content editing, left as it was",
   "xenlink.ts": "moved in the owner_id change (#258)",
 };
 
