@@ -685,7 +685,7 @@ module.exports = function (app: express.Application) {
       if (!file) throw new AppError(404, "File not found");
 
       if (file.isExpired()) {
-        return res.status(403).json({ status: false, message: "Link expired", isExpired: true });
+        throw new AppError(403, "Link expired", { isExpired: true });
       }
 
       return res.json({
@@ -712,15 +712,13 @@ module.exports = function (app: express.Application) {
       if (!file) throw new AppError(404, "File not found");
 
       if (file.isExpired()) {
-        return res.status(403).json({ status: false, message: "Link expired" });
+        throw new AppError(403, "Link expired");
       }
 
       if (file.hasPassword()) {
         const wrong = !password || typeof password !== "string" || !(await file.checkPassword(password));
         if (wrong) {
-          return res.status(401).json({
-            status: false,
-            message: !password ? "Password required" : "Incorrect password",
+          throw new AppError(401, !password ? "Password required" : "Incorrect password", {
             requiresPassword: true,
             name: file.name,
             expiry: file.expiry ? file.expiry.toISOString() : null,
@@ -805,8 +803,7 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFolderTokenParamSchema),
     async function (req: express.Request, res: express.Response) {
       const folder = await sharedFolder(req.params.token as string);
-      if (folderLinkExpired(folder))
-        return res.status(403).json({ status: false, message: "Link expired", isExpired: true });
+      if (folderLinkExpired(folder)) throw new AppError(403, "Link expired", { isExpired: true });
       return res.json({
         status: true,
         data: {

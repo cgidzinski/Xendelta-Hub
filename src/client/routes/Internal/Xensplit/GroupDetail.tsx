@@ -73,6 +73,8 @@ import type {
   UpdateExpenseInput,
 } from "../../../hooks/xensplit/types";
 import UserName from "../../../components/user/UserName";
+import { MAX_RECEIPT_IMAGES } from "../Share/receipt";
+import { useSharedReceipt } from "../Share/useSharedReceipt";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -239,6 +241,20 @@ export default function GroupDetail() {
     () => computeFinalExpenseIds(group?.expenses ?? [], group?.recurring_expenses),
     [group?.expenses, group?.recurring_expenses],
   );
+
+  // A receipt photo shared from another app opens the new-expense form with the photo attached.
+  useSharedReceipt(!!group, MAX_RECEIPT_IMAGES, (images) => {
+    if (!group) return;
+    add.reset(
+      emptyDraft({
+        currency: group.default_currency || "CAD",
+        paidBy: user?.id || "",
+        paidByUser: user ? { _id: user.id, username: user.username, avatar: user.avatar } : null,
+      }),
+    );
+    add.setters.images(images);
+    setShowAddExpenseModal(true);
+  });
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorDisplay error={error} onRetry={() => refetch()} />;

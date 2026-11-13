@@ -1,14 +1,13 @@
 import express = require("express");
 import { buyShopItemSchema, validate } from "../utils/validation";
 import { authenticateToken } from "../middleware/auth";
-import { AuthenticatedRequest } from "../types";
 import { ShopItem } from "../types/shopItem";
 const mongoose = require("mongoose");
 import { User } from "../models/user";
 import { GemPurchase } from "../models/gemPurchase";
 import { SHOP_ITEMS } from "../constants/shopItems";
 import { ITEMS } from "../constants/items";
-import { AppError, loadCaller } from "../utils/http";
+import { AppError, callerId, loadCaller } from "../utils/http";
 import { canUseProvider, fulfilGemPurchase, getPaymentProvider } from "../payments";
 
 const isAdmin = (roles: string[] | undefined) => (roles || []).some((r) => r.toLowerCase() === "admin");
@@ -44,7 +43,7 @@ module.exports = function (app: express.Application) {
 };
 
 async function buyWithGems(req: express.Request, res: express.Response, shopItem: ShopItem) {
-  const userId = (req as AuthenticatedRequest).user!._id;
+  const userId = callerId(req);
   const price = shopItem.price;
   if (price === undefined) throw new AppError(500, "Item has no price");
 

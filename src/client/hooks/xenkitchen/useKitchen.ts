@@ -97,6 +97,8 @@ export interface KitchenItem {
   brand: string;
   methods: KitchenMethod[];
   storage_note: string;
+  /** The web address the recipe was imported from, or "". */
+  source_url: string;
   share?: { enabled: boolean; token: string | null };
   created_at: string;
   updated_at: string;
@@ -286,6 +288,34 @@ export const useUploadKitchenImages = () =>
     v.files.forEach((f) => form.append("images", f));
     return itemData(await apiClient.post(`${base}/items/${v.id}/images`, form));
   });
+
+/** A recipe read from a web page (nothing is saved): what the editor is filled with for review. */
+export interface ImportedKitchenRecipe {
+  title: string;
+  description: string;
+  servings: number | null;
+  prep_minutes: number | null;
+  cook_minutes: number | null;
+  ingredients: Array<{ quantity: string; unit: string; name: string; note: string; section: string }>;
+  steps: Array<{ text: string; timer_minutes: null }>;
+  tags: string[];
+  source_url: string;
+  /** The page's main photo; added to the item after it is saved. */
+  image_url: string | null;
+}
+
+export const useImportKitchenRecipe = () =>
+  useMutation({
+    mutationFn: async (url: string) =>
+      unwrap(await apiClient.post<ApiResponse<{ recipe: ImportedKitchenRecipe }>>(`${base}/import-url`, { url }))
+        .recipe,
+  });
+
+/** Add a picture from a web address (the imported recipe's photo) to a saved item. */
+export const useAddKitchenImageFromUrl = () =>
+  useKitchenMutation(async (v: { id: string; url: string }) =>
+    itemData(await apiClient.post(`${base}/items/${v.id}/images/from-url`, { url: v.url })),
+  );
 
 export const useDeleteKitchenImage = () =>
   useKitchenMutation(async (v: { id: string; imageId: string }) =>

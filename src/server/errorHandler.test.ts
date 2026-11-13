@@ -36,6 +36,14 @@ describe("errorHandler", () => {
     expect(res.body).toEqual({ status: false, message: "Group not found" });
   });
 
+  it("adds an AppError's extra fields, which can't override status or message", async () => {
+    const res = await request(
+      appThatThrows(new AppError(401, "Password required", { requiresPassword: true, status: true, message: "x" })),
+    ).get("/boom");
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ requiresPassword: true, status: false, message: "Password required" });
+  });
+
   it("answers any other error with a 500", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const res = await request(appThatThrows(new Error("kaboom"))).get("/boom");
