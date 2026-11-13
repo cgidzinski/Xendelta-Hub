@@ -14,7 +14,10 @@ export type AuditAction =
   | "user_delete"
   | "notify_send"
   | "chats_delete_all"
-  | "task_toggle";
+  | "task_toggle"
+  | "backup_create"
+  | "backup_restore"
+  | "backup_delete";
 
 /** Which filter chip each action sits under. */
 export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
@@ -28,6 +31,9 @@ export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
   notify_send: "Notify",
   chats_delete_all: "Danger",
   task_toggle: "System",
+  backup_create: "System",
+  backup_restore: "Danger",
+  backup_delete: "System",
 };
 
 export interface AuditEntry {
@@ -36,7 +42,7 @@ export interface AuditEntry {
   admin: { _id: string; username: string };
   action: AuditAction;
   category: AuditCategory;
-  target: { type: "user" | "everyone" | "chats" | "task" | "group"; id?: string; label: string };
+  target: { type: "user" | "everyone" | "chats" | "task" | "group" | "database"; id?: string; label: string };
   /** One readable line: what changed. */
   detail: string;
   /** Structured extras (a broadcast's title and channels, a role change's before and after). */
@@ -173,4 +179,39 @@ export interface AdminSystemReport {
     lastError: string | null;
   }>;
   documents: Array<{ label: string; collection: string; bytes: number; percentOfLimit: number }>;
+}
+
+// Database backups (routes/admin/backups.ts). They live in the private bucket under BACKUP_PREFIX.
+export const BACKUP_PREFIX = "db-backups/";
+/** The only object names the backup routes accept: ours, never a path the caller made up. */
+export const BACKUP_NAME_PATTERN =
+  /^db-backups\/(xendelta-hub-backup|pre-restore|scheduled)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.ndjson\.gz$/;
+
+export interface AdminBackup {
+  /** The object name, e.g. db-backups/xendelta-hub-backup-2026-01-01T00-00-00-000Z.ndjson.gz */
+  name: string;
+  /** "pre-restore" files are the safety snapshot taken just before a restore; "scheduled" ones are the automatic backups. */
+  kind: "backup" | "pre-restore" | "scheduled";
+  size: number;
+  createdAt: string | null;
+}
+
+export interface AdminBackupJob {
+  id: string;
+  kind: "backup" | "restore";
+  status: "running" | "done" | "error";
+  startedAt: string;
+  finishedAt?: string;
+  /** The backup written (backup) or restored from (restore). */
+  name?: string;
+  /** For a restore: the safety snapshot taken first. */
+  snapshot?: string;
+  error?: string;
+  /** For a restore: what was wiped and put back, and any collections that failed. */
+  summary?: { collections: number; deleted: number; inserted: number; errors: string[] };
+}
+
+export interface AdminBackupsResponse {
+  backups: AdminBackup[];
+  job: AdminBackupJob | null;
 }

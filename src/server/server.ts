@@ -114,6 +114,19 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: () => runNoteReminders(),
     });
+    // Automatic database backups to the private bucket, only when BACKUP_SCHEDULE_HOURS is set (docs/admin.md).
+    const { scheduleFromEnv, runScheduledBackup } = require("./utils/gcsBackups");
+    const backupSchedule = scheduleFromEnv();
+    if (backupSchedule) {
+      scheduler.register({
+        name: "database-backup",
+        everyMs: 60 * 60 * 1000,
+        handler: async () => {
+          const db = require("mongoose").connection.db;
+          if (db) await runScheduledBackup(db, backupSchedule);
+        },
+      });
+    }
     scheduler.start();
   } catch (e) {
     // An error thrown from an event handler would crash the process as an
@@ -169,6 +182,10 @@ app.use(
     message: { status: false, message: "Too many requests. Slow down and try again shortly." },
   }),
 );
+
+// Paused with a 503 while an admin restores the database from a backup (routes/admin/backups.ts).
+const { restoreMaintenance } = require("./middleware/restoreMaintenance");
+app.use(restoreMaintenance);
 
 // Liveness/readiness for the process manager and uptime checks.
 app.get("/api/health", (_req: any, res: any) => {

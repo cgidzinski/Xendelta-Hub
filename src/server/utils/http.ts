@@ -12,6 +12,8 @@ export class AppError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Fields the client reads beside the message (a password prompt's `requiresPassword`); can't override `status`/`message`. */
+    public readonly extra?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "AppError";
@@ -45,7 +47,7 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   // An AppError is an expected, deliberate response (not found, forbidden...): answer it
   // quietly. Everything else is a bug and gets logged.
   if (err instanceof AppError) {
-    return res.status(err.status).json({ status: false, message: err.message });
+    return res.status(err.status).json({ ...err.extra, status: false, message: err.message });
   }
   console.error(">>> Unhandled error:", err);
   const status = err.status || err.statusCode || 500;

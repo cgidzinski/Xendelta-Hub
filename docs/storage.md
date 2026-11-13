@@ -107,3 +107,6 @@ quota is what gems extend.
   moments between a deploy and `migrations/1794900000000-xendrive-password-hash.ts`, which hashes it and removes it. The
   migration can't be reversed; restore from a backup to go back.
 
+## Database backups
+Admin-made database backups live in the private bucket under `db-backups/` (`docs/admin.md`). They are not XenDrive files and don't
+count toward anyone's quota. There is no retention yet: delete old ones from the System page.

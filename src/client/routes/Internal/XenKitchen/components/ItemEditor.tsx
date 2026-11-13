@@ -19,21 +19,25 @@ import {
 import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
+import LanguageIcon from "@mui/icons-material/Language";
 import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { MAX_KITCHEN_IMAGES, type KitchenLayout } from "@shared/xenkitchen/kitchen";
 import {
   canEditBook,
+  useAddKitchenImageFromUrl,
   useCreateKitchenItem,
   useDeleteKitchenImage,
   useKitchenBooks,
   useKitchenCategories,
   useUpdateKitchenItem,
   useUploadKitchenImages,
+  type ImportedKitchenRecipe,
   type KitchenItem,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView } from "./kitchenIcons";
-import { Draft, newKey, draftFrom, inputFrom, filledExtras, Extra } from "./itemEditor/itemDraft";
+import { Draft, newKey, draftFrom, draftFromImport, inputFrom, filledExtras, Extra } from "./itemEditor/itemDraft";
+import { ImportUrlDialog } from "./itemEditor/ImportUrlDialog";
 import { PhotoStrip } from "./itemEditor/PhotoStrip";
 import { TagField, quietInput } from "./itemEditor/editorFields";
 import { RecipeFields } from "./itemEditor/RecipeFields";
@@ -49,6 +53,15 @@ const EXTRA_LABELS: Record<Extra, string> = {
 const EXTRAS_FOR: Record<KitchenLayout, Extra[]> = {
   recipe: ["description", "times", "tags", "notes"],
   instructions: ["brand", "storage", "description", "tags", "notes"],
+};
+
+/** "food.example.com" for a recipe's source link. */
+const sourceHost = (url: string) => {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 };
 
 // ---------- the editor ----------
@@ -88,6 +101,7 @@ export default function ItemEditor({
   const create = useCreateKitchenItem();
   const update = useUpdateKitchenItem();
   const upload = useUploadKitchenImages();
+  const addFromUrl = useAddKitchenImageFromUrl();
   const deleteImage = useDeleteKitchenImage();
 
   const [draft, setDraft] = useState<Draft>(() => draftFrom(item, defaultCategoryId));
@@ -97,6 +111,9 @@ export default function ItemEditor({
   const [newFiles, setNewFiles] = useState<Array<{ key: string; file: File; url: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [opened, setOpened] = useState<Set<Extra>>(new Set());
+  // Importing from a web address: the dialog, and the page's photo, which is added once the item is saved.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importedImage, setImportedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -106,6 +123,7 @@ export default function ItemEditor({
     initial.current = JSON.stringify(inputFrom(d));
     setPhotos(item?.images ?? []);
     setNewFiles([]);
+    setImportedImage(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?._id]);
 
@@ -150,6 +168,14 @@ export default function ItemEditor({
     ]);
   };
 
+  const applyImport = (recipe: ImportedKitchenRecipe) => {
+    const d = draftFromImport(recipe, draft.category_id);
+    setDraft(d);
+    setOpened(filledExtras(d));
+    setImportedImage(recipe.image_url);
+    enqueueSnackbar("Recipe imported. Have a look, then save it.", { variant: "success" });
+  };
+
   const save = async () => {
     setSaving(true);
     const input = inputFrom(draft);
@@ -162,6 +188,14 @@ export default function ItemEditor({
           .item;
       } else {
         saved = (await create.mutateAsync({ ...input, book_id: bookId })).item;
+      }
+      // The imported page's photo, unless there's no room or the person added their own. A failure never loses the recipe.
+      if (importedImage && !item && newFiles.length === 0) {
+        try {
+          saved = (await addFromUrl.mutateAsync({ id: saved._id, url: importedImage })).item;
+        } catch {
+          enqueueSnackbar("Saved, but the photo from the page couldn't be added", { variant: "warning" });
+        }
       }
       if (newFiles.length) {
         try {
@@ -225,6 +259,17 @@ export default function ItemEditor({
           hint={layout === "instructions" ? "Snap the box" : "Add a photo"}
         />
 
+        {!item && (
+          <Button
+            size="small"
+            startIcon={<LanguageIcon />}
+            onClick={() => setImportOpen(true)}
+            sx={{ mt: 1.5, px: 0, textTransform: "none" }}
+          >
+            Import from a web address
+          </Button>
+        )}
+
         <TextField
           variant="standard"
           fullWidth
@@ -235,6 +280,22 @@ export default function ItemEditor({
           sx={{ mt: 2, ...quietInput }}
           slotProps={{ htmlInput: { maxLength: 120, "aria-label": "Title", style: { fontSize: 26, fontWeight: 800 } } }}
         />
+
+        {(draft.source_url || importedImage) && (
+          <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: "wrap", rowGap: 1 }}>
+            {draft.source_url && (
+              <Chip
+                size="small"
+                icon={<LanguageIcon />}
+                label={`From ${sourceHost(draft.source_url)}`}
+                onDelete={() => set({ source_url: "" })}
+              />
+            )}
+            {importedImage && !item && (
+              <Chip size="small" label="The page's photo will be added" onDelete={() => setImportedImage(null)} />
+            )}
+          </Stack>
+        )}
 
         <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: "wrap", rowGap: 1 }}>
           <TextField
@@ -421,6 +482,7 @@ export default function ItemEditor({
           </Stack>
         )}
       </DialogContent>
+      <ImportUrlDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={applyImport} />
     </Dialog>
   );
 }
