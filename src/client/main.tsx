@@ -58,7 +58,10 @@ const People = lazyPage(() => import("./routes/Internal/People/People"));
 const PersonProfile = lazyPage(() => import("./routes/Internal/People/PersonProfile"));
 const Profile = lazyPage(() => import("./routes/Internal/Profile/Profile"));
 const Messages = lazyPage(() => import("./routes/Internal/Messages/Messages"));
-const WhatsNew = lazyPage(() => import("./routes/Internal/WhatsNew/WhatsNew"));
+const About = lazyPage(() => import("./routes/Internal/About/About"));
+const WhatsNewRedirect = lazyPage<object>(() =>
+  import("./routes/Internal/About/About").then((m) => ({ default: m.WhatsNewRedirect })),
+);
 const Feedback = lazyPage(() => import("./routes/Internal/Feedback/Feedback"));
 const Notifications = lazyPage(() => import("./routes/Internal/Notifications/Notifications"));
 const InternalBlog = lazyPage(() => import("./routes/Internal/Blog/InternalBlog"));
@@ -186,7 +189,9 @@ const router = createBrowserRouter(
         <Route path="notifications" element={<Notifications />} />
         {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
         <Route path="share" element={<Share />} />
-        <Route path="whats-new" element={<WhatsNew />} />
+        <Route path="about" element={<About />} />
+        {/* The About page used to be called What's new: keep old links working */}
+        <Route path="whats-new" element={<WhatsNewRedirect />} />
         <Route path="feedback" element={<Feedback />} />
         <Route path="blog" element={<InternalBlog />} />
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
