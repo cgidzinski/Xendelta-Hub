@@ -9,6 +9,9 @@ const feedbackSchema = new Schema({
   message: { type: String, required: true },
   status: { type: String, enum: FEEDBACK_STATUSES, default: "new" },
   createdAt: { type: Date, default: Date.now },
+  // Set once, when an admin rewards a fixed bug with gems. Its presence is what stops a second reward.
+  rewardedGems: { type: Number },
+  rewardedAt: { type: Date },
 });
 
 feedbackSchema.index({ status: 1, createdAt: -1 });

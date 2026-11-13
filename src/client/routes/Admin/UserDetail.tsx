@@ -223,7 +223,7 @@ function GemsCard({ user }: { user: AdminUserDetail }) {
         </Button>
       </Box>
       <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 0.75 }}>
-        Free gems are a deliberate no. Use this to correct a mistake or refund.
+        Use this to correct a mistake or refund. To thank someone for a bug report, use Resolve in Feedback.
       </Typography>
     </Box>
   );

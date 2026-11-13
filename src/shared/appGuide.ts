@@ -48,7 +48,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Send a link, some text or a photo from your phone's Share button, then save it as a note, a short link, a file or the start of an expense.",
       "Choose a light or dark look and your timezone.",
       "Create keys so your own scripts or smart-home tools can use your account.",
-      "Send feedback to the people who run it.",
+      "Send feedback to the people who run it, and earn gems when a bug you report gets fixed.",
     ],
     tips: [
       {
@@ -64,6 +64,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/profile",
       },
       { text: "Use your phone's Share button to send a link, some text or a photo straight to XenSuite." },
+      {
+        text: "Found a bug? Send feedback and describe what went wrong. If we fix it, you get gems as a thank you.",
+        link: "/internal/feedback",
+      },
     ],
   },
   recipaint: {

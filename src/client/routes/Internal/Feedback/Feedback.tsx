@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Alert, Button, Stack, TextField } from "@mui/material";
 import { FEEDBACK_MAX_LENGTH, FEEDBACK_MIN_LENGTH } from "@shared/feedback";
+import { GemIcon } from "../../../components/icons/GemIcon";
+import { GEM_COLOR } from "../../../theme";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import { useTitle } from "../../../hooks/useTitle";
@@ -24,7 +26,7 @@ export default function Feedback() {
         <PageHeader title="Thanks" />
         <Stack spacing={2} alignItems="flex-start">
           <Alert severity="success" sx={{ width: "100%" }}>
-            Your feedback was sent. We read everything.
+            Your feedback was sent. We read everything, and if it's a bug we fix, you'll be rewarded with gems.
           </Alert>
           <Stack direction="row" spacing={1}>
             <Button
@@ -48,6 +50,9 @@ export default function Feedback() {
     <PageContainer width="narrow">
       <PageHeader title="Send feedback" subtitle="An idea, something that's wrong, or anything else." />
       <Stack spacing={2}>
+        <Alert severity="info" icon={<GemIcon sx={{ color: GEM_COLOR }} />}>
+          Found a bug? Tell us what went wrong. When we fix a bug you reported, you're rewarded with gems.
+        </Alert>
         <TextField
           label="Your message"
           value={message}
