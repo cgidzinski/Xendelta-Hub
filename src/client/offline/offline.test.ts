@@ -8,6 +8,7 @@ import {
   isNetworkError,
   overlayQueuedTicks,
   queuedDoneKeys,
+  requestFor,
   replayQueue,
   type QueuedAction,
 } from "./offlineQueue";
@@ -286,5 +287,22 @@ describe("what is kept for offline use", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("the request that sends a queued change", () => {
+  it("ticks an item with the idempotent per-item endpoint", () => {
+    expect(requestFor(tick("n1", "i2", true))).toEqual({
+      method: "put",
+      url: "/api/xennote/notes/n1/checklist/i2",
+      body: { done: true },
+    });
+  });
+  it("completes a routine on the routines path, with the due date that was on screen", () => {
+    expect(requestFor(routineDone("r1", 2, "2026-03-01T00:00:00.000Z"))).toEqual({
+      method: "post",
+      url: "/api/xenroutine/routines/r1/complete",
+      body: { occurrence: 2, expected_due_at: "2026-03-01T00:00:00.000Z" },
+    });
   });
 });

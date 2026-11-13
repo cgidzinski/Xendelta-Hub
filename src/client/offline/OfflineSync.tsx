@@ -2,25 +2,19 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSnackbar } from "notistack";
 import { useAuth } from "../contexts/AuthContext";
-import { api, apiClient } from "../config/api";
+import { apiClient } from "../config/api";
 import { xennoteKeys } from "../hooks/xennote/keys";
 import { routineKeys } from "../hooks/xenroutine/useRoutines";
 import { useOnlineStatus } from "../pwa/hooks/useOnlineStatus";
-import { overlayQueuedTicks, replayQueue, type QueuedAction } from "./offlineQueue";
+import { overlayQueuedTicks, replayQueue, requestFor, type QueuedAction } from "./offlineQueue";
 import { offlineQueue, offlineStore } from "./offlineRuntime";
 import { clearPersistedCache, restoreCache, startPersisting } from "./queryPersistence";
 
 const RETRY_MS = 60_000;
 
 const send = async (action: QueuedAction): Promise<void> => {
-  if (action.kind === "note-tick") {
-    await api.put(`/api/xennote/notes/${action.noteId}/checklist/${action.itemId}`, { done: action.done });
-  } else {
-    await apiClient.post(`/api/xenroutine/${action.routineId}/complete`, {
-      occurrence: action.occurrence,
-      expected_due_at: action.expectedDueAt,
-    });
-  }
+  const { method, url, body } = requestFor(action);
+  await apiClient.request({ method, url, data: body });
 };
 
 /**

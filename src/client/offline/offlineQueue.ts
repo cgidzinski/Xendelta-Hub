@@ -80,6 +80,22 @@ export function createOfflineQueue(store: KeyValueStore, now: () => number = Dat
 
 export type OfflineQueue = ReturnType<typeof createOfflineQueue>;
 
+/** The request that sends a queued change. Both are safe to repeat (see the top of this file). */
+export function requestFor(action: QueuedAction): { method: "put" | "post"; url: string; body: unknown } {
+  if (action.kind === "note-tick") {
+    return {
+      method: "put",
+      url: `/api/xennote/notes/${action.noteId}/checklist/${action.itemId}`,
+      body: { done: action.done },
+    };
+  }
+  return {
+    method: "post",
+    url: `/api/xenroutine/routines/${action.routineId}/complete`,
+    body: { occurrence: action.occurrence, expected_due_at: action.expectedDueAt },
+  };
+}
+
 /** A request that never got an answer (offline, dropped, timed out) rather than one the server refused. */
 export const isNetworkError = (error: unknown): boolean => {
   const status =
