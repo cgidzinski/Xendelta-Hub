@@ -105,6 +105,8 @@ export interface Completion {
   at: string;
   by_username: string | null;
   note?: string;
+  /** How many photos were added when it was marked done. */
+  photos: number;
   /** When the completion was for a later occurrence done ahead of time. */
   occurrenceAt?: string;
 }
@@ -127,6 +129,7 @@ export function recentCompletions(
         at: h.at,
         by_username: h.by_username ?? null,
         note: h.note,
+        photos: h.images?.length ?? 0,
         occurrenceAt: h.occurrence_at,
       });
     }

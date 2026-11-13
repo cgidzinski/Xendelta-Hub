@@ -44,6 +44,17 @@ const historySchema = new Schema(
     // For "done" on a routine with a checklist: what was ticked off, out of how many steps there were.
     steps_done: { type: [String], default: undefined },
     steps_total: { type: Number, min: 0 },
+    // Photos taken when it was marked done (the filter you replaced, a meter reading): XenDrive files tagged to this
+    // routine (utils/xenRoutineFiles.ts), shown through signed links.
+    images: {
+      type: [
+        new Schema(
+          { file_id: { type: Schema.Types.ObjectId, ref: "XenDriveFile" }, uploaded_by: { type: String } },
+          { _id: false },
+        ),
+      ],
+      default: undefined,
+    },
   },
   { _id: false },
 );

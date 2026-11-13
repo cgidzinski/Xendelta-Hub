@@ -32,6 +32,8 @@ export interface HistoryEntry {
   /** The checklist steps ticked off when it was done, and how many steps there were. */
   steps_done?: string[];
   steps_total?: number;
+  /** Photos taken when it was marked done (XenDrive files). */
+  images?: Array<{ file_id: unknown; uploaded_by?: string }>;
 }
 export interface ChecklistStep {
   _id?: unknown;
@@ -132,10 +134,18 @@ export function doneAheadIndices(
  */
 export function applyComplete(
   routine: RoutineLike,
-  opts: { by: string; now: Date; doneAt?: Date; note?: string; occurrence?: number },
+  opts: {
+    by: string;
+    now: Date;
+    doneAt?: Date;
+    note?: string;
+    occurrence?: number;
+    images?: HistoryEntry["images"];
+  },
 ): Pick<RoutineLike, "last_done_at" | "due_at" | "last_notified_at" | "history" | "done_ahead"> &
   Partial<Pick<RoutineLike, "checklist">> {
   const n = Math.max(1, Math.floor(opts.occurrence ?? 1));
+  const photos = opts.images && opts.images.length > 0 ? { images: opts.images } : {};
   const doneAt = opts.doneAt && opts.doneAt.getTime() <= opts.now.getTime() ? opts.doneAt : opts.now;
 
   if (n > 1) {
@@ -152,6 +162,7 @@ export function applyComplete(
         by_user: opts.by,
         note: opts.note,
         occurrence_at: date,
+        ...photos,
       }),
     };
   }
@@ -178,6 +189,7 @@ export function applyComplete(
       by_user: opts.by,
       note: opts.note,
       ...stepsRecord,
+      ...photos,
     }),
     ...(steps.length > 0 ? { checklist: steps.map((c) => ({ ...c, done: false })) } : {}),
   };

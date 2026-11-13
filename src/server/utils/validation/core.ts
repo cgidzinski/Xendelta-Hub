@@ -861,7 +861,8 @@ export const completeXenRoutineSchema = z.object({
   done_at: z.string().datetime({ offset: true }).optional(),
   // Which upcoming occurrence is being completed (1 = the current due date). Sent with the
   // due_at the client saw so a stale view can't complete the wrong occurrence.
-  occurrence: z.number().int().min(1).max(400).optional(),
+  // Coerced: a "done" with photos is sent as a form, where every field is text.
+  occurrence: z.coerce.number().int().min(1).max(400).optional(),
   expected_due_at: z.string().datetime({ offset: true }).optional(),
   note: z.string().trim().max(500).optional(),
 });
