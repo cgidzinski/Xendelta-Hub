@@ -635,7 +635,7 @@ module.exports = function (app: express.Application) {
       if (!file) throw new AppError(404, "File not found");
 
       if (file.isExpired()) {
-        return res.status(403).json({ status: false, message: "Link expired", isExpired: true });
+        throw new AppError(403, "Link expired", { isExpired: true });
       }
 
       return res.json({
@@ -662,15 +662,13 @@ module.exports = function (app: express.Application) {
       if (!file) throw new AppError(404, "File not found");
 
       if (file.isExpired()) {
-        return res.status(403).json({ status: false, message: "Link expired" });
+        throw new AppError(403, "Link expired");
       }
 
       if (file.password) {
         const wrong = !password || typeof password !== "string" || !file.validPassword(password);
         if (wrong) {
-          return res.status(401).json({
-            status: false,
-            message: !password ? "Password required" : "Incorrect password",
+          throw new AppError(401, !password ? "Password required" : "Incorrect password", {
             requiresPassword: true,
             name: file.name,
             expiry: file.expiry ? file.expiry.toISOString() : null,

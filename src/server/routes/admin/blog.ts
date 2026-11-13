@@ -1,4 +1,5 @@
 import express = require("express");
+import { AppError, callerId } from "../../utils/http";
 import { BlogPost } from "../../models/blogPost";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
@@ -15,7 +16,6 @@ import { ensureUniqueSlug } from "../../utils/slugUtils";
 import { uploadBlogAsset as multerUploadBlogAsset } from "../../config/multer";
 import { uploadBlogAsset, generateUniqueFilename } from "../../utils/mediaUtils";
 import { deleteFromGCS } from "../../utils/gcsUtils";
-import { AuthenticatedRequest } from "../../types";
 import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 export function registerAdminBlogRoutes(app: express.Application) {
@@ -45,7 +45,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const { title, slug, markdown, publishDate, assets, featuredImage, categories, tags, featured, published } =
         req.body;
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       const uniqueSlug = await ensureUniqueSlug(slug);
 
@@ -82,26 +82,17 @@ export function registerAdminBlogRoutes(app: express.Application) {
     multerUploadBlogAsset.single("asset"),
     async function (req: express.Request, res: express.Response) {
       if (!req.file) {
-        return res.status(400).json({
-          status: false,
-          message: "No asset file provided",
-        });
+        throw new AppError(400, "No asset file provided");
       }
 
       const postId = req.body.postId || req.query.postId;
       if (!postId) {
-        return res.status(400).json({
-          status: false,
-          message: "Post ID is required",
-        });
+        throw new AppError(400, "Post ID is required");
       }
 
       const post = await BlogPost.findById(postId).exec();
       if (!post) {
-        return res.status(404).json({
-          status: false,
-          message: "Blog post not found",
-        });
+        throw new AppError(404, "Blog post not found");
       }
 
       // Generate unique filename
@@ -139,25 +130,16 @@ export function registerAdminBlogRoutes(app: express.Application) {
       const assetUrl = req.query.assetUrl as string;
 
       if (!postId) {
-        return res.status(400).json({
-          status: false,
-          message: "Post ID is required",
-        });
+        throw new AppError(400, "Post ID is required");
       }
 
       if (!assetUrl) {
-        return res.status(400).json({
-          status: false,
-          message: "Asset URL is required",
-        });
+        throw new AppError(400, "Asset URL is required");
       }
 
       const post = await BlogPost.findById(postId).exec();
       if (!post) {
-        return res.status(404).json({
-          status: false,
-          message: "Blog post not found",
-        });
+        throw new AppError(404, "Blog post not found");
       }
 
       // Remove URL from assets array
@@ -191,10 +173,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
       const post = await BlogPost.findById(req.params.id).exec();
 
       if (!post) {
-        return res.status(404).json({
-          status: false,
-          message: "Blog post not found",
-        });
+        throw new AppError(404, "Blog post not found");
       }
 
       const { title, slug, markdown, publishDate, assets, featuredImage, categories, tags, featured, published } =
@@ -236,10 +215,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
       const post = await BlogPost.findById(req.params.id).exec();
 
       if (!post) {
-        return res.status(404).json({
-          status: false,
-          message: "Blog post not found",
-        });
+        throw new AppError(404, "Blog post not found");
       }
 
       // Delete associated assets from public GCS
