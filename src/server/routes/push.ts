@@ -3,7 +3,7 @@ import { PushSubscription } from "../models/pushSubscription";
 import { authenticateToken } from "../middleware/auth";
 import { validate, pushSubscribeSchema, pushUnsubscribeSchema } from "../utils/validation";
 import { getVapidPublicKey } from "../utils/pushUtils";
-import { AuthenticatedRequest } from "../types";
+import { AppError, callerId } from "../utils/http";
 
 module.exports = function (app: express.Application) {
   // Served at runtime rather than baked in at build time, so the VAPID key lives only in
@@ -12,10 +12,7 @@ module.exports = function (app: express.Application) {
     const publicKey = getVapidPublicKey();
 
     if (!publicKey) {
-      return res.status(503).json({
-        status: false,
-        message: "Push notifications are not configured on this server",
-      });
+      throw new AppError(503, "Push notifications are not configured on this server");
     }
 
     return res.json({
@@ -30,7 +27,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(pushSubscribeSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { endpoint, keys } = req.body;
 
       // Upsert by endpoint: the same device re-subscribing (or a subscription that moved to
@@ -60,7 +57,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(pushUnsubscribeSchema),
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
       const { endpoint } = req.body;
 
       await PushSubscription.deleteOne({ endpoint, userId });

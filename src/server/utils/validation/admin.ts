@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { objectIdSchema } from "./core";
-import { AUDIT_CATEGORIES } from "../../../shared/admin";
+import { AUDIT_CATEGORIES, BACKUP_NAME_PATTERN } from "../../../shared/admin";
 
 export const adminUserIdParamSchema = z.object({ userId: objectIdSchema });
 export const adminUserItemParamSchema = z.object({ userId: objectIdSchema, itemKey: z.string().min(1).max(100) });
@@ -85,3 +85,8 @@ export const adminTaskToggleSchema = z.object({ enabled: z.boolean() });
 
 // Wiping every chat needs the word typed.
 export const adminDeleteChatsSchema = z.object({ confirm: z.literal("DELETE") });
+
+// Backups: the object name must be one of ours; a restore also needs the word typed.
+const backupName = z.string().regex(BACKUP_NAME_PATTERN, "Not a backup file");
+export const adminBackupNameSchema = z.object({ name: backupName });
+export const adminRestoreBackupSchema = z.object({ name: backupName, confirm: z.literal("RESTORE") });

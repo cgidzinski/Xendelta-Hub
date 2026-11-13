@@ -233,8 +233,7 @@ export function registerBackupRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     async (req: Request, res: Response) => {
       try {
-        const book = await loadBookForMember(req, res);
-        if (!book) return;
+        const book = await loadBookForMember(req);
         await book.populate("members", PUBLIC_USER_FIELDS);
 
         const safeName = book.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -284,51 +283,47 @@ export function registerBackupRoutes(app: any) {
         res.write("\n  ]\n}\n");
         res.end();
       } catch (error) {
-        console.error("Error exporting book:", error);
         // The response may already be streaming, in which case headers are long gone and
         // the only honest signal left is an abrupt end.
-        if (res.headersSent) res.end();
-        else res.status(500).json({ status: false, message: "Failed to export book" });
+        // Otherwise the global errorHandler answers it.
+        if (!res.headersSent) throw error;
+        console.error("Error exporting book:", error);
+        res.end();
       }
     },
   );
 
   // POST /api/xenbudget/books/import - restore as a NEW book
   app.post("/api/xenbudget/books/import", validate(xenBudgetRestoreSchema), async (req: Request, res: Response) => {
-    try {
-      const userId = callerId(req);
-      const payload = req.body;
-      const { members, idMap, unmatched } = await resolveRestoreMembers(payload.book.members || [], userId);
+    const userId = callerId(req);
+    const payload = req.body;
+    const { members, idMap, unmatched } = await resolveRestoreMembers(payload.book.members || [], userId);
 
-      const book = new XenBudgetBook({
-        name: payload.book.name,
-        default_currency: payload.book.default_currency || "CAD",
-        created_by: userId,
-        members,
-        categories: stripIds(payload.book.categories),
-        flags: stripIds(payload.book.flags),
-        budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
-        piggy_banks: remapPiggyBanks(stripIds(payload.book.piggy_banks), idMap),
-        rules: remapRules(stripIds(payload.book.rules), idMap),
-        import_presets: stripIds(payload.book.import_presets),
-      });
-      // A restore must still end up with the built-ins, even from an older export.
-      ensureSystemLabels(book);
-      await book.save();
+    const book = new XenBudgetBook({
+      name: payload.book.name,
+      default_currency: payload.book.default_currency || "CAD",
+      created_by: userId,
+      members,
+      categories: stripIds(payload.book.categories),
+      flags: stripIds(payload.book.flags),
+      budgets: remapBudgets(stripIds(payload.book.budgets), idMap),
+      piggy_banks: remapPiggyBanks(stripIds(payload.book.piggy_banks), idMap),
+      rules: remapRules(stripIds(payload.book.rules), idMap),
+      import_presets: stripIds(payload.book.import_presets),
+    });
+    // A restore must still end up with the built-ins, even from an older export.
+    ensureSystemLabels(book);
+    await book.save();
 
-      const inserted = await insertRestoredItems(book, payload.items, idMap, userId, "merge");
-      await book.populate("members", PUBLIC_USER_FIELDS);
-      SocketManager.getInstance().notifyXenBudgetBooksUpdated(members.map(String));
+    const inserted = await insertRestoredItems(book, payload.items, idMap, userId, "merge");
+    await book.populate("members", PUBLIC_USER_FIELDS);
+    SocketManager.getInstance().notifyXenBudgetBooksUpdated(members.map(String));
 
-      res.json({
-        status: true,
-        message: `Restored ${inserted} item${inserted === 1 ? "" : "s"}`,
-        data: { book: serializeBookFor(book, userId, inserted), restored: inserted, unmatched_people: unmatched },
-      });
-    } catch (error) {
-      console.error("Error restoring book:", error);
-      res.status(500).json({ status: false, message: "Failed to restore book" });
-    }
+    res.json({
+      status: true,
+      message: `Restored ${inserted} item${inserted === 1 ? "" : "s"}`,
+      data: { book: serializeBookFor(book, userId, inserted), restored: inserted, unmatched_people: unmatched },
+    });
   });
 
   // POST /api/xenbudget/books/:bookId/import - restore INTO this book
@@ -337,58 +332,52 @@ export function registerBackupRoutes(app: any) {
     validateParams(xenBudgetBookIdParamSchema),
     validate(xenBudgetRestoreSchema),
     async (req: Request, res: Response) => {
-      try {
-        // scope wins over the legacy mode field; a request with neither is an items-only
-        // merge, which is what a bare restore has always done.
-        const scope =
-          (req.body.scope as "items" | "config" | "everything" | undefined) ||
-          (req.body.mode === "replace" ? "everything" : "items");
-        // Config and everything overwrite book-level settings (and everything also wipes
-        // items), so they are the owner's call; a plain items merge is member-safe.
-        const book = scope === "items" ? await loadBookForMember(req, res) : await loadBookForCreator(req, res);
-        if (!book) return;
+      // scope wins over the legacy mode field; a request with neither is an items-only
+      // merge, which is what a bare restore has always done.
+      const scope =
+        (req.body.scope as "items" | "config" | "everything" | undefined) ||
+        (req.body.mode === "replace" ? "everything" : "items");
+      // Config and everything overwrite book-level settings (and everything also wipes
+      // items), so they are the owner's call; a plain items merge is member-safe.
+      const book = scope === "items" ? await loadBookForMember(req) : await loadBookForCreator(req);
 
-        const userId = callerId(req);
-        const { idMap, unmatched } = await resolveRestoreMembers(req.body.book.members || [], userId);
+      const userId = callerId(req);
+      const { idMap, unmatched } = await resolveRestoreMembers(req.body.book.members || [], userId);
 
-        let removed = 0;
-        let inserted = 0;
-        if (scope === "config" || scope === "everything") {
-          await applyConfig(book, req.body, idMap);
-        }
-        if (scope === "everything") {
-          const result = await XenBudgetItem.deleteMany({ book_id: book._id });
-          removed = result.deletedCount || 0;
-          inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "replace");
-        } else if (scope === "items") {
-          inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "merge");
-        }
-
-        await book.populate("members", PUBLIC_USER_FIELDS);
-        broadcastBook(book);
-
-        const message =
-          scope === "config"
-            ? "Imported settings"
-            : scope === "everything"
-              ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
-              : `Added ${inserted} item${inserted === 1 ? "" : "s"}`;
-
-        res.json({
-          status: true,
-          message,
-          data: {
-            scope,
-            restored: inserted,
-            removed,
-            skipped_duplicates: scope === "items" ? req.body.items.length - inserted : 0,
-            unmatched_people: unmatched,
-          },
-        });
-      } catch (error) {
-        console.error("Error restoring into book:", error);
-        res.status(500).json({ status: false, message: "Failed to restore into book" });
+      let removed = 0;
+      let inserted = 0;
+      if (scope === "config" || scope === "everything") {
+        await applyConfig(book, req.body, idMap);
       }
+      if (scope === "everything") {
+        const result = await XenBudgetItem.deleteMany({ book_id: book._id });
+        removed = result.deletedCount || 0;
+        inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "replace");
+      } else if (scope === "items") {
+        inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "merge");
+      }
+
+      await book.populate("members", PUBLIC_USER_FIELDS);
+      broadcastBook(book);
+
+      const message =
+        scope === "config"
+          ? "Imported settings"
+          : scope === "everything"
+            ? `Replaced ${removed} item${removed === 1 ? "" : "s"} with ${inserted}`
+            : `Added ${inserted} item${inserted === 1 ? "" : "s"}`;
+
+      res.json({
+        status: true,
+        message,
+        data: {
+          scope,
+          restored: inserted,
+          removed,
+          skipped_duplicates: scope === "items" ? req.body.items.length - inserted : 0,
+          unmatched_people: unmatched,
+        },
+      });
     },
   );
 }

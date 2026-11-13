@@ -36,6 +36,7 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/xendrive/folders/:folderId/share/rotate":
     "no body: replaces the folder's public link (path names the folder)",
   "POST /api/xenlink/click/:slug": "no body: counts a click on the link named by the path",
+  "POST /api/admin/backups": "no body: starts a backup of the whole database",
   "POST /api/admin/debug/trigger-error": "no body: throws on purpose to test error reporting",
   "POST /api/auth/verify": "no body: refreshes the token of the authenticated caller",
   "PUT /api/user/notifications/mark-read": "no body: marks the caller's notifications read",

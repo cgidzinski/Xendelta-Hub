@@ -4,11 +4,11 @@ import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { notificationIdParamSchema, validateParams } from "../utils/validation";
-import { AuthenticatedRequest } from "../types";
+import { AppError, callerId } from "../utils/http";
 
 module.exports = function (app: express.Application) {
   app.get("/api/user/notifications", authenticateToken, async function (req: express.Request, res: express.Response) {
-    const userId = (req as AuthenticatedRequest).user!._id;
+    const userId = callerId(req);
     await User.findByIdAndUpdate(userId, { notificationsLastCheckedAt: new Date() });
 
     const notifications = await Notification.find({ userId }).sort({ time: -1 }).limit(10).exec();
@@ -26,7 +26,7 @@ module.exports = function (app: express.Application) {
     "/api/user/notifications/mark-read",
     authenticateToken,
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       await Notification.updateMany({ userId, unread: true }, { unread: false });
 
@@ -51,7 +51,7 @@ module.exports = function (app: express.Application) {
     validateParams(notificationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { notificationId } = req.params;
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       const notification = await Notification.findOneAndUpdate(
         { _id: notificationId, userId },
@@ -71,10 +71,7 @@ module.exports = function (app: express.Application) {
           },
         });
       } else {
-        return res.status(404).json({
-          status: false,
-          message: "Notification not found",
-        });
+        throw new AppError(404, "Notification not found");
       }
     },
   );
@@ -86,7 +83,7 @@ module.exports = function (app: express.Application) {
     validateParams(notificationIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const { notificationId } = req.params;
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       const notification = await Notification.findOneAndDelete({ _id: notificationId, userId });
 
@@ -100,10 +97,7 @@ module.exports = function (app: express.Application) {
           data: { notificationId },
         });
       } else {
-        return res.status(404).json({
-          status: false,
-          message: "Notification not found",
-        });
+        throw new AppError(404, "Notification not found");
       }
     },
   );
@@ -113,7 +107,7 @@ module.exports = function (app: express.Application) {
     "/api/user/notifications",
     authenticateToken,
     async function (req: express.Request, res: express.Response) {
-      const userId = (req as AuthenticatedRequest).user!._id;
+      const userId = callerId(req);
 
       await Notification.deleteMany({ userId });
 
