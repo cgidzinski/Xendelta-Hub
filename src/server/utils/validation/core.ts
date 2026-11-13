@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { VALIDATION_LIMITS } from "../../constants";
 import { ALL_CURRENCIES } from "@shared/currencies";
 import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
+import { isSafeUrl } from "@shared/xennote/notes";
 
 // Helper to validate MongoDB ObjectId
 export const objectIdSchema = z
@@ -937,6 +938,13 @@ export const xenKitchenItemSchema = z.object({
   brand: shortStr(80),
   methods: z.array(xenKitchenMethodSchema).max(10).optional(),
   storage_note: shortStr(500),
+  /** Where a recipe came from: a web address, or empty. */
+  source_url: z
+    .string()
+    .trim()
+    .max(2000)
+    .refine((v) => v === "" || isSafeUrl(v), "Only web addresses (http or https) can be a source")
+    .optional(),
   /** Image ids in the order to show them; the first is the cover. */
   image_order: z.array(objectIdSchema).max(10).optional(),
 });
@@ -964,6 +972,9 @@ export const xenKitchenBulkCategorySchema = z.object({
 export const xenKitchenBulkDeleteSchema = z.object({
   ids: z.array(objectIdSchema).min(1).max(500),
 });
+
+// A recipe page (or a picture on it) to fetch. What may be fetched is decided by utils/safeFetch.ts, not here.
+export const xenKitchenImportUrlSchema = z.object({ url: z.string().trim().min(1, "Paste a web address").max(2000) });
 
 export const xenKitchenIdParamSchema = z.object({ id: objectIdSchema });
 export const xenKitchenImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });

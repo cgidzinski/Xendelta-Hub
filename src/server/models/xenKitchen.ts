@@ -111,6 +111,8 @@ const itemSchema = new Schema({
   brand: { type: String, default: "", maxlength: 80 },
   methods: { type: [methodSchema], default: [] },
   storage_note: { type: String, default: "", maxlength: 500 },
+  // The web address a recipe was imported from (XenKitchen > New > Import from a web address), shown as a link.
+  source_url: { type: String, default: "", maxlength: 2000 },
 
   share: {
     enabled: { type: Boolean, default: false },

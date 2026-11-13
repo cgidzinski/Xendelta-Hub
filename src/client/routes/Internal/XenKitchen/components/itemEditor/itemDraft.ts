@@ -1,5 +1,6 @@
 import { ingredientLine, parseIngredientLine, type CookMethod } from "@shared/xenkitchen/kitchen";
 import {
+  type ImportedKitchenRecipe,
   type KitchenItem,
   type KitchenItemInput,
   type KitchenMethod,
@@ -52,6 +53,8 @@ export interface Draft {
   brand: string;
   methods: MethodRow[];
   storage_note: string;
+  /** Where the recipe was imported from, "" for one written here. */
+  source_url: string;
 }
 
 export let keySeq = 0;
@@ -103,6 +106,7 @@ export function draftFrom(item: KitchenItem | null | undefined, categoryId: stri
       brand: "",
       methods: [blankMethod()],
       storage_note: "",
+      source_url: "",
     };
   }
   const ingredients: IngredientRow[] = [];
@@ -141,6 +145,7 @@ export function draftFrom(item: KitchenItem | null | undefined, categoryId: stri
         }))
       : [blankMethod()],
     storage_note: item.storage_note,
+    source_url: item.source_url ?? "",
   };
 }
 
@@ -183,6 +188,31 @@ export function inputFrom(d: Draft): KitchenItemInput {
           .filter(Boolean),
       })),
     storage_note: d.storage_note,
+    source_url: d.source_url,
+  };
+}
+
+/**
+ * A new item's draft filled from an imported recipe, for the person to review and change before saving. Keeps the
+ * category they had chosen, and any title they had typed is replaced (they asked for this recipe).
+ */
+export function draftFromImport(recipe: ImportedKitchenRecipe, categoryId: string | null): Draft {
+  const base = draftFrom(null, categoryId);
+  const ingredients: IngredientRow[] = recipe.ingredients.map((ing) => {
+    const text = ingredientLine(ing);
+    return { key: newKey(), kind: "ingredient", text, original: text, parsed: { ...ing } };
+  });
+  return {
+    ...base,
+    title: recipe.title,
+    description: recipe.description,
+    tags: recipe.tags,
+    servings: numStr(recipe.servings),
+    prep_minutes: numStr(recipe.prep_minutes),
+    cook_minutes: numStr(recipe.cook_minutes),
+    ingredients: ingredients.length ? ingredients : base.ingredients,
+    steps: recipe.steps.length ? recipe.steps.map((s) => ({ key: newKey(), text: s.text, timer: "" })) : base.steps,
+    source_url: recipe.source_url,
   };
 }
 
