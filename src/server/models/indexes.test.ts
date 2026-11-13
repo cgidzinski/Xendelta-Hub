@@ -37,27 +37,27 @@ describe("model indexes", () => {
     expect(await indexKeys("Conversation")).toContain("members.user_id,lastMessage.at");
   });
 
-  it("spaces are indexed by member (the my-spaces query)", async () => {
-    await import("./space.js");
-    expect(await indexKeys("Space")).toContain("members.user_id");
+  it("communities are indexed by member (the my-communities query)", async () => {
+    await import("./community.js");
+    expect(await indexKeys("Community")).toContain("members.user_id");
   });
 
-  it("channels are indexed by space, and read state is one row per person and channel", async () => {
+  it("channels are indexed by community, and read state is one row per person and channel", async () => {
     await import("./conversation.js");
     await import("./channelState.js");
-    expect(await indexKeys("Conversation")).toContain("spaceId,channel.position");
+    expect(await indexKeys("Conversation")).toContain("communityId,channel.position");
     expect(await indexKeys("ChannelState")).toContain("userId,conversationId");
     const unique = (await mongoose.model("ChannelState").collection.indexes()).find((i) => i.unique && i.key.userId);
     expect(unique?.key).toEqual({ userId: 1, conversationId: 1 });
   });
 
-  it("space invites are one per person per space, and expire", async () => {
-    await import("./spaceInvite.js");
+  it("community invites are one per person per community, and expire", async () => {
+    await import("./communityInvite.js");
     const indexes = await (async () => {
-      await mongoose.model("SpaceInvite").init();
-      return mongoose.model("SpaceInvite").collection.indexes();
+      await mongoose.model("CommunityInvite").init();
+      return mongoose.model("CommunityInvite").collection.indexes();
     })();
-    expect(indexes.find((i) => i.unique && i.key.spaceId)?.key).toEqual({ spaceId: 1, userId: 1 });
+    expect(indexes.find((i) => i.unique && i.key.communityId)?.key).toEqual({ communityId: 1, userId: 1 });
     expect(indexes.find((i) => i.expireAfterSeconds)?.key).toEqual({ createdAt: 1 });
   });
 });

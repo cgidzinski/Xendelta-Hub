@@ -9,9 +9,9 @@
 //
 // Members use the standard shape of utils/membership.ts (`user_id`, `role`) with two roles, owner and member.
 import type { ChatRole } from "@shared/chat";
-import type { ChannelOverride, SpacePermission } from "@shared/spaces";
+import type { ChannelOverride, CommunityPermission } from "@shared/communities";
 import { can } from "../social/policy";
-import { hasPermission, type SpaceLike } from "../spaces/policy";
+import { hasPermission, type CommunityLike } from "../communities/policy";
 
 export interface ChatMemberLike {
   user_id: string;
@@ -47,16 +47,16 @@ export function nextOwner(chat: HasChatMembers, leaving: string): string | null 
   return rest[0]?.user_id ?? null;
 }
 
-// A chat inside a space (a channel) is decided by the space's permissions instead of by who is in `members`. Pass the
-// chat's space and its overrides for a channel, or leave `space` out for a DM or group chat, which behaves as before.
+// A chat inside a community (a channel) is decided by the community's permissions instead of by who is in `members`. Pass the
+// chat's community and its overrides for a channel, or leave `community` out for a DM or group chat, which behaves as before.
 export interface ChatAccess {
   chat: HasChatMembers;
-  space?: SpaceLike | null;
+  community?: CommunityLike | null;
   overrides?: readonly ChannelOverride[];
 }
 
-function allowed(access: ChatAccess, userId: string, permission: SpacePermission): boolean {
-  if (access.space) return hasPermission(access.space, userId, permission, access.overrides);
+function allowed(access: ChatAccess, userId: string, permission: CommunityPermission): boolean {
+  if (access.community) return hasPermission(access.community, userId, permission, access.overrides);
   return isChatMember(access.chat, userId);
 }
 
@@ -71,8 +71,8 @@ export const canPostChat = (access: ChatAccess, userId: string) =>
  * May do the managing `permission` stands for in the chat (delete others' messages, pin, mention everyone...). In a
  * DM or group chat that is the owner, as before.
  */
-export function canManageChat(access: ChatAccess, userId: string, permission: SpacePermission): boolean {
-  if (access.space) return canReadChat(access, userId) && allowed(access, userId, permission);
+export function canManageChat(access: ChatAccess, userId: string, permission: CommunityPermission): boolean {
+  if (access.community) return canReadChat(access, userId) && allowed(access, userId, permission);
   return isChatOwner(access.chat, userId);
 }
 

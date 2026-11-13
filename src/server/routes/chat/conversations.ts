@@ -179,7 +179,7 @@ export function registerConversationRoutes(app: Application) {
       const chat = context.chat;
 
       // A channel has no member entry to hold this: muting it is kept in the person's ChannelState.
-      if (context.space) {
+      if (context.community) {
         if (muted !== undefined) {
           await ChannelState.updateOne(
             { userId: me, conversationId: chat._id },
@@ -219,7 +219,7 @@ export function registerConversationRoutes(app: Application) {
       const chat = context.chat;
       const newest = chat.lastMessage?.seq ?? 0;
       const upTo = seq >= newest ? chat.seq : Math.min(seq, chat.seq);
-      if (context.space) {
+      if (context.community) {
         // A channel's read state is per person and private: only their own tabs hear about it.
         await ChannelState.updateOne(
           { userId: me, conversationId: chat._id },

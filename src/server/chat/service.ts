@@ -9,7 +9,7 @@ import { realtime } from "../realtime";
 import { registerDriveSource } from "../utils/driveSources";
 import { sendPushToUser } from "../utils/pushUtils";
 import { ChannelState } from "../models/channelState";
-import { unreadChannelCount } from "../spaces/channels";
+import { unreadChannelCount } from "../communities/channels";
 import { audienceOf, resolveChatAccess, type ChatContext } from "./access";
 import { canPostChat } from "./policy";
 import {
@@ -180,7 +180,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
   const bumped = await Conversation.findByIdAndUpdate(
     chat._id,
     { $inc: { seq: 1 } },
-    { new: true, projection: "seq spaceId" },
+    { new: true, projection: "seq communityId" },
   ).exec();
   if (!bumped) throw new AppError(404, "Conversation not found");
   const seq = bumped.seq;
@@ -217,7 +217,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
       { arrayFilters: [{ "me.user_id": input.from }] },
     ).exec();
     // A channel has no member list: the sender's own read position is in ChannelState.
-    if (bumped.spaceId) {
+    if (bumped.communityId) {
       await ChannelState.updateOne(
         { userId: input.from, conversationId: chat._id },
         { $max: { lastReadSeq: seq } },
@@ -251,7 +251,7 @@ export async function postSystemMessage(
 
 /** Tell the readers about a stored message, and push to anyone who is not looking at the app. */
 export async function publishMessage(context: ChatContext, message: MessageDocument, senderName: string) {
-  const { chat, space } = context;
+  const { chat, community } = context;
   const wire = await serializeMessage(message);
   const conversationId = String(chat._id);
   const audience = audienceOf(context);
@@ -265,13 +265,13 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
   let silenced: Set<string>;
   let title: string;
   let url: string;
-  if (space) {
+  if (community) {
     const states = await ChannelState.find({ conversationId: chat._id, mutedUntil: { $gt: new Date(now) } }, "userId")
       .lean()
       .exec();
     silenced = new Set(states.map((s) => s.userId));
-    title = `${senderName} in #${chat.name ?? "channel"} · ${space.name}`;
-    url = `/internal/spaces/${space._id}/${conversationId}`;
+    title = `${senderName} in #${chat.name ?? "channel"} · ${community.name}`;
+    url = `/internal/communities/${community._id}/${conversationId}`;
   } else {
     silenced = new Set(chat.members.filter((m) => isMuted(m, now)).map((m) => m.user_id));
     title = chat.name ? `${senderName} in ${chat.name}` : senderName;
@@ -308,7 +308,7 @@ registerDriveSource("chat", {
     for (const ref of refs) {
       if (names.has(ref) || !Types.ObjectId.isValid(ref)) continue;
       const context = await resolveChatAccess(ref, userId);
-      if (context?.space) names.set(ref, `#${context.chat.name ?? "channel"} · ${context.space.name}`);
+      if (context?.community) names.set(ref, `#${context.chat.name ?? "channel"} · ${context.community.name}`);
     }
     return new Map(refs.map((ref) => [ref, names.get(ref) ?? "A chat you're no longer in"]));
   },
@@ -324,7 +324,7 @@ export async function deleteChat(conversationId: unknown): Promise<void> {
 
 // ---------- unread ----------
 
-/** How many of the person's conversations and space channels have unread messages (muted ones don't count). */
+/** How many of the person's conversations and community channels have unread messages (muted ones don't count). */
 export async function unreadConversationCount(userId: string): Promise<number> {
   const chats = await Conversation.find(
     { "members.user_id": userId, "lastMessage.at": { $exists: true } },

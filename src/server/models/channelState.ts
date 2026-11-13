@@ -1,7 +1,7 @@
 import mongoose, { Schema, type HydratedDocument, type InferSchemaType } from "mongoose";
 
-// One person's read and mute state for one channel of a space. A DM or group chat keeps this on the conversation's
-// own member entry; a channel has no member list (everyone in the space who may read it can), so it lives here.
+// One person's read and mute state for one channel of a community. A DM or group chat keeps this on the conversation's
+// own member entry; a channel has no member list (everyone in the community who may read it can), so it lives here.
 const channelStateSchema = new Schema({
   userId: { type: String, required: true },
   conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },

@@ -18,21 +18,21 @@ type U = Awaited<ReturnType<typeof createUser>>;
 const id = (u: U) => String(u.user._id);
 
 const make = async (me: U, name = "Crew") => {
-  const res = await request(t.app).post("/api/spaces").set(as(me.token)).send({ name });
+  const res = await request(t.app).post("/api/communities").set(as(me.token)).send({ name });
   expect(res.status).toBe(200);
-  return res.body.data.space as any;
+  return res.body.data.community as any;
 };
-const addMember = async (spaceId: string, who: U) => {
-  const { Space } = await import("../../models/space.js");
-  await Space.updateOne({ _id: spaceId }, { $push: { members: { user_id: id(who), role: "member" } } }).exec();
+const addMember = async (communityId: string, who: U) => {
+  const { Community } = await import("../../models/community.js");
+  await Community.updateOne({ _id: communityId }, { $push: { members: { user_id: id(who), role: "member" } } }).exec();
 };
-const channels = async (spaceId: string, me: U) => {
-  const res = await request(t.app).get(`/api/spaces/${spaceId}/channels`).set(as(me.token));
+const channels = async (communityId: string, me: U) => {
+  const res = await request(t.app).get(`/api/communities/${communityId}/channels`).set(as(me.token));
   expect(res.status).toBe(200);
   return res.body.data.channels as any[];
 };
-const addChannel = async (spaceId: string, me: U, body: Record<string, unknown>) =>
-  request(t.app).post(`/api/spaces/${spaceId}/channels`).set(as(me.token)).send(body);
+const addChannel = async (communityId: string, me: U, body: Record<string, unknown>) =>
+  request(t.app).post(`/api/communities/${communityId}/channels`).set(as(me.token)).send(body);
 /** Pretend someone posted: the posting itself arrives with #309. */
 const post = async (channelId: string, seq: number) => {
   const { Conversation } = await import("../../models/conversation.js");
@@ -42,15 +42,15 @@ const post = async (channelId: string, seq: number) => {
   );
 };
 
-describe("channels of a space", () => {
-  it("a new space starts with a general channel", async () => {
+describe("channels of a community", () => {
+  it("a new community starts with a general channel", async () => {
     const a = await createUser();
-    const space = await make(a);
-    const list = await channels(space._id, a);
+    const community = await make(a);
+    const list = await channels(community._id, a);
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       name: "general",
-      spaceId: space._id,
+      communityId: community._id,
       position: 0,
       category: "",
       topic: "",
@@ -60,30 +60,30 @@ describe("channels of a space", () => {
 
   it("needs manage channels to add one, and puts it at the end", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    expect((await addChannel(space._id, b, { name: "mine" })).status).toBe(403);
-    const res = await addChannel(space._id, a, { name: "  random ", topic: "anything", category: "Chat" });
+    const community = await make(a);
+    await addMember(community._id, b);
+    expect((await addChannel(community._id, b, { name: "mine" })).status).toBe(403);
+    const res = await addChannel(community._id, a, { name: "  random ", topic: "anything", category: "Chat" });
     expect(res.status).toBe(200);
     expect(res.body.data.channel).toMatchObject({ name: "random", topic: "anything", category: "Chat", position: 1 });
-    expect((await channels(space._id, b)).map((c) => c.name)).toEqual(["general", "random"]);
+    expect((await channels(community._id, b)).map((c) => c.name)).toEqual(["general", "random"]);
   });
 
   it("a non-member can't list or add, and bad input is refused", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    expect((await request(t.app).get(`/api/spaces/${space._id}/channels`).set(as(b.token))).status).toBe(404);
-    expect((await addChannel(space._id, b, { name: "x" })).status).toBe(404);
-    expect((await addChannel(space._id, a, { name: " " })).status).toBe(400);
-    expect((await addChannel(space._id, a, { name: "x".repeat(51) })).status).toBe(400);
+    const community = await make(a);
+    expect((await request(t.app).get(`/api/communities/${community._id}/channels`).set(as(b.token))).status).toBe(404);
+    expect((await addChannel(community._id, b, { name: "x" })).status).toBe(404);
+    expect((await addChannel(community._id, a, { name: " " })).status).toBe(400);
+    expect((await addChannel(community._id, a, { name: "x".repeat(51) })).status).toBe(400);
   });
 
   it("renames, sets the topic and moves to a category", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
-    const url = `/api/spaces/${space._id}/channels/${general._id}`;
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
+    const url = `/api/communities/${community._id}/channels/${general._id}`;
     expect((await request(t.app).patch(url).set(as(b.token)).send({ name: "no" })).status).toBe(403);
     expect((await request(t.app).patch(url).set(as(a.token)).send({})).status).toBe(400);
     const res = await request(t.app).patch(url).set(as(a.token)).send({ name: "lobby", topic: "Hi", category: "Info" });
@@ -92,11 +92,11 @@ describe("channels of a space", () => {
 
   it("reorders, and must be told about every channel once", async () => {
     const a = await createUser();
-    const space = await make(a);
-    await addChannel(space._id, a, { name: "two" });
-    await addChannel(space._id, a, { name: "three" });
-    const [one, two, three] = await channels(space._id, a);
-    const url = `/api/spaces/${space._id}/channels/order`;
+    const community = await make(a);
+    await addChannel(community._id, a, { name: "two" });
+    await addChannel(community._id, a, { name: "three" });
+    const [one, two, three] = await channels(community._id, a);
+    const url = `/api/communities/${community._id}/channels/order`;
     const put = (list: any[]) => request(t.app).put(url).set(as(a.token)).send({ channels: list });
 
     expect((await put([{ id: one._id, category: "" }])).status).toBe(400);
@@ -133,31 +133,32 @@ describe("channels of a space", () => {
     ]);
   });
 
-  it("deletes a channel, but a space keeps at least one", async () => {
+  it("deletes a channel, but a community keeps at least one", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const extra = (await addChannel(space._id, a, { name: "extra" })).body.data.channel;
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const extra = (await addChannel(community._id, a, { name: "extra" })).body.data.channel;
+    const [general] = await channels(community._id, a);
     expect(
-      (await request(t.app).delete(`/api/spaces/${space._id}/channels/${extra._id}`).set(as(b.token))).status,
+      (await request(t.app).delete(`/api/communities/${community._id}/channels/${extra._id}`).set(as(b.token))).status,
     ).toBe(403);
     expect(
-      (await request(t.app).delete(`/api/spaces/${space._id}/channels/${extra._id}`).set(as(a.token))).status,
+      (await request(t.app).delete(`/api/communities/${community._id}/channels/${extra._id}`).set(as(a.token))).status,
     ).toBe(200);
     expect(
-      (await request(t.app).delete(`/api/spaces/${space._id}/channels/${general._id}`).set(as(a.token))).status,
+      (await request(t.app).delete(`/api/communities/${community._id}/channels/${general._id}`).set(as(a.token)))
+        .status,
     ).toBe(400);
-    expect((await channels(space._id, a)).map((c) => c.name)).toEqual(["general"]);
+    expect((await channels(community._id, a)).map((c) => c.name)).toEqual(["general"]);
   });
 
-  it("a channel of another space is a 404, whatever the id", async () => {
+  it("a channel of another community is a 404, whatever the id", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const mine = await make(a, "Mine");
     const theirs = await make(b, "Theirs");
     const [theirChannel] = await channels(theirs._id, b);
     const res = await request(t.app)
-      .patch(`/api/spaces/${mine._id}/channels/${theirChannel._id}`)
+      .patch(`/api/communities/${mine._id}/channels/${theirChannel._id}`)
       .set(as(a.token))
       .send({ name: "x" });
     expect(res.status).toBe(404);
@@ -167,20 +168,20 @@ describe("channels of a space", () => {
 describe("who can see a channel", () => {
   it("a channel closed to everyone is hidden from members, and answers 404 to them", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const secret = (await addChannel(space._id, a, { name: "staff" })).body.data.channel;
-    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    const community = await make(a);
+    await addMember(community._id, b);
+    const secret = (await addChannel(community._id, a, { name: "staff" })).body.data.channel;
+    const everyone = community.roles.find((r: any) => r.everyone)._id;
     const { Conversation } = await import("../../models/conversation.js");
     await Conversation.updateOne(
       { _id: secret._id },
       { overrides: [{ roleId: everyone, allow: [], deny: ["readMessages"] }] },
     );
 
-    expect((await channels(space._id, b)).map((c) => c.name)).toEqual(["general"]);
-    expect((await channels(space._id, a)).map((c) => c.name)).toEqual(["general", "staff"]);
+    expect((await channels(community._id, b)).map((c) => c.name)).toEqual(["general"]);
+    expect((await channels(community._id, a)).map((c) => c.name)).toEqual(["general", "staff"]);
     expect(
-      (await request(t.app).delete(`/api/spaces/${space._id}/channels/${secret._id}`).set(as(b.token))).status,
+      (await request(t.app).delete(`/api/communities/${community._id}/channels/${secret._id}`).set(as(b.token))).status,
     ).toBe(404);
   });
 });
@@ -188,15 +189,15 @@ describe("who can see a channel", () => {
 describe("unread", () => {
   it("counts a channel with unread messages for each person, and not a muted one", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
     const unread = async (u: U) => (await request(t.app).get("/api/chat/unread").set(as(u.token))).body.data.count;
 
     expect(await unread(b)).toBe(0);
     await post(general._id, 3);
     expect(await unread(b)).toBe(1);
-    expect((await channels(space._id, b))[0].unread).toBe(3);
+    expect((await channels(community._id, b))[0].unread).toBe(3);
 
     const { ChannelState } = await import("../../models/channelState.js");
     await ChannelState.create({ userId: id(a), conversationId: general._id, lastReadSeq: 3 });
@@ -210,13 +211,13 @@ describe("unread", () => {
       mutedUntil: new Date(Date.now() + 60_000),
     });
     expect(await unread(b)).toBe(0);
-    expect((await channels(space._id, b))[0]).toMatchObject({ unread: 3, muted: true });
+    expect((await channels(community._id, b))[0]).toMatchObject({ unread: 3, muted: true });
   });
 
   it("a channel is not in the chat list, and is not a chat you can rename or add people to", async () => {
     const a = await createUser();
-    const space = await make(a);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    const [general] = await channels(community._id, a);
     const list = await request(t.app).get("/api/chat/conversations").set(as(a.token));
     expect(list.body.data.conversations).toEqual([]);
     expect((await request(t.app).get(`/api/chat/conversations/${general._id}`).set(as(a.token))).status).toBe(404);
@@ -250,9 +251,9 @@ describe("messages in a channel", () => {
 
   it("members send and read, and every reader (not outsiders) hears about it", async () => {
     const [a, b, outsider] = [await createUser(), await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
 
     const res = await send(b, general._id, "hello channel");
     expect(res.status).toBe(200);
@@ -272,46 +273,46 @@ describe("messages in a channel", () => {
 
   it("the sender has read their own message; others have it unread until they read", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
     await send(b, general._id, "one");
     await send(b, general._id, "two");
 
-    expect((await channels(space._id, b))[0].unread).toBe(0);
-    expect((await channels(space._id, a))[0].unread).toBe(2);
+    expect((await channels(community._id, b))[0].unread).toBe(0);
+    expect((await channels(community._id, a))[0].unread).toBe(2);
     sent = [];
     const read = await request(t.app)
       .post(`/api/chat/conversations/${general._id}/read`)
       .set(as(a.token))
       .send({ seq: 2 });
     expect(read.status).toBe(200);
-    expect((await channels(space._id, a))[0].unread).toBe(0);
+    expect((await channels(community._id, a))[0].unread).toBe(0);
     // Reading is private to the reader's own tabs.
     expect(sent.filter((e) => e.event === "chat:read").map((e) => e.room)).toEqual([`user:${id(a)}`]);
   });
 
   it("muting a channel is your own setting", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
     const mute = (u: U, muted: boolean) =>
       request(t.app).patch(`/api/chat/conversations/${general._id}/me`).set(as(u.token)).send({ muted });
     expect((await mute(b, true)).status).toBe(200);
-    expect((await channels(space._id, b))[0].muted).toBe(true);
-    expect((await channels(space._id, a))[0].muted).toBe(false);
+    expect((await channels(community._id, b))[0].muted).toBe(true);
+    expect((await channels(community._id, a))[0].muted).toBe(false);
     expect((await mute(b, false)).status).toBe(200);
-    expect((await channels(space._id, b))[0].muted).toBe(false);
+    expect((await channels(community._id, b))[0].muted).toBe(false);
   });
 
   it("a read-only channel lets people read but not post or react", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
     const first = await send(a, general._id, "announcement");
-    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    const everyone = community.roles.find((r: any) => r.everyone)._id;
     await setOverrides(general._id, [{ roleId: everyone, allow: [], deny: ["sendMessages"] }]);
 
     expect((await request(t.app).get(msgUrl(general._id)).set(as(b.token))).status).toBe(200);
@@ -326,10 +327,10 @@ describe("messages in a channel", () => {
 
   it("a private channel is a 404 for people who can't read it, and they hear nothing from it", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const secret = (await addChannel(space._id, a, { name: "staff" })).body.data.channel;
-    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    const community = await make(a);
+    await addMember(community._id, b);
+    const secret = (await addChannel(community._id, a, { name: "staff" })).body.data.channel;
+    const everyone = community.roles.find((r: any) => r.everyone)._id;
     await setOverrides(secret._id, [{ roleId: everyone, allow: [], deny: ["readMessages"] }]);
 
     expect((await send(b, secret._id, "hi")).status).toBe(404);
@@ -341,16 +342,19 @@ describe("messages in a channel", () => {
 
   it("editing is for the author; deleting is for the author or someone who manages messages", async () => {
     const [a, b, c] = [await createUser(), await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    await addMember(space._id, c);
-    const [general] = await channels(space._id, a);
-    const { Space } = await import("../../models/space.js");
-    const mod = await Space.findById(space._id).exec();
+    const community = await make(a);
+    await addMember(community._id, b);
+    await addMember(community._id, c);
+    const [general] = await channels(community._id, a);
+    const { Community } = await import("../../models/community.js");
+    const mod = await Community.findById(community._id).exec();
     mod!.roles.push({ name: "mod", position: 1, permissions: ["manageMessages"] } as any);
     const modRole = String(mod!.roles[mod!.roles.length - 1]!._id);
     await mod!.save();
-    await Space.updateOne({ _id: space._id, "members.user_id": id(c) }, { $set: { "members.$.roleIds": [modRole] } });
+    await Community.updateOne(
+      { _id: community._id, "members.user_id": id(c) },
+      { $set: { "members.$.roleIds": [modRole] } },
+    );
 
     const m1 = (await send(b, general._id, "mine")).body.data.message;
     const url = `${msgUrl(general._id)}/${m1.seq}`;
@@ -359,7 +363,7 @@ describe("messages in a channel", () => {
 
     const m2 = (await send(b, general._id, "bad")).body.data.message;
     const other = await createUser();
-    await addMember(space._id, other);
+    await addMember(community._id, other);
     expect(
       (
         await request(t.app)
@@ -374,7 +378,7 @@ describe("messages in a channel", () => {
           .set(as(c.token))
       ).status,
     ).toBe(200);
-    // The space owner can delete anyone's too.
+    // The community owner can delete anyone's too.
     const m3 = (await send(b, general._id, "worse")).body.data.message;
     expect(
       (
@@ -387,10 +391,10 @@ describe("messages in a channel", () => {
 
   it("typing in a channel reaches the other readers, and only from someone who can post", async () => {
     const [a, b, c] = [await createUser(), await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    await addMember(space._id, c);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    await addMember(community._id, c);
+    const [general] = await channels(community._id, a);
 
     let connection: (socket: any) => void = () => undefined;
     const io = {
@@ -428,7 +432,7 @@ describe("messages in a channel", () => {
 
     // Closed to posting: no typing from them. Closed to reading: they can't say it and don't hear it.
     sent = [];
-    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    const everyone = community.roles.find((r: any) => r.everyone)._id;
     await setOverrides(general._id, [{ roleId: everyone, allow: [], deny: ["sendMessages"] }]);
     await typing(b)({ conversationId: general._id, typing: true });
     expect(sent.filter((e) => e.event === "chat:typing")).toEqual([]);
@@ -438,9 +442,9 @@ describe("messages in a channel", () => {
 
   it("only readers are counted as the audience, so removed people stop hearing", async () => {
     const [a, b] = [await createUser(), await createUser()];
-    const space = await make(a);
-    await addMember(space._id, b);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
     const { resolveChatAccess, audienceOf } = await import("../../chat/access.js");
     const context = (await resolveChatAccess(general._id, id(a)))!;
     expect(audienceOf(context).sort()).toEqual([id(a), id(b)].sort());
@@ -448,19 +452,19 @@ describe("messages in a channel", () => {
   });
 });
 
-describe("deleting a space", () => {
+describe("deleting a community", () => {
   it("deletes its channels and their messages and read state", async () => {
     const a = await createUser();
-    const space = await make(a);
-    const [general] = await channels(space._id, a);
+    const community = await make(a);
+    const [general] = await channels(community._id, a);
     const { Message } = await import("../../models/message.js");
     const { Conversation } = await import("../../models/conversation.js");
     const { ChannelState } = await import("../../models/channelState.js");
     await Message.create({ conversationId: general._id, seq: 1, from: id(a), body: "hi" });
     await ChannelState.create({ userId: id(a), conversationId: general._id, lastReadSeq: 1 });
 
-    expect((await request(t.app).delete(`/api/spaces/${space._id}`).set(as(a.token))).status).toBe(200);
-    expect(await Conversation.countDocuments({ spaceId: space._id })).toBe(0);
+    expect((await request(t.app).delete(`/api/communities/${community._id}`).set(as(a.token))).status).toBe(200);
+    expect(await Conversation.countDocuments({ communityId: community._id })).toBe(0);
     expect(await Message.countDocuments({ conversationId: general._id })).toBe(0);
     expect(await ChannelState.countDocuments({ conversationId: general._id })).toBe(0);
   });

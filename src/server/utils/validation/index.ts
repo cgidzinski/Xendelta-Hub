@@ -15,6 +15,6 @@ export * from "./admin";
 export * from "./xennote";
 export * from "./apiKeys";
 export * from "./chat";
-export * from "./spaces";
+export * from "./communities";
 export * from "./feed";
 export * from "./feedback";
