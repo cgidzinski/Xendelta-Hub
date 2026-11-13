@@ -170,6 +170,10 @@ app.use(
   }),
 );
 
+// Paused with a 503 while an admin restores the database from a backup (routes/admin/backups.ts).
+const { restoreMaintenance } = require("./middleware/restoreMaintenance");
+app.use(restoreMaintenance);
+
 // Liveness/readiness for the process manager and uptime checks.
 app.get("/api/health", (_req: any, res: any) => {
   const connected = Mongo.getConnection().readyState === 1;

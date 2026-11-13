@@ -19,5 +19,7 @@ export const adminKeys = {
   reach: (type: string, role: string) => [...adminKeys.all, "reach", type, role] as const,
   broadcasts: () => [...adminKeys.all, "broadcasts"] as const,
   system: () => [...adminKeys.all, "system"] as const,
+  backups: () => [...adminKeys.all, "backups"] as const,
+  backupJob: () => [...adminKeys.all, "backup-job"] as const,
   audit: (params: object) => [...adminKeys.all, "audit", params] as const,
 };
