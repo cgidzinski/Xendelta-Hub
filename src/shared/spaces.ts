@@ -8,6 +8,11 @@ export const SPACE_NAME_MAX = 60;
 export const SPACE_ROLE_NAME_MAX = 32;
 export const SPACE_MAX_ROLES = 25;
 export const SPACE_MAX_MEMBERS = 500;
+/** People one person can invite to spaces in an hour, so invites can't be used to spam. */
+export const SPACE_INVITES_PER_HOUR = 30;
+export const SPACE_MAX_INVITES_AT_ONCE = 20;
+/** How long an invite stays open. */
+export const SPACE_INVITE_DAYS = 30;
 export const SPACE_MAX_SPACES_PER_USER = 50;
 export const SPACE_CHANNEL_NAME_MAX = 50;
 export const SPACE_CHANNEL_TOPIC_MAX = 200;
@@ -105,5 +110,22 @@ export interface SpaceChannel {
   muted: boolean;
   /** Who this channel is closed to, or open only to. Empty means it follows the space's roles. */
   overrides: ChannelOverride[];
+  createdAt: string;
+}
+
+/** An invite waiting for you to answer (what you see in your own list). */
+export interface MySpaceInvite {
+  spaceId: string;
+  spaceName: string;
+  spaceIcon: string | null;
+  memberCount: number;
+  invitedBy: ChatPerson | null;
+  createdAt: string;
+}
+
+/** An invite someone in the space sent and nobody has answered yet (what the space's managers see). */
+export interface PendingSpaceInvite {
+  person: ChatPerson;
+  invitedBy: string;
   createdAt: string;
 }

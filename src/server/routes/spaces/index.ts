@@ -2,6 +2,7 @@ import { registerSpaceRoutes } from "./spaces";
 import { registerSpaceMemberRoutes } from "./members";
 import { registerChannelRoutes } from "./channels";
 import { registerRoleRoutes } from "./roles";
+import { registerInviteRoutes } from "./invites";
 
 // Spaces: a group's own place with channels, roles and members (models/space.ts). The rules live in
 // spaces/policy.ts and the shared pieces in spaces/service.ts. Routes here only validate, call those and answer.
@@ -11,4 +12,5 @@ module.exports = function (app: any) {
   registerSpaceMemberRoutes(app);
   registerChannelRoutes(app);
   registerRoleRoutes(app);
+  registerInviteRoutes(app);
 };

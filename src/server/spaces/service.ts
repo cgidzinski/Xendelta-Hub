@@ -1,4 +1,5 @@
 import { Space, type SpaceDocument } from "../models/space";
+import { SpaceInvite } from "../models/spaceInvite";
 import { AppError } from "../utils/http";
 import { loadPeople } from "../chat/service";
 import { realtime } from "../realtime";
@@ -66,5 +67,6 @@ export function announceSpace(space: SpaceDocument, removed: string[] = []) {
 /** Delete a space with its channels and their messages. */
 export async function deleteSpace(space: SpaceDocument): Promise<void> {
   await deleteChannelsOf(String(space._id));
+  await SpaceInvite.deleteMany({ spaceId: String(space._id) }).exec();
   await Space.deleteOne({ _id: space._id }).exec();
 }

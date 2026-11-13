@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { objectIdSchema } from "./core";
 import {
+  SPACE_MAX_INVITES_AT_ONCE,
   CHANNEL_PERMISSIONS,
   SPACE_PERMISSIONS,
   SPACE_MAX_ROLES,
@@ -95,3 +96,13 @@ export const channelOverridesSchema = z.object({
     .max(SPACE_MAX_ROLES)
     .refine((list) => new Set(list.map((o) => o.roleId)).size === list.length, { message: "One entry per role" }),
 });
+
+export const inviteSpaceSchema = z.object({
+  userIds: z
+    .array(objectIdSchema)
+    .min(1, "Pick at least one person")
+    .max(SPACE_MAX_INVITES_AT_ONCE)
+    .transform((list) => [...new Set(list)]),
+});
+/** Answer an invite: join (true) or turn it down (false). */
+export const respondInviteSchema = z.object({ accept: z.boolean() });

@@ -50,4 +50,14 @@ describe("model indexes", () => {
     const unique = (await mongoose.model("ChannelState").collection.indexes()).find((i) => i.unique && i.key.userId);
     expect(unique?.key).toEqual({ userId: 1, conversationId: 1 });
   });
+
+  it("space invites are one per person per space, and expire", async () => {
+    await import("./spaceInvite.js");
+    const indexes = await (async () => {
+      await mongoose.model("SpaceInvite").init();
+      return mongoose.model("SpaceInvite").collection.indexes();
+    })();
+    expect(indexes.find((i) => i.unique && i.key.spaceId)?.key).toEqual({ spaceId: 1, userId: 1 });
+    expect(indexes.find((i) => i.expireAfterSeconds)?.key).toEqual({ createdAt: 1 });
+  });
 });
