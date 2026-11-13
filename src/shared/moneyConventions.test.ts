@@ -16,6 +16,7 @@ const ROUNDING_ALLOWED: Record<string, string> = {
   "client/routes/Internal/XenKitchen/components/ItemView.tsx": "a recipe scaling factor, not money",
   "shared/xenkitchen/kitchen.ts": "recipe quantities, not money",
   "server/utils/recipeImport.ts": "recipe servings read from a page, not money",
+  "shared/xenkitchen/units.ts": "recipe measures and temperatures, not money",
 };
 
 function walk(dir: string, out: string[] = []): string[] {

@@ -140,4 +140,22 @@ const XenKitchenBook = mongoose.model("XenKitchenBook", bookSchema);
 const XenKitchenCategory = mongoose.model("XenKitchenCategory", categorySchema);
 const XenKitchenItem = mongoose.model("XenKitchenItem", itemSchema);
 
-export { XenKitchenBook, XenKitchenCategory, XenKitchenItem };
+// The meal plan: a recipe planned for a day, in a book (so everyone in the book shares one plan). `date` is a calendar day
+// as written on the plan ("2026-03-04"), not a moment, so it never shifts with anyone's time zone. `servings` is how many
+// the meal is for; null means "as the recipe is written". An entry whose recipe is deleted or moved out of the book is
+// dropped the next time the plan is read.
+const planSchema = new Schema({
+  book_id: { type: Schema.Types.ObjectId, ref: "XenKitchenBook", required: true },
+  date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
+  item_id: { type: Schema.Types.ObjectId, ref: "XenKitchenItem", required: true },
+  servings: { type: Number, min: 0.25, max: 1000, default: null },
+  created_by: { type: String },
+  created_at: { type: Date, default: Date.now },
+});
+planSchema.index({ book_id: 1, date: 1 });
+planSchema.index({ item_id: 1 });
+
+export type XenKitchenPlanAttrs = InferSchemaType<typeof planSchema>;
+const XenKitchenPlan = mongoose.model("XenKitchenPlan", planSchema);
+
+export { XenKitchenBook, XenKitchenCategory, XenKitchenItem, XenKitchenPlan };

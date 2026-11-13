@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Box,
+  Button,
   Card,
   Checkbox,
   Chip,
@@ -11,6 +12,8 @@ import {
   Link,
   Stack,
   Switch,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -23,9 +26,18 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import AcUnitIcon from "@mui/icons-material/AcUnit";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import SoupKitchenOutlinedIcon from "@mui/icons-material/SoupKitchenOutlined";
 import { cardSx, sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { useWakeLock } from "../../../../hooks/useWakeLock";
+import { useLocalStorageState } from "../../../../hooks/useLocalStorageState";
 import { COOK_METHOD_LABELS, formatMinuteRange, formatMinutes, scaleQuantity } from "@shared/xenkitchen/kitchen";
+import {
+  UNIT_SYSTEMS,
+  UNIT_SYSTEM_LABELS,
+  convertAmount,
+  convertTemp,
+  type UnitSystem,
+} from "@shared/xenkitchen/units";
 import type {
   KitchenIngredient,
   KitchenItem,
@@ -33,6 +45,7 @@ import type {
   KitchenStep,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
+import CookMode from "../cook/CookMode";
 
 /** "food.example.com" for a recipe's source link. */
 const sourceHost = (url: string) => {
@@ -53,6 +66,12 @@ export default function ItemView({ item, actions }: ItemViewProps) {
   const theme = useTheme();
   const [cookMode, setCookMode] = useState(false);
   useWakeLock(cookMode);
+  // How measures are shown. Remembered on this device, and only changes what is displayed, never the recipe.
+  const [units, setUnits] = useLocalStorageState<UnitSystem>(
+    "xenkitchen-unit-system",
+    "original",
+    (v): v is UnitSystem => UNIT_SYSTEMS.includes(v as UnitSystem),
+  );
   const accent = item.category?.color ?? theme.palette.primary.main;
 
   return (
@@ -115,9 +134,16 @@ export default function ItemView({ item, actions }: ItemViewProps) {
       )}
 
       {item.layout === "instructions" ? (
-        <InstructionsSection item={item} accent={accent} />
+        <InstructionsSection item={item} accent={accent} units={units} onUnits={setUnits} />
       ) : (
-        <RecipeSection item={item} accent={accent} cookMode={cookMode} onCookMode={setCookMode} />
+        <RecipeSection
+          item={item}
+          accent={accent}
+          cookMode={cookMode}
+          onCookMode={setCookMode}
+          units={units}
+          onUnits={setUnits}
+        />
       )}
 
       {item.notes && (
@@ -316,17 +342,22 @@ function RecipeSection({
   accent,
   cookMode,
   onCookMode,
+  units,
+  onUnits,
 }: {
   item: KitchenItem;
   accent: string;
   cookMode: boolean;
   onCookMode: (v: boolean) => void;
+  units: UnitSystem;
+  onUnits: (v: UnitSystem) => void;
 }) {
   const baseServings = item.servings || 0;
   const [servings, setServings] = useState(baseServings);
   useEffect(() => setServings(baseServings), [baseServings]);
   const factor = baseServings > 0 && servings > 0 ? servings / baseServings : 1;
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [cooking, setCooking] = useState(false);
   const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set());
   const toggle = (set: Set<number>, i: number) => {
     const n = new Set(set);
@@ -412,6 +443,7 @@ function RecipeSection({
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 Ingredients
               </Typography>
+              <UnitToggle units={units} onChange={onUnits} />
               {factor !== 1 && (
                 <Chip
                   size="small"
@@ -430,7 +462,7 @@ function RecipeSection({
                   )}
                   {g.rows.map(({ ing, index }) => {
                     const done = checked.has(index);
-                    const qty = scaleQuantity(ing.quantity, factor);
+                    const { quantity: qty, unit } = convertAmount(scaleQuantity(ing.quantity, factor), ing.unit, units);
                     return (
                       <Box
                         key={index}
@@ -456,9 +488,9 @@ function RecipeSection({
                           variant="body2"
                           sx={{ pt: 0.6, opacity: done ? 0.45 : 1, textDecoration: done ? "line-through" : "none" }}
                         >
-                          {(qty || ing.unit) && (
+                          {(qty || unit) && (
                             <Box component="span" sx={{ fontWeight: 700 }}>
-                              {[qty, ing.unit].filter(Boolean).join(" ")}{" "}
+                              {[qty, unit].filter(Boolean).join(" ")}{" "}
                             </Box>
                           )}
                           {ing.name}
@@ -483,6 +515,15 @@ function RecipeSection({
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 Steps
               </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<SoupKitchenOutlinedIcon />}
+                onClick={() => setCooking(true)}
+                sx={{ mr: 1 }}
+              >
+                Step by step
+              </Button>
               <Tooltip title="Keeps your screen awake and makes steps easier to read">
                 <FormControlLabel
                   control={<Switch size="small" checked={cookMode} onChange={(e) => onCookMode(e.target.checked)} />}
@@ -507,6 +548,22 @@ function RecipeSection({
           </Box>
         )}
       </Box>
+      <CookMode
+        open={cooking}
+        onClose={() => setCooking(false)}
+        title={item.title || "Recipe"}
+        accent={accent}
+        steps={item.steps.map((st) => ({ text: st.text, timer_minutes: st.timer_minutes }))}
+        ingredients={item.ingredients.map((ing, key) => ({
+          key,
+          section: ing.section || "",
+          text:
+            [scaleQuantity(ing.quantity, factor), ing.unit, ing.name].filter(Boolean).join(" ") +
+            (ing.note ? `, ${ing.note}` : ""),
+        }))}
+        checked={checked}
+        onToggleIngredient={(key) => setChecked((set) => toggle(set, key))}
+      />
     </>
   );
 }
@@ -627,11 +684,47 @@ function StepTimer({ minutes, accent }: { minutes: number; accent: string }) {
   );
 }
 
+/** As written / Metric / US. A display choice for this device; the recipe itself is never changed. */
+function UnitToggle({ units, onChange }: { units: UnitSystem; onChange: (v: UnitSystem) => void }) {
+  return (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={units}
+      onChange={(_, v: UnitSystem | null) => v && onChange(v)}
+      aria-label="Units"
+    >
+      {UNIT_SYSTEMS.map((u) => (
+        <ToggleButton key={u} value={u} sx={{ px: 1.25, py: 0.25, textTransform: "none" }}>
+          {UNIT_SYSTEM_LABELS[u]}
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  );
+}
+
 // ---------- instructions ----------
 
-function InstructionsSection({ item, accent }: { item: KitchenItem; accent: string }) {
+function InstructionsSection({
+  item,
+  accent,
+  units,
+  onUnits,
+}: {
+  item: KitchenItem;
+  accent: string;
+  units: UnitSystem;
+  onUnits: (v: UnitSystem) => void;
+}) {
+  // Only worth offering when there is a temperature to convert.
+  const hasTemp = item.methods.some((m) => m.temp);
   return (
     <Box sx={{ mt: 3 }}>
+      {hasTemp && (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+          <UnitToggle units={units} onChange={onUnits} />
+        </Box>
+      )}
       {item.methods.length === 0 ? (
         <Card variant="outlined" sx={{ ...cardSx, p: 3, textAlign: "center" }}>
           <RestaurantMenuIcon color="disabled" />
@@ -648,7 +741,7 @@ function InstructionsSection({ item, accent }: { item: KitchenItem; accent: stri
           }}
         >
           {item.methods.map((m, i) => (
-            <MethodCard key={m._id ?? i} m={m} accent={accent} />
+            <MethodCard key={m._id ?? i} m={m} accent={accent} units={units} />
           ))}
         </Box>
       )}
@@ -668,8 +761,9 @@ function InstructionsSection({ item, accent }: { item: KitchenItem; accent: stri
   );
 }
 
-function MethodCard({ m, accent }: { m: KitchenMethod; accent: string }) {
+function MethodCard({ m, accent, units }: { m: KitchenMethod; accent: string; units: UnitSystem }) {
   const time = formatMinuteRange(m.minutes_min, m.minutes_max);
+  const shown = m.temp ? convertTemp(m.temp, m.temp_unit, units) : null;
   return (
     <Card variant="outlined" sx={{ ...cardSx, overflow: "hidden" }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, py: 1.25, bgcolor: alpha(accent, 0.12) }}>
@@ -686,7 +780,7 @@ function MethodCard({ m, accent }: { m: KitchenMethod; accent: string }) {
               {m.temp ? "Temp" : "Power"}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 800 }}>
-              {m.temp ? `${m.temp}°${m.temp_unit}` : m.power}
+              {shown ? `${shown.temp}°${shown.unit}` : m.power}
             </Typography>
           </Box>
         ) : null}
