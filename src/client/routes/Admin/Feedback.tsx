@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Box, Button, Card, Stack, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
-import {
-  FEEDBACK_KIND_LABEL,
-  FEEDBACK_STATUSES,
-  FEEDBACK_STATUS_LABEL,
-  type AdminFeedback,
-  type FeedbackStatus,
-} from "@shared/feedback";
+import { FEEDBACK_STATUSES, FEEDBACK_STATUS_LABEL, type AdminFeedback, type FeedbackStatus } from "@shared/feedback";
 import PageHeader from "../../components/ui/PageHeader";
 import EmptyState from "../../components/ui/EmptyState";
 import ListSkeleton from "../../components/ui/ListSkeleton";
@@ -34,19 +28,11 @@ function FeedbackCard({ item }: { item: AdminFeedback }) {
     <Card variant="outlined" sx={{ ...cardSx, p: 2 }}>
       <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", mb: 1 }}>
         <StatusChip label={FEEDBACK_STATUS_LABEL[item.status]} tone={TONE[item.status]} />
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {FEEDBACK_KIND_LABEL[item.kind]}
-        </Typography>
         <Typography variant="body2" color="text.secondary">
           from {item.from.username} · {dateTime(item.createdAt)}
         </Typography>
       </Stack>
       <Typography sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.message}</Typography>
-      {item.page && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Sent from {item.page}
-        </Typography>
-      )}
       <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
         {item.status !== "seen" && item.status !== "done" && (
           <Button size="small" disabled={update.isPending} onClick={() => set("seen")}>

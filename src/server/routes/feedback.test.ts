@@ -38,19 +38,17 @@ const inbox = (who: { token: string }, query = "") => request(t.app).get(`/api/a
 
 describe("sending feedback", () => {
   it("needs a signed-in person", async () => {
-    expect((await request(t.app).post("/api/feedback").send({ kind: "idea", message: "hello" })).status).toBe(401);
+    expect((await request(t.app).post("/api/feedback").send({ message: "hello" })).status).toBe(401);
   });
 
   it("saves it with who sent it, and tells every admin (and nobody else)", async () => {
-    const res = await send(ann, { kind: "idea", message: "Dark mode for the cook view", page: "/internal/xenkitchen" });
+    const res = await send(ann, { message: "Dark mode for the cook view" });
     expect(res.status).toBe(201);
     const rows = await mongoose.model("Feedback").find({}).lean<any[]>();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       username: "ann",
-      kind: "idea",
       message: "Dark mode for the cook view",
-      page: "/internal/xenkitchen",
       status: "new",
     });
     const notes = await mongoose.model("Notification").find({}).lean<any[]>();
@@ -60,27 +58,25 @@ describe("sending feedback", () => {
     expect(notes[0].link).toBe("/admin/feedback");
   });
 
-  it("refuses an empty, too long or unknown-kind message, and ignores a page that isn't ours", async () => {
-    expect((await send(ann, { kind: "idea", message: "  " })).status).toBe(400);
-    expect((await send(ann, { kind: "idea", message: "x".repeat(2001) })).status).toBe(400);
-    expect((await send(ann, { kind: "praise", message: "great" })).status).toBe(400);
-    expect((await send(ann, { kind: "bug", message: "broken", page: "https://evil.example/x" })).status).toBe(400);
+  it("refuses an empty or too long message", async () => {
+    expect((await send(ann, { message: "  " })).status).toBe(400);
+    expect((await send(ann, { message: "x".repeat(2001) })).status).toBe(400);
     expect(await mongoose.model("Feedback").countDocuments()).toBe(0);
   });
 
   it("limits how much one person can send in an hour, without affecting others", async () => {
-    for (let i = 0; i < 10; i++) expect((await send(bob, { kind: "other", message: `message ${i}` })).status).toBe(201);
-    const blocked = await send(bob, { kind: "other", message: "one more" });
+    for (let i = 0; i < 10; i++) expect((await send(bob, { message: `message ${i}` })).status).toBe(201);
+    const blocked = await send(bob, { message: "one more" });
     expect(blocked.status).toBe(429);
     expect(blocked.body.message).toMatch(/try again later/i);
-    expect((await send(ann, { kind: "other", message: "still fine" })).status).toBe(201);
+    expect((await send(ann, { message: "still fine" })).status).toBe(201);
   });
 });
 
 describe("the admin inbox", () => {
   it("is for admins only", async () => {
     expect((await inbox(ann)).status).toBe(403);
-    const row = await mongoose.model("Feedback").create({ user_id: "1", username: "x", kind: "idea", message: "hi" });
+    const row = await mongoose.model("Feedback").create({ user_id: "1", username: "x", message: "hi" });
     const put = await request(t.app).put(`/api/admin/feedback/${row._id}`).set(auth(ann)).send({ status: "done" });
     expect(put.status).toBe(403);
   });
@@ -90,14 +86,12 @@ describe("the admin inbox", () => {
     await model.create({
       user_id: "1",
       username: "a",
-      kind: "idea",
       message: "old",
       createdAt: new Date("2026-01-01"),
     });
     await model.create({
       user_id: "2",
       username: "b",
-      kind: "bug",
       message: "newer",
       createdAt: new Date("2026-02-01"),
       status: "done",
@@ -105,7 +99,6 @@ describe("the admin inbox", () => {
     await model.create({
       user_id: "3",
       username: "c",
-      kind: "other",
       message: "newest",
       createdAt: new Date("2026-03-01"),
     });
@@ -121,7 +114,7 @@ describe("the admin inbox", () => {
   });
 
   it("changes the status, and writes an audit row naming who did it", async () => {
-    await send(ann, { kind: "bug", message: "The timer didn't ring" });
+    await send(ann, { message: "The timer didn't ring" });
     const id = String((await mongoose.model("Feedback").findOne({}))!._id);
     const res = await request(t.app).put(`/api/admin/feedback/${id}`).set(auth(boss)).send({ status: "seen" });
     expect(res.status).toBe(200);

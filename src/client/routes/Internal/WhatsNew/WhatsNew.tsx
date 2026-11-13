@@ -1,135 +1,127 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Button, Card, Chip, Stack, Typography } from "@mui/material";
-import HubIcon from "@mui/icons-material/Hub";
-import { APP_GUIDE, GUIDE_APPS, type GuideApp } from "@shared/appGuide";
+import { Box, Button, Typography } from "@mui/material";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import type { GuideApp } from "@shared/appGuide";
 import { CHANGELOG } from "@shared/changelog";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
-import SectionLabel from "../../../components/ui/SectionLabel";
-import EmptyState from "../../../components/ui/EmptyState";
-import { cardSx } from "../../../components/ui/surfaceStyles";
 import { APPS_REGISTRY } from "../../../constants/apps";
 import { useTitle } from "../../../hooks/useTitle";
 import { useWhatsNew } from "../../../hooks/useWhatsNew";
+import { changesByApp } from "./changesByApp";
 import { entryKey, newKeys } from "./seen";
 
-const appInfo = (key: GuideApp) =>
-  key === "hub"
-    ? { label: "The hub", Icon: HubIcon }
-    : {
-        label: APPS_REGISTRY.find((a) => a.key === key)?.label ?? key,
-        Icon: APPS_REGISTRY.find((a) => a.key === key)?.icon ?? HubIcon,
-      };
+const HUB = { label: "The hub", description: "Home, sharing from your phone, and everything that isn't one app." };
 
-const monthLabel = (date: string) =>
-  new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+const about = (app: GuideApp) => {
+  if (app === "hub") return { ...HUB, path: null as string | null };
+  const found = APPS_REGISTRY.find((a) => a.key === app);
+  return { label: found?.label ?? app, description: found?.description ?? "", path: found?.path ?? null };
+};
+
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-/** What each app is for, and what has changed, newest first. Linked from the sidebar. */
+/**
+ * The apps, each with a button that shows just that app's changes. Nothing is one long list: you open the app you care about.
+ * An app with changes you haven't seen says how many are new. Linked from Home.
+ */
 export default function WhatsNew() {
   useTitle("What's new");
   const navigate = useNavigate();
   const { seen, markSeen } = useWhatsNew();
-  const [filter, setFilter] = useState<GuideApp | "all">("all");
+  const [open, setOpen] = useState<ReadonlySet<GuideApp>>(new Set());
 
-  // The "New" chips are worked out from what was seen before this visit; leaving the page then marks them seen.
+  // "New" is worked out from what was seen before this visit; opening the page then marks everything seen.
   const seenAtArrival = useRef(seen);
   const fresh = useMemo(() => newKeys(CHANGELOG, seenAtArrival.current), []);
   useEffect(() => markSeen(), [markSeen]);
 
-  const apps = APPS_REGISTRY.filter((a) => GUIDE_APPS.includes(a.key as GuideApp));
-  const inChangelog = GUIDE_APPS.filter((a) => CHANGELOG.some((e) => e.app === a));
-  const shown = CHANGELOG.filter((e) => filter === "all" || e.app === filter);
-  const months = shown.reduce<Array<{ month: string; entries: typeof shown }>>((out, e) => {
-    const month = monthLabel(e.date);
-    const last = out[out.length - 1];
-    if (last?.month === month) last.entries.push(e);
-    else out.push({ month, entries: [e] });
-    return out;
-  }, []);
+  const toggle = (app: GuideApp) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (!next.delete(app)) next.add(app);
+      return next;
+    });
 
   return (
     <PageContainer width="narrow">
-      <PageHeader title="What's new" subtitle="What each app is for, and what has changed." />
-
-      <SectionLabel>The apps</SectionLabel>
-      <Stack spacing={1.5} sx={{ mb: 4 }}>
-        {apps.map((app) => (
-          <Card key={app.key} variant="outlined" sx={{ ...cardSx, p: 2 }}>
-            <Stack direction="row" spacing={1.5} alignItems="flex-start">
-              <Box sx={{ color: "primary.main", display: "flex", pt: 0.25 }}>
-                <app.icon />
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 600 }}>{app.label}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {APP_GUIDE[app.key as GuideApp].about}
-                </Typography>
-              </Box>
-              <Button size="small" onClick={() => navigate(app.path)}>
-                Open
-              </Button>
-            </Stack>
-          </Card>
-        ))}
-      </Stack>
-
-      <SectionLabel>Changes</SectionLabel>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
-        <Chip label="All" color={filter === "all" ? "primary" : "default"} onClick={() => setFilter("all")} />
-        {inChangelog.map((a) => (
-          <Chip
-            key={a}
-            label={appInfo(a).label}
-            color={filter === a ? "primary" : "default"}
-            onClick={() => setFilter(a)}
-          />
-        ))}
-      </Stack>
-
-      {months.length === 0 ? (
-        <EmptyState title="Nothing here yet" description="No changes for this app so far." />
-      ) : (
-        months.map(({ month, entries }) => (
-          <Box key={month} sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-              {month}
-            </Typography>
-            <Stack spacing={1}>
-              {entries.map((e) => {
-                const { label, Icon } = appInfo(e.app);
-                return (
-                  <Card key={entryKey(e)} variant="outlined" sx={{ ...cardSx, p: 1.5 }}>
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                      <Box sx={{ color: "text.secondary", display: "flex", pt: 0.25 }}>
-                        <Icon fontSize="small" />
+      <PageHeader title="What's new" />
+      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>
+        {changesByApp(CHANGELOG).map(({ app, entries }, i) => {
+          const { label, description, path } = about(app);
+          const isOpen = open.has(app);
+          const newCount = entries.filter((e) => fresh.has(entryKey(e))).length;
+          return (
+            <Box component="li" key={app} sx={{ borderTop: i === 0 ? 0 : 1, borderColor: "divider", py: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 600 }}>
+                    {path ? (
+                      <Box
+                        component="a"
+                        href={path}
+                        onClick={(e: React.MouseEvent) => {
+                          e.preventDefault();
+                          navigate(path);
+                        }}
+                        sx={{ color: "inherit", textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+                      >
+                        {label}
                       </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 600 }}>
-                          {e.title}
-                          {fresh.has(entryKey(e)) && (
-                            <Chip size="small" color="primary" label="New" sx={{ ml: 1, height: 20 }} />
-                          )}
-                        </Typography>
-                        {e.detail && (
-                          <Typography variant="body2" color="text.secondary">
-                            {e.detail}
-                          </Typography>
-                        )}
-                        <Typography variant="caption" color="text.secondary">
-                          {label} · {dayLabel(e.date)}
-                        </Typography>
+                    ) : (
+                      label
+                    )}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {description}
+                  </Typography>
+                </Box>
+                {entries.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0, pt: 0.5 }}>
+                    No changes yet
+                  </Typography>
+                ) : (
+                  <Button
+                    size="small"
+                    aria-expanded={isOpen}
+                    onClick={() => toggle(app)}
+                    endIcon={isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    {isOpen ? "Hide changes" : `Changes (${entries.length})`}
+                    {!isOpen && newCount > 0 && (
+                      <Box component="span" sx={{ ml: 0.75, fontWeight: 700 }}>
+                        · {newCount} new
                       </Box>
-                    </Stack>
-                  </Card>
-                );
-              })}
-            </Stack>
-          </Box>
-        ))
-      )}
+                    )}
+                  </Button>
+                )}
+              </Box>
+              {isOpen && (
+                <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.5, display: "flex", flexDirection: "column", gap: 0.75 }}>
+                  {entries.map((e) => (
+                    <Typography key={entryKey(e)} component="li" variant="body2">
+                      {fresh.has(entryKey(e)) && (
+                        <Box component="span" sx={{ color: "primary.main", fontWeight: 700, mr: 0.75 }}>
+                          NEW
+                        </Box>
+                      )}
+                      {e.title}
+                      <Typography component="span" variant="caption" color="text.secondary">
+                        {" "}
+                        {dayLabel(e.date)}
+                      </Typography>
+                    </Typography>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
     </PageContainer>
   );
 }

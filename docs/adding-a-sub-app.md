@@ -44,7 +44,7 @@ A new app, `myapp`, has to appear in all of these. Each is explained in the sect
 | 15 | `src/shared/activity.ts`, `server/activity/spaces.ts`, `recordActivity` | activity on Home | 4b |
 | 16 | `src/server/feed/providers/` + `feed/attention.ts` | "needs attention" cards and badges | 4b |
 | 17 | `notify()` | notifications | 2 |
-| 18 | `src/shared/appGuide.ts` | what it is for, plus tips (**required**, a test enforces it) | 9 |
+| 18 | `src/shared/appGuide.ts`, `src/server/feed/appUsage.ts` | what it is for, a one-line `pitch`, tips, and how to tell someone uses it (**required**, tests enforce it) | 9 |
 | 19 | `src/shared/changelog.ts` | a "what's new" entry (**always**) | 9 |
 | 20 | `src/client/routes/Admin/Storage.tsx`, `Overview.tsx` | admin copy that names the apps | 10 |
 | 21 | `src/client/routes/Internal/Share/` | accept shared photos/links, if it makes sense | 10 |
@@ -250,13 +250,15 @@ shape, `reset`, and unit-tested helpers) instead of parallel `useState`s for "ad
 Two files, both written for the people who use the hub, not for developers.
 
 - **`src/shared/appGuide.ts` (`APP_GUIDE`), required for a new app.** `about`: two or three plain sentences on what the app
-  is for. `tips`: at least two, each a sentence that says what you can do ("Paste a web address into Import and the recipe is
-  filled in for you.") with a link to where to try it. Add the key to `GUIDE_APPS` too. The What's new page lists the apps
-  from this, and the Home feed shows the tips as "Did you know?" when it is empty. `appGuideCoverage.test.ts` fails if
-  an app in `APPS_REGISTRY` has no entry.
+  is for. `pitch`: one line that gets someone who doesn't use the app to try it ("Try XenNote for quick notes and checklists you
+  can share."), with a link to open it. `tips`: at least two sentences on what you can do once you use the app, with a link to
+  where to try it. Add the key to `GUIDE_APPS` too. The What's new page lists the apps from this. The "Did you know?" cards on an
+  empty Home invite people to the apps they **don't** use (the `pitch`) and only show `tips` for apps they **do**, so add a line for
+  the app in `src/server/feed/appUsage.ts` that says what "uses it" means (they have something in it). Tests fail if an app in
+  `APPS_REGISTRY` has no guide entry, no pitch, or isn't tracked there.
 - **`src/shared/changelog.ts` (`CHANGELOG`), every time.** Every feature you add, and every change a person would
   notice (a fix included), gets an entry **in the same PR**: newest first, `date` (today), `app` (the app key, or
-  `"hub"`), a short `title` and optionally one sentence of `detail`. Write "Added…", "You can now…" or "Fixed…". No PR
+  `"hub"`) and a short `title` (one line: the page shows only that). Write "Added…", "You can now…" or "Fixed…". No PR
   numbers, file names or technical words; a test rejects them. A change nobody can see (a refactor, a test) gets no entry.
   Also add a tip to the app's `APP_GUIDE` when the feature is worth discovering.
 

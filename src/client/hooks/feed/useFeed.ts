@@ -65,3 +65,11 @@ export const useFeedPrefs = () => {
   });
   return { prefs: prefs.data, savePrefs: save.mutateAsync, hide: hide.mutateAsync };
 };
+
+/** Which apps the person already uses (a set of app keys), for the "Did you know?" tips. Undefined until it has loaded. */
+export const useUsedApps = () =>
+  useQuery({
+    queryKey: feedKeys.usage(),
+    queryFn: async () => new Set((await api.get<{ used: string[] }>("/api/feed/usage")).used),
+    staleTime: 5 * 60_000,
+  });

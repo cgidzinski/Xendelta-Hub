@@ -41,5 +41,19 @@ export default defineConfig({
     // comment, so browsers never fetch them and they aren't publicly linked - the deploy
     // workflow uploads them to Bugsnag directly from dist/ and deletes them afterward.
     sourcemap: "hidden",
+    // MUI is one 760 kB chunk (about 220 kB gzipped) that changes only when MUI does. Warn if something else grows past this.
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        // The app's own entry chunk was ~960 kB because React, the router and MUI were all in it, which made every build
+        // warn and meant any app change re-downloaded them. They change rarely, so they get their own long-lived chunks.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return "react";
+          if (/node_modules\/(@mui|@emotion)\//.test(id)) return "mui";
+          return undefined;
+        },
+      },
+    },
   },
 });
