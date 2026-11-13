@@ -8,9 +8,11 @@ export interface XenDriveFile {
   createdAt: string; // ISO string
   shared: boolean; // the file's own link is on
   shareToken?: string; // the file's link (works only while `shared`)
-  hasPassword?: boolean;
-  password?: string | null; // plain text, shown to the owner only
+  hasPassword?: boolean; // there is one; it is stored as a hash and can't be shown
   expiry?: string | null; // ISO string or null
+  /** Public downloads of this file (through its own link or a shared folder's). */
+  downloads?: number;
+  lastDownloadedAt?: string | null;
   /** A picture link for image files, when the list was asked for thumbnails. */
   previewUrl?: string | null;
   /** Set when an app stored the file for the person (a photo on an expense, a chat attachment). */
@@ -26,6 +28,11 @@ export interface XenDriveFolder {
   itemCount: number; // files and folders directly inside
   shared: boolean;
   shareToken: string | null; // set while the folder's public link is on
+  hasPassword?: boolean; // the link has a password (stored as a hash, can't be shown)
+  expiry?: string | null; // when the link stops working
+  /** Files downloaded through the link. */
+  downloads?: number;
+  lastDownloadedAt?: string | null;
   created_at: string;
 }
 
@@ -67,6 +74,13 @@ export interface FileDetailResult {
   neighbors: FileNeighbors;
   /** A short-lived link to show the file in the page, for images, PDFs, video and audio. */
   previewUrl: string | null;
+}
+
+/** What a visitor learns about a folder link before opening it. */
+export interface PublicFolderInfo {
+  name: string;
+  requiresPassword: boolean;
+  expiry: string | null;
 }
 
 /** A shared folder as the public sees it (no owner details, nothing above the shared folder). */

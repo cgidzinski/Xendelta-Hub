@@ -17,10 +17,12 @@ import { alpha } from "@mui/material/styles";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import LinkIcon from "@mui/icons-material/Link";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import type { PublicXenNote, XenNote } from "../../../../types/XenNote";
 import { checklistProgress, hostOf, splitLinks } from "../noteDraft";
 import { isSafeUrl } from "@shared/xennote/notes";
 import { noteSurfaceSx } from "../noteColors";
+import { formatReminder } from "../reminders";
 
 interface NoteCardProps {
   note: XenNote | PublicXenNote;
@@ -183,8 +185,17 @@ export default function NoteCard({ note, onOpen, onToggleItem, onTogglePin }: No
           )
         )}
 
-        {note.labels.length > 0 && (
+        {(note.labels.length > 0 || (full?.reminder && !full.reminder.sent)) && (
           <Stack direction="row" spacing={0.5} sx={{ mt: 1.5, flexWrap: "wrap", gap: 0.5 }}>
+            {full?.reminder && !full.reminder.sent && (
+              <Chip
+                size="small"
+                color="primary"
+                variant="outlined"
+                icon={<NotificationsActiveIcon sx={{ fontSize: 14 }} />}
+                label={formatReminder(full.reminder.at)}
+              />
+            )}
             {note.labels.map((label) => (
               <Chip key={label} label={label} size="small" variant="outlined" />
             ))}

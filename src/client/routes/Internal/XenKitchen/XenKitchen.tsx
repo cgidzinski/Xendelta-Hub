@@ -29,8 +29,9 @@ import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
 import DeleteIcon from "@mui/icons-material/Delete";
 import StarIcon from "@mui/icons-material/Star";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
@@ -274,6 +275,14 @@ export default function XenKitchen() {
           </Stack>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+          <Button
+            component={RouterLink}
+            to="/internal/xenkitchen/plan"
+            variant="outlined"
+            startIcon={<CalendarMonthIcon />}
+          >
+            Meal plan
+          </Button>
           {currentBook && (
             <>
               <Button
