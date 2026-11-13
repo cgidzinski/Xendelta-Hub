@@ -90,14 +90,14 @@ private one; the public original is deleted only after the item points at the co
 It ties to the ongoing-cost plan in `docs/monetization.md` ("Gems to keep files stored or shared"): once counting is on, the
 quota is what gems extend.
 
-## Thumbnails of images
+## Thumbnails of images and PDFs
 The drive's grid (and a shared folder's page) shows a small picture of each image file, not the original. A thumbnail
 (360 px on the long side, WebP) is made once, in the background, and stored beside the file as
 `xendrive/<user>/thumbs/<name>.webp` (`utils/xendriveThumbs.ts`, paths in `utils/xendriveThumbPaths.ts`). It is made after an
 upload finishes, and for older files the first time a listing asks for pictures. Until it exists, or if it can't be made
 (`XenDriveFile.thumbnail` is `"failed"`: not a readable picture, SVG, or over 40 MB), the grid uses the original, so
 nothing waits on one. Thumbnails aren't counted toward anyone's storage, and are deleted with their file (a single delete,
-a folder delete, or an app removing its photos). PDF previews are not generated: the server has no PDF renderer.
+a folder delete, or an app removing its photos). A PDF's thumbnail is its first page (`utils/pdfThumb.ts`: pdf.js drawn on `@napi-rs/canvas`, cut off after 20 s, PDFs over 25 MB skipped); until it is ready a PDF has no link and keeps its icon, since the original can't stand in for it in an image tag.
 
 ## Share links: passwords, expiry and download counts
 - A file's own link and a folder's link can each have a **password** and an **expiry**. Passwords are bcrypt hashes

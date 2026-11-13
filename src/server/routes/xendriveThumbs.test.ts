@@ -217,8 +217,11 @@ describe("making and using thumbnails", () => {
     await browse(me);
     await thumbnailsIdle();
     expect(downloads).toEqual([]);
-    expect((await record(svg.id)).thumbnail).toBe("failed");
-    expect((await record(huge.id)).thumbnail).toBe("failed");
+    // Marked in the background with nothing queued to wait for, so poll for it.
+    await vi.waitFor(async () => {
+      expect((await record(svg.id)).thumbnail).toBe("failed");
+      expect((await record(huge.id)).thumbnail).toBe("failed");
+    });
   });
 
   it("can be asked for directly (an upload does this), and does nothing for a missing file", async () => {
