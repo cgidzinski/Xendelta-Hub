@@ -1,11 +1,10 @@
-import { useState } from "react";
-import { Alert, Box, Button, ButtonBase, Typography } from "@mui/material";
+import { Box, Button, ButtonBase, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { formatMoney } from "@shared/money";
 import { gemBonusPercent } from "@shared/monetization";
 import GemAmount from "../../../../components/GemAmount";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import type { ShopItem, ShopPayments } from "../../../../hooks/user/useShop";
+import type { ShopItem } from "../../../../hooks/user/useShop";
 
 const cost = (pack: ShopItem) =>
   formatMoney((pack.priceCents ?? 0) / 100, pack.currency ?? "USD", { symbol: "narrow" });
@@ -14,14 +13,13 @@ const bonusOf = (pack: ShopItem) => gemBonusPercent(pack.grantsGems ?? 0, pack.p
 interface PackButtonProps {
   pack: ShopItem;
   selected: boolean;
-  onSelect: (id: string) => void;
 }
 
-function PackButton({ pack, selected, onSelect }: PackButtonProps) {
+/** Looks like a pack you can pick, but buying gems is not open yet, so clicking it does nothing. */
+function PackButton({ pack, selected }: PackButtonProps) {
   const bonus = bonusOf(pack);
   return (
     <ButtonBase
-      onClick={() => onSelect(pack.id)}
       aria-pressed={selected}
       sx={{
         ...cardSx,
@@ -55,17 +53,15 @@ function PackButton({ pack, selected, onSelect }: PackButtonProps) {
 interface GemHeroProps {
   /** The Shop's items in the Gems category: ordinary items priced in money that add gems. */
   packs: ShopItem[];
-  payments: ShopPayments | undefined;
   balance: number;
-  onBuy: (item: ShopItem) => void;
-  isBuying: boolean;
 }
 
-/** The top of the Shop: pick a gem pack on the left, see what you would have and pay on the right. */
-export default function GemHero({ packs, payments, balance, onBuy, isBuying }: GemHeroProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  if (!payments?.available || packs.length === 0) {
+/**
+ * The top of the Shop: the gem packs on the left, what you would have and the pay button on the right. Buying gems
+ * is switched off for now, so nothing here reacts to a click. To turn it on, pass `onBuy` and a selection again.
+ */
+export default function GemHero({ packs, balance }: GemHeroProps) {
+  if (packs.length === 0) {
     return (
       <Box sx={{ ...cardSx, p: 3 }}>
         <Typography variant="overline" color="text.secondary">
@@ -78,7 +74,7 @@ export default function GemHero({ packs, payments, balance, onBuy, isBuying }: G
     );
   }
 
-  const selected = packs.find((p) => p.id === selectedId) ?? packs.find((p) => p.badge === "Popular") ?? packs[0];
+  const selected = packs.find((p) => p.badge === "Popular") ?? packs[0];
   const bonus = bonusOf(selected);
   const gems = selected.grantsGems ?? 0;
 
@@ -96,7 +92,7 @@ export default function GemHero({ packs, payments, balance, onBuy, isBuying }: G
         </Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 1.25, mt: 1 }}>
           {packs.map((pack) => (
-            <PackButton key={pack.id} pack={pack} selected={pack.id === selected.id} onSelect={setSelectedId} />
+            <PackButton key={pack.id} pack={pack} selected={pack.id === selected.id} />
           ))}
         </Box>
       </Box>
@@ -126,14 +122,9 @@ export default function GemHero({ packs, payments, balance, onBuy, isBuying }: G
         <Typography variant="body2" color="text.secondary">
           You would have {(balance + gems).toLocaleString()} gems.
         </Typography>
-        <Button variant="contained" size="large" loading={isBuying} onClick={() => onBuy(selected)}>
+        <Button variant="contained" size="large" disableRipple>
           Pay {cost(selected)}
         </Button>
-        {payments.testMode && (
-          <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
-            Test mode: no card is charged.
-          </Alert>
-        )}
       </Box>
     </Box>
   );

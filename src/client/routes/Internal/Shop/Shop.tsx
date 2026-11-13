@@ -26,7 +26,7 @@ export default function Shop() {
   useTitle("Shop");
   const navigate = useNavigate();
   const { profile } = useUserProfile();
-  const { items, payments, isLoading, isError, error, refetch } = useShop();
+  const { items, isLoading, isError, error, refetch } = useShop();
   const { buy, isBuying } = useBuy();
   const [selected, setSelected] = useState<ShopItem | null>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -67,7 +67,7 @@ export default function Shop() {
 
       <Stack spacing={3.5}>
         <Box ref={heroRef} sx={{ scrollMarginTop: 16 }}>
-          <GemHero packs={packs} payments={payments} balance={balance} onBuy={buy} isBuying={isBuying} />
+          <GemHero packs={packs} balance={balance} />
         </Box>
 
         {isLoading ? (
