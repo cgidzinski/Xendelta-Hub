@@ -11,8 +11,12 @@ interface ShopItemRowProps {
 /** A compact horizontal item: small picture, name and description, price on the right. Used for storage. */
 export default function ShopItemRow({ item, onSelect }: ShopItemRowProps) {
   return (
-    <Card variant="outlined" sx={{ ...cardSx, "&:hover": { borderColor: "primary.main" } }}>
-      <CardActionArea onClick={() => onSelect(item)} sx={{ display: "flex", alignItems: "center", gap: 2, p: 2 }}>
+    <Card variant="outlined" sx={{ ...cardSx, opacity: 0.55, filter: "grayscale(1)" }}>
+      <CardActionArea
+        disabled
+        onClick={() => onSelect(item)}
+        sx={{ display: "flex", alignItems: "center", gap: 2, p: 2 }}
+      >
         <Box
           sx={{
             width: 56,
@@ -41,7 +45,12 @@ export default function ShopItemRow({ item, onSelect }: ShopItemRowProps) {
             {item.item.description}
           </Typography>
         </Box>
-        <GemAmount amount={item.price ?? 0} />
+        <Box sx={{ textAlign: "right" }}>
+          <GemAmount amount={item.price ?? 0} />
+          <Typography variant="caption" color="text.secondary" component="div">
+            Out of stock
+          </Typography>
+        </Box>
       </CardActionArea>
     </Card>
   );
