@@ -8,6 +8,7 @@ import {
   isDirty,
   isEmptyDraft,
   matchesKind,
+  moveAmongActive,
   moveItem,
   splitLinks,
   toInput,
@@ -112,6 +113,31 @@ describe("draftFromNote / hostOf", () => {
   it("shows a link's host without www, and the raw text when it isn't an address", () => {
     expect(hostOf("https://www.example.com/a/b")).toBe("example.com");
     expect(hostOf("not a url")).toBe("not a url");
+  });
+});
+
+describe("moveAmongActive", () => {
+  const item = (text: string, done = false) => ({ text, done });
+  const texts = (items: Array<{ text: string }>) => items.map((i) => i.text);
+
+  it("moves an unticked item up or down one place", () => {
+    const list = [item("a"), item("b"), item("c")];
+    expect(texts(moveAmongActive(list, 1, -1))).toEqual(["b", "a", "c"]);
+    expect(texts(moveAmongActive(list, 1, 1))).toEqual(["a", "c", "b"]);
+  });
+
+  it("steps over ticked items, which aren't in the list being reordered", () => {
+    const list = [item("a"), item("x", true), item("b"), item("y", true), item("c")];
+    expect(texts(moveAmongActive(list, 2, -1))).toEqual(["b", "a", "x", "y", "c"]);
+    expect(texts(moveAmongActive(list, 2, 1))).toEqual(["a", "x", "y", "c", "b"]);
+  });
+
+  it("does nothing at the ends, for a ticked item, or for a bad index", () => {
+    const list = [item("a"), item("x", true), item("b")];
+    expect(moveAmongActive(list, 0, -1)).toBe(list);
+    expect(moveAmongActive(list, 2, 1)).toBe(list);
+    expect(moveAmongActive(list, 1, 1)).toBe(list);
+    expect(moveAmongActive(list, 9, -1)).toBe(list);
   });
 });
 
