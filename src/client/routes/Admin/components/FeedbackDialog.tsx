@@ -1,31 +1,50 @@
 import { useState } from "react";
-import { Box, Button, Chip, Stack, TextField, Typography } from "@mui/material";
+import {
+  Avatar,
+  Box,
+  Button,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 import { useSnackbar } from "notistack";
 import {
-  FEEDBACK_RESOLVE_MESSAGES,
+  FEEDBACK_MESSAGE_PRESETS,
+  FEEDBACK_OUTCOME_LABEL,
   FEEDBACK_REWARD_MAX_GEMS,
-  FEEDBACK_REWARD_MESSAGES,
   FEEDBACK_REWARD_MESSAGE_MAX_LENGTH,
   FEEDBACK_REWARD_PRESETS,
   FEEDBACK_STATUS_LABEL,
   type AdminFeedback,
+  type FeedbackOutcome,
   type FeedbackStatus,
 } from "@shared/feedback";
 import GemAmount from "../../../components/GemAmount";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
+import SectionLabel from "../../../components/ui/SectionLabel";
 import { useDeleteFeedback, useResolveFeedback, useUpdateFeedback } from "../../../hooks/admin/useAdminData";
 import StatusChip, { type Tone } from "./StatusChip";
-import { dateTime } from "../adminFormat";
+import { dateTime, timeAgo } from "../adminFormat";
 
-const TONE: Record<FeedbackStatus, Tone> = { new: "info", seen: "info", done: "success", archived: "default" };
+const TONE: Record<FeedbackStatus, Tone> = {
+  new: "info",
+  seen: "info",
+  done: "success",
+  dismissed: "default",
+  archived: "default",
+};
+const OUTCOME_HELP: Record<FeedbackOutcome, string> = {
+  resolved: "Fixed, answered or done.",
+  dismissed: "Reviewed, no action will be taken.",
+};
 const CUSTOM = "custom";
-type Choice = number | typeof CUSTOM;
-
-const chip = (selected: boolean) => ({
-  variant: selected ? ("filled" as const) : ("outlined" as const),
-  color: selected ? ("primary" as const) : ("default" as const),
-});
+const NONE = "none";
 
 interface FeedbackDialogProps {
   item: AdminFeedback;
@@ -33,9 +52,9 @@ interface FeedbackDialogProps {
 }
 
 /**
- * One feedback, opened. An open report has a single Resolve button, and what it does depends on what was picked:
- * gems and/or a message tell the person (as a notification); with neither, it is closed quietly. Done and archived
- * reports offer reopening, archiving and deleting instead.
+ * One feedback, opened. An open report is closed with a single Submit: pick Resolved or Dismissed, and for Resolved
+ * choose whether to tell the user (gems and a message). Dismissed is always silent. Closed reports offer reopening,
+ * archiving and (once archived) deleting.
  */
 export default function FeedbackDialog({ item, onClose }: FeedbackDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
@@ -43,48 +62,67 @@ export default function FeedbackDialog({ item, onClose }: FeedbackDialogProps) {
   const resolve = useResolveFeedback();
   const update = useUpdateFeedback();
   const remove = useDeleteFeedback();
-  const [choice, setChoice] = useState<Choice>(0);
-  const [custom, setCustom] = useState("");
+
+  const [outcome, setOutcome] = useState<FeedbackOutcome>("resolved");
+  const [inform, setInform] = useState(false);
+  const [gemsChoice, setGemsChoice] = useState("0");
+  const [customGems, setCustomGems] = useState("");
+  const [presetKey, setPresetKey] = useState(NONE);
   const [message, setMessage] = useState("");
 
   const isOpen = item.status === "new" || item.status === "seen";
-  const canPay = !item.rewardedGems;
-  const gems = choice === CUSTOM ? Number(custom) : choice;
+  const dismissed = outcome === "dismissed";
+  const showForm = inform && !dismissed;
+  const gems = !showForm ? 0 : gemsChoice === CUSTOM ? Number(customGems) : Number(gemsChoice);
   const gemsValid = Number.isInteger(gems) && gems >= 0 && gems <= FEEDBACK_REWARD_MAX_GEMS;
-  const text = message.trim();
-  const needsMessage = gems > 0 && !text;
+  const text = showForm ? message.trim() : "";
+  const invalid = showForm && (!text || !gemsValid || (gemsChoice === CUSTOM && gems < 1));
   const busy = resolve.isPending || update.isPending || remove.isPending;
-  const presets: readonly string[] = gems > 0 ? FEEDBACK_REWARD_MESSAGES : FEEDBACK_RESOLVE_MESSAGES;
 
   const fail = (fallback: string) => ({
     onError: (e: unknown) => enqueueSnackbar((e as Error).message || fallback, { variant: "error" }),
   });
 
-  const pick = (next: Choice) => {
-    setChoice(next);
-    const nextGems = next === CUSTOM ? Number(custom) : next;
-    // Paying gems needs a message: fill one in if the box is empty or still holds a quick-pick.
-    const all: readonly string[] = [...FEEDBACK_REWARD_MESSAGES, ...FEEDBACK_RESOLVE_MESSAGES];
-    if (nextGems > 0 && (!text || all.includes(text))) setMessage(FEEDBACK_REWARD_MESSAGES[0]);
-    if (nextGems === 0 && FEEDBACK_REWARD_MESSAGES.includes(text as never)) setMessage("");
+  const chooseGems = (value: string) => {
+    setGemsChoice(value);
+    // Gems always travel with a message: offer one if the box is still empty.
+    if (value !== "0" && !message.trim()) {
+      const first = FEEDBACK_MESSAGE_PRESETS.find((p) => p.withGems);
+      if (first) {
+        setPresetKey(first.key);
+        setMessage(first.text);
+      }
+    }
   };
+
+  const choosePreset = (key: string) => {
+    setPresetKey(key);
+    setMessage(FEEDBACK_MESSAGE_PRESETS.find((p) => p.key === key)?.text ?? "");
+  };
+
+  const summary = dismissed
+    ? "Marked Dismissed. The user is not told."
+    : !inform
+      ? "Marked Resolved. The user is not told."
+      : !text
+        ? "Choose or write a message for the user."
+        : !gemsValid || (gemsChoice === CUSTOM && gems < 1)
+          ? `Enter a gem amount from 1 to ${FEEDBACK_REWARD_MAX_GEMS.toLocaleString()}.`
+          : gems > 0
+            ? `Marked Resolved. The user gets a notification with ${gems.toLocaleString()} gems and your message. The report is then archived.`
+            : "Marked Resolved. The user gets a notification with your message.";
 
   const submit = () =>
     resolve.mutate(
-      { id: item._id, gems, message: text },
+      { id: item._id, outcome, gems, message: text },
       {
         onSuccess: () => {
-          enqueueSnackbar(
-            gems > 0
-              ? `Sent ${item.from.username} ${gems.toLocaleString()} gems`
-              : text
-                ? `Replied to ${item.from.username}`
-                : "Resolved",
-            { variant: "success" },
-          );
+          enqueueSnackbar(gems > 0 ? `Sent ${gems.toLocaleString()} gems` : dismissed ? "Dismissed" : "Resolved", {
+            variant: "success",
+          });
           onClose();
         },
-        ...fail("Couldn't resolve that"),
+        ...fail("Couldn't submit that"),
       },
     );
 
@@ -99,9 +137,6 @@ export default function FeedbackDialog({ item, onClose }: FeedbackDialogProps) {
     if (ok) remove.mutate(item._id, { onSuccess: onClose, ...fail("Couldn't delete that") });
   };
 
-  const resolveLabel =
-    gems > 0 ? `Resolve and send ${gems.toLocaleString()} gems` : text ? "Resolve and reply" : "Resolve";
-
   return (
     <ResponsiveDialog
       open
@@ -113,13 +148,13 @@ export default function FeedbackDialog({ item, onClose }: FeedbackDialogProps) {
             <Button onClick={onClose} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="contained" onClick={submit} disabled={!gemsValid || needsMessage || busy}>
-              {resolveLabel}
+            <Button variant="contained" onClick={submit} disabled={invalid || busy}>
+              Submit
             </Button>
           </>
         ) : item.status === "archived" ? (
           <>
-            <Button color="error" onClick={askDelete} disabled={busy}>
+            <Button color="error" onClick={askDelete} disabled={busy} sx={{ mr: "auto" }}>
               Delete
             </Button>
             <Button variant="contained" onClick={() => setStatus("new")} disabled={busy}>
@@ -139,85 +174,173 @@ export default function FeedbackDialog({ item, onClose }: FeedbackDialogProps) {
       }
     >
       <Stack spacing={2.5} sx={{ pt: 0.5 }}>
-        <Box>
-          <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", mb: 1 }}>
-            <StatusChip label={FEEDBACK_STATUS_LABEL[item.status]} tone={TONE[item.status]} />
-            <Typography variant="body2" color="text.secondary">
-              from {item.from.username} · {dateTime(item.createdAt)}
-            </Typography>
-            {item.rewardedGems ? <GemAmount amount={item.rewardedGems} iconSize={16} variant="body2" /> : null}
+        <Stack spacing={1.5}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <Avatar sx={{ width: 36, height: 36, bgcolor: "primary.main" }}>
+              {(item.from.username || "?").charAt(0).toUpperCase()}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {item.from.username}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" title={dateTime(item.createdAt)}>
+                {timeAgo(item.createdAt)}
+              </Typography>
+            </Box>
+            <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+              {item.rewardedGems ? <GemAmount amount={item.rewardedGems} iconSize={16} variant="body2" /> : null}
+              <StatusChip label={FEEDBACK_STATUS_LABEL[item.status]} tone={TONE[item.status]} />
+            </Box>
           </Stack>
-          <Typography sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.message}</Typography>
-        </Box>
+          <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2 }}>
+            <Typography sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.message}</Typography>
+          </Box>
+        </Stack>
 
         {isOpen && (
           <>
-            <Typography variant="body2" color="text.secondary">
-              {item.from.username} is only told if you add gems or a message. Leave both empty to close this quietly.
-            </Typography>
-
-            {canPay && (
-              <Box>
-                <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.75 }}>
-                  Gems
-                </Typography>
-                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                  <Chip clickable {...chip(choice === 0)} onClick={() => pick(0)} label="No gems" />
-                  {FEEDBACK_REWARD_PRESETS.map((n) => (
-                    <Chip
-                      key={n}
-                      clickable
-                      {...chip(choice === n)}
-                      onClick={() => pick(n)}
-                      label={<GemAmount amount={n} iconSize={16} variant="body2" />}
-                    />
-                  ))}
-                  <Chip clickable {...chip(choice === CUSTOM)} onClick={() => pick(CUSTOM)} label="Custom" />
-                </Box>
-                {choice === CUSTOM && (
-                  <TextField
-                    autoFocus
-                    size="small"
-                    type="number"
-                    label="Gems"
-                    value={custom}
-                    onChange={(e) => setCustom(e.target.value)}
-                    slotProps={{ htmlInput: { min: 0, max: FEEDBACK_REWARD_MAX_GEMS, step: 1 } }}
-                    error={custom !== "" && !gemsValid}
-                    helperText={`Up to ${FEEDBACK_REWARD_MAX_GEMS.toLocaleString()}`}
-                    sx={{ mt: 1.5, width: 180 }}
+            <Box>
+              <SectionLabel>What happens to it</SectionLabel>
+              <RadioGroup
+                row
+                value={outcome}
+                onChange={(e) => setOutcome(e.target.value as FeedbackOutcome)}
+                sx={{ gap: 1, flexWrap: "wrap" }}
+              >
+                {(Object.keys(FEEDBACK_OUTCOME_LABEL) as FeedbackOutcome[]).map((o) => (
+                  <FormControlLabel
+                    key={o}
+                    value={o}
+                    control={<Radio />}
+                    sx={{
+                      flex: "1 1 200px",
+                      m: 0,
+                      p: 1,
+                      pr: 1.5,
+                      alignItems: "flex-start",
+                      border: 1,
+                      borderColor: outcome === o ? "primary.main" : "divider",
+                      borderWidth: outcome === o ? 2 : 1,
+                      borderRadius: 2,
+                    }}
+                    label={
+                      <Box sx={{ pt: 0.75 }}>
+                        <Typography sx={{ fontWeight: 500 }}>{FEEDBACK_OUTCOME_LABEL[o]}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {OUTCOME_HELP[o]}
+                        </Typography>
+                      </Box>
+                    }
                   />
-                )}
+                ))}
+              </RadioGroup>
+            </Box>
+
+            {!dismissed && (
+              <Box>
+                <SectionLabel>Inform user</SectionLabel>
+                <ToggleButtonGroup
+                  exclusive
+                  fullWidth
+                  color="primary"
+                  value={inform ? "yes" : "no"}
+                  onChange={(_e, v: string | null) => v && setInform(v === "yes")}
+                  aria-label="Inform user"
+                >
+                  <ToggleButton value="yes">Yes</ToggleButton>
+                  <ToggleButton value="no">No</ToggleButton>
+                </ToggleButtonGroup>
               </Box>
             )}
 
-            <Box>
-              <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.75 }}>
-                Message {gems > 0 ? "" : "(optional)"}
-              </Typography>
-              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
-                {presets.map((m) => (
-                  <Chip
-                    key={m}
-                    clickable
-                    size="small"
-                    {...chip(message === m)}
-                    onClick={() => setMessage(m)}
-                    label={m.length > 36 ? `${m.slice(0, 34)}…` : m}
+            {showForm && (
+              <Stack spacing={2}>
+                <Box>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Gems"
+                    value={gemsChoice}
+                    onChange={(e) => chooseGems(e.target.value)}
+                    slotProps={{ select: { native: true } }}
+                    helperText="Gems can be paid once per report."
+                  >
+                    <option value="0">No gems</option>
+                    {FEEDBACK_REWARD_PRESETS.map((n) => (
+                      <option key={n} value={String(n)}>
+                        {n.toLocaleString()} gems
+                      </option>
+                    ))}
+                    <option value={CUSTOM}>Other amount…</option>
+                  </TextField>
+                  {gemsChoice === CUSTOM && (
+                    <TextField
+                      autoFocus
+                      type="number"
+                      size="small"
+                      label="Gem amount"
+                      value={customGems}
+                      onChange={(e) => setCustomGems(e.target.value)}
+                      slotProps={{ htmlInput: { min: 1, max: FEEDBACK_REWARD_MAX_GEMS, step: 1 } }}
+                      error={customGems !== "" && !gemsValid}
+                      helperText={`1 to ${FEEDBACK_REWARD_MAX_GEMS.toLocaleString()}`}
+                      sx={{ mt: 1.5, width: 200 }}
+                    />
+                  )}
+                </Box>
+
+                <Box>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Message"
+                    value={presetKey}
+                    onChange={(e) => choosePreset(e.target.value)}
+                    slotProps={{ select: { native: true } }}
+                  >
+                    <option value={NONE}>Choose a message…</option>
+                    <optgroup label="With gems">
+                      {FEEDBACK_MESSAGE_PRESETS.filter((p) => p.withGems).map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Reply">
+                      {FEEDBACK_MESSAGE_PRESETS.filter((p) => !p.withGems).map((p) => (
+                        <option key={p.key} value={p.key}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <option value={CUSTOM}>Write my own…</option>
+                  </TextField>
+                  <TextField
+                    multiline
+                    minRows={4}
+                    fullWidth
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      setPresetKey(CUSTOM);
+                    }}
+                    placeholder="What the user will read"
+                    slotProps={{
+                      htmlInput: {
+                        maxLength: FEEDBACK_REWARD_MESSAGE_MAX_LENGTH,
+                        "aria-label": "Message the user will see",
+                      },
+                    }}
+                    helperText={`Sent exactly as written. ${message.length} / ${FEEDBACK_REWARD_MESSAGE_MAX_LENGTH}`}
+                    sx={{ mt: 1.5 }}
                   />
-                ))}
-              </Box>
-              <TextField
-                multiline
-                minRows={3}
-                fullWidth
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Write a reply, or leave empty"
-                slotProps={{ htmlInput: { maxLength: FEEDBACK_REWARD_MESSAGE_MAX_LENGTH } }}
-                helperText={`${message.length}/${FEEDBACK_REWARD_MESSAGE_MAX_LENGTH}`}
-              />
-            </Box>
+                </Box>
+              </Stack>
+            )}
+
+            <Typography variant="body2" color="text.secondary">
+              {summary}
+            </Typography>
           </>
         )}
       </Stack>
