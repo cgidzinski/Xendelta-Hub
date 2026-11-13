@@ -8,7 +8,10 @@ import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { realtime } from "../realtime";
 import { registerDriveSource } from "../utils/driveSources";
 import { sendPushToUser } from "../utils/pushUtils";
+import { ChannelState } from "../models/channelState";
 import { unreadChannelCount } from "../spaces/channels";
+import { audienceOf, resolveChatAccess, type ChatContext } from "./access";
+import { canPostChat } from "./policy";
 import {
   CHAT_PREVIEW_MAX,
   chatTitle,
@@ -28,6 +31,13 @@ export async function loadChat(conversationId: string, userId: string): Promise<
   const chat = await Conversation.findOne({ _id: conversationId, "members.user_id": userId }).exec();
   if (!chat) throw new AppError(404, "Conversation not found");
   return chat;
+}
+
+/** The conversation for a request, if the caller may see it: a chat they are in, or a channel they can read. */
+export async function loadChatContext(conversationId: string, userId: string): Promise<ChatContext> {
+  const context = await resolveChatAccess(conversationId, userId);
+  if (!context) throw new AppError(404, "Conversation not found");
+  return context;
 }
 
 export const memberIdsOf = (chat: { members: Array<{ user_id: string }> }) => chat.members.map((m) => m.user_id);
@@ -170,7 +180,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
   const bumped = await Conversation.findByIdAndUpdate(
     chat._id,
     { $inc: { seq: 1 } },
-    { new: true, projection: "seq" },
+    { new: true, projection: "seq spaceId" },
   ).exec();
   if (!bumped) throw new AppError(404, "Conversation not found");
   const seq = bumped.seq;
@@ -206,6 +216,14 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
       { $max: { "members.$[me].lastReadSeq": seq } },
       { arrayFilters: [{ "me.user_id": input.from }] },
     ).exec();
+    // A channel has no member list: the sender's own read position is in ChannelState.
+    if (bumped.spaceId) {
+      await ChannelState.updateOne(
+        { userId: input.from, conversationId: chat._id },
+        { $max: { lastReadSeq: seq } },
+        { upsert: true },
+      ).exec();
+    }
   }
   return message;
 }
@@ -231,25 +249,38 @@ export async function postSystemMessage(
   });
 }
 
-/** Tell the members about a stored message, and push to anyone who is not looking at the app. */
-export async function publishMessage(chat: ConversationDocument, message: MessageDocument, senderName: string) {
+/** Tell the readers about a stored message, and push to anyone who is not looking at the app. */
+export async function publishMessage(context: ChatContext, message: MessageDocument, senderName: string) {
+  const { chat, space } = context;
   const wire = await serializeMessage(message);
   const conversationId = String(chat._id);
-  realtime.toUsers(memberIdsOf(chat), "chat:message", { conversationId, message: wire });
+  const audience = audienceOf(context);
+  realtime.toUsers(audience, "chat:message", { conversationId, message: wire });
 
   if (message.kind !== "text" || !message.from) return;
-  const title = chat.name ? `${senderName} in ${chat.name}` : senderName;
   const body = previewOf(message.body ?? "", message.attachments.length, message.attachments[0]?.name);
   const now = Date.now();
-  for (const member of chat.members) {
-    if (member.user_id === message.from || isMuted(member, now) || realtime.isOnline(member.user_id)) continue;
+
+  // Who has silenced it: a chat member's own setting, or a channel's ChannelState.
+  let silenced: Set<string>;
+  let title: string;
+  let url: string;
+  if (space) {
+    const states = await ChannelState.find({ conversationId: chat._id, mutedUntil: { $gt: new Date(now) } }, "userId")
+      .lean()
+      .exec();
+    silenced = new Set(states.map((s) => s.userId));
+    title = `${senderName} in #${chat.name ?? "channel"} · ${space.name}`;
+    url = `/internal/spaces/${space._id}/${conversationId}`;
+  } else {
+    silenced = new Set(chat.members.filter((m) => isMuted(m, now)).map((m) => m.user_id));
+    title = chat.name ? `${senderName} in ${chat.name}` : senderName;
+    url = `/internal/messages/${conversationId}`;
+  }
+  for (const userId of audience) {
+    if (userId === message.from || silenced.has(userId) || realtime.isOnline(userId)) continue;
     // One notification per conversation on the lock screen (the tag), and never a failed push breaking a send.
-    void sendPushToUser(member.user_id, {
-      title,
-      body,
-      url: `/internal/messages/${conversationId}`,
-      tag: `chat-${conversationId}`,
-    }).catch(() => undefined);
+    void sendPushToUser(userId, { title, body, url, tag: `chat-${conversationId}` }).catch(() => undefined);
   }
 }
 
@@ -261,15 +292,24 @@ registerDriveSource("chat", {
   label: "Chat",
   // Chat attachments use the sender's storage, like a file uploaded to XenDrive.
   counts: async () => true,
-  verify: async (userId, ref) =>
-    Types.ObjectId.isValid(ref) && !!(await Conversation.exists({ _id: ref, "members.user_id": userId })),
+  verify: async (userId, ref) => {
+    if (!Types.ObjectId.isValid(ref)) return false;
+    const context = await resolveChatAccess(ref, userId);
+    return !!context && canPostChat(context.access, userId);
+  },
   describe: async (userId, refs) => {
     const valid = refs.filter((r) => Types.ObjectId.isValid(r));
     const chats =
       valid.length > 0 ? await Conversation.find({ _id: { $in: valid }, "members.user_id": userId }).exec() : [];
     const people = await loadPeople(chats.flatMap(memberIdsOf));
     const names = new Map(chats.map((c) => [String(c._id), chatTitle(serializeChat(c, userId, people), userId)]));
-    // A chat the person has left (or that was deleted) keeps its files until they delete them.
+    // A channel is named after itself; a chat the person has left (or that was deleted) keeps its files until they
+    // delete them.
+    for (const ref of refs) {
+      if (names.has(ref) || !Types.ObjectId.isValid(ref)) continue;
+      const context = await resolveChatAccess(ref, userId);
+      if (context?.space) names.set(ref, `#${context.chat.name ?? "channel"} · ${context.space.name}`);
+    }
     return new Map(refs.map((ref) => [ref, names.get(ref) ?? "A chat you're no longer in"]));
   },
 });

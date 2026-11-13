@@ -75,3 +75,7 @@ export function canManageChat(access: ChatAccess, userId: string, permission: Sp
   if (access.space) return canReadChat(access, userId) && allowed(access, userId, permission);
   return isChatOwner(access.chat, userId);
 }
+
+/** Delete a message: your own, or anyone's if you manage messages (in a DM or group chat, if you own it). */
+export const canDeleteChatMessage = (access: ChatAccess, message: { from?: string | null }, userId: string) =>
+  message.from === userId || canManageChat(access, userId, "manageMessages");

@@ -1,7 +1,8 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user";
-import { Conversation } from "../models/conversation";
+import { audienceOf, resolveChatAccess } from "../chat/access";
+import { canPostChat } from "../chat/policy";
 import { getJwtSecret } from "../config/env";
 import type { ClientEvents, RealtimeEvent, RealtimeEvents } from "@shared/realtime";
 
@@ -100,15 +101,11 @@ export class SocketManager {
           this.lastTyping.set(socket.id, now);
         }
 
-        // Only members of the conversation hear it, and only members can say it.
-        const conversation = await Conversation.findOne(
-          { _id: conversationId, "members.user_id": socket.userId },
-          "members.user_id",
-        )
-          .lean()
-          .exec();
-        if (!conversation) return;
-        const others = conversation.members.map((m) => m.user_id).filter((id) => id !== socket.userId);
+        // Only people who can read the chat hear it, and only people who can post in it can say it: a DM or group
+        // chat's members, or a channel's readers.
+        const context = await resolveChatAccess(conversationId, socket.userId!);
+        if (!context || !canPostChat(context.access, socket.userId!)) return;
+        const others = audienceOf(context).filter((id) => id !== socket.userId);
         this.emitToUsers(others, "chat:typing", {
           conversationId,
           userId: socket.userId!,

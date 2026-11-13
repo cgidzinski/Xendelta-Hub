@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../../testing/testApp";
@@ -213,15 +213,238 @@ describe("unread", () => {
     expect((await channels(space._id, b))[0]).toMatchObject({ unread: 3, muted: true });
   });
 
-  it("a channel never shows up in the chat list or through the chat routes", async () => {
+  it("a channel is not in the chat list, and is not a chat you can rename or add people to", async () => {
     const a = await createUser();
     const space = await make(a);
     const [general] = await channels(space._id, a);
     const list = await request(t.app).get("/api/chat/conversations").set(as(a.token));
     expect(list.body.data.conversations).toEqual([]);
-    expect((await request(t.app).get(`/api/chat/conversations/${general._id}/messages`).set(as(a.token))).status).toBe(
-      404,
-    );
+    expect((await request(t.app).get(`/api/chat/conversations/${general._id}`).set(as(a.token))).status).toBe(404);
+    expect(
+      (await request(t.app).patch(`/api/chat/conversations/${general._id}`).set(as(a.token)).send({ name: "x" }))
+        .status,
+    ).toBe(404);
+  });
+});
+
+describe("messages in a channel", () => {
+  let sent: Array<{ room: string; event: string; payload: any }> = [];
+  beforeAll(async () => {
+    const { SocketManager } = await import("../../infrastructure/SocketManager.js");
+    (SocketManager.getInstance() as any).io = {
+      to: (room: string) => ({ emit: (event: string, payload: any) => sent.push({ room, event, payload }) }),
+      sockets: { adapter: { rooms: new Map() } },
+    };
+  });
+  beforeEach(() => {
+    sent = [];
+  });
+
+  const msgUrl = (channelId: string) => `/api/chat/conversations/${channelId}/messages`;
+  const send = (u: U, channelId: string, body: string) =>
+    request(t.app).post(msgUrl(channelId)).set(as(u.token)).send({ body });
+  const setOverrides = async (channelId: string, overrides: unknown[]) => {
+    const { Conversation } = await import("../../models/conversation.js");
+    await Conversation.updateOne({ _id: channelId }, { overrides });
+  };
+
+  it("members send and read, and every reader (not outsiders) hears about it", async () => {
+    const [a, b, outsider] = [await createUser(), await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    const [general] = await channels(space._id, a);
+
+    const res = await send(b, general._id, "hello channel");
+    expect(res.status).toBe(200);
+    expect(res.body.data.message).toMatchObject({ seq: 1, from: id(b), body: "hello channel" });
+    expect(
+      sent
+        .filter((e) => e.event === "chat:message")
+        .map((e) => e.room)
+        .sort(),
+    ).toEqual([`user:${id(a)}`, `user:${id(b)}`].sort());
+
+    const page = await request(t.app).get(msgUrl(general._id)).set(as(a.token));
+    expect(page.body.data.messages.map((m: any) => m.body)).toEqual(["hello channel"]);
+    expect((await request(t.app).get(msgUrl(general._id)).set(as(outsider.token))).status).toBe(404);
+    expect((await send(outsider, general._id, "let me in")).status).toBe(404);
+  });
+
+  it("the sender has read their own message; others have it unread until they read", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    const [general] = await channels(space._id, a);
+    await send(b, general._id, "one");
+    await send(b, general._id, "two");
+
+    expect((await channels(space._id, b))[0].unread).toBe(0);
+    expect((await channels(space._id, a))[0].unread).toBe(2);
+    sent = [];
+    const read = await request(t.app)
+      .post(`/api/chat/conversations/${general._id}/read`)
+      .set(as(a.token))
+      .send({ seq: 2 });
+    expect(read.status).toBe(200);
+    expect((await channels(space._id, a))[0].unread).toBe(0);
+    // Reading is private to the reader's own tabs.
+    expect(sent.filter((e) => e.event === "chat:read").map((e) => e.room)).toEqual([`user:${id(a)}`]);
+  });
+
+  it("muting a channel is your own setting", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    const [general] = await channels(space._id, a);
+    const mute = (u: U, muted: boolean) =>
+      request(t.app).patch(`/api/chat/conversations/${general._id}/me`).set(as(u.token)).send({ muted });
+    expect((await mute(b, true)).status).toBe(200);
+    expect((await channels(space._id, b))[0].muted).toBe(true);
+    expect((await channels(space._id, a))[0].muted).toBe(false);
+    expect((await mute(b, false)).status).toBe(200);
+    expect((await channels(space._id, b))[0].muted).toBe(false);
+  });
+
+  it("a read-only channel lets people read but not post or react", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    const [general] = await channels(space._id, a);
+    const first = await send(a, general._id, "announcement");
+    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    await setOverrides(general._id, [{ roleId: everyone, allow: [], deny: ["sendMessages"] }]);
+
+    expect((await request(t.app).get(msgUrl(general._id)).set(as(b.token))).status).toBe(200);
+    expect((await send(b, general._id, "hi")).status).toBe(403);
+    const react = await request(t.app)
+      .put(`${msgUrl(general._id)}/${first.body.data.message.seq}/reactions/${encodeURIComponent("👍")}`)
+      .set(as(b.token));
+    expect(react.status).toBe(403);
+    // The owner is never held back by an override.
+    expect((await send(a, general._id, "more")).status).toBe(200);
+  });
+
+  it("a private channel is a 404 for people who can't read it, and they hear nothing from it", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    const secret = (await addChannel(space._id, a, { name: "staff" })).body.data.channel;
+    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    await setOverrides(secret._id, [{ roleId: everyone, allow: [], deny: ["readMessages"] }]);
+
+    expect((await send(b, secret._id, "hi")).status).toBe(404);
+    expect((await request(t.app).get(msgUrl(secret._id)).set(as(b.token))).status).toBe(404);
+    sent = [];
+    expect((await send(a, secret._id, "secret")).status).toBe(200);
+    expect(sent.filter((e) => e.event === "chat:message").map((e) => e.room)).toEqual([`user:${id(a)}`]);
+  });
+
+  it("editing is for the author; deleting is for the author or someone who manages messages", async () => {
+    const [a, b, c] = [await createUser(), await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    await addMember(space._id, c);
+    const [general] = await channels(space._id, a);
+    const { Space } = await import("../../models/space.js");
+    const mod = await Space.findById(space._id).exec();
+    mod!.roles.push({ name: "mod", position: 1, permissions: ["manageMessages"] } as any);
+    const modRole = String(mod!.roles[mod!.roles.length - 1]!._id);
+    await mod!.save();
+    await Space.updateOne({ _id: space._id, "members.user_id": id(c) }, { $set: { "members.$.roleIds": [modRole] } });
+
+    const m1 = (await send(b, general._id, "mine")).body.data.message;
+    const url = `${msgUrl(general._id)}/${m1.seq}`;
+    expect((await request(t.app).patch(url).set(as(c.token)).send({ body: "edited" })).status).toBe(403);
+    expect((await request(t.app).patch(url).set(as(b.token)).send({ body: "edited" })).status).toBe(200);
+
+    const m2 = (await send(b, general._id, "bad")).body.data.message;
+    const other = await createUser();
+    await addMember(space._id, other);
+    expect(
+      (
+        await request(t.app)
+          .delete(`${msgUrl(general._id)}/${m2.seq}`)
+          .set(as(other.token))
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(t.app)
+          .delete(`${msgUrl(general._id)}/${m2.seq}`)
+          .set(as(c.token))
+      ).status,
+    ).toBe(200);
+    // The space owner can delete anyone's too.
+    const m3 = (await send(b, general._id, "worse")).body.data.message;
+    expect(
+      (
+        await request(t.app)
+          .delete(`${msgUrl(general._id)}/${m3.seq}`)
+          .set(as(a.token))
+      ).status,
+    ).toBe(200);
+  });
+
+  it("typing in a channel reaches the other readers, and only from someone who can post", async () => {
+    const [a, b, c] = [await createUser(), await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    await addMember(space._id, c);
+    const [general] = await channels(space._id, a);
+
+    let connection: (socket: any) => void = () => undefined;
+    const io = {
+      use: () => undefined,
+      on: (event: string, handler: (socket: any) => void) => {
+        if (event === "connection") connection = handler;
+      },
+      to: (room: string) => ({ emit: (event: string, payload: any) => sent.push({ room, event, payload }) }),
+      sockets: { adapter: { rooms: new Map() } },
+    };
+    const { SocketManager } = await import("../../infrastructure/SocketManager.js");
+    const manager = SocketManager.getInstance() as any;
+    manager.isInitialized = false;
+    await manager.initialize(io);
+    const typing = (u: U) => {
+      const handlers: Record<string, (data: unknown) => Promise<void>> = {};
+      connection({
+        id: `socket-${id(u)}`,
+        userId: id(u),
+        username: "someone",
+        join: () => undefined,
+        on: (event: string, handler: any) => (handlers[event] = handler),
+        disconnect: () => undefined,
+      });
+      return (data: unknown) => handlers["chat:typing"]!(data);
+    };
+
+    await typing(b)({ conversationId: general._id, typing: true });
+    expect(
+      sent
+        .filter((e) => e.event === "chat:typing")
+        .map((e) => e.room)
+        .sort(),
+    ).toEqual([`user:${id(a)}`, `user:${id(c)}`].sort());
+
+    // Closed to posting: no typing from them. Closed to reading: they can't say it and don't hear it.
+    sent = [];
+    const everyone = space.roles.find((r: any) => r.everyone)._id;
+    await setOverrides(general._id, [{ roleId: everyone, allow: [], deny: ["sendMessages"] }]);
+    await typing(b)({ conversationId: general._id, typing: true });
+    expect(sent.filter((e) => e.event === "chat:typing")).toEqual([]);
+    await typing(a)({ conversationId: general._id, typing: true });
+    expect(sent.filter((e) => e.event === "chat:typing").length).toBe(2);
+  });
+
+  it("only readers are counted as the audience, so removed people stop hearing", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const space = await make(a);
+    await addMember(space._id, b);
+    const [general] = await channels(space._id, a);
+    const { resolveChatAccess, audienceOf } = await import("../../chat/access.js");
+    const context = (await resolveChatAccess(general._id, id(a)))!;
+    expect(audienceOf(context).sort()).toEqual([id(a), id(b)].sort());
+    expect(await resolveChatAccess(general._id, id(await createUser()))).toBeNull();
   });
 });
 

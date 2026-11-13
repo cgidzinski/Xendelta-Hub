@@ -4,11 +4,11 @@ import { Conversation } from "../../models/conversation";
 import { XenDriveFile } from "../../models/xendriveFile";
 import { generateSignedUrl } from "../../utils/gcsUtils";
 import { authenticateToken } from "../../middleware/auth";
-import { canDeleteMessage, canEditMessage } from "../../chat/policy";
+import { audienceOf, type ChatContext } from "../../chat/access";
+import { canDeleteChatMessage, canEditMessage, canPostChat } from "../../chat/policy";
 import {
-  loadChat,
+  loadChatContext,
   loadPeople,
-  memberIdsOf,
   publishMessage,
   appendMessage,
   serializeMessage,
@@ -38,7 +38,8 @@ export function registerMessageRoutes(app: Application) {
     validateParams(chatConversationParamSchema),
     validateQuery(chatMessagesQuerySchema),
     async (req: Request, res: Response) => {
-      const chat = await loadChat(req.params.conversationId as string, callerId(req));
+      const context = await loadChatContext(req.params.conversationId as string, callerId(req));
+      const { chat } = context;
       const { before, limit } = chatMessagesQuerySchema.parse(req.query);
       const found = await Message.find({ conversationId: chat._id, ...(before ? { seq: { $lt: before } } : {}) })
         .sort({ seq: -1 })
@@ -66,7 +67,9 @@ export function registerMessageRoutes(app: Application) {
     validate(sendChatMessageSchema),
     async (req: Request, res: Response) => {
       const me = callerId(req);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const { chat } = context;
+      if (!canPostChat(context.access, me)) throw new AppError(403, "You can't post here");
       const { clientId, body, replyTo, attachmentIds } = sendChatMessageSchema.parse(req.body);
 
       // A retry of a send that already went through returns the stored message instead of sending it twice.
@@ -96,7 +99,7 @@ export function registerMessageRoutes(app: Application) {
 
       const user = await loadCaller(req);
       const message = await appendMessage(chat, { from: me, body, replyTo, attachments, clientId });
-      await publishMessage(chat, message, user.username ?? "Someone");
+      await publishMessage(context, message, user.username ?? "Someone");
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
   );
@@ -108,7 +111,8 @@ export function registerMessageRoutes(app: Application) {
     authenticateToken,
     validateParams(chatAttachmentParamSchema),
     async (req: Request, res: Response) => {
-      const chat = await loadChat(req.params.conversationId as string, callerId(req));
+      const context = await loadChatContext(req.params.conversationId as string, callerId(req));
+      const { chat } = context;
       const message = await loadMessage(chat._id, req.params.seq as string);
       const fileId = req.params.fileId as string;
       if (message.deletedAt || !message.attachments.some((a) => String(a.fileId) === fileId)) {
@@ -129,7 +133,8 @@ export function registerMessageRoutes(app: Application) {
     validate(editChatMessageSchema),
     async (req: Request, res: Response) => {
       const me = callerId(req);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const { chat } = context;
       const message = await loadMessage(chat._id, req.params.seq as string);
       if (message.kind !== "text" || !canEditMessage(message, me))
         throw new AppError(403, "You can only edit your own messages");
@@ -138,7 +143,7 @@ export function registerMessageRoutes(app: Application) {
       message.editedAt = new Date();
       await message.save();
       await refreshLastPreview(chat._id, message.seq, message.body);
-      await announceUpdate(chat, message);
+      await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
   );
@@ -150,9 +155,10 @@ export function registerMessageRoutes(app: Application) {
     validateParams(chatMessageParamSchema),
     async (req: Request, res: Response) => {
       const me = callerId(req);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const { chat } = context;
       const message = await loadMessage(chat._id, req.params.seq as string);
-      if (message.kind !== "text" || !canDeleteMessage(chat, message, me)) {
+      if (message.kind !== "text" || !canDeleteChatMessage(context.access, message, me)) {
         throw new AppError(403, "You can't delete that message");
       }
 
@@ -162,7 +168,7 @@ export function registerMessageRoutes(app: Application) {
       message.set("reactions", []);
       await message.save();
       await refreshLastPreview(chat._id, message.seq, "This message was deleted");
-      await announceUpdate(chat, message);
+      await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
   );
@@ -173,8 +179,10 @@ export function registerMessageRoutes(app: Application) {
     validateParams(chatReactionParamSchema),
     async (req: Request, res: Response) => {
       const me = callerId(req);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const { chat } = context;
       const message = await loadMessage(chat._id, req.params.seq as string);
+      if (!canPostChat(context.access, me)) throw new AppError(403, "You can't react here");
       if (message.kind !== "text" || message.deletedAt) throw new AppError(400, "You can't react to that message");
 
       const emoji = req.params.emoji as string;
@@ -187,7 +195,7 @@ export function registerMessageRoutes(app: Application) {
         message.reactions.push({ emoji, userIds: [me] });
       }
       await message.save();
-      await announceUpdate(chat, message);
+      await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
   );
@@ -198,7 +206,8 @@ export function registerMessageRoutes(app: Application) {
     validateParams(chatReactionParamSchema),
     async (req: Request, res: Response) => {
       const me = callerId(req);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const { chat } = context;
       const message = await loadMessage(chat._id, req.params.seq as string);
 
       const emoji = req.params.emoji as string;
@@ -211,7 +220,7 @@ export function registerMessageRoutes(app: Application) {
             message.reactions.filter((r) => r.emoji !== emoji),
           );
         await message.save();
-        await announceUpdate(chat, message);
+        await announceUpdate(context, message);
       }
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
@@ -224,12 +233,9 @@ async function loadMessage(conversationId: unknown, seq: string) {
   return message;
 }
 
-async function announceUpdate(
-  chat: { _id: unknown; members: Array<{ user_id: string }> },
-  message: Awaited<ReturnType<typeof loadMessage>>,
-) {
-  realtime.toUsers(memberIdsOf(chat), "chat:message_update", {
-    conversationId: String(chat._id),
+async function announceUpdate(context: ChatContext, message: Awaited<ReturnType<typeof loadMessage>>) {
+  realtime.toUsers(audienceOf(context), "chat:message_update", {
+    conversationId: String(context.chat._id),
     message: await serializeMessage(message),
   });
 }
