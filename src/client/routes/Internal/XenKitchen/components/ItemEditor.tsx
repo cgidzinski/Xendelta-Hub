@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AppBar,
+  Box,
   Button,
   Chip,
   CircularProgress,
@@ -16,7 +17,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import LanguageIcon from "@mui/icons-material/Language";
@@ -39,7 +40,7 @@ import { CategoryIconView } from "./kitchenIcons";
 import { Draft, newKey, draftFrom, draftFromImport, inputFrom, filledExtras, Extra } from "./itemEditor/itemDraft";
 import { ImportUrlDialog } from "./itemEditor/ImportUrlDialog";
 import { PhotoStrip } from "./itemEditor/PhotoStrip";
-import { TagField, quietInput } from "./itemEditor/editorFields";
+import { SectionTitle, TagField, quietInput } from "./itemEditor/editorFields";
 import { RecipeFields } from "./itemEditor/RecipeFields";
 import { InstructionFields } from "./itemEditor/InstructionFields";
 const EXTRA_LABELS: Record<Extra, string> = {
@@ -50,9 +51,10 @@ const EXTRA_LABELS: Record<Extra, string> = {
   storage: "Storage",
   notes: "Notes",
 };
+// Serves / time (recipes) and brand (box instructions) are always shown; these are the optional extras.
 const EXTRAS_FOR: Record<KitchenLayout, Extra[]> = {
-  recipe: ["description", "times", "tags", "notes"],
-  instructions: ["brand", "storage", "description", "tags", "notes"],
+  recipe: ["description", "tags", "notes"],
+  instructions: ["storage", "description", "tags", "notes"],
 };
 
 /** "food.example.com" for a recipe's source link. */
@@ -220,8 +222,32 @@ export default function ItemEditor({
   const hidden = extras.filter((e) => !opened.has(e));
   const openExtra = (e: Extra) => setOpened((o) => new Set(o).add(e));
 
+  const timeField = (label: string, key: "prep_minutes" | "cook_minutes") => (
+    <TextField
+      label={label}
+      type="number"
+      size="small"
+      value={draft[key]}
+      onChange={(ev) => set({ [key]: ev.target.value })}
+      fullWidth
+      slotProps={{
+        htmlInput: { min: 0, inputMode: "numeric" },
+        input: { endAdornment: <InputAdornment position="end">min</InputAdornment> },
+      }}
+    />
+  );
+  const saveLabel = saving ? "Saving" : item ? "Save" : "Save recipe";
+  const saveIcon = saving ? <CircularProgress size={16} color="inherit" /> : undefined;
+  const status = dirty ? "Unsaved changes" : item ? "All changes saved" : "Not saved yet";
+
   return (
-    <Dialog open={open} onClose={requestClose} fullScreen={phone} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={requestClose}
+      fullScreen={phone}
+      fullWidth
+      maxWidth={layout === "recipe" ? "md" : "sm"}
+    >
       <AppBar
         position="sticky"
         color="inherit"
@@ -235,39 +261,36 @@ export default function ItemEditor({
           <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 700 }} noWrap>
             {item ? "Edit" : "New"}
           </Typography>
-          <Button
-            variant="contained"
-            onClick={save}
-            disabled={!canSave}
-            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            {saving ? "Saving" : "Save"}
-          </Button>
+          {!phone && (
+            <Typography variant="caption" color="text.secondary">
+              {status}
+            </Typography>
+          )}
+          {/* On phones Save lives in the bottom bar, under the thumb. */}
+          {!phone && (
+            <Button variant="contained" onClick={save} disabled={!canSave} startIcon={saveIcon}>
+              {saving ? "Saving" : "Save"}
+            </Button>
+          )}
         </Toolbar>
       </AppBar>
 
-      <DialogContent sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 4 }}>
-        <PhotoStrip
-          photos={photos}
-          newFiles={newFiles}
-          accent={accent}
-          canAdd={totalPhotos < MAX_KITCHEN_IMAGES}
-          onAdd={addFiles}
-          onRemovePhoto={(id) => setPhotos((p) => p.filter((x) => x._id !== id))}
-          onCoverPhoto={(id) => setPhotos((p) => [...p.filter((x) => x._id === id), ...p.filter((x) => x._id !== id)])}
-          onRemoveNew={(key) => setNewFiles((f) => f.filter((x) => x.key !== key))}
-          hint={layout === "instructions" ? "Snap the box" : "Add a photo"}
-        />
-
-        {!item && (
-          <Button
-            size="small"
-            startIcon={<LanguageIcon />}
-            onClick={() => setImportOpen(true)}
-            sx={{ mt: 1.5, px: 0, textTransform: "none" }}
+      <DialogContent sx={{ px: { xs: 2, sm: 3 }, pt: 2, pb: 4 }}>
+        {!item && !draft.title.trim() && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ mb: 2, px: 1.5, py: 0.75, borderRadius: 2, bgcolor: (t) => alpha(t.palette.primary.main, 0.08) }}
           >
-            Import from a web address
-          </Button>
+            <LanguageIcon fontSize="small" color="primary" />
+            <Typography variant="body2" sx={{ flex: 1 }}>
+              Have a link to a recipe?
+            </Typography>
+            <Button size="small" onClick={() => setImportOpen(true)}>
+              Import
+            </Button>
+          </Stack>
         )}
 
         <TextField
@@ -277,7 +300,7 @@ export default function ItemEditor({
           placeholder={layout === "instructions" ? "What's in the box?" : "Recipe name"}
           value={draft.title}
           onChange={(e) => set({ title: e.target.value })}
-          sx={{ mt: 2, ...quietInput }}
+          sx={quietInput}
           slotProps={{ htmlInput: { maxLength: 120, "aria-label": "Title", style: { fontSize: 26, fontWeight: 800 } } }}
         />
 
@@ -361,6 +384,50 @@ export default function ItemEditor({
           )}
         </Stack>
 
+        {/* Quick facts, right under the title */}
+        <Stack direction="row" spacing={1.5} sx={{ mt: 2.5 }}>
+          {layout === "recipe" ? (
+            <>
+              <TextField
+                label="Serves"
+                type="number"
+                size="small"
+                value={draft.servings}
+                onChange={(ev) => set({ servings: ev.target.value })}
+                fullWidth
+                slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }}
+              />
+              {timeField("Prep", "prep_minutes")}
+              {timeField("Cook", "cook_minutes")}
+            </>
+          ) : (
+            <TextField
+              label="Brand"
+              size="small"
+              value={draft.brand}
+              onChange={(ev) => set({ brand: ev.target.value })}
+              fullWidth
+              slotProps={{ htmlInput: { maxLength: 80 } }}
+            />
+          )}
+        </Stack>
+
+        <Box sx={{ mt: 2 }}>
+          <PhotoStrip
+            photos={photos}
+            newFiles={newFiles}
+            accent={accent}
+            canAdd={totalPhotos < MAX_KITCHEN_IMAGES}
+            onAdd={addFiles}
+            onRemovePhoto={(id) => setPhotos((p) => p.filter((x) => x._id !== id))}
+            onCoverPhoto={(id) =>
+              setPhotos((p) => [...p.filter((x) => x._id === id), ...p.filter((x) => x._id !== id)])
+            }
+            onRemoveNew={(key) => setNewFiles((f) => f.filter((x) => x.key !== key))}
+            hint={layout === "instructions" ? "Snap the box" : "Add a photo"}
+          />
+        </Box>
+
         {layout === "recipe" ? (
           <RecipeFields draft={draft} set={set} accent={accent} />
         ) : (
@@ -368,8 +435,9 @@ export default function ItemEditor({
         )}
 
         {/* Optional details */}
+        <SectionTitle>More details</SectionTitle>
         {shown.length > 0 && (
-          <Stack spacing={2} sx={{ mt: 3 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
             {shown.map((e) => {
               switch (e) {
                 case "description":
@@ -387,56 +455,6 @@ export default function ItemEditor({
                   );
                 case "tags":
                   return <TagField key={e} value={draft.tags} onChange={(tags) => set({ tags })} />;
-                case "times":
-                  return (
-                    <Stack key={e} direction="row" spacing={1.5}>
-                      <TextField
-                        label="Serves"
-                        type="number"
-                        size="small"
-                        value={draft.servings}
-                        onChange={(ev) => set({ servings: ev.target.value })}
-                        fullWidth
-                        slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }}
-                      />
-                      <TextField
-                        label="Prep"
-                        type="number"
-                        size="small"
-                        value={draft.prep_minutes}
-                        onChange={(ev) => set({ prep_minutes: ev.target.value })}
-                        fullWidth
-                        slotProps={{
-                          htmlInput: { min: 0, inputMode: "numeric" },
-                          input: { endAdornment: <InputAdornment position="end">min</InputAdornment> },
-                        }}
-                      />
-                      <TextField
-                        label="Cook"
-                        type="number"
-                        size="small"
-                        value={draft.cook_minutes}
-                        onChange={(ev) => set({ cook_minutes: ev.target.value })}
-                        fullWidth
-                        slotProps={{
-                          htmlInput: { min: 0, inputMode: "numeric" },
-                          input: { endAdornment: <InputAdornment position="end">min</InputAdornment> },
-                        }}
-                      />
-                    </Stack>
-                  );
-                case "brand":
-                  return (
-                    <TextField
-                      key={e}
-                      label="Brand"
-                      size="small"
-                      value={draft.brand}
-                      onChange={(ev) => set({ brand: ev.target.value })}
-                      fullWidth
-                      slotProps={{ htmlInput: { maxLength: 80 } }}
-                    />
-                  );
                 case "storage":
                   return (
                     <TextField
@@ -469,7 +487,7 @@ export default function ItemEditor({
           </Stack>
         )}
         {hidden.length > 0 && (
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 3 }}>
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: shown.length ? 2 : 0.5 }}>
             {hidden.map((e) => (
               <Chip
                 key={e}
@@ -482,6 +500,21 @@ export default function ItemEditor({
           </Stack>
         )}
       </DialogContent>
+      {phone && (
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1.5}
+          sx={{ px: 2, py: 1.25, borderTop: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}
+        >
+          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            {status}
+          </Typography>
+          <Button variant="contained" onClick={save} disabled={!canSave} startIcon={saveIcon}>
+            {saveLabel}
+          </Button>
+        </Stack>
+      )}
       <ImportUrlDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={applyImport} />
     </Dialog>
   );

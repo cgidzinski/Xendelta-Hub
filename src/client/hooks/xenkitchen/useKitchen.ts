@@ -276,8 +276,20 @@ export const useUpdateKitchenItem = () =>
     itemData(await apiClient.put(`${base}/items/${v.id}`, v.patch)),
   );
 
-export const useDeleteKitchenItem = () =>
-  useKitchenMutation(async (id: string) => (await apiClient.delete(`${base}/items/${id}`)).data);
+/**
+ * Deleting must not wait on the shared invalidation: that refetches the open item, which is now a 404 and
+ * retries for several seconds, so the caller sat on a hung promise and never navigated away.
+ */
+export const useDeleteKitchenItem = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await apiClient.delete(`${base}/items/${id}`)).data,
+    onSuccess: (_result, id) => {
+      qc.removeQueries({ queryKey: kitchenKeys.item(id) });
+      void qc.invalidateQueries({ queryKey: kitchenKeys.all });
+    },
+  });
+};
 
 export const useDuplicateKitchenItem = () =>
   useKitchenMutation(async (id: string) => itemData(await apiClient.post(`${base}/items/${id}/duplicate`)));
