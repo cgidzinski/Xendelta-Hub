@@ -69,7 +69,8 @@ describe("inviting", () => {
     sent = [];
     expect((await invite(space._id, a, [b])).body.data.invited).toBe(0);
     expect((await invite(space._id, a, [a])).body.data.invited).toBe(0);
-    expect(sent).toEqual([]);
+    // (The first invite's notification may still be arriving, so look only at the invite event.)
+    expect(sent.filter((e) => e.event === "space:invite")).toEqual([]);
     expect(await mine(b)).toHaveLength(1);
   });
 
@@ -145,7 +146,7 @@ describe("managing pending invites", () => {
           .set(as(a.token))
       ).status,
     ).toBe(200);
-    expect(sent.map((e) => e.room)).toEqual([`user:${id(b)}`]);
+    expect(sent.filter((e) => e.event === "space:invite").map((e) => e.room)).toEqual([`user:${id(b)}`]);
     expect(await mine(b)).toEqual([]);
     expect(
       (
