@@ -18,8 +18,8 @@ import { AppError } from "../utils/http";
 export type GemAccount = { type: "user"; id: string } | { type: "community"; id: string } | { type: "house" };
 
 export const HOUSE: GemAccount = { type: "house" };
-export const userAccount = (id: unknown): GemAccount => ({ type: "user", id: String(id) });
-export const communityAccount = (id: unknown): GemAccount => ({ type: "community", id: String(id) });
+export const userAccount = (id: unknown) => ({ type: "user" as const, id: String(id) });
+export const communityAccount = (id: unknown) => ({ type: "community" as const, id: String(id) });
 
 export interface TransferInput {
   from: GemAccount;
