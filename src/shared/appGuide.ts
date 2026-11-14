@@ -308,7 +308,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Copy or move a recipe between books.",
     ],
     tips: [
-      { text: "Paste a web address into Import and the recipe is filled in for you.", link: "/internal/xenkitchen" },
+      {
+        text: "Paste a recipe's web address as the name of a new recipe and it is imported for you.",
+        link: "/internal/xenkitchen",
+      },
       {
         text: "Photograph a recipe card or a few cookbook pages in Import and the recipe is read off them for you to check.",
         link: "/internal/xenkitchen",

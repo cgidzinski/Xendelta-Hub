@@ -17,6 +17,8 @@ import {
 import { alpha, useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import LanguageIcon from "@mui/icons-material/Language";
+import LinkIcon from "@mui/icons-material/Link";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
 import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { RADIUS } from "../../../../theme";
@@ -29,12 +31,13 @@ import {
   useKitchenBooks,
   useKitchenCategories,
   useUpdateKitchenItem,
+  usePhotoImportEnabled,
   useUploadKitchenImages,
   type ImportedKitchenRecipe,
   type KitchenItem,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { Draft, newKey, draftFrom, draftFromImport, inputFrom, filledExtras, Extra } from "./itemEditor/itemDraft";
-import { ImportDialog } from "./itemEditor/ImportDialog";
+import { ImportDialog, type ImportMode } from "./itemEditor/ImportDialog";
 import { PhotoStrip } from "./itemEditor/PhotoStrip";
 import { SectionTitle, quietInput } from "./itemEditor/editorFields";
 import { RecipeFields } from "./itemEditor/RecipeFields";
@@ -100,7 +103,8 @@ export default function ItemEditor({
   const [saving, setSaving] = useState(false);
   const [opened, setOpened] = useState<Set<Extra>>(new Set());
   // Importing from a web address: the dialog, and the page's photo, which is added once the item is saved.
-  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState<{ mode: ImportMode; url?: string } | null>(null);
+  const photoImport = usePhotoImportEnabled();
   const [importedImage, setImportedImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -218,20 +222,53 @@ export default function ItemEditor({
   const noun = layout === "instructions" ? "item" : "recipe";
   const heading = item ? `Edit ${item.title || noun}` : `New ${noun}`;
 
+  // A new, still empty item can start from a recipe somewhere else: a web page or photos of it.
   const importBanner = !item && !draft.title.trim() && (
     <Stack
-      direction="row"
-      alignItems="center"
+      direction={{ xs: "column", sm: "row" }}
+      alignItems={{ xs: "stretch", sm: "center" }}
       spacing={1}
-      sx={{ mb: 2, px: 1.5, py: 0.75, borderRadius: RADIUS.lg, bgcolor: (t) => alpha(t.palette.primary.main, 0.08) }}
+      sx={{
+        mb: 2,
+        p: 1.5,
+        borderRadius: RADIUS.lg,
+        border: "1px solid",
+        borderColor: (t) => alpha(t.palette.primary.main, 0.3),
+        bgcolor: (t) => alpha(t.palette.primary.main, 0.06),
+      }}
     >
-      <LanguageIcon fontSize="small" color="primary" />
-      <Typography variant="body2" sx={{ flex: 1 }}>
-        Have a link or a photo of a recipe?
-      </Typography>
-      <Button size="small" onClick={() => setImportOpen(true)}>
-        Import
-      </Button>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Already have this recipe somewhere?
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {photoImport
+            ? "Bring it in from a web page or photos, then check it over."
+            : "Bring it in from a web page, then check it over."}
+        </Typography>
+      </Box>
+      <Stack direction="row" spacing={1}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<LinkIcon />}
+          onClick={() => setImporting({ mode: "url" })}
+          sx={{ flex: { xs: 1, sm: "none" } }}
+        >
+          From a link
+        </Button>
+        {photoImport && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PhotoCameraOutlinedIcon />}
+            onClick={() => setImporting({ mode: "photo" })}
+            sx={{ flex: { xs: 1, sm: "none" } }}
+          >
+            From photos
+          </Button>
+        )}
+      </Stack>
     </Stack>
   );
 
@@ -240,9 +277,20 @@ export default function ItemEditor({
       variant="standard"
       fullWidth
       autoFocus={!item}
-      placeholder={layout === "instructions" ? "What's in the box?" : "Recipe name"}
+      placeholder={
+        layout === "instructions" ? "What's in the box?" : item ? "Recipe name" : "Recipe name, or paste a link"
+      }
       value={draft.title}
       onChange={(e) => set({ title: e.target.value })}
+      // A recipe's web address pasted as the name of a new item is read as an import instead.
+      onPaste={(e) => {
+        if (item || draft.title.trim()) return;
+        const text = e.clipboardData.getData("text").trim();
+        if (/^https?:\/\/\S+$/i.test(text)) {
+          e.preventDefault();
+          setImporting({ mode: "url", url: text });
+        }
+      }}
       sx={quietInput}
       slotProps={{ htmlInput: { maxLength: 120, "aria-label": "Title", style: { fontSize: 26, fontWeight: 800 } } }}
     />
@@ -399,7 +447,13 @@ export default function ItemEditor({
           </Button>
         </Stack>
       )}
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={applyImport} />
+      <ImportDialog
+        open={!!importing}
+        mode={importing?.mode}
+        initialUrl={importing?.url}
+        onClose={() => setImporting(null)}
+        onImported={applyImport}
+      />
     </Dialog>
   );
 }

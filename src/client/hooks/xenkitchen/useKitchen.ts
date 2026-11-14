@@ -329,12 +329,12 @@ export function usePhotoImportEnabled() {
   return !!data;
 }
 
-/** Read a recipe out of a photo. Nothing is saved: the editor shows the result for review. */
+/** Read a recipe out of photos of it (a card, or a few cookbook pages, in order). Nothing is saved: the editor shows the result for review. */
 export const useImportKitchenRecipeFromPhoto = () =>
   useMutation({
-    mutationFn: async (photo: File) => {
+    mutationFn: async (photos: File[]) => {
       const form = new FormData();
-      form.append("image", photo);
+      photos.forEach((photo) => form.append("image", photo));
       return unwrap(await apiClient.post<ApiResponse<{ recipe: ImportedKitchenRecipe }>>(`${base}/import-photo`, form))
         .recipe;
     },

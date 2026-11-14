@@ -77,6 +77,8 @@ export const STARTER_CATEGORIES: StarterCategory[] = [
 ];
 
 export const MAX_KITCHEN_IMAGES = 10;
+/** Photos one recipe can be read from in one go (a card, or the pages of a cookbook). */
+export const MAX_RECIPE_SCAN_PHOTOS = 4;
 
 /** Case/whitespace-insensitive key for an ingredient name ("  Olive  Oil" → "olive oil"). */
 export function normalizeIngredientName(name: string): string {

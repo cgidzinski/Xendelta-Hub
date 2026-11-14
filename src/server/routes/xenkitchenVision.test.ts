@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import request from "supertest";
 import sharp from "sharp";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
+import { mergePhotoParts } from "../ai/vision";
 
 // Reading a recipe out of a photo, through the real route and the real Workers AI call shape. Cloudflare is replaced by
 // a fake fetch: what is being checked is the request we send, what we make of the answer, and that nothing is saved.
@@ -153,6 +154,36 @@ describe("reading a recipe from a photo", () => {
     expect(res.body.data.recipe.steps.map((s: any) => s.text)).toContain("2 cups flour");
   });
 
+  it("reads several photos of one recipe, one call each, and runs the pages together", async () => {
+    const me = await createUser();
+    const calls = fakeCloudflare(() => ({ result: { response: STRUCTURED } }));
+    const image = await photo();
+
+    const res = await api(me)
+      .post("/import-photo")
+      .attach("image", image, { filename: "page1.png", contentType: "image/png" })
+      .attach("image", image, { filename: "page2.png", contentType: "image/png" });
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect(res.body.data.recipe.title).toBe("Grandma's pancakes");
+    expect(res.body.data.recipe.ingredients).toHaveLength(6);
+    expect(res.body.data.recipe.steps).toHaveLength(4);
+  });
+
+  it("refuses more than four photos at once", async () => {
+    const me = await createUser();
+    const calls = fakeCloudflare(() => ({ result: { response: STRUCTURED } }));
+    const image = await photo();
+    let req = api(me).post("/import-photo");
+    for (let i = 0; i < 5; i += 1)
+      req = req.attach("image", image, { filename: `p${i}.png`, contentType: "image/png" });
+    const res = await req;
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect(calls).toHaveLength(0);
+  });
+
   it("says so when nothing was set up on the server", async () => {
     delete process.env.CLOUDFLARE_AI_ACCOUNT_ID;
     delete process.env.CLOUDFLARE_AI_TOKEN;
@@ -215,5 +246,41 @@ describe("reading a recipe from a photo", () => {
     }
     expect(statuses.slice(0, 6).every((s) => s === 200)).toBe(true);
     expect(statuses[6]).toBe(429);
+  });
+});
+
+describe("putting the pages of a recipe together", () => {
+  it("takes the title and times from the first page that has them, and runs ingredients and steps on", () => {
+    const merged = mergePhotoParts([
+      {
+        wordsOnly: false,
+        parts: { title: "Lasagne", servings: "6", ingredient_lines: ["500 g mince", "1 onion"], steps: [] },
+      },
+      {
+        wordsOnly: false,
+        parts: {
+          title: "",
+          cook_minutes: "45",
+          ingredient_lines: ["9 sheets pasta"],
+          steps: ["Brown the mince.", "Layer."],
+        },
+      },
+    ]);
+    expect(merged).toMatchObject({
+      title: "Lasagne",
+      servings: "6",
+      cook_minutes: "45",
+      ingredient_lines: ["500 g mince", "1 onion", "9 sheets pasta"],
+      steps: ["Brown the mince.", "Layer."],
+    });
+  });
+
+  it("prefers a properly read page's title over a words-only page's first line", () => {
+    const merged = mergePhotoParts([
+      { wordsOnly: true, parts: { title: "Page 112", steps: "Page 112\nStir well." } },
+      { wordsOnly: false, parts: { title: "Risotto", ingredient_lines: ["1 cup rice"], steps: [] } },
+    ]);
+    expect(merged.title).toBe("Risotto");
+    expect(merged.steps).toEqual(["Page 112\nStir well."]);
   });
 });
