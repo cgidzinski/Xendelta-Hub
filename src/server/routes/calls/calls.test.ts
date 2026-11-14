@@ -115,7 +115,7 @@ describe("joining and ringing", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.data.sessionId).toBe("session00000001");
     expect(res.body.data.iceServers).toHaveLength(2);
-    expect(res.body.data.call).toMatchObject({ conversationId: chat, startedBy: id(a), video: true });
+    expect(res.body.data.call).toMatchObject({ conversationId: chat, startedBy: id(a), video: true, kind: "direct" });
     expect(res.body.data.call.participants.map((p: any) => p.userId)).toEqual([id(a)]);
     expect(JSON.stringify(res.body)).not.toContain(SECRET);
     // the Cloudflare call carried the secret

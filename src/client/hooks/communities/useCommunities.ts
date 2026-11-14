@@ -64,7 +64,13 @@ export function useCommunityActions() {
   });
 
   const createChannel = useMutation({
-    mutationFn: async (input: { communityId: string; name: string; topic?: string; category?: string }) => {
+    mutationFn: async (input: {
+      communityId: string;
+      name: string;
+      kind?: "text" | "voice";
+      topic?: string;
+      category?: string;
+    }) => {
       const { communityId, ...body } = input;
       return (await api.post<{ channel: CommunityChannel }>(`/api/communities/${communityId}/channels`, body)).channel;
     },

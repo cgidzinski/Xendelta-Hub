@@ -31,6 +31,7 @@ const channelCategory = z.string().trim().max(COMMUNITY_CATEGORY_MAX);
 
 export const createChannelSchema = z.object({
   name: channelName,
+  kind: z.enum(["text", "voice"]).optional(),
   topic: channelTopic.optional(),
   category: channelCategory.optional(),
 });

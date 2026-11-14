@@ -30,6 +30,8 @@ export interface CallState {
   conversationId: string;
   startedAt: string;
   startedBy: string;
+  /** A call between two people, in a group chat, or in a voice channel of a community. */
+  kind: "direct" | "group" | "voice";
   /** Started as a video call (the camera was asked for). */
   video: boolean;
   participants: CallParticipant[];

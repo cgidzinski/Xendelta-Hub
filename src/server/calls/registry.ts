@@ -6,6 +6,7 @@ interface ActiveCall {
   startedAt: Date;
   startedBy: string;
   video: boolean;
+  kind: CallState["kind"];
   participants: Map<string, CallParticipant>;
   /** Everyone who has been in it, for the summary line. */
   everJoined: Set<string>;
@@ -20,7 +21,7 @@ export const callRegistry = {
   },
 
   /** Put a person in the call, starting it if there isn't one. Returns whether this started it. */
-  join(conversationId: string, userId: string, sessionId: string, video: boolean) {
+  join(conversationId: string, userId: string, sessionId: string, video: boolean, kind: CallState["kind"]) {
     let call = calls.get(conversationId);
     const started = !call;
     if (!call) {
@@ -29,6 +30,7 @@ export const callRegistry = {
         startedAt: new Date(),
         startedBy: userId,
         video,
+        kind,
         participants: new Map(),
         everJoined: new Set(),
       };
@@ -94,6 +96,7 @@ export const callRegistry = {
       startedAt: call.startedAt.toISOString(),
       startedBy: call.startedBy,
       video: call.video,
+      kind: call.kind,
       participants: [...call.participants.values()],
     };
   },

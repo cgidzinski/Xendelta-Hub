@@ -104,6 +104,8 @@ export interface CommunityChannel {
   _id: string;
   communityId: string;
   name: string;
+  /** A text channel is for messages; a voice channel is a room to talk in (voice and video, screen share). */
+  kind: "text" | "voice";
   topic: string;
   /** The heading it sits under in the sidebar; empty for none. */
   category: string;

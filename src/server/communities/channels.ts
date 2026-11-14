@@ -49,6 +49,7 @@ export function serializeChannel(
     _id: String(channel._id),
     communityId: channel.communityId ?? "",
     name: channel.name ?? "",
+    kind: channel.channel?.kind === "voice" ? "voice" : "text",
     topic: channel.channel?.topic ?? "",
     category: channel.channel?.category ?? "",
     position: channel.channel?.position ?? 0,
@@ -95,6 +96,7 @@ export async function listChannels(community: CommunityDocument, userId: string)
 
 export interface NewChannel {
   name: string;
+  kind?: "text" | "voice";
   topic?: string;
   category?: string;
 }
@@ -115,6 +117,7 @@ export async function createChannel(community: CommunityDocument, input: NewChan
       position: (last?.channel?.position ?? -1) + 1,
       category: input.category ?? "",
       topic: input.topic ?? "",
+      kind: input.kind ?? "text",
     },
   });
 }

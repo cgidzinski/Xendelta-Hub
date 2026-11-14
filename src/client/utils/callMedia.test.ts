@@ -7,6 +7,7 @@ const call = (participants: Array<{ userId: string; sessionId: string; tracks?: 
   startedAt: "2026-01-01T00:00:00Z",
   startedBy: "a",
   video: false,
+  kind: "direct",
   participants: participants.map((p) => ({
     userId: p.userId,
     sessionId: p.sessionId,

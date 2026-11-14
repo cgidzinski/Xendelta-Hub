@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Autocomplete, Box, Button, TextField, Typography } from "@mui/material";
+import { Autocomplete, Box, Button, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import TagIcon from "@mui/icons-material/Tag";
+import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
 import { useSnackbar } from "notistack";
 import { COMMUNITY_CATEGORY_MAX, COMMUNITY_CHANNEL_NAME_MAX, COMMUNITY_CHANNEL_TOPIC_MAX } from "@shared/communities";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
@@ -28,6 +30,7 @@ export default function CreateChannelDialog({
   const [name, setName] = useState("");
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState(initialCategory);
+  const [kind, setKind] = useState<"text" | "voice">("text");
   const { enqueueSnackbar } = useSnackbar();
   const { createChannel } = useCommunityActions();
   const trimmed = name.trim();
@@ -44,7 +47,7 @@ export default function CreateChannelDialog({
   const submit = () => {
     if (!trimmed || createChannel.isPending) return;
     createChannel.mutate(
-      { communityId, name: trimmed, topic: topic.trim() || undefined, category: category.trim() || undefined },
+      { communityId, name: trimmed, kind, topic: topic.trim() || undefined, category: category.trim() || undefined },
       {
         onSuccess: (channel) => {
           setName("");
@@ -61,7 +64,7 @@ export default function CreateChannelDialog({
     <ResponsiveDialog
       open={open}
       onClose={close}
-      title="Add a channel"
+      title={kind === "voice" ? "Add a voice channel" : "Add a channel"}
       maxWidth="xs"
       actions={
         <>
@@ -73,6 +76,26 @@ export default function CreateChannelDialog({
       }
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+        <ToggleButtonGroup
+          exclusive
+          fullWidth
+          size="small"
+          value={kind}
+          onChange={(_e, v: "text" | "voice" | null) => v && setKind(v)}
+          aria-label="Channel type"
+        >
+          <ToggleButton value="text">
+            <TagIcon fontSize="small" sx={{ mr: 0.75 }} /> Text
+          </ToggleButton>
+          <ToggleButton value="voice">
+            <VolumeUpOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} /> Voice
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+          {kind === "voice"
+            ? "A room people drop into to talk, with voice, video and screen share."
+            : "A place for messages, files and threads."}
+        </Typography>
         <TextField
           autoFocus
           fullWidth

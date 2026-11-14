@@ -40,7 +40,7 @@ interface CallContextType {
   expanded: boolean;
   setExpanded: (value: boolean) => void;
   join: (conversationId: string, video: boolean) => Promise<void>;
-  leave: () => Promise<void>;
+  leave: (quiet?: boolean) => Promise<void>;
   decline: () => Promise<void>;
   toggleMute: () => void;
   toggleCamera: () => Promise<void>;
@@ -83,6 +83,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [incoming, setIncoming] = useState<IncomingCall | null>(null);
   const [expanded, setExpanded] = useState(true);
 
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const session = useRef<CallSession | null>(null);
   const conversation = useRef<string | null>(null);
   const names = useRef<{ audio?: string; video?: string; screen?: string }>({});
@@ -168,6 +170,23 @@ export function CallProvider({ children }: { children: ReactNode }) {
       enqueueSnackbar("The call ended", { variant: "info" });
       cleanup();
       return;
+    }
+    // Say when someone leaves, and in a two-person call end it when the other person has gone.
+    const before = activeRef.current?.call;
+    if (before) {
+      const nowIn = new Set(call.participants.map((p) => p.userId));
+      const people = queryClient.getQueryData<{ people: ChatPerson[] }>(callKeys.chat(conversationId))?.people ?? [];
+      for (const p of before.participants) {
+        if (p.userId !== user.id && !nowIn.has(p.userId)) {
+          const name = people.find((x) => x._id === p.userId)?.username ?? "Someone";
+          enqueueSnackbar(`${name} left the call`, { variant: "info" });
+        }
+      }
+      if (call.kind === "direct" && call.participants.length <= 1 && before.participants.length > 1) {
+        enqueueSnackbar("The call ended", { variant: "info" });
+        void leave(true);
+        return;
+      }
     }
     setActive((a) => (a ? { ...a, call } : a));
     void sync(call);
@@ -255,11 +274,15 @@ export function CallProvider({ children }: { children: ReactNode }) {
     [cleanup, enqueueSnackbar, say, sync],
   );
 
-  const leave = useCallback(async () => {
-    const id = conversation.current;
-    cleanup();
-    if (id) await api.post(`/api/calls/${id}/leave`).catch(() => undefined);
-  }, [cleanup]);
+  const leave = useCallback(
+    async (quiet = false) => {
+      const id = conversation.current;
+      if (id && !quiet) enqueueSnackbar("You left the call", { variant: "info" });
+      cleanup();
+      if (id) await api.post(`/api/calls/${id}/leave`).catch(() => undefined);
+    },
+    [cleanup, enqueueSnackbar],
+  );
 
   const decline = useCallback(async () => {
     const id = incoming?.conversationId;

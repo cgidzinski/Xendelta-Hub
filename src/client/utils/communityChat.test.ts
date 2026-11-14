@@ -29,6 +29,7 @@ const channel = (over: Partial<CommunityChannel>): CommunityChannel => ({
   _id: "ch",
   communityId: "c",
   name: "general",
+  kind: "text",
   topic: "",
   category: "",
   position: 0,

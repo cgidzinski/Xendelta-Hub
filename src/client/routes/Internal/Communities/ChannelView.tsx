@@ -7,7 +7,7 @@ import TagIcon from "@mui/icons-material/Tag";
 import type { Community, CommunityChannel } from "@shared/communities";
 import { useAuth } from "../../../contexts/AuthContext";
 import { channelConversation } from "../../../utils/communityChat";
-import { VoiceChannelButton } from "../../../components/calls/CallButtons";
+import VoiceRoom from "./VoiceRoom";
 import ChatPane from "../Messages/components/ChatPane";
 import { senderMetaFor } from "./communityUi";
 
@@ -94,7 +94,6 @@ export default function ChannelView({
             </Typography>
           </>
         )}
-        <VoiceChannelButton conversationId={channel._id} />
         {search}
         {threads}
         {pins}
@@ -114,6 +113,20 @@ export default function ChannelView({
       </Box>
     );
   };
+
+  if (channel.kind === "voice") {
+    return (
+      <VoiceRoom
+        community={community}
+        channel={channel}
+        phone={phone}
+        onOpenDrawer={onOpenDrawer}
+        otherUnread={otherUnread}
+        membersOpen={membersOpen}
+        onToggleMembers={onToggleMembers}
+      />
+    );
+  }
 
   return (
     <ChatPane

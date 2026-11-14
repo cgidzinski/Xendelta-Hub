@@ -45,7 +45,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
       "Start a voice or video call with anyone in a chat or group, and share your screen during it.",
-      "Drop into a community channel's voice room, no ringing needed, and keep talking while you browse the app.",
+      "Add voice channels to a community: drop in to talk (with video or a shared screen), see who is there, and keep talking while you browse the app.",
       "Forward a message to other chats, with the original sender named.",
       "Create a poll with up to ten options, let people vote live, and close it when you are done.",
       "Record a voice message and send it, then play it with a waveform, a speed button and a slider to jump around.",

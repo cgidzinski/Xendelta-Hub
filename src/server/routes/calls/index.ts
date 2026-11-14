@@ -12,7 +12,7 @@ import {
   sessionTracks,
 } from "../../calls/cloudflare";
 import { callRegistry } from "../../calls/registry";
-import { announceCall, isVoiceChannel, leaveAllCalls, leaveCall, ringOthers } from "../../calls/service";
+import { announceCall, callKindOf, isVoiceChannel, leaveAllCalls, leaveCall, ringOthers } from "../../calls/service";
 import { realtime } from "../../realtime";
 import { AppError, callerId, loadCaller } from "../../utils/http";
 import {
@@ -84,6 +84,10 @@ module.exports = function (app: Application) {
       const me = callerId(req);
       const context = await loadChatContext(req.params.conversationId as string, me);
       if (!canPostChat(context.access, me)) throw new AppError(403, "You can't join calls here");
+      // In a community, calls happen in voice channels, not in the text channels.
+      if (context.community && context.chat.channel?.kind !== "voice") {
+        throw new AppError(409, "Calls happen in voice channels");
+      }
       const { video } = joinCallSchema.parse(req.body);
       const conversationId = String(context.chat._id);
       if (
@@ -94,7 +98,7 @@ module.exports = function (app: Application) {
       }
 
       const sessionId = await createSession();
-      const joined = callRegistry.join(conversationId, me, sessionId, video);
+      const joined = callRegistry.join(conversationId, me, sessionId, video, callKindOf(context));
       if (joined.full) throw new AppError(409, "This call is full");
       const name = (await loadCaller(req)).username ?? "Someone";
       if (joined.started && !isVoiceChannel(context)) await ringOthers(context, me, name, video);

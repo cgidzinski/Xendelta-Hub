@@ -5,6 +5,11 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TagIcon from "@mui/icons-material/Tag";
+import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
+import MicOffIcon from "@mui/icons-material/MicOff";
+import { Avatar } from "@mui/material";
+import { useCall } from "../../../../contexts/CallContext";
+import { useChatCall } from "../../../../hooks/calls/useChatCall";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import type { Community, CommunityChannel } from "@shared/communities";
 import { RADIUS } from "../../../../theme";
@@ -53,7 +58,13 @@ function Row({ channel, selected, onSelect }: { channel: CommunityChannel; selec
         "&:hover": { bgcolor: selected ? undefined : "action.hover" },
       }}
     >
-      {closed ? <LockOutlinedIcon sx={{ fontSize: 18 }} /> : <TagIcon sx={{ fontSize: 18 }} />}
+      {closed ? (
+        <LockOutlinedIcon sx={{ fontSize: 18 }} />
+      ) : channel.kind === "voice" ? (
+        <VolumeUpOutlinedIcon sx={{ fontSize: 18 }} />
+      ) : (
+        <TagIcon sx={{ fontSize: 18 }} />
+      )}
       <Box
         component="span"
         sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
@@ -103,6 +114,35 @@ function Row({ channel, selected, onSelect }: { channel: CommunityChannel; selec
         </Box>
       )}
     </ButtonBase>
+  );
+}
+
+/** Who is in a voice channel right now, listed under it. */
+function VoiceParticipants({ channelId }: { channelId: string }) {
+  const { enabled } = useCall();
+  const { call, people } = useChatCall(channelId, enabled);
+  if (!call || call.participants.length === 0) return null;
+  return (
+    <Box component="ul" aria-label="In this voice channel" sx={{ listStyle: "none", m: 0, pl: 4.5, pr: 1, pb: 0.5 }}>
+      {call.participants.map((p) => {
+        const person = people.find((x) => x._id === p.userId);
+        return (
+          <Box
+            component="li"
+            key={p.userId}
+            sx={{ display: "flex", alignItems: "center", gap: 1, height: 28, color: "text.secondary" }}
+          >
+            <Avatar src={person?.avatar || undefined} sx={{ width: 20, height: 20, fontSize: 11 }}>
+              {person?.username[0]?.toUpperCase()}
+            </Avatar>
+            <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>
+              {person?.username ?? "Someone"}
+            </Typography>
+            {p.muted && <MicOffIcon sx={{ fontSize: 14 }} aria-label="Muted" />}
+          </Box>
+        );
+      })}
+    </Box>
   );
 }
 
@@ -181,12 +221,10 @@ export default function ChannelSidebar({
               </Box>
             )}
             {group.channels.map((channel) => (
-              <Row
-                key={channel._id}
-                channel={channel}
-                selected={channel._id === selectedId}
-                onSelect={() => onSelect(channel._id)}
-              />
+              <Box key={channel._id}>
+                <Row channel={channel} selected={channel._id === selectedId} onSelect={() => onSelect(channel._id)} />
+                {channel.kind === "voice" && <VoiceParticipants channelId={channel._id} />}
+              </Box>
             ))}
           </Box>
         ))}

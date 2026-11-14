@@ -10,6 +10,10 @@ import { CALL_RING_SECONDS } from "@shared/calls";
 /** A channel of a community is a voice channel: people drop in and out, nobody is rung, and no line is left behind. */
 export const isVoiceChannel = (context: ChatContext) => !!context.community;
 
+/** What sort of call this chat has. */
+export const callKindOf = (context: ChatContext) =>
+  context.community ? ("voice" as const) : context.chat.members.length === 2 ? ("direct" as const) : ("group" as const);
+
 /** Everyone in the chat hears the call changed (so "Join call" and the participant list stay right). */
 export function announceCall(context: ChatContext) {
   realtime.toUsers(audienceOf(context), "call:state", {

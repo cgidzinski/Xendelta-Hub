@@ -42,6 +42,8 @@ const conversationSchema = new Schema(
       position: { type: Number, default: 0 },
       category: { type: String, default: "" },
       topic: { type: String, default: "" },
+      // "voice": a room people join to talk (calls), listed with who is in it. A text channel is the default.
+      kind: { type: String, enum: ["text", "voice"], default: "text" },
     },
     overrides: [channelOverrideSchema],
     // The member ids sorted and joined (shared/chat.ts rosterKeyOf). Finds "the chat with exactly these people".
