@@ -96,3 +96,20 @@ A community's bills are paid from its fund. Any member can donate, including ahe
 - Members get `community:fund` over realtime when it changes.
 - `donationsOpen` is `communitiesBilled()`: the Donate button stays hidden until some center billed to communities is
   switched on, so nobody donates to a fund that pays for nothing.
+
+## Settlement and `canSpend` (`src/server/billing/settlement.ts`)
+
+- The hourly `billing-settlement` job closes **every finished month that isn't settled yet**, so a server that was down
+  on the 1st catches up. Each account that used something gets one `BillingStatement` (unique per account and month)
+  with its lines, the rates and margin used, the free tier and the amount due.
+- The statement is written `pending`, then settled:
+  - `free`: nothing due.
+  - `shadow`: something is due but `BILLING_ENFORCED` is off, so nothing is taken.
+  - `paid`: a ledger `bill` to the house, keyed `bill:<type>:<id>:<month>`, so a rerun can't pay twice.
+  - `unpaid`: the balance couldn't cover it. Nothing is taken and the whole amount stays owed.
+- People (or every member of a community) are notified when a statement has something due, and once a month when
+  usage reaches 80% of the free tier (`BillingNotice` keeps it to once).
+- `canSpend(account)` is the one check a cost center makes before starting something that costs money: always yes in
+  shadow mode; otherwise yes while this month is inside the free tier with nothing unpaid, or while the balance is above
+  this month's cost beyond the free tier (rounded up) plus anything unpaid. `assertCanSpend` throws a 402 with
+  `billing: true` and a message that says what to do. **No cost center calls it yet**; each discussion wires it.

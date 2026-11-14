@@ -115,6 +115,14 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: () => reconcilePendingGems(),
     });
+    // Close finished billing months and warn accounts near their free tier (billing/settlement.ts).
+    const { runBillingJobs } = require("./billing/settlement");
+    scheduler.register({
+      name: "billing-settlement",
+      everyMs: 60 * 60 * 1000,
+      runOnStart: true,
+      handler: runBillingJobs,
+    });
     scheduler.register({
       name: "xenroutine-reminders",
       everyMs: 60 * 60 * 1000,
