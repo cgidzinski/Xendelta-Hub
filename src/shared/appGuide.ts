@@ -297,6 +297,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Keep recipe books, and share them with others as editors or viewers.",
       "Write recipes with photos, tags, times, servings, ingredient sections and steps with timers.",
       "Import a recipe from a web address.",
+      "Import a recipe from a photo of it, like a recipe card or a page of a cookbook.",
       "Scale the servings and switch between metric and US units.",
       "Cook one step at a time in big text, with timers and the screen kept awake.",
       "Plan meals week by week.",
@@ -308,6 +309,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     ],
     tips: [
       { text: "Paste a web address into Import and the recipe is filled in for you.", link: "/internal/xenkitchen" },
+      {
+        text: "Photograph a recipe card or a cookbook page in Import and the recipe is read off it for you to check.",
+        link: "/internal/xenkitchen",
+      },
       {
         text: "Press Step by step on a recipe to see one step at a time in big text, with timers that keep running.",
         link: "/internal/xenkitchen",

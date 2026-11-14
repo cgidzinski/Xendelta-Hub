@@ -133,6 +133,8 @@ export interface IngredientSuggestion {
 
 export const kitchenKeys = {
   all: ["xenkitchen"] as const,
+  /** Whether this server can read a recipe from a photo. Under its own root: it is a server capability, not kitchen data. */
+  status: () => ["xenkitchen-status"] as const,
   books: () => [...kitchenKeys.all, "books"] as const,
   categories: (book: BookScope) => [...kitchenKeys.all, "categories", book] as const,
   items: (params: string) => [...kitchenKeys.all, "items", params] as const,
@@ -326,6 +328,29 @@ export const useImportKitchenRecipe = () =>
     mutationFn: async (url: string) =>
       unwrap(await apiClient.post<ApiResponse<{ recipe: ImportedKitchenRecipe }>>(`${base}/import-url`, { url }))
         .recipe,
+  });
+
+/** Whether this server can read a recipe from a photo (the tab is left out when it can't, like the GIF button). */
+export function usePhotoImportEnabled() {
+  const { data } = useQuery({
+    queryKey: kitchenKeys.status(),
+    queryFn: async () =>
+      unwrap(await apiClient.get<ApiResponse<{ photo_import: boolean }>>(`${base}/status`)).photo_import,
+    staleTime: Infinity,
+    retry: false,
+  });
+  return !!data;
+}
+
+/** Read a recipe out of a photo. Nothing is saved: the editor shows the result for review. */
+export const useImportKitchenRecipeFromPhoto = () =>
+  useMutation({
+    mutationFn: async (photo: File) => {
+      const form = new FormData();
+      form.append("image", photo);
+      return unwrap(await apiClient.post<ApiResponse<{ recipe: ImportedKitchenRecipe }>>(`${base}/import-photo`, form))
+        .recipe;
+    },
   });
 
 /** Add a picture from a web address (the imported recipe's photo) to a saved item. */

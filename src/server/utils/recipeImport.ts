@@ -269,3 +269,60 @@ export function extractRecipe(html: string, pageUrl: string): ImportedRecipe | n
     image_url: imageFrom(node.image, pageUrl),
   };
 }
+
+/** What a recipe has been read as, before it is turned into an item: a model's answer about a photo, say. */
+export interface RecipeParts {
+  title?: unknown;
+  description?: unknown;
+  /** "4" or "4 servings"; anything with a number is read as one. */
+  servings?: unknown;
+  /** "15" or "15 minutes". */
+  prep_minutes?: unknown;
+  cook_minutes?: unknown;
+  /** One ingredient per line, as it was written ("2 cups flour"). Split the same way a pasted list is. */
+  ingredient_lines?: unknown;
+  /** The method, one step per string (a single block with line breaks is split too). */
+  steps?: unknown;
+  tags?: unknown;
+  source_url?: string;
+  image_url?: string | null;
+}
+
+/** "About 30 minutes" → 30. Null when there is no usable number. */
+function minutesFrom(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0 && value <= MAX_MINUTES ? value : null;
+  const n = Number(/\d+(?:\.\d+)?/.exec(String(value ?? ""))?.[0]);
+  return Number.isFinite(n) && n >= 0 && n <= MAX_MINUTES ? Math.round(n) : null;
+}
+
+/**
+ * A recipe from parts that were already read — a photo scan's answer, for instance. Everything is cut to the same
+ * limits an item accepts and ingredients are split by the same parser a pasted list uses, so an item made from a
+ * photo behaves exactly like one imported from a page. Null when there is nothing worth saving.
+ */
+export function recipeFromParts(parts: RecipeParts): ImportedRecipe | null {
+  const title = clip(plain(parts.title), MAX_TITLE);
+  const ingredients = ingredientsFrom(parts.ingredient_lines);
+  const steps = stepsFrom(parts.steps);
+  if (!title || (ingredients.length === 0 && steps.length === 0)) return null;
+
+  const tags = [
+    ...new Set(
+      asArray(parts.tags)
+        .map((t) => normalizeTag(plain(t)))
+        .filter((t) => t.length > 0),
+    ),
+  ];
+  return {
+    title,
+    description: clip(plain(parts.description), MAX_DESCRIPTION),
+    servings: servingsFrom(parts.servings),
+    prep_minutes: minutesFrom(parts.prep_minutes),
+    cook_minutes: minutesFrom(parts.cook_minutes),
+    ingredients,
+    steps: steps.map((text) => ({ text, timer_minutes: null })),
+    tags: tags.slice(0, MAX_TAGS),
+    source_url: (parts.source_url ?? "").slice(0, 2000),
+    image_url: parts.image_url ?? null,
+  };
+}

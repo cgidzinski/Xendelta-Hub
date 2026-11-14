@@ -38,7 +38,7 @@ import {
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView } from "./kitchenIcons";
 import { Draft, newKey, draftFrom, draftFromImport, inputFrom, filledExtras, Extra } from "./itemEditor/itemDraft";
-import { ImportUrlDialog } from "./itemEditor/ImportUrlDialog";
+import { ImportDialog } from "./itemEditor/ImportDialog";
 import { PhotoStrip } from "./itemEditor/PhotoStrip";
 import { SectionTitle, TagField, quietInput } from "./itemEditor/editorFields";
 import { RecipeFields } from "./itemEditor/RecipeFields";
@@ -170,11 +170,15 @@ export default function ItemEditor({
     ]);
   };
 
-  const applyImport = (recipe: ImportedKitchenRecipe) => {
+  const applyImport = (recipe: ImportedKitchenRecipe, photo?: File) => {
     const d = draftFromImport(recipe, draft.category_id);
     setDraft(d);
     setOpened(filledExtras(d));
     setImportedImage(recipe.image_url);
+    // A photo the recipe was read from is the recipe's picture: it goes up with the save like any other added photo.
+    if (photo && totalPhotos < MAX_KITCHEN_IMAGES) {
+      setNewFiles((prev) => [...prev, { key: newKey(), file: photo, url: URL.createObjectURL(photo) }]);
+    }
     enqueueSnackbar("Recipe imported. Have a look, then save it.", { variant: "success" });
   };
 
@@ -285,7 +289,7 @@ export default function ItemEditor({
           >
             <LanguageIcon fontSize="small" color="primary" />
             <Typography variant="body2" sx={{ flex: 1 }}>
-              Have a link to a recipe?
+              Have a link or a photo of a recipe?
             </Typography>
             <Button size="small" onClick={() => setImportOpen(true)}>
               Import
@@ -515,7 +519,7 @@ export default function ItemEditor({
           </Button>
         </Stack>
       )}
-      <ImportUrlDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={applyImport} />
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={applyImport} />
     </Dialog>
   );
 }

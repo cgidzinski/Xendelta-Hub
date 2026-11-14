@@ -13,6 +13,7 @@ import { XENKITCHEN_SOURCE, removeKitchenPhotos, withPhotoUrls } from "../utils/
 import { AppError, callerId } from "../utils/http";
 import { fetchPublicImage, fetchPublicPage } from "../utils/safeFetch";
 import { extractRecipe } from "../utils/recipeImport";
+import { photoImportEnabled, readRecipeFromImage } from "../ai/vision";
 import { notify } from "../utils/notificationUtils";
 import { SocketManager } from "../infrastructure/SocketManager";
 import {
@@ -76,6 +77,16 @@ const importLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: false, message: "Too many imports. Wait a minute and try again." },
+});
+
+// Reading a photo costs money at the other end, so it is limited harder than a page import (per person, not per address).
+const scanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 6,
+  keyGenerator: (req) => (req as AuthenticatedRequest).user?._id.toString() ?? "anonymous",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: false, message: "That's a lot of photos. Wait a minute and try again." },
 });
 
 const validIcon = (icon?: string) => (CATEGORY_ICONS as readonly string[]).includes(icon ?? "");
@@ -1017,6 +1028,34 @@ module.exports = function (app: any) {
           422,
           "Couldn't find a recipe on that page. Some sites don't publish their recipes in a way that can be read.",
         );
+      }
+      res.json({ status: true, message: "Recipe found", data: { recipe } });
+    }),
+  );
+
+  // Where a recipe can be read from a photo of it, and whether this server is set up for that (mirrors /api/gifs/status:
+  // without credentials the button is left out instead of failing when pressed).
+  app.get(
+    "/api/xenkitchen/status",
+    authenticateToken,
+    handle(async (_req, res) => {
+      res.json({ status: true, message: "", data: { photo_import: photoImportEnabled() } });
+    }),
+  );
+
+  // Read a recipe out of a photo (a recipe card, a cookbook page, a screenshot). Nothing is saved: like import-url, the
+  // editor shows the result for review and a person fixes whatever the model misread.
+  app.post(
+    "/api/xenkitchen/import-photo",
+    authenticateToken,
+    scanLimiter,
+    uploadXenKitchenImages.single("image"),
+    handle(async (req, res) => {
+      const file = req.file as Express.Multer.File | undefined;
+      if (!file) throw new AppError(400, "Choose a photo of the recipe");
+      const recipe = await readRecipeFromImage(file.buffer, file.mimetype);
+      if (!recipe) {
+        throw new AppError(422, "Couldn't find a recipe in that photo. Try a sharper picture of the whole recipe.");
       }
       res.json({ status: true, message: "Recipe found", data: { recipe } });
     }),
