@@ -3,6 +3,7 @@ import DashboardOutlinedIcon from "@mui/icons-material/DashboardOutlined";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
@@ -54,6 +55,12 @@ export const ADMIN_NAV: AdminNavItem[] = [
     path: "/admin/money",
     icon: <CreditCardOutlinedIcon fontSize="small" />,
     group: "Money",
+  },
+  {
+    key: "billing",
+    label: "Billing",
+    path: "/admin/billing",
+    icon: <ReceiptLongOutlinedIcon fontSize="small" />,
   },
   {
     key: "storage",

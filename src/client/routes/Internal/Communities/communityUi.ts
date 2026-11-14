@@ -87,6 +87,7 @@ export function settingsTabs(community: Pick<Community, "permissions">) {
     ...(has("manageRoles") ? [{ key: "roles", label: "Roles" }] : []),
     ...(has("manageEmoji") ? [{ key: "emoji", label: "Emoji" }] : []),
     { key: "members", label: "Members" },
+    { key: "billing", label: "Billing" },
   ];
 }
 

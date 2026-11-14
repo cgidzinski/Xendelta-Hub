@@ -13,9 +13,10 @@ import EmojiTab from "./EmojiTab";
 import MembersTab from "./MembersTab";
 import OverviewTab from "./OverviewTab";
 import RolesTab from "./RolesTab";
+import BillingTab from "./BillingTab";
 
 /**
- * A community's settings: overview, channels, roles and members. Each tab shows only to people who can use it.
+ * A community's settings: overview, channels, roles, members and its bill. Each tab shows only to people who can use it.
  *   /internal/communities/:communityId/settings/:tab
  */
 export default function CommunitySettings() {
@@ -83,6 +84,7 @@ export default function CommunitySettings() {
       {current === "roles" && <RolesTab community={community} />}
       {current === "emoji" && <EmojiTab community={community} />}
       {current === "members" && <MembersTab community={community} />}
+      {current === "billing" && <BillingTab community={community} />}
     </PageContainer>
   );
 }
