@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { PushSubscription } from "../models/pushSubscription";
+import { User } from "../models/user";
 
 // Web Push (VAPID) delivery. Every browser hardcodes its own push service — Chrome/Android
 // route through FCM, Safari/iOS through Apple, Firefox through Mozilla — and the endpoint
@@ -68,6 +69,9 @@ function truncate(text: string, max: number): string {
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<PushResult> {
   if (!ensureVapid()) return { sent: 0, pruned: 0 };
+  // Do not disturb: nothing reaches the phone or desktop, whoever it is from (in-app notifications are still kept).
+  const quiet = await User.exists({ _id: userId, "presence.choice": "dnd" }).exec();
+  if (quiet) return { sent: 0, pruned: 0 };
 
   const subscriptions = await PushSubscription.find({ userId }).exec();
   if (subscriptions.length === 0) return { sent: 0, pruned: 0 };

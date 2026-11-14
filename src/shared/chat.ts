@@ -3,6 +3,7 @@
 // Everything is a conversation. A conversation with two members is what people call a DM; there is no separate kind.
 // Messages are numbered 1, 2, 3... per conversation (`seq`), which is what paging, replies and "read up to here" use.
 import type { Cosmetics } from "./cosmetics";
+import type { ChatGif } from "./gif";
 
 export const CHAT_BODY_MAX = 10_000;
 export const CHAT_NAME_MAX = 100;
@@ -13,7 +14,7 @@ export const CHAT_REACTIONS_PER_MESSAGE = 20;
 export const CHAT_PREVIEW_MAX = 140;
 
 export type ChatRole = "owner" | "member";
-export type ChatMessageKind = "text" | "system" | "call";
+export type ChatMessageKind = "text" | "system" | "call" | "poll";
 
 /** What other people may see of a person (the same fields every app shows). */
 export interface ChatPerson {
@@ -50,7 +51,83 @@ export interface ChatReaction {
  * A line in the history that explains what happened to the chat itself. In a system message `userIds[0]` is who did
  * it and the rest are who it happened to (the people added or removed).
  */
-export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "renamed" | "owner";
+export type ChatSystemEvent =
+  "created" | "added" | "removed" | "left" | "renamed" | "owner" | "pinned" | "call_ended" | "call_missed";
+
+/** How many messages a chat can have pinned at once. */
+export const CHAT_MAX_PINS = 50;
+/** The most chats one message may be forwarded to at once. */
+export const CHAT_MAX_FORWARD_TARGETS = 5;
+
+export const POLL_QUESTION_MAX = 300;
+export const POLL_OPTION_MAX = 100;
+export const POLL_MIN_OPTIONS = 2;
+export const POLL_MAX_OPTIONS = 10;
+/** The furthest ahead a poll may be set to end. */
+export const POLL_MAX_DAYS = 30;
+
+export interface ChatPollOption {
+  /** "0", "1", ... in the order written. */
+  id: string;
+  text: string;
+  /** Who chose it: voting is open, so the people behind each count can be shown. */
+  userIds: string[];
+}
+
+/** A poll message: its question is the message's body, and this is the rest. */
+export interface ChatPoll {
+  question: string;
+  options: ChatPollOption[];
+  /** More than one option may be chosen. */
+  multiple: boolean;
+  /** ISO time the poll closes by itself, or null. */
+  endsAt: string | null;
+  /** ISO time the creator (or a moderator) closed it early, or null. */
+  closedAt: string | null;
+}
+
+/** Whether voting has ended, by the clock or because it was closed. */
+export const isPollClosed = (poll: Pick<ChatPoll, "endsAt" | "closedAt">, now = Date.now()): boolean =>
+  !!poll.closedAt || (!!poll.endsAt && new Date(poll.endsAt).getTime() <= now);
+/** The longest voice message, in seconds, and how many bars its waveform has. */
+export const VOICE_MAX_SECONDS = 300;
+export const VOICE_WAVEFORM_BARS = 48;
+
+/** What a voice message carries besides its audio file (the one attachment): how long it is, and its shape. */
+export interface ChatVoice {
+  /** Seconds. */
+  duration: number;
+  /** Loudness 0 to 255 for each of VOICE_WAVEFORM_BARS slices. */
+  waveform: number[];
+}
+export const CHAT_THREAD_PAGE = 100;
+/** A thread with no reply for this long is shown as archived (a new reply brings it back). */
+export const CHAT_THREAD_ARCHIVE_DAYS = 7;
+export const CHAT_SEARCH_PAGE = 25;
+export const CHAT_SEARCH_MAX_QUERY = 100;
+/** What a search can ask a message to have. */
+export const CHAT_SEARCH_HAS = ["attachment", "link"] as const;
+export type ChatSearchHas = (typeof CHAT_SEARCH_HAS)[number];
+
+/** One hit of a message search: the message, and where it was said. */
+export interface ChatSearchResult {
+  message: ChatMessage;
+  /** The community the message was said in; null for a DM or group chat. */
+  communityId: string | null;
+  /** A community channel's name. A DM or group chat is named by the client from its own list. */
+  channelName: string | null;
+}
+
+/** A preview of a web page a message links to: what the page says about itself. No picture (that would tell the site who reads it). */
+export interface LinkEmbed {
+  /** Where the link ended up, after redirects. */
+  url: string;
+  title: string;
+  description: string;
+  siteName: string;
+}
+
+export const CHAT_MAX_EMBEDS = 3;
 
 export interface ChatMessage {
   _id: string;
@@ -65,6 +142,27 @@ export interface ChatMessage {
   /** The `seq` of the message this one replies to. */
   replyTo?: number | null;
   reactions: ChatReaction[];
+  /** Previews of the links in the body, added a moment after sending. */
+  embeds?: LinkEmbed[];
+  /** A GIF sent from the picker. */
+  gif?: ChatGif | null;
+  /** Set on a message copied here from another chat: who said it originally. */
+  forwardedFrom?: string | null;
+  /** Set on a poll message (kind "poll"). */
+  poll?: ChatPoll | null;
+  /** Set on a voice message: its one attachment is the audio. */
+  voice?: ChatVoice | null;
+  /** For a reply in a thread: the number of the message the thread hangs off. Such replies are not in the main history. */
+  threadRoot?: number | null;
+  /** On a message that has a thread: its replies so far. */
+  thread?: { count: number; lastAt: string | null; lastBy: string | null } | null;
+  /** When it was pinned, and by whom; null when it isn't pinned. */
+  pinnedAt?: string | null;
+  pinnedBy?: string | null;
+  /** The people the body mentions (who can read it), and whether it pings everyone or whoever is online. */
+  mentions?: string[];
+  mentionsEveryone?: boolean;
+  mentionsHere?: boolean;
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;

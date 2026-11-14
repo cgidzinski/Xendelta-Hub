@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatConversation } from "@shared/chat";
+import { plainMessageText } from "@shared/messageText";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../useSocket";
 import { useRealtime } from "../useRealtime";
 import { userProfileKeys } from "../user/useUserProfile";
 import { chatKeys } from "./keys";
+import { patchThreads, receiveReply } from "./useThread";
 import { patchMessage, upsertMessage, type MessagesData } from "../../utils/chatCache";
 
 /**
@@ -24,7 +26,9 @@ export function useChatRealtime() {
   };
 
   useRealtime("chat:message", ({ conversationId, message }) => {
+    // A reply in a thread goes to its thread; everything else to the history.
     queryClient.setQueryData<MessagesData>(chatKeys.messages(conversationId), (data) => upsertMessage(data, message));
+    receiveReply(queryClient, message);
     // The open chat's own numbers move with the message, so its unread count is right without a refetch.
     queryClient.setQueryData<ChatConversation>(chatKeys.conversation(conversationId), (c) =>
       c
@@ -35,7 +39,20 @@ export function useChatRealtime() {
               message.from === user.id
                 ? 0
                 : Math.max(c.seq, message.seq) - (c.members.find((m) => m.user_id === user.id)?.lastReadSeq ?? 0),
-            lastMessage: { seq: message.seq, from: message.from, preview: message.body, at: message.createdAt },
+            lastMessage: {
+              seq: message.seq,
+              from: message.from,
+              preview:
+                plainMessageText(message.body) ||
+                (message.gif
+                  ? "Sent a GIF"
+                  : message.voice
+                    ? "Sent a voice message"
+                    : message.poll
+                      ? `Poll: ${message.poll.question}`
+                      : ""),
+              at: message.createdAt,
+            },
           }
         : c,
     );
@@ -44,6 +61,17 @@ export function useChatRealtime() {
 
   useRealtime("chat:message_update", ({ conversationId, message }) => {
     queryClient.setQueryData<MessagesData>(chatKeys.messages(conversationId), (data) => patchMessage(data, message));
+    // A window opened by a jump gets the same edit, delete, reaction or pin.
+    queryClient.setQueriesData<{ data: MessagesData; hasNewer: boolean }>(
+      { queryKey: chatKeys.around(conversationId) },
+      (w) => (w ? { ...w, data: patchMessage(w.data, message) ?? w.data } : w),
+    );
+    patchThreads(queryClient, message);
+    queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) });
+    // The list of threads shows reply counts and last activity.
+    if (message.thread || typeof message.threadRoot === "number") {
+      queryClient.invalidateQueries({ queryKey: chatKeys.threads(conversationId) });
+    }
     queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
   });
 
@@ -52,6 +80,8 @@ export function useChatRealtime() {
     if (removed) {
       queryClient.removeQueries({ queryKey: chatKeys.conversation(conversationId) });
       queryClient.removeQueries({ queryKey: chatKeys.messages(conversationId) });
+      queryClient.removeQueries({ queryKey: chatKeys.around(conversationId) });
+      queryClient.removeQueries({ queryKey: chatKeys.thread(conversationId) });
     } else {
       queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) });
     }

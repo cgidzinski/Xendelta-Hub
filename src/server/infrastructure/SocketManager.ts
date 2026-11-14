@@ -1,8 +1,10 @@
 import { Server as SocketIOServer, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user";
-import { Conversation } from "../models/conversation";
+import { audienceOf, resolveChatAccess } from "../chat/access";
+import { canPostChat } from "../chat/policy";
 import { getJwtSecret } from "../config/env";
+import { presenceTracker, scheduleAnnounce, type Send } from "../presence/tracker";
 import type { ClientEvents, RealtimeEvent, RealtimeEvents } from "@shared/realtime";
 
 interface AuthenticatedSocket extends Socket {
@@ -34,6 +36,11 @@ export class SocketManager {
   private static instance: SocketManager;
   private io!: SocketIOServer;
   private isInitialized: boolean = false;
+  /** Called when a person's last tab disconnects (calls use it to take them out of any call). */
+  private offlineHandlers: Array<(userId: string) => void> = [];
+  onUserOffline(handler: (userId: string) => void) {
+    this.offlineHandlers.push(handler);
+  }
   /** When each socket last announced it was typing, so a client can't flood a conversation with typing events. */
   private lastTyping = new Map<string, number>();
 
@@ -88,6 +95,16 @@ export class SocketManager {
       // joins it, and none disconnects another. Clients cannot join any other room.
       socket.join(`user:${socket.userId}`);
 
+      // Presence: a first tab opening, or the last one closing, changes how the person looks to others.
+      const send: Send = (ids, event, payload) => this.emitToUsers(ids, event, payload);
+      presenceTracker.connect(socket.userId, socket.id);
+      scheduleAnnounce(socket.userId, send);
+      socket.on("presence:activity", (data: ClientEvents["presence:activity"]) => {
+        if (typeof data?.idle !== "boolean") return;
+        presenceTracker.setIdle(socket.userId!, socket.id, data.idle);
+        scheduleAnnounce(socket.userId!, send);
+      });
+
       socket.on("chat:typing", async (data: ClientEvents["chat:typing"]) => {
         const conversationId = typeof data?.conversationId === "string" ? data.conversationId : "";
         if (!/^[a-f0-9]{24}$/i.test(conversationId)) return;
@@ -100,15 +117,11 @@ export class SocketManager {
           this.lastTyping.set(socket.id, now);
         }
 
-        // Only members of the conversation hear it, and only members can say it.
-        const conversation = await Conversation.findOne(
-          { _id: conversationId, "members.user_id": socket.userId },
-          "members.user_id",
-        )
-          .lean()
-          .exec();
-        if (!conversation) return;
-        const others = conversation.members.map((m) => m.user_id).filter((id) => id !== socket.userId);
+        // Only people who can read the chat hear it, and only people who can post in it can say it: a DM or group
+        // chat's members, or a channel's readers.
+        const context = await resolveChatAccess(conversationId, socket.userId!);
+        if (!context || !canPostChat(context.access, socket.userId!)) return;
+        const others = audienceOf(context).filter((id) => id !== socket.userId);
         this.emitToUsers(others, "chat:typing", {
           conversationId,
           userId: socket.userId!,
@@ -119,6 +132,11 @@ export class SocketManager {
 
       socket.on("disconnect", () => {
         this.lastTyping.delete(socket.id);
+        presenceTracker.disconnect(socket.userId!, socket.id);
+        if (presenceTracker.state(socket.userId!) === "offline") {
+          for (const handler of this.offlineHandlers) handler(socket.userId!);
+        }
+        scheduleAnnounce(socket.userId!, send);
       });
     });
   }

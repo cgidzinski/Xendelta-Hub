@@ -43,6 +43,8 @@ export function systemText(message: ChatMessage, lookup: PeopleLookup, meId: str
       return s.name ? `${who} named the chat “${s.name}”` : `${who} removed the chat name`;
     case "owner":
       return targets.length > 0 ? `${who} made ${others} the owner` : `${who} ${verb("are", "is")} now the owner`;
+    case "pinned":
+      return `${who} pinned a message`;
     default:
       return message.body;
   }
@@ -69,4 +71,18 @@ export const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hou
 export function listTime(iso: string, now = new Date()): string {
   const d = new Date(iso);
   return d.toDateString() === now.toDateString() ? clock(iso) : dayLabel(iso, now);
+}
+
+/**
+ * Who reacted, for the tooltip on a reaction: "You, Sam and 2 others reacted with 👍". Names are the first few people
+ * (you first), with the rest counted.
+ */
+export function reactedBy(userIds: string[], emoji: string, lookup: PeopleLookup, meId: string, show = 5): string {
+  const ordered = [...userIds].sort((a, b) => Number(b === meId) - Number(a === meId));
+  const names = ordered.map((id) => nameFor(lookup, id, meId));
+  const shown = names.slice(0, show);
+  const more = names.length - shown.length;
+  const parts = more > 0 ? [...shown, `${more} ${more === 1 ? "other" : "others"}`] : shown;
+  const who = parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `${who} reacted with ${emoji}`;
 }

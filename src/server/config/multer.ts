@@ -5,6 +5,8 @@
  */
 
 import multer from "multer";
+import { AppError } from "../utils/http";
+import { CUSTOM_EMOJI_MAX_UPLOAD_BYTES, CUSTOM_EMOJI_MIMES } from "@shared/emoji";
 import { Request } from "express";
 import {
   MAX_FILE_SIZE,
@@ -101,4 +103,14 @@ export const uploadXenKitchenImages = multer({
     fileSize: MAX_XENKITCHEN_IMAGE_SIZE,
   },
   fileFilter: (req, file, cb) => (file.mimetype === "image/webp" ? cb(null, true) : imageFileFilter(req, file, cb)),
+});
+
+// Custom emoji: a small picture, PNG, GIF or WebP only. A refusal is a 400 with a message, not a crash.
+export const uploadEmoji = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: CUSTOM_EMOJI_MAX_UPLOAD_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if ((CUSTOM_EMOJI_MIMES as readonly string[]).includes(file.mimetype)) cb(null, true);
+    else cb(new AppError(400, "An emoji must be a PNG, GIF or WebP picture"));
+  },
 });

@@ -1,9 +1,20 @@
 import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChatAttachment, ChatConversation, ChatMessage } from "@shared/chat";
+import type { ChatGif } from "@shared/gif";
+import type {
+  ChatAttachment,
+  ChatConversation,
+  ChatMessage,
+  ChatPerson,
+  ChatVoice,
+  ChatSearchHas,
+  ChatSearchResult,
+} from "@shared/chat";
 import { api } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { chatKeys } from "./keys";
+import { patchThreads } from "./useThread";
+import { communityKeys } from "../communities/keys";
 import {
   patchMessage,
   removeLocalMessage,
@@ -69,6 +80,71 @@ export function useMessages(conversationId: string | undefined) {
   });
 }
 
+/**
+ * A window of history around one message, for a jump to a link, a reply or the first unread. It is kept apart from the
+ * live history so the live pages never have a hole in them. `hasNewer` says the window stops short of the present.
+ */
+export function useAroundMessages(conversationId: string | undefined, seq: number | null) {
+  const { isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: chatKeys.around(conversationId ?? "", seq ?? 0),
+    queryFn: async () => {
+      const page = await api.get<MessagesPage & { hasNewer?: boolean }>(
+        `/api/chat/conversations/${conversationId}/messages`,
+        { params: { around: seq } },
+      );
+      const data: MessagesData = { pages: [page], pageParams: [undefined] };
+      return { data, hasNewer: !!page.hasNewer };
+    },
+    enabled: isAuthenticated && !!conversationId && seq !== null,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+/** The messages pinned in a chat (loaded when the pins panel is open), newest pin first. */
+export function usePins(conversationId: string | undefined, enabled: boolean) {
+  const { isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: chatKeys.pins(conversationId ?? ""),
+    queryFn: () =>
+      api.get<{ messages: ChatMessage[]; people: ChatPerson[] }>(`/api/chat/conversations/${conversationId}/pins`),
+    enabled: isAuthenticated && !!conversationId && enabled,
+    retry: false,
+  });
+}
+
+export interface ChatSearchParams {
+  q: string;
+  conversationId?: string;
+  communityId?: string;
+  from?: string;
+  has?: ChatSearchHas;
+  after?: string;
+  before?: string;
+}
+
+/** Message search, a page at a time (newest first). Runs only when there is something to look for. */
+export function useChatSearch(params: ChatSearchParams, enabled: boolean) {
+  const { isAuthenticated } = useAuth();
+  const hasQuery = params.q.trim().length > 0 || !!params.from || !!params.has;
+  return useInfiniteQuery({
+    queryKey: chatKeys.search({ ...params }),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
+      if (pageParam > 0) query.set("offset", String(pageParam));
+      return api.get<{ results: ChatSearchResult[]; hasMore: boolean; people: ChatPerson[] }>(
+        `/api/chat/search?${query.toString()}`,
+      );
+    },
+    getNextPageParam: (last, pages) => (last.hasMore ? pages.reduce((n, p) => n + p.results.length, 0) : undefined),
+    enabled: isAuthenticated && enabled && hasQuery,
+    retry: false,
+  });
+}
+
 /** How many conversations have something unread. */
 export function useChatUnread() {
   const { isAuthenticated } = useAuth();
@@ -91,6 +167,10 @@ export interface SendInput {
   /** XenDrive file ids; `attachments` is what to draw while it sends. */
   attachmentIds?: string[];
   attachments?: ChatAttachment[];
+  /** A GIF from the picker. */
+  gif?: ChatGif;
+  /** Marks the one attachment as a voice message. */
+  voice?: ChatVoice;
 }
 
 export const newClientId = () =>
@@ -112,6 +192,8 @@ export function useSendMessage(conversationId: string) {
           body: input.body,
           replyTo: input.replyTo,
           attachmentIds: input.attachmentIds,
+          gif: input.gif,
+          voice: input.voice,
         })
       ).message,
     onMutate: (input) => {
@@ -124,6 +206,8 @@ export function useSendMessage(conversationId: string) {
         kind: "text",
         body: input.body,
         attachments: input.attachments ?? [],
+        gif: input.gif ?? null,
+        voice: input.voice ?? null,
         replyTo: input.replyTo ?? null,
         reactions: [],
         createdAt: new Date().toISOString(),
@@ -171,10 +255,12 @@ export function useChatActions() {
     queryClient.setQueryData(chatKeys.conversation(conversation._id), conversation);
     queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
   };
-  const setMessage = (message: ChatMessage) =>
+  const setMessage = (message: ChatMessage) => {
     queryClient.setQueryData<MessagesData>(chatKeys.messages(message.conversationId), (data) =>
       patchMessage(data, message),
     );
+    patchThreads(queryClient, message);
+  };
 
   const startChat = useMutation({
     mutationFn: (input: { userIds: string[]; name?: string }) =>
@@ -235,6 +321,8 @@ export function useChatActions() {
     onSuccess: (_data, input) => {
       queryClient.invalidateQueries({ queryKey: chatKeys.unread() });
       queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      // A community channel keeps its read state with its channel list.
+      queryClient.invalidateQueries({ queryKey: communityKeys.allChannels() });
       void input;
     },
   });
@@ -255,6 +343,73 @@ export function useChatActions() {
     onSuccess: setMessage,
   });
 
+  /** Pin a message, or take its pin off. */
+  const pin = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number; on: boolean }) => {
+      const url = `${base(input.conversationId)}/messages/${input.seq}/pin`;
+      return (await (input.on ? api.put<{ message: ChatMessage }>(url) : api.delete<{ message: ChatMessage }>(url)))
+        .message;
+    },
+    onSuccess: (message) => {
+      setMessage(message);
+      queryClient.invalidateQueries({ queryKey: chatKeys.pins(message.conversationId) });
+    },
+  });
+
+  /** Send a copy of a message to other chats. Chats you can't post in are skipped and listed. */
+  const forward = useMutation({
+    mutationFn: (input: { conversationId: string; seq: number; toConversationIds: string[] }) =>
+      api.post<{ sent: string[]; skipped: string[] }>(`${base(input.conversationId)}/messages/${input.seq}/forward`, {
+        toConversationIds: input.toConversationIds,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: chatKeys.conversations() }),
+  });
+
+  /** Start a poll in a chat (it arrives as a message through the usual live update). */
+  const createPoll = useMutation({
+    mutationFn: async (input: {
+      conversationId: string;
+      question: string;
+      options: string[];
+      multiple: boolean;
+      endsAt?: string;
+    }) => {
+      const { conversationId, ...poll } = input;
+      return (await api.post<{ message: ChatMessage }>(`${base(conversationId)}/polls`, poll)).message;
+    },
+    onSuccess: (message) =>
+      queryClient.setQueryData<MessagesData>(chatKeys.messages(message.conversationId), (data) =>
+        upsertMessage(data, message),
+      ),
+  });
+
+  /** Choose options in a poll, or take the vote back with an empty list. */
+  const votePoll = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number; optionIds: string[] }) =>
+      (
+        await api.put<{ message: ChatMessage }>(`${base(input.conversationId)}/messages/${input.seq}/poll/vote`, {
+          optionIds: input.optionIds,
+        })
+      ).message,
+    onSuccess: setMessage,
+  });
+
+  /** Close a poll early. */
+  const closePoll = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number }) =>
+      (await api.post<{ message: ChatMessage }>(`${base(input.conversationId)}/messages/${input.seq}/poll/close`))
+        .message,
+    onSuccess: setMessage,
+  });
+
+  /** Take the link previews off a message. */
+  const removeEmbeds = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number }) =>
+      (await api.delete<{ message: ChatMessage }>(`${base(input.conversationId)}/messages/${input.seq}/embeds`))
+        .message,
+    onSuccess: setMessage,
+  });
+
   const react = useMutation({
     mutationFn: async (input: { conversationId: string; seq: number; emoji: string; on: boolean }) => {
       const url = `${base(input.conversationId)}/messages/${input.seq}/reactions/${encodeURIComponent(input.emoji)}`;
@@ -264,5 +419,22 @@ export function useChatActions() {
     onSuccess: setMessage,
   });
 
-  return { startChat, rename, addMembers, removeMember, makeOwner, setMine, markRead, edit, remove, react };
+  return {
+    startChat,
+    rename,
+    addMembers,
+    removeMember,
+    makeOwner,
+    setMine,
+    markRead,
+    edit,
+    remove,
+    react,
+    removeEmbeds,
+    pin,
+    forward,
+    createPoll,
+    votePoll,
+    closePoll,
+  };
 }

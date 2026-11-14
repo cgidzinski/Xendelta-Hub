@@ -8,6 +8,13 @@ import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { realtime } from "../realtime";
 import { registerDriveSource } from "../utils/driveSources";
 import { sendPushToUser } from "../utils/pushUtils";
+import { ChannelState } from "../models/channelState";
+import { unreadChannelCount } from "../communities/channels";
+import { audienceOf, resolveChatAccess, type ChatContext } from "./access";
+import { canPostChat } from "./policy";
+import { mentionNames } from "./mentions";
+import { plainMessageText } from "@shared/messageText";
+import { deleteEmojiOf } from "../emoji/cleanup";
 import {
   CHAT_PREVIEW_MAX,
   chatTitle,
@@ -27,6 +34,13 @@ export async function loadChat(conversationId: string, userId: string): Promise<
   const chat = await Conversation.findOne({ _id: conversationId, "members.user_id": userId }).exec();
   if (!chat) throw new AppError(404, "Conversation not found");
   return chat;
+}
+
+/** The conversation for a request, if the caller may see it: a chat they are in, or a channel they can read. */
+export async function loadChatContext(conversationId: string, userId: string): Promise<ChatContext> {
+  const context = await resolveChatAccess(conversationId, userId);
+  if (!context) throw new AppError(404, "Conversation not found");
+  return context;
 }
 
 export const memberIdsOf = (chat: { members: Array<{ user_id: string }> }) => chat.members.map((m) => m.user_id);
@@ -116,7 +130,7 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
       conversationId: String(m.conversationId),
       seq: m.seq,
       from: m.from ?? null,
-      kind: m.kind === "system" ? "system" : m.kind === "call" ? "call" : "text",
+      kind: m.kind === "system" ? "system" : m.kind === "call" ? "call" : m.kind === "poll" ? "poll" : "text",
       body: deleted ? "" : (m.body ?? ""),
       system,
       attachments: deleted
@@ -129,7 +143,48 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
             ...(existing.has(String(a.fileId)) ? {} : { removed: true }),
           })),
       replyTo: m.replyTo ?? null,
+      gif:
+        !deleted && m.gif?.url
+          ? {
+              url: m.gif.url,
+              stillUrl: m.gif.stillUrl ?? m.gif.url,
+              width: m.gif.width ?? 0,
+              height: m.gif.height ?? 0,
+              title: m.gif.title ?? "",
+            }
+          : null,
+      poll:
+        !deleted && m.kind === "poll" && m.poll?.options
+          ? {
+              question: m.body ?? "",
+              multiple: !!m.poll.multiple,
+              endsAt: iso(m.poll.endsAt),
+              closedAt: iso(m.poll.closedAt),
+              options: m.poll.options.map((o) => ({ id: o.id, text: o.text, userIds: [...(o.userIds ?? [])] })),
+            }
+          : null,
+      voice:
+        !deleted && m.voice?.duration ? { duration: m.voice.duration, waveform: [...(m.voice.waveform ?? [])] } : null,
+      forwardedFrom: deleted ? null : (m.forwardedFrom ?? null),
+      threadRoot: m.threadRoot ?? null,
+      thread:
+        m.thread?.lastAt && (m.thread.count ?? 0) > 0
+          ? { count: m.thread.count ?? 0, lastAt: iso(m.thread.lastAt), lastBy: m.thread.lastBy ?? null }
+          : null,
       reactions: deleted ? [] : m.reactions.map((r) => ({ emoji: r.emoji, userIds: [...r.userIds] })),
+      pinnedAt: deleted ? null : iso(m.pinnedAt),
+      pinnedBy: deleted ? null : (m.pinnedBy ?? null),
+      mentions: deleted ? [] : [...(m.mentions ?? [])],
+      mentionsEveryone: deleted ? false : !!m.mentionsEveryone,
+      mentionsHere: deleted ? false : !!m.mentionsHere,
+      embeds: deleted
+        ? []
+        : m.embeds.map((e) => ({
+            url: e.url,
+            title: e.title ?? "",
+            description: e.description ?? "",
+            siteName: e.siteName ?? "",
+          })),
       createdAt: m.createdAt.toISOString(),
       editedAt: iso(m.editedAt),
       deletedAt: iso(m.deletedAt),
@@ -144,21 +199,39 @@ export async function serializeMessage(message: MessageDocument): Promise<ChatMe
 
 // ---------- sending ----------
 
-function previewOf(body: string, attachmentCount: number, attachmentName?: string): string {
+function previewOf(
+  rawBody: string,
+  attachmentCount: number,
+  attachmentName?: string,
+  names?: ReadonlyMap<string, string>,
+  hasGif = false,
+  hasVoice = false,
+): string {
+  const body = plainMessageText(rawBody, names);
   const text = body.trim().replace(/\s+/g, " ");
   if (text) return text.length > CHAT_PREVIEW_MAX ? text.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd() + "…" : text;
+  if (hasGif) return "Sent a GIF";
+  if (hasVoice) return "Sent a voice message";
   if (attachmentCount === 1) return attachmentName ? `Sent ${attachmentName}` : "Sent a file";
   return attachmentCount > 1 ? `Sent ${attachmentCount} files` : "";
 }
 
 export interface NewMessage {
   from: string | null;
-  kind?: "text" | "system";
+  kind?: "text" | "system" | "poll";
   body?: string;
   system?: { event: ChatSystemEvent; userIds?: string[]; name?: string };
   attachments?: Array<{ fileId: string; name: string; mimeType: string; size: number }>;
   replyTo?: number;
+  gif?: { url: string; stillUrl: string; width: number; height: number; title: string };
+  voice?: { duration: number; waveform: number[] };
+  forwardedFrom?: string;
+  poll?: { multiple: boolean; endsAt?: Date; options: Array<{ id: string; text: string }> };
+  /** A reply in the thread of this message (kept out of the main history). */
+  threadRoot?: number;
   clientId?: string;
+  /** Who the body mentions (see chat/mentions.ts resolveMentions). */
+  mentions?: { userIds: string[]; everyone: boolean; here: boolean };
 }
 
 /**
@@ -169,7 +242,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
   const bumped = await Conversation.findByIdAndUpdate(
     chat._id,
     { $inc: { seq: 1 } },
-    { new: true, projection: "seq" },
+    { new: true, projection: "seq communityId" },
   ).exec();
   if (!bumped) throw new AppError(404, "Conversation not found");
   const seq = bumped.seq;
@@ -184,13 +257,34 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     system: input.system && { event: input.system.event, userIds: input.system.userIds ?? [], name: input.system.name },
     attachments,
     replyTo: input.replyTo,
+    gif: input.gif,
+    voice: input.voice,
+    forwardedFrom: input.forwardedFrom,
+    poll: input.poll && {
+      multiple: input.poll.multiple,
+      endsAt: input.poll.endsAt,
+      options: input.poll.options.map((o) => ({ ...o, userIds: [] })),
+    },
+    threadRoot: input.threadRoot,
     clientId: input.clientId,
+    mentions: input.mentions?.userIds ?? [],
+    mentionsEveryone: input.mentions?.everyone ?? false,
+    mentionsHere: input.mentions?.here ?? false,
   });
 
   const preview =
     input.kind === "system"
       ? (input.body ?? "")
-      : previewOf(input.body ?? "", attachments.length, attachments[0]?.name);
+      : input.kind === "poll"
+        ? `Poll: ${input.body ?? ""}`
+        : previewOf(
+            input.body ?? "",
+            attachments.length,
+            attachments[0]?.name,
+            await mentionNames(input.body ?? ""),
+            !!input.gif,
+            !!input.voice,
+          );
   // Only the newest message may set the last-message summary, so two sends racing can't leave an older one in it.
   await Conversation.updateOne(
     { _id: chat._id, $or: [{ "lastMessage.seq": { $lt: seq } }, { "lastMessage.seq": { $exists: false } }] },
@@ -205,6 +299,14 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
       { $max: { "members.$[me].lastReadSeq": seq } },
       { arrayFilters: [{ "me.user_id": input.from }] },
     ).exec();
+    // A channel has no member list: the sender's own read position is in ChannelState.
+    if (bumped.communityId) {
+      await ChannelState.updateOne(
+        { userId: input.from, conversationId: chat._id },
+        { $max: { lastReadSeq: seq } },
+        { upsert: true },
+      ).exec();
+    }
   }
   return message;
 }
@@ -230,25 +332,67 @@ export async function postSystemMessage(
   });
 }
 
-/** Tell the members about a stored message, and push to anyone who is not looking at the app. */
-export async function publishMessage(chat: ConversationDocument, message: MessageDocument, senderName: string) {
+/** Tell the readers about a stored message, and push to anyone who is not looking at the app. */
+export async function publishMessage(context: ChatContext, message: MessageDocument, senderName: string) {
+  const { chat, community } = context;
   const wire = await serializeMessage(message);
   const conversationId = String(chat._id);
-  realtime.toUsers(memberIdsOf(chat), "chat:message", { conversationId, message: wire });
+  const audience = audienceOf(context);
+  realtime.toUsers(audience, "chat:message", { conversationId, message: wire });
 
-  if (message.kind !== "text" || !message.from) return;
-  const title = chat.name ? `${senderName} in ${chat.name}` : senderName;
-  const body = previewOf(message.body ?? "", message.attachments.length, message.attachments[0]?.name);
+  if ((message.kind !== "text" && message.kind !== "poll") || !message.from) return;
+  const body = previewOf(
+    message.body ?? "",
+    message.attachments.length,
+    message.attachments[0]?.name,
+    await mentionNames(message.body ?? ""),
+    !!message.gif?.url,
+    !!message.voice?.duration,
+  );
   const now = Date.now();
-  for (const member of chat.members) {
-    if (member.user_id === message.from || isMuted(member, now) || realtime.isOnline(member.user_id)) continue;
+
+  // Who has silenced it: a chat member's own setting, or a channel's ChannelState.
+  let silenced: Set<string>;
+  let title: string;
+  let url: string;
+  if (community) {
+    const states = await ChannelState.find({ conversationId: chat._id, mutedUntil: { $gt: new Date(now) } }, "userId")
+      .lean()
+      .exec();
+    silenced = new Set(states.map((s) => s.userId));
+    title = `${senderName} in #${chat.name ?? "channel"} · ${community.name}`;
+    url = `/internal/communities/${community._id}/${conversationId}`;
+  } else {
+    silenced = new Set(chat.members.filter((m) => isMuted(m, now)).map((m) => m.user_id));
+    title = chat.name ? `${senderName} in ${chat.name}` : senderName;
+    url = `/internal/messages/${conversationId}`;
+  }
+  // Someone named in the message is told even if they have muted the chat; a message to everyone says so.
+  const named = new Set(message.mentions ?? []);
+  // A reply in a thread tells only the people following it (and anyone named), not the whole chat.
+  const inThread = typeof message.threadRoot === "number";
+  const followers = new Set<string>(
+    inThread
+      ? ((
+          await Message.findOne({ conversationId: chat._id, seq: message.threadRoot }, "thread.followers").lean().exec()
+        )?.thread?.followers ?? [])
+      : [],
+  );
+  const where = community ? `#${chat.name ?? "channel"} · ${community.name}` : chat.name ? chat.name : "a chat";
+  for (const userId of audience) {
+    if (userId === message.from || realtime.isOnline(userId)) continue;
+    const mentioned = named.has(userId);
+    if (inThread && !followers.has(userId) && !mentioned && !message.mentionsEveryone) continue;
+    if (silenced.has(userId) && !mentioned) continue;
+    const heading = mentioned
+      ? `${senderName} mentioned you in ${where}`
+      : message.mentionsEveryone
+        ? `${senderName} pinged everyone in ${where}`
+        : inThread
+          ? `${title} (thread)`
+          : title;
     // One notification per conversation on the lock screen (the tag), and never a failed push breaking a send.
-    void sendPushToUser(member.user_id, {
-      title,
-      body,
-      url: `/internal/messages/${conversationId}`,
-      tag: `chat-${conversationId}`,
-    }).catch(() => undefined);
+    void sendPushToUser(userId, { title: heading, body, url, tag: `chat-${conversationId}` }).catch(() => undefined);
   }
 }
 
@@ -260,15 +404,24 @@ registerDriveSource("chat", {
   label: "Chat",
   // Chat attachments use the sender's storage, like a file uploaded to XenDrive.
   counts: async () => true,
-  verify: async (userId, ref) =>
-    Types.ObjectId.isValid(ref) && !!(await Conversation.exists({ _id: ref, "members.user_id": userId })),
+  verify: async (userId, ref) => {
+    if (!Types.ObjectId.isValid(ref)) return false;
+    const context = await resolveChatAccess(ref, userId);
+    return !!context && canPostChat(context.access, userId);
+  },
   describe: async (userId, refs) => {
     const valid = refs.filter((r) => Types.ObjectId.isValid(r));
     const chats =
       valid.length > 0 ? await Conversation.find({ _id: { $in: valid }, "members.user_id": userId }).exec() : [];
     const people = await loadPeople(chats.flatMap(memberIdsOf));
     const names = new Map(chats.map((c) => [String(c._id), chatTitle(serializeChat(c, userId, people), userId)]));
-    // A chat the person has left (or that was deleted) keeps its files until they delete them.
+    // A channel is named after itself; a chat the person has left (or that was deleted) keeps its files until they
+    // delete them.
+    for (const ref of refs) {
+      if (names.has(ref) || !Types.ObjectId.isValid(ref)) continue;
+      const context = await resolveChatAccess(ref, userId);
+      if (context?.community) names.set(ref, `#${context.chat.name ?? "channel"} · ${context.community.name}`);
+    }
     return new Map(refs.map((ref) => [ref, names.get(ref) ?? "A chat you're no longer in"]));
   },
 });
@@ -277,13 +430,14 @@ registerDriveSource("chat", {
 
 /** A conversation ends when its last member leaves (or an admin clears everything). Attached files stay in XenDrive. */
 export async function deleteChat(conversationId: unknown): Promise<void> {
+  await deleteEmojiOf({ conversationId: String(conversationId) });
   await Message.deleteMany({ conversationId }).exec();
   await Conversation.deleteOne({ _id: conversationId }).exec();
 }
 
 // ---------- unread ----------
 
-/** How many of the person's conversations have unread messages (muted ones don't count). */
+/** How many of the person's conversations and community channels have unread messages (muted ones don't count). */
 export async function unreadConversationCount(userId: string): Promise<number> {
   const chats = await Conversation.find(
     { "members.user_id": userId, "lastMessage.at": { $exists: true } },
@@ -292,10 +446,11 @@ export async function unreadConversationCount(userId: string): Promise<number> {
     .lean()
     .exec();
   const now = Date.now();
-  return chats.filter((c) => {
+  const chatCount = chats.filter((c) => {
     const me = c.members[0];
     return (c.seq ?? 0) > (me?.lastReadSeq ?? 0) && !isMuted(me, now);
   }).length;
+  return chatCount + (await unreadChannelCount(userId));
 }
 
 export { rosterKeyOf };

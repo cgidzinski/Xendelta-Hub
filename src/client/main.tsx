@@ -33,6 +33,8 @@ import { xennoteRoutes } from "./routes/Internal/XenNote/routes";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SocketProvider } from "./contexts/SocketContext";
+import { CallProvider } from "./contexts/CallContext";
+import CallOverlay from "./components/calls/CallOverlay";
 
 // Routes - External
 const Landing = lazyPage(() => import("./routes/External/Landing/Landing"));
@@ -58,6 +60,8 @@ const People = lazyPage(() => import("./routes/Internal/People/People"));
 const PersonProfile = lazyPage(() => import("./routes/Internal/People/PersonProfile"));
 const Profile = lazyPage(() => import("./routes/Internal/Profile/Profile"));
 const Messages = lazyPage(() => import("./routes/Internal/Messages/Messages"));
+const Communities = lazyPage(() => import("./routes/Internal/Communities/Communities"));
+const CommunitySettings = lazyPage(() => import("./routes/Internal/Communities/settings/CommunitySettings"));
 const About = lazyPage(() => import("./routes/Internal/About/About"));
 const WhatsNewRedirect = lazyPage<object>(() =>
   import("./routes/Internal/About/About").then((m) => ({ default: m.WhatsNewRedirect })),
@@ -186,6 +190,11 @@ const router = createBrowserRouter(
         <Route path="people/:userId" element={<PersonProfile />} />
         <Route path="messages" element={<Messages />} />
         <Route path="messages/:conversationId" element={<Messages />} />
+        <Route path="communities" element={<Communities />} />
+        <Route path="communities/:communityId" element={<Communities />} />
+        <Route path="communities/:communityId/settings" element={<CommunitySettings />} />
+        <Route path="communities/:communityId/settings/:tab" element={<CommunitySettings />} />
+        <Route path="communities/:communityId/:channelId" element={<Communities />} />
         <Route path="notifications" element={<Notifications />} />
         {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
         <Route path="share" element={<Share />} />
@@ -278,7 +287,10 @@ ReactDOM.createRoot(rootElement).render(
               <NavBarProvider>
                 <AppSnackbarProvider>
                   <ConfirmProvider>
-                    <RouterProvider router={router} />
+                    <CallProvider>
+                      <RouterProvider router={router} />
+                      <CallOverlay />
+                    </CallProvider>
                     <PWA />
                   </ConfirmProvider>
                 </AppSnackbarProvider>

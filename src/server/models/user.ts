@@ -41,6 +41,15 @@ const userSchema = new Schema({
     // Extra bytes on top of the free tier (FREE_STORAGE_BYTES): admin grants and redeemed vouchers.
     spaceAllowed: { type: Number, default: 0 },
   },
+  // Presence (shared/presence.ts): what the person chose to show, and an optional status line that can expire.
+  presence: {
+    choice: { type: String, enum: ["online", "idle", "dnd", "invisible"], default: "online" },
+    customStatus: {
+      text: { type: String },
+      emoji: { type: String },
+      expiresAt: { type: Date },
+    },
+  },
   pinnedApps: [{ type: String }],
   // What Home's feed hides for this person: whole apps, single spaces ("<app>:<id>") and single events.
   feedPrefs: {

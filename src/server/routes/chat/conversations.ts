@@ -1,9 +1,11 @@
 import type { Application, Request, Response } from "express";
+import { ChannelState } from "../../models/channelState";
 import { Conversation } from "../../models/conversation";
 import { authenticateToken } from "../../middleware/auth";
 import { canMessage } from "../../chat/policy";
 import {
   loadChat,
+  loadChatContext,
   loadPeople,
   memberIdsOf,
   postSystemMessage,
@@ -173,7 +175,20 @@ export function registerConversationRoutes(app: Application) {
     async (req: Request, res: Response) => {
       const me = callerId(req);
       const { muted, hidden } = chatMeSchema.parse(req.body);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const chat = context.chat;
+
+      // A channel has no member entry to hold this: muting it is kept in the person's ChannelState.
+      if (context.community) {
+        if (muted !== undefined) {
+          await ChannelState.updateOne(
+            { userId: me, conversationId: chat._id },
+            muted ? { $set: { mutedUntil: FAR_FUTURE } } : { $unset: { mutedUntil: "" } },
+            { upsert: true },
+          ).exec();
+        }
+        return res.json({ status: true, message: "", data: {} });
+      }
 
       const set: Record<string, unknown> = {};
       const unset: Record<string, ""> = {};
@@ -200,9 +215,20 @@ export function registerConversationRoutes(app: Application) {
     async (req: Request, res: Response) => {
       const me = callerId(req);
       const { seq } = chatReadSchema.parse(req.body);
-      const chat = await loadChat(req.params.conversationId as string, me);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const chat = context.chat;
       const newest = chat.lastMessage?.seq ?? 0;
       const upTo = seq >= newest ? chat.seq : Math.min(seq, chat.seq);
+      if (context.community) {
+        // A channel's read state is per person and private: only their own tabs hear about it.
+        await ChannelState.updateOne(
+          { userId: me, conversationId: chat._id },
+          { $max: { lastReadSeq: upTo } },
+          { upsert: true },
+        ).exec();
+        realtime.toUsers([me], "chat:read", { conversationId: String(chat._id), userId: me, seq: upTo });
+        return res.json({ status: true, message: "", data: { lastReadSeq: upTo } });
+      }
       await Conversation.updateOne(
         { _id: chat._id },
         { $max: { "members.$[me].lastReadSeq": upTo } },

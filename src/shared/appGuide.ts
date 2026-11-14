@@ -43,6 +43,25 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
+      "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
+      "Start a voice or video call with anyone in a chat or group, and share your screen during it.",
+      "Drop into a community channel's voice room, no ringing needed, and keep talking while you browse the app.",
+      "Forward a message to other chats, with the original sender named.",
+      "Create a poll with up to ten options, let people vote live, and close it when you are done.",
+      "Record a voice message and send it, then play it with a waveform, a speed button and a slider to jump around.",
+      "Search for a GIF and send it in a chat.",
+      "Reply in a thread under any message to keep a side conversation out of the main chat, and follow a thread to hear about its replies.",
+      "See who is online, idle or busy, and set your own status, with a line that can clear itself.",
+      "Jump to your first unread message, to the message a reply quotes, or to a message someone shared a link to.",
+      "Copy a link to any message so others can open the chat right at it.",
+      "Search your messages by words, sender, files, links or date, in one chat, one community or everywhere.",
+      "Pin an important message so everyone can find it again from the pin button at the top of the chat.",
+      "See a short preview of a web page when someone shares its link, and take it off your own message if you prefer.",
+      "Format a message with bold, italic, strikethrough, code, quotes and lists, or hide a spoiler until it is clicked.",
+      "Pick any emoji for a message or a reaction, with search, skin tones and the ones you used lately.",
+      "Add your own emoji to a community or a group chat, and use them in messages and reactions.",
+      "Make a community for a group, with its own channels, roles and people, and invite hub users to join.",
+      "Make a channel private or read-only, and give people roles with the permissions you choose.",
       "Find the people you share groups, books and notebooks with, and message them.",
       "Get notifications on your phone or computer, and by email if you want them.",
       "Send a link, some text or a photo from your phone's Share button, then save it as a note, a short link, a file or the start of an expense.",
@@ -54,6 +73,53 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       {
         text: "Press Edit next to Pinned apps on Home to pin the apps you use. They show up at the top with a count of what is waiting.",
         link: "/internal",
+      },
+      {
+        text: "Try Communities to chat with a group in separate channels. Use the invite button to ask people to join.",
+        link: "/internal/communities",
+      },
+      {
+        text: "Try the phone or camera button at the top of a chat to call someone. Minimise the call to keep using the app.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try Forward in a message's menu to share it with other chats at once.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try Create a poll from the paperclip menu to settle a question quickly.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try the microphone button next to the message box to send a voice message of up to five minutes.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try Reply in thread in a message's menu to keep a side conversation tidy. The threads button lists them all.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try Do not disturb in your status (in the side menu) to silence push notifications while you focus.",
+      },
+      {
+        text: "Try tapping a reply's quote to jump to the message it answers.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try the magnifying glass at the top of a chat to find an old message by who sent it or when.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try typing @ and a name in a message to mention someone. They are told even if they muted the chat.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try putting ** around words to make them bold, or || around words to hide them as a spoiler.",
+        link: "/internal/messages",
+      },
+      {
+        text: "Try typing a colon and a word, like :smile, in a message. Pick an emoji from the list that appears.",
+        link: "/internal/messages",
       },
       {
         text: "Open Messages to chat with a person or a group, and send photos in the conversation.",
