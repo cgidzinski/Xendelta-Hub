@@ -153,6 +153,8 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
               title: m.gif.title ?? "",
             }
           : null,
+      voice:
+        !deleted && m.voice?.duration ? { duration: m.voice.duration, waveform: [...(m.voice.waveform ?? [])] } : null,
       threadRoot: m.threadRoot ?? null,
       thread:
         m.thread?.lastAt && (m.thread.count ?? 0) > 0
@@ -192,11 +194,13 @@ function previewOf(
   attachmentName?: string,
   names?: ReadonlyMap<string, string>,
   hasGif = false,
+  hasVoice = false,
 ): string {
   const body = plainMessageText(rawBody, names);
   const text = body.trim().replace(/\s+/g, " ");
   if (text) return text.length > CHAT_PREVIEW_MAX ? text.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd() + "…" : text;
   if (hasGif) return "Sent a GIF";
+  if (hasVoice) return "Sent a voice message";
   if (attachmentCount === 1) return attachmentName ? `Sent ${attachmentName}` : "Sent a file";
   return attachmentCount > 1 ? `Sent ${attachmentCount} files` : "";
 }
@@ -209,6 +213,7 @@ export interface NewMessage {
   attachments?: Array<{ fileId: string; name: string; mimeType: string; size: number }>;
   replyTo?: number;
   gif?: { url: string; stillUrl: string; width: number; height: number; title: string };
+  voice?: { duration: number; waveform: number[] };
   /** A reply in the thread of this message (kept out of the main history). */
   threadRoot?: number;
   clientId?: string;
@@ -240,6 +245,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     attachments,
     replyTo: input.replyTo,
     gif: input.gif,
+    voice: input.voice,
     threadRoot: input.threadRoot,
     clientId: input.clientId,
     mentions: input.mentions?.userIds ?? [],
@@ -256,6 +262,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
           attachments[0]?.name,
           await mentionNames(input.body ?? ""),
           !!input.gif,
+          !!input.voice,
         );
   // Only the newest message may set the last-message summary, so two sends racing can't leave an older one in it.
   await Conversation.updateOne(
@@ -319,6 +326,7 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
     message.attachments[0]?.name,
     await mentionNames(message.body ?? ""),
     !!message.gif?.url,
+    !!message.voice?.duration,
   );
   const now = Date.now();
 

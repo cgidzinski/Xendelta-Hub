@@ -3,6 +3,9 @@ import { Box, ButtonBase, IconButton, InputBase, Paper, Typography, useMediaQuer
 import SendIcon from "@mui/icons-material/Send";
 import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined";
 import GifBoxOutlinedIcon from "@mui/icons-material/GifBoxOutlined";
+import MicNoneOutlinedIcon from "@mui/icons-material/MicNoneOutlined";
+import VoiceRecorderBar from "../../../../components/chat/VoiceRecorderBar";
+import { canRecordVoice } from "../../../../hooks/chat/useVoiceRecorder";
 import type { ChatGif } from "@shared/gif";
 import GifPicker from "../../../../components/chat/GifPicker";
 import { useGifsEnabled } from "../../../../hooks/chat/useGifs";
@@ -12,7 +15,7 @@ import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiP
 import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../../../components/emoji/emojiText";
 import { CustomEmojiImage } from "../../../../components/emoji/EmojiText";
 import { emojiToken, type CustomEmoji } from "@shared/emoji";
-import type { ChatPerson } from "@shared/chat";
+import type { ChatAttachment, ChatPerson, ChatVoice } from "@shared/chat";
 import { Avatar } from "@mui/material";
 import {
   mentionBeforeCaret,
@@ -43,6 +46,8 @@ interface ComposerProps {
   onSaveEdit: (body: string) => void;
   /** Send a GIF from the picker (the GIF button is shown only when this is given and GIFs are set up). */
   onSendGif?: (gif: ChatGif) => void;
+  /** Send a recorded voice message (the mic button is shown when this is given). */
+  onSendVoice?: (attachment: ChatAttachment, voice: ChatVoice) => void;
   /** The custom emoji of this community or chat, offered in the picker and when typing `:name`. */
   customEmoji?: CustomEmoji[];
   /** Who can be mentioned with `@name` here, and whether this person may also use @everyone and @here. */
@@ -82,6 +87,7 @@ export default function Composer({
   onSend,
   onSaveEdit,
   onSendGif,
+  onSendVoice,
   customEmoji = NO_CUSTOM,
   mentionable = NO_PEOPLE,
   canPingAll = false,
@@ -96,6 +102,7 @@ export default function Composer({
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null);
   const gifsEnabled = useGifsEnabled();
+  const [recordingVoice, setRecordingVoice] = useState(false);
   // `:smi` suggests emoji: the list loads the first time a colon-word is typed.
   const [emojiList, setEmojiList] = useState<EmojiEntry[] | null>(null);
   const [caret, setCaret] = useState(0);
@@ -254,76 +261,89 @@ export default function Composer({
 
       <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2.5, bgcolor: "background.paper", p: 0.75 }}>
         {tray}
-        <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
-          {!editing && attach}
-          <IconButton aria-label="Add emoji" onClick={(e) => setEmojiAnchor(e.currentTarget)}>
-            <EmojiEmotionsOutlinedIcon />
-          </IconButton>
-          {onSendGif && gifsEnabled && !editing && (
-            <IconButton aria-label="Add a GIF" aria-haspopup="dialog" onClick={(e) => setGifAnchor(e.currentTarget)}>
-              <GifBoxOutlinedIcon />
-            </IconButton>
-          )}
-          <InputBase
-            multiline
-            maxRows={6}
-            fullWidth
-            inputRef={input}
-            value={text}
-            placeholder={`Message ${title}`}
-            onChange={(e) => {
-              setText(e.target.value);
-              setCaret(e.target.selectionStart ?? e.target.value.length);
-              onInput();
-            }}
-            onKeyDown={(e) => {
-              if (suggesting) {
-                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setPick((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length);
-                  return;
-                }
-                if (e.key === "Enter" || e.key === "Tab") {
-                  e.preventDefault();
-                  acceptSuggestion(suggestions[pick]!);
-                  return;
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setDismissedAt(match!.start);
-                  return;
-                }
-              }
-              if (e.key === "Enter" && !e.shiftKey && !coarse) {
-                e.preventDefault();
-                submit();
-              }
-              if (e.key === "Escape" && (editing || replyTo)) onCancelContext();
-            }}
-            slotProps={{
-              input: {
-                "aria-label": `Message ${title}`,
-                maxLength: CHAT_BODY_MAX,
-                onSelect: (e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0),
-              },
-            }}
-            sx={{ px: 1, py: 1, fontSize: 14 }}
+        {recordingVoice && onSendVoice ? (
+          <VoiceRecorderBar
+            conversationId={conversationId}
+            onSend={onSendVoice}
+            onClose={() => setRecordingVoice(false)}
           />
-          <IconButton
-            color="primary"
-            onClick={submit}
-            disabled={!canSend}
-            aria-label={editing ? "Save" : "Send"}
-            sx={{
-              bgcolor: canSend ? "primary.main" : undefined,
-              color: canSend ? "primary.contrastText" : undefined,
-              borderRadius: 1.5,
-              "&:hover": { bgcolor: "primary.dark" },
-            }}
-          >
-            <SendIcon fontSize="small" />
-          </IconButton>
-        </Box>
+        ) : (
+          <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
+            {!editing && attach}
+            <IconButton aria-label="Add emoji" onClick={(e) => setEmojiAnchor(e.currentTarget)}>
+              <EmojiEmotionsOutlinedIcon />
+            </IconButton>
+            {onSendGif && gifsEnabled && !editing && (
+              <IconButton aria-label="Add a GIF" aria-haspopup="dialog" onClick={(e) => setGifAnchor(e.currentTarget)}>
+                <GifBoxOutlinedIcon />
+              </IconButton>
+            )}
+            <InputBase
+              multiline
+              maxRows={6}
+              fullWidth
+              inputRef={input}
+              value={text}
+              placeholder={`Message ${title}`}
+              onChange={(e) => {
+                setText(e.target.value);
+                setCaret(e.target.selectionStart ?? e.target.value.length);
+                onInput();
+              }}
+              onKeyDown={(e) => {
+                if (suggesting) {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setPick((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length);
+                    return;
+                  }
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    acceptSuggestion(suggestions[pick]!);
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setDismissedAt(match!.start);
+                    return;
+                  }
+                }
+                if (e.key === "Enter" && !e.shiftKey && !coarse) {
+                  e.preventDefault();
+                  submit();
+                }
+                if (e.key === "Escape" && (editing || replyTo)) onCancelContext();
+              }}
+              slotProps={{
+                input: {
+                  "aria-label": `Message ${title}`,
+                  maxLength: CHAT_BODY_MAX,
+                  onSelect: (e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0),
+                },
+              }}
+              sx={{ px: 1, py: 1, fontSize: 14 }}
+            />
+            {onSendVoice && canRecordVoice() && !editing && !text.trim() && !hasAttachments && (
+              <IconButton aria-label="Record a voice message" onClick={() => setRecordingVoice(true)}>
+                <MicNoneOutlinedIcon />
+              </IconButton>
+            )}
+            <IconButton
+              color="primary"
+              onClick={submit}
+              disabled={!canSend}
+              aria-label={editing ? "Save" : "Send"}
+              sx={{
+                bgcolor: canSend ? "primary.main" : undefined,
+                color: canSend ? "primary.contrastText" : undefined,
+                borderRadius: 1.5,
+                "&:hover": { bgcolor: "primary.dark" },
+              }}
+            >
+              <SendIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        )}
       </Box>
       {suggesting && (
         <Paper

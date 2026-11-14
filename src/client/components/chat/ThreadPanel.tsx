@@ -118,6 +118,12 @@ export default function ThreadPanel({
       removeEmbeds.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't remove the preview") }),
     onRetry: (m: LocalMessage) => send.mutate({ clientId: m.clientId!, body: m.body, replyTo: m.replyTo ?? undefined }),
     onDiscard: (m: LocalMessage) => discard(m._id),
+    onAttachmentUrl: async (m: LocalMessage, a: ChatAttachment) =>
+      (
+        await api.get<{ url: string }>(
+          `/api/chat/conversations/${conversationId}/messages/${m.seq}/attachments/${a.fileId}`,
+        )
+      ).url,
     onOpenAttachment: async (m: LocalMessage, a: ChatAttachment) => {
       try {
         const { url } = await api.get<{ url: string }>(
@@ -224,6 +230,17 @@ export default function ThreadPanel({
           hasAttachments={false}
           onSend={(body) => {
             send.mutate({ clientId: newClientId(), body, replyTo: replyTo?.seq });
+            setReplyTo(undefined);
+          }}
+          onSendVoice={(attachment, voice) => {
+            send.mutate({
+              clientId: newClientId(),
+              body: "",
+              attachmentIds: [attachment.fileId],
+              attachments: [attachment],
+              voice,
+              replyTo: replyTo?.seq,
+            });
             setReplyTo(undefined);
           }}
           onSendGif={(gif) => {

@@ -42,7 +42,9 @@ export function useChatRealtime() {
             lastMessage: {
               seq: message.seq,
               from: message.from,
-              preview: plainMessageText(message.body) || (message.gif ? "Sent a GIF" : ""),
+              preview:
+                plainMessageText(message.body) ||
+                (message.gif ? "Sent a GIF" : message.voice ? "Sent a voice message" : ""),
               at: message.createdAt,
             },
           }

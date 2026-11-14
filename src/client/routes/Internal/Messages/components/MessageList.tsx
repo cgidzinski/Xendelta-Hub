@@ -48,6 +48,7 @@ interface MessageListProps {
     onRetry: (m: LocalMessage) => void;
     onDiscard: (m: LocalMessage) => void;
     onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
+    onAttachmentUrl: (m: LocalMessage, a: ChatAttachment) => Promise<string>;
   };
 }
 

@@ -47,6 +47,11 @@ const messageSchema = new Schema({
     name: { type: String },
   },
   attachments: [attachmentSchema],
+  // A voice message: how long it is and its loudness bars. The audio is the message's one attachment.
+  voice: {
+    duration: { type: Number },
+    waveform: { type: [Number], default: undefined },
+  },
   // A GIF picked from the picker (shared/gif.ts): where the provider hosts it, a still frame, and its size.
   gif: {
     url: { type: String },

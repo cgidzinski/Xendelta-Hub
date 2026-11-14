@@ -6,6 +6,7 @@ import type {
   ChatConversation,
   ChatMessage,
   ChatPerson,
+  ChatVoice,
   ChatSearchHas,
   ChatSearchResult,
 } from "@shared/chat";
@@ -168,6 +169,8 @@ export interface SendInput {
   attachments?: ChatAttachment[];
   /** A GIF from the picker. */
   gif?: ChatGif;
+  /** Marks the one attachment as a voice message. */
+  voice?: ChatVoice;
 }
 
 export const newClientId = () =>
@@ -190,6 +193,7 @@ export function useSendMessage(conversationId: string) {
           replyTo: input.replyTo,
           attachmentIds: input.attachmentIds,
           gif: input.gif,
+          voice: input.voice,
         })
       ).message,
     onMutate: (input) => {
@@ -203,6 +207,7 @@ export function useSendMessage(conversationId: string) {
         body: input.body,
         attachments: input.attachments ?? [],
         gif: input.gif ?? null,
+        voice: input.voice ?? null,
         replyTo: input.replyTo ?? null,
         reactions: [],
         createdAt: new Date().toISOString(),

@@ -69,7 +69,7 @@ export default function ThreadsButton({ conversationId, lookup, onOpen }: Props)
               wordBreak: "break-word",
             }}
           >
-            {plainMessageText(m.body) || (m.gif ? "GIF" : "Attachment")}
+            {plainMessageText(m.body) || (m.gif ? "GIF" : m.voice ? "Voice message" : "Attachment")}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {who?.username ?? "Former member"} · {m.thread?.count} {m.thread?.count === 1 ? "reply" : "replies"} · last{" "}

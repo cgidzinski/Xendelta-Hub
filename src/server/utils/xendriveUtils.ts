@@ -35,7 +35,16 @@ function detectContentType(filename: string): string {
   if (ext === "gif") return "image/gif";
   if (ext === "pdf") return "application/pdf";
   if (ext === "zip") return "application/zip";
-  return "application/octet-stream";
+  // Audio, so a recording (a chat voice message: .webm or .m4a) is stored as audio.
+  const audio: Record<string, string> = {
+    webm: "audio/webm",
+    m4a: "audio/mp4",
+    mp3: "audio/mpeg",
+    ogg: "audio/ogg",
+    wav: "audio/wav",
+    aac: "audio/aac",
+  };
+  return audio[ext] ?? "application/octet-stream";
 }
 
 /** Throws unless `folderId` is one of this person's folders. null means the top level. */

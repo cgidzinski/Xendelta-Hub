@@ -55,6 +55,17 @@ export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "rename
 
 /** How many messages a chat can have pinned at once. */
 export const CHAT_MAX_PINS = 50;
+/** The longest voice message, in seconds, and how many bars its waveform has. */
+export const VOICE_MAX_SECONDS = 300;
+export const VOICE_WAVEFORM_BARS = 48;
+
+/** What a voice message carries besides its audio file (the one attachment): how long it is, and its shape. */
+export interface ChatVoice {
+  /** Seconds. */
+  duration: number;
+  /** Loudness 0 to 255 for each of VOICE_WAVEFORM_BARS slices. */
+  waveform: number[];
+}
 export const CHAT_THREAD_PAGE = 100;
 /** A thread with no reply for this long is shown as archived (a new reply brings it back). */
 export const CHAT_THREAD_ARCHIVE_DAYS = 7;
@@ -101,6 +112,8 @@ export interface ChatMessage {
   embeds?: LinkEmbed[];
   /** A GIF sent from the picker. */
   gif?: ChatGif | null;
+  /** Set on a voice message: its one attachment is the audio. */
+  voice?: ChatVoice | null;
   /** For a reply in a thread: the number of the message the thread hangs off. Such replies are not in the main history. */
   threadRoot?: number | null;
   /** On a message that has a thread: its replies so far. */

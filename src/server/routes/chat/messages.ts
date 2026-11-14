@@ -126,7 +126,7 @@ export function registerMessageRoutes(app: Application) {
       const context = await loadChatContext(req.params.conversationId as string, me);
       const { chat } = context;
       if (!canPostChat(context.access, me)) throw new AppError(403, "You can't post here");
-      const { clientId, body, replyTo, threadRoot, attachmentIds, gif } = sendChatMessageSchema.parse(req.body);
+      const { clientId, body, replyTo, threadRoot, attachmentIds, gif, voice } = sendChatMessageSchema.parse(req.body);
 
       // A retry of a send that already went through returns the stored message instead of sending it twice.
       if (clientId) {
@@ -161,6 +161,11 @@ export function registerMessageRoutes(app: Application) {
         });
       }
 
+      // A voice message is exactly one audio file.
+      if (voice && (attachments.length !== 1 || !/^(audio\/|video\/(webm|mp4))/.test(attachments[0].mimeType))) {
+        throw new AppError(400, "A voice message is one audio recording");
+      }
+
       const user = await loadCaller(req);
       const message = await appendMessage(chat, {
         from: me,
@@ -168,6 +173,7 @@ export function registerMessageRoutes(app: Application) {
         replyTo,
         threadRoot,
         gif,
+        voice,
         attachments,
         clientId,
         mentions: resolveMentions(context, me, body),

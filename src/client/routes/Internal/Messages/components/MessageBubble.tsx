@@ -7,6 +7,7 @@ import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LinkIcon from "@mui/icons-material/Link";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import VoiceMessage from "../../../../components/chat/VoiceMessage";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -104,6 +105,8 @@ export interface MessageBubbleProps {
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
+  /** A short-lived address for the audio of a voice message. */
+  onAttachmentUrl: (m: LocalMessage, a: ChatAttachment) => Promise<string>;
 }
 
 /** One message: the bubble, what it replies to, its files, reactions and status, and its action menu. */
@@ -154,6 +157,26 @@ export default function MessageBubble(props: MessageBubbleProps) {
         ))}
       </>
     ) : null;
+
+  // A voice message plays in place of its file card.
+  const voiceView =
+    !deleted && m.voice && m.attachments[0] && stored ? (
+      <Box
+        sx={{
+          mt: 0.5,
+          px: 1.25,
+          py: 0.75,
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 2,
+          display: "inline-block",
+          maxWidth: "100%",
+        }}
+      >
+        <VoiceMessage voice={m.voice} getUrl={() => props.onAttachmentUrl(m, m.attachments[0])} />
+      </Box>
+    ) : null;
+  const showFiles = !m.voice || !stored;
 
   // A GIF from the picker: still for people who ask their device to reduce motion, moving otherwise.
   const gifView =
@@ -448,7 +471,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </Typography>
           )}
 
-          {!deleted && m.attachments.length > 0 && (
+          {voiceView}
+          {!deleted && showFiles && m.attachments.length > 0 && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
               {m.attachments.map((a) => (
                 <AttachmentCard
@@ -601,7 +625,9 @@ export default function MessageBubble(props: MessageBubbleProps) {
               </Box>
             )}
 
+            {voiceView}
             {!deleted &&
+              showFiles &&
               m.attachments.map((a) => (
                 <AttachmentCard key={a.fileId} attachment={a} mine={mine} onOpen={() => props.onOpenAttachment(m, a)} />
               ))}

@@ -233,7 +233,9 @@ function SearchDialog({
             <>
               {results.map((r) => {
                 const who = lookup(r.message.from) ?? (r.message.from ? extraPeople.get(r.message.from) : undefined);
-                const body = plainMessageText(r.message.body) || (r.message.gif ? "GIF" : "Attachment");
+                const body =
+                  plainMessageText(r.message.body) ||
+                  (r.message.gif ? "GIF" : r.message.voice ? "Voice message" : "Attachment");
                 return (
                   <Box
                     key={r.message._id}

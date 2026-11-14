@@ -11,6 +11,8 @@ import {
   CHAT_SEARCH_HAS,
   CHAT_SEARCH_MAX_QUERY,
   CHAT_SEARCH_PAGE,
+  VOICE_MAX_SECONDS,
+  VOICE_WAVEFORM_BARS,
 } from "../../../shared/chat";
 
 const seq = z.coerce.number().int().min(1);
@@ -83,6 +85,11 @@ const chatGifSchema = z.object({
   title: z.string().max(120).default(""),
 });
 
+const chatVoiceSchema = z.object({
+  duration: z.number().min(0.5).max(VOICE_MAX_SECONDS),
+  waveform: z.array(z.number().int().min(0).max(255)).length(VOICE_WAVEFORM_BARS),
+});
+
 export const sendChatMessageSchema = z
   .object({
     /** Chosen by the sender's client; a retried send with the same one is stored once. */
@@ -95,6 +102,8 @@ export const sendChatMessageSchema = z
     attachmentIds: z.array(objectIdSchema).max(CHAT_MAX_ATTACHMENTS).optional(),
     /** A GIF from the picker. */
     gif: chatGifSchema.optional(),
+    /** Marks the one attachment as a voice message. */
+    voice: chatVoiceSchema.optional(),
   })
   .refine((v) => v.body.trim().length > 0 || (v.attachmentIds?.length ?? 0) > 0 || !!v.gif, {
     message: "Write a message or attach a file",
