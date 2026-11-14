@@ -1,7 +1,7 @@
 import type { Application, Request, Response } from "express";
 import { authenticateToken } from "../../middleware/auth";
 import { Conversation } from "../../models/conversation";
-import { loadChannel, serializeChannel } from "../../communities/channels";
+import { loadChannel, permissionsIn, serializeChannel } from "../../communities/channels";
 import { canGrantPermissions, canManageRole, hasPermission, memberOf, rankOf } from "../../communities/policy";
 import { announceCommunity, loadCommunity, presentCommunity, communityMemberIds } from "../../communities/service";
 import { realtime } from "../../realtime";
@@ -232,7 +232,7 @@ export function registerRoleRoutes(app: Application) {
       channel.set("overrides", overrides);
       await channel.save();
       realtime.toUsers(communityMemberIds(community), "community:channels", { communityId: String(community._id) });
-      ok(res, { channel: serializeChannel(channel, undefined) });
+      ok(res, { channel: serializeChannel(channel, undefined, permissionsIn(community, channel, me)) });
     },
   );
 }

@@ -2,7 +2,7 @@ import type { Application, Request, Response } from "express";
 import { authenticateToken } from "../../middleware/auth";
 import { Community } from "../../models/community";
 import { loadPeople } from "../../chat/service";
-import { createChannel } from "../../communities/channels";
+import { createChannel, unreadChannelsByCommunity } from "../../communities/channels";
 import { hasPermission, isCommunityOwner } from "../../communities/policy";
 import {
   announceCommunity,
@@ -33,7 +33,10 @@ export function registerCommunityRoutes(app: Application) {
     const me = callerId(req);
     const communities = await Community.find({ "members.user_id": me }).sort({ createdAt: -1 }).exec();
     const people = await loadPeople(communities.flatMap((s) => s.members.map((m) => m.user_id)));
-    ok(res, { communities: communities.map((s) => serializeCommunity(s, me, people)) });
+    const unread = await unreadChannelsByCommunity(me);
+    ok(res, {
+      communities: communities.map((s) => serializeCommunity(s, me, people, unread.get(String(s._id)) ?? 0)),
+    });
   });
 
   // Make a community. The maker is its owner.

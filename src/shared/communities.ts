@@ -89,6 +89,8 @@ export interface Community {
   roles: CommunityRoleInfo[];
   /** What the person asking may do across the community (channels can change this for them). */
   permissions: CommunityPermission[];
+  /** How many of its channels have something the person hasn't read (muted ones don't count). */
+  unreadChannels: number;
   createdAt: string;
 }
 
@@ -110,6 +112,8 @@ export interface CommunityChannel {
   muted: boolean;
   /** Who this channel is closed to, or open only to. Empty means it follows the community's roles. */
   overrides: ChannelOverride[];
+  /** What the person asking may do in this channel: the community's permissions changed by the overrides. */
+  permissions: CommunityPermission[];
   createdAt: string;
 }
 

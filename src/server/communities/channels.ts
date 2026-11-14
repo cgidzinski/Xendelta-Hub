@@ -6,8 +6,8 @@ import { Conversation, type ConversationDocument } from "../models/conversation"
 import { Message } from "../models/message";
 import { Community, type CommunityDocument } from "../models/community";
 import { AppError } from "../utils/http";
-import { hasPermission } from "./policy";
-import type { ChannelOverride, CommunityChannel } from "@shared/communities";
+import { channelPermissions, hasPermission } from "./policy";
+import type { ChannelOverride, CommunityChannel, CommunityPermission } from "@shared/communities";
 
 type StateLike = { lastReadSeq?: number | null; mutedUntil?: Date | null } | undefined;
 
@@ -31,7 +31,16 @@ export async function loadChannel(community: CommunityDocument, channelId: strin
 
 const isMutedNow = (state: StateLike, now = Date.now()) => !!state?.mutedUntil && state.mutedUntil.getTime() > now;
 
-export function serializeChannel(channel: ConversationDocument, state: StateLike): CommunityChannel {
+/** What `userId` may do in this channel (the community's permissions, changed by the channel's overrides). */
+export const permissionsIn = (community: CommunityDocument, channel: ConversationDocument, userId: string) => [
+  ...channelPermissions(community, userId, channelOverrides(channel)),
+];
+
+export function serializeChannel(
+  channel: ConversationDocument,
+  state: StateLike,
+  permissions: CommunityPermission[],
+): CommunityChannel {
   const last = channel.lastMessage;
   const seq = channel.seq ?? 0;
   return {
@@ -49,6 +58,7 @@ export function serializeChannel(channel: ConversationDocument, state: StateLike
     unread: Math.max(0, seq - (state?.lastReadSeq ?? 0)),
     muted: isMutedNow(state),
     overrides: channelOverrides(channel),
+    permissions,
     createdAt: (channel.createdAt ?? new Date(0)).toISOString(),
   };
 }
@@ -63,7 +73,7 @@ export async function listChannels(community: CommunityDocument, userId: string)
     .lean()
     .exec();
   const byChannel = new Map(states.map((s) => [String(s.conversationId), s]));
-  return visible.map((c) => serializeChannel(c, byChannel.get(String(c._id))));
+  return visible.map((c) => serializeChannel(c, byChannel.get(String(c._id)), permissionsIn(community, c, userId)));
 }
 
 export interface NewChannel {
@@ -99,10 +109,11 @@ export async function deleteChannel(channelId: unknown): Promise<void> {
   await Conversation.deleteOne({ _id: channelId }).exec();
 }
 
-/** How many channels the person can see that have something unread (muted ones don't count). */
-export async function unreadChannelCount(userId: string): Promise<number> {
+/** How many channels the person can see that have something unread (muted ones don't count), by community id. */
+export async function unreadChannelsByCommunity(userId: string): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
   const communities = await Community.find({ "members.user_id": userId }).exec();
-  if (communities.length === 0) return 0;
+  if (communities.length === 0) return counts;
   const communityById = new Map(communities.map((s) => [String(s._id), s]));
   const channels = await Conversation.find(
     { communityId: { $in: [...communityById.keys()] }, "lastMessage.at": { $exists: true } },
@@ -113,16 +124,24 @@ export async function unreadChannelCount(userId: string): Promise<number> {
     .exec();
   const byChannel = new Map(states.map((s) => [String(s.conversationId), s]));
   const now = Date.now();
-  return channels.filter((c) => {
+  for (const c of channels) {
     const community = communityById.get(c.communityId ?? "");
     const state = byChannel.get(String(c._id));
-    return (
-      !!community &&
+    if (
+      community &&
       canSeeChannel(community, c, userId) &&
       (c.seq ?? 0) > (state?.lastReadSeq ?? 0) &&
       !isMutedNow(state, now)
-    );
-  }).length;
+    ) {
+      counts.set(String(community._id), (counts.get(String(community._id)) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** How many channels, in all the person's communities, have something unread (muted ones don't count). */
+export async function unreadChannelCount(userId: string): Promise<number> {
+  return [...(await unreadChannelsByCommunity(userId)).values()].reduce((sum, n) => sum + n, 0);
 }
 
 /** Delete every channel of a community (when the community is deleted). */

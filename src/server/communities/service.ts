@@ -3,7 +3,7 @@ import { CommunityInvite } from "../models/communityInvite";
 import { AppError } from "../utils/http";
 import { loadPeople } from "../chat/service";
 import { realtime } from "../realtime";
-import { deleteChannelsOf } from "./channels";
+import { deleteChannelsOf, unreadChannelsByCommunity } from "./channels";
 import { communityPermissions } from "./policy";
 import type { ChatPerson } from "@shared/chat";
 import type { Community as CommunityWire } from "@shared/communities";
@@ -24,6 +24,7 @@ export function serializeCommunity(
   community: CommunityDocument,
   viewerId: string,
   people: Map<string, ChatPerson>,
+  unreadChannels = 0,
 ): CommunityWire {
   const owner = community.members.find((m) => m.role === "owner");
   return {
@@ -49,13 +50,18 @@ export function serializeCommunity(
         everyone: !!r.everyone,
       })),
     permissions: [...communityPermissions(community, viewerId)],
+    unreadChannels,
     createdAt: iso(community.createdAt),
   };
 }
 
 /** The community as `viewerId` sees it, with its members' public info. */
 export async function presentCommunity(community: CommunityDocument, viewerId: string): Promise<CommunityWire> {
-  return serializeCommunity(community, viewerId, await loadPeople(communityMemberIds(community)));
+  const [people, unread] = await Promise.all([
+    loadPeople(communityMemberIds(community)),
+    unreadChannelsByCommunity(viewerId),
+  ]);
+  return serializeCommunity(community, viewerId, people, unread.get(String(community._id)) ?? 0);
 }
 
 /** Tell everyone in the community (and anyone just removed from it) that it changed, so their lists refetch. */

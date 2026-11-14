@@ -8,6 +8,7 @@ import {
   deleteChannel,
   listChannels,
   loadChannel,
+  permissionsIn,
   serializeChannel,
 } from "../../communities/channels";
 import { loadCommunity, communityMemberIds } from "../../communities/service";
@@ -60,7 +61,7 @@ export function registerChannelRoutes(app: Application) {
       }
       const channel = await createChannel(community, createChannelSchema.parse(req.body));
       tell(community);
-      ok(res, { channel: serializeChannel(channel, undefined) });
+      ok(res, { channel: serializeChannel(channel, undefined, permissionsIn(community, channel, me)) });
     },
   );
 
@@ -119,7 +120,7 @@ export function registerChannelRoutes(app: Application) {
       if (change.category !== undefined) channel.set("channel.category", change.category);
       await channel.save();
       tell(community);
-      ok(res, { channel: serializeChannel(channel, undefined) });
+      ok(res, { channel: serializeChannel(channel, undefined, permissionsIn(community, channel, me)) });
     },
   );
 

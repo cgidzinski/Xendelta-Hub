@@ -186,6 +186,35 @@ describe("who can see a channel", () => {
   });
 });
 
+describe("what you may do in a channel", () => {
+  it("each channel says what the viewer may do there, with the channel's overrides applied", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
+    const everyone = community.roles.find((r: any) => r.everyone)._id;
+    expect((await channels(community._id, b))[0].permissions.sort()).toEqual([
+      "invite",
+      "readMessages",
+      "sendMessages",
+    ]);
+
+    const { Conversation } = await import("../../models/conversation.js");
+    await Conversation.updateOne(
+      { _id: general._id },
+      { overrides: [{ roleId: everyone, allow: [], deny: ["sendMessages"] }] },
+    );
+    expect((await channels(community._id, b))[0].permissions.sort()).toEqual(["invite", "readMessages"]);
+    // The owner is never held back, and the answer to a change carries it too.
+    expect((await channels(community._id, a))[0].permissions).toContain("sendMessages");
+    const renamed = await request(t.app)
+      .patch(`/api/communities/${community._id}/channels/${general._id}`)
+      .set(as(a.token))
+      .send({ topic: "x" });
+    expect(renamed.body.data.channel.permissions).toContain("sendMessages");
+  });
+});
+
 describe("unread", () => {
   it("counts a channel with unread messages for each person, and not a muted one", async () => {
     const [a, b] = [await createUser(), await createUser()];
@@ -449,6 +478,25 @@ describe("messages in a channel", () => {
     const context = (await resolveChatAccess(general._id, id(a)))!;
     expect(audienceOf(context).sort()).toEqual([id(a), id(b)].sort());
     expect(await resolveChatAccess(general._id, id(await createUser()))).toBeNull();
+  });
+});
+
+describe("the community list", () => {
+  it("says how many channels have something unread, for each community", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const community = await make(a);
+    await addMember(community._id, b);
+    const [general] = await channels(community._id, a);
+    const list = async (u: U) =>
+      (await request(t.app).get("/api/communities").set(as(u.token))).body.data.communities as any[];
+    expect((await list(b))[0].unreadChannels).toBe(0);
+    await post(general._id, 2);
+    expect((await list(b))[0].unreadChannels).toBe(1);
+    const detail = await request(t.app).get(`/api/communities/${community._id}`).set(as(b.token));
+    expect(detail.body.data.community.unreadChannels).toBe(1);
+    const { ChannelState } = await import("../../models/channelState.js");
+    await ChannelState.create({ userId: id(b), conversationId: general._id, lastReadSeq: 2 });
+    expect((await list(b))[0].unreadChannels).toBe(0);
   });
 });
 
