@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { EmojiEntry } from "./emojiData";
 import type { CustomEmoji } from "@shared/emoji";
-import { isEmojiOnly, shortcodeBeforeCaret, splitEmojiText, suggestCustom, suggestShortcodes } from "./emojiText";
+import {
+  isEmojiOnly,
+  shortcodeBeforeCaret,
+  splitEmojiText,
+  suggestCustom,
+  suggestShortcodes,
+} from "./emojiTextHelpers";
 
 describe("shortcodeBeforeCaret", () => {
   it("finds the :partial before the cursor", () => {

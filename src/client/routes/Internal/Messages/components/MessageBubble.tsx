@@ -30,7 +30,7 @@ import type { LocalMessage } from "../../../../utils/chatCache";
 import { alpha, type Theme } from "@mui/material/styles";
 import { roleTextColor } from "../../Communities/communityUi";
 import { clock, listTime, nameFor, reactedBy, type PeopleLookup } from "../chatUi";
-import { isEmojiOnly } from "../../../../components/emoji/emojiText";
+import { isEmojiOnly } from "../../../../components/emoji/emojiTextHelpers";
 
 function AttachmentCard({
   attachment,

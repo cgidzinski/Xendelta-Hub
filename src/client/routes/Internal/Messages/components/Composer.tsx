@@ -12,7 +12,7 @@ import { useGifsEnabled } from "../../../../hooks/chat/useGifs";
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
 import { loadEmoji, withTone, type EmojiEntry } from "../../../../components/emoji/emojiData";
 import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
-import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../../../components/emoji/emojiText";
+import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../../../components/emoji/emojiTextHelpers";
 import { CustomEmojiImage } from "../../../../components/emoji/EmojiText";
 import { emojiToken, type CustomEmoji } from "@shared/emoji";
 import type { ChatAttachment, ChatPerson, ChatVoice } from "@shared/chat";

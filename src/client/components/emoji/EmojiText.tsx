@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { customIdOfReaction, type CustomEmoji } from "@shared/emoji";
-import { splitEmojiText } from "./emojiText";
+import { splitEmojiText } from "./emojiTextHelpers";
 
 /** One custom emoji as a picture that sits in a line of text (`size` is in em). */
 export function CustomEmojiImage({ emoji, size = 1.4 }: { emoji: Pick<CustomEmoji, "name" | "url">; size?: number }) {
