@@ -6,6 +6,7 @@ import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import StarIcon from "@mui/icons-material/Star";
 
+import { RADIUS } from "../../../../../theme";
 import { type KitchenItem } from "../../../../../hooks/xenkitchen/useKitchen";
 
 // ---------- photos ----------
@@ -20,6 +21,7 @@ export function PhotoStrip({
   onCoverPhoto,
   onRemoveNew,
   hint,
+  wrap = false,
 }: {
   photos: KitchenItem["images"];
   newFiles: Array<{ key: string; url: string }>;
@@ -30,6 +32,8 @@ export function PhotoStrip({
   onCoverPhoto: (id: string) => void;
   onRemoveNew: (key: string) => void;
   hint: string;
+  /** Wrap onto rows of three for a narrow column (the desktop sidebar) instead of scrolling sideways. */
+  wrap?: boolean;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -39,7 +43,9 @@ export function PhotoStrip({
     ...newFiles.map((f) => ({ key: f.key, url: f.url, existing: false })),
   ];
 
-  const tile = { width: 88, height: 88, borderRadius: 2, flexShrink: 0 } as const;
+  const tile = wrap
+    ? ({ width: "100%", aspectRatio: "1", borderRadius: RADIUS.lg } as const)
+    : ({ width: 88, height: 88, borderRadius: RADIUS.lg, flexShrink: 0 } as const);
 
   return (
     <Box
@@ -53,12 +59,23 @@ export function PhotoStrip({
         setDragOver(false);
         onAdd(e.dataTransfer.files);
       }}
-      sx={{ borderRadius: 3, outline: dragOver ? `2px dashed ${accent}` : "none", outlineOffset: 4 }}
+      sx={{ borderRadius: RADIUS.xl, outline: dragOver ? `2px dashed ${accent}` : "none", outlineOffset: 4 }}
     >
-      <Box sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 1 }}>
+      <Box
+        sx={
+          wrap
+            ? { display: "grid", gap: 1, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }
+            : { display: "flex", gap: 1, overflowX: "auto", pb: 1 }
+        }
+      >
         {all.map((p, i) => (
           <Box key={p.key} sx={{ ...tile, position: "relative" }}>
-            <Box component="img" src={p.url} alt="" sx={{ ...tile, objectFit: "cover", display: "block" }} />
+            <Box
+              component="img"
+              src={p.url}
+              alt=""
+              sx={{ ...tile, height: "100%", objectFit: "cover", display: "block" }}
+            />
             {i === 0 && (
               <Chip
                 size="small"
