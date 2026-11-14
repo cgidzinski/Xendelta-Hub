@@ -10,6 +10,10 @@ import { initialsOf } from "../communityUi";
 interface CommunityRailProps {
   communities: Community[];
   selectedId?: string;
+  /** Direct messages are open. */
+  directSelected?: boolean;
+  /** Something unread in a DM or group chat. */
+  directUnread?: boolean;
   /** Invites waiting for an answer. */
   inviteCount: number;
   /** Narrower on a phone, where it sits beside the channel list. */
@@ -39,6 +43,8 @@ const tile = (size: number) =>
 export default function CommunityRail({
   communities,
   selectedId,
+  directSelected,
+  directUnread,
   inviteCount,
   compact,
   onSelect,
@@ -65,11 +71,56 @@ export default function CommunityRail({
         overflowY: "auto",
       }}
     >
-      <Tooltip title="Messages" placement="right">
-        <ButtonBase aria-label="Messages" onClick={onMessages} sx={tile(size)}>
-          <ChatBubbleOutlineIcon />
-        </ButtonBase>
-      </Tooltip>
+      <Box sx={{ position: "relative" }}>
+        {directSelected && (
+          <Box
+            sx={{
+              position: "absolute",
+              left: compact ? -10 : -12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 4,
+              height: 28,
+              borderRadius: "0 4px 4px 0",
+              bgcolor: "primary.main",
+            }}
+          />
+        )}
+        <Tooltip title="Direct messages" placement="right">
+          <ButtonBase
+            aria-label={directUnread ? "Direct messages, unread" : "Direct messages"}
+            aria-current={directSelected ? "true" : undefined}
+            onClick={onMessages}
+            sx={{
+              ...tile(size),
+              ...(directSelected && {
+                color: "primary.main",
+                borderColor: "primary.main",
+                bgcolor: (t: Theme) => alpha(t.palette.primary.main, 0.14),
+              }),
+              ...(directUnread && { color: "text.primary" }),
+            }}
+          >
+            <ChatBubbleOutlineIcon />
+          </ButtonBase>
+        </Tooltip>
+        {directUnread && (
+          <Box
+            aria-hidden
+            sx={{
+              position: "absolute",
+              top: -2,
+              right: -2,
+              width: 12,
+              height: 12,
+              borderRadius: "50%",
+              bgcolor: "primary.main",
+              border: 2,
+              borderColor: "background.paper",
+            }}
+          />
+        )}
+      </Box>
       <Divider flexItem sx={{ mx: 2 }} />
 
       {communities.map((community) => {

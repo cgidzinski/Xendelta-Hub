@@ -75,7 +75,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal",
       },
       {
-        text: "Try Communities to chat with a group in separate channels. Use the invite button to ask people to join.",
+        text: "Try the round tiles on the left of Chat: the top one is your direct messages, and each community below it has its own channels. Use the invite button to ask people to join.",
         link: "/internal/communities",
       },
       {

@@ -59,8 +59,8 @@ const Home = lazyPage(() => import("./routes/Internal/Home/Home"));
 const People = lazyPage(() => import("./routes/Internal/People/People"));
 const PersonProfile = lazyPage(() => import("./routes/Internal/People/PersonProfile"));
 const Profile = lazyPage(() => import("./routes/Internal/Profile/Profile"));
-const Messages = lazyPage(() => import("./routes/Internal/Messages/Messages"));
-const Communities = lazyPage(() => import("./routes/Internal/Communities/Communities"));
+const Chat = lazyPage(() => import("./routes/Internal/Chat/Chat"));
+const ChatHome = lazyPage(() => import("./routes/Internal/Chat/ChatHome"));
 const CommunitySettings = lazyPage(() => import("./routes/Internal/Communities/settings/CommunitySettings"));
 const About = lazyPage(() => import("./routes/Internal/About/About"));
 const WhatsNewRedirect = lazyPage<object>(() =>
@@ -188,13 +188,14 @@ const router = createBrowserRouter(
         <Route path="profile" element={<Profile />} />
         <Route path="people" element={<People />} />
         <Route path="people/:userId" element={<PersonProfile />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="messages/:conversationId" element={<Messages />} />
-        <Route path="communities" element={<Communities />} />
-        <Route path="communities/:communityId" element={<Communities />} />
+        <Route path="chat" element={<ChatHome />} />
+        <Route path="messages" element={<Chat />} />
+        <Route path="messages/:conversationId" element={<Chat />} />
+        <Route path="communities" element={<Chat />} />
+        <Route path="communities/:communityId" element={<Chat />} />
         <Route path="communities/:communityId/settings" element={<CommunitySettings />} />
         <Route path="communities/:communityId/settings/:tab" element={<CommunitySettings />} />
-        <Route path="communities/:communityId/:channelId" element={<Communities />} />
+        <Route path="communities/:communityId/:channelId" element={<Chat />} />
         <Route path="notifications" element={<Notifications />} />
         {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
         <Route path="share" element={<Share />} />
