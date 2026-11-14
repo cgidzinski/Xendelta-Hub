@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { objectIdSchema } from "./core";
 import { customIdOfReaction } from "../../../shared/emoji";
+import { isGifHost } from "../../../shared/gif";
 import {
   CHAT_BODY_MAX,
   CHAT_MAX_ATTACHMENTS,
@@ -73,6 +74,15 @@ export const chatOwnerSchema = z.object({ role: z.literal("owner") });
 export const chatMeSchema = z.object({ muted: z.boolean().optional(), hidden: z.boolean().optional() });
 export const chatReadSchema = z.object({ seq: z.number().int().min(0) });
 
+const gifUrl = z.string().max(500).refine(isGifHost, { message: "That isn't a GIF from the picker" });
+const chatGifSchema = z.object({
+  url: gifUrl,
+  stillUrl: gifUrl,
+  width: z.number().int().min(1).max(2000),
+  height: z.number().int().min(1).max(2000),
+  title: z.string().max(120).default(""),
+});
+
 export const sendChatMessageSchema = z
   .object({
     /** Chosen by the sender's client; a retried send with the same one is stored once. */
@@ -83,8 +93,10 @@ export const sendChatMessageSchema = z
     threadRoot: z.number().int().min(1).optional(),
     /** XenDrive files the sender owns. */
     attachmentIds: z.array(objectIdSchema).max(CHAT_MAX_ATTACHMENTS).optional(),
+    /** A GIF from the picker. */
+    gif: chatGifSchema.optional(),
   })
-  .refine((v) => v.body.trim().length > 0 || (v.attachmentIds?.length ?? 0) > 0, {
+  .refine((v) => v.body.trim().length > 0 || (v.attachmentIds?.length ?? 0) > 0 || !!v.gif, {
     message: "Write a message or attach a file",
   });
 export const editChatMessageSchema = z.object({

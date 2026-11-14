@@ -143,6 +143,16 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
             ...(existing.has(String(a.fileId)) ? {} : { removed: true }),
           })),
       replyTo: m.replyTo ?? null,
+      gif:
+        !deleted && m.gif?.url
+          ? {
+              url: m.gif.url,
+              stillUrl: m.gif.stillUrl ?? m.gif.url,
+              width: m.gif.width ?? 0,
+              height: m.gif.height ?? 0,
+              title: m.gif.title ?? "",
+            }
+          : null,
       threadRoot: m.threadRoot ?? null,
       thread:
         m.thread?.lastAt && (m.thread.count ?? 0) > 0
@@ -181,10 +191,12 @@ function previewOf(
   attachmentCount: number,
   attachmentName?: string,
   names?: ReadonlyMap<string, string>,
+  hasGif = false,
 ): string {
   const body = plainMessageText(rawBody, names);
   const text = body.trim().replace(/\s+/g, " ");
   if (text) return text.length > CHAT_PREVIEW_MAX ? text.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd() + "…" : text;
+  if (hasGif) return "Sent a GIF";
   if (attachmentCount === 1) return attachmentName ? `Sent ${attachmentName}` : "Sent a file";
   return attachmentCount > 1 ? `Sent ${attachmentCount} files` : "";
 }
@@ -196,6 +208,7 @@ export interface NewMessage {
   system?: { event: ChatSystemEvent; userIds?: string[]; name?: string };
   attachments?: Array<{ fileId: string; name: string; mimeType: string; size: number }>;
   replyTo?: number;
+  gif?: { url: string; stillUrl: string; width: number; height: number; title: string };
   /** A reply in the thread of this message (kept out of the main history). */
   threadRoot?: number;
   clientId?: string;
@@ -226,6 +239,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     system: input.system && { event: input.system.event, userIds: input.system.userIds ?? [], name: input.system.name },
     attachments,
     replyTo: input.replyTo,
+    gif: input.gif,
     threadRoot: input.threadRoot,
     clientId: input.clientId,
     mentions: input.mentions?.userIds ?? [],
@@ -236,7 +250,13 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
   const preview =
     input.kind === "system"
       ? (input.body ?? "")
-      : previewOf(input.body ?? "", attachments.length, attachments[0]?.name, await mentionNames(input.body ?? ""));
+      : previewOf(
+          input.body ?? "",
+          attachments.length,
+          attachments[0]?.name,
+          await mentionNames(input.body ?? ""),
+          !!input.gif,
+        );
   // Only the newest message may set the last-message summary, so two sends racing can't leave an older one in it.
   await Conversation.updateOne(
     { _id: chat._id, $or: [{ "lastMessage.seq": { $lt: seq } }, { "lastMessage.seq": { $exists: false } }] },
@@ -298,6 +318,7 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
     message.attachments.length,
     message.attachments[0]?.name,
     await mentionNames(message.body ?? ""),
+    !!message.gif?.url,
   );
   const now = Date.now();
 

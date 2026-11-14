@@ -155,6 +155,23 @@ export default function MessageBubble(props: MessageBubbleProps) {
       </>
     ) : null;
 
+  // A GIF from the picker: still for people who ask their device to reduce motion, moving otherwise.
+  const gifView =
+    !deleted && m.gif ? (
+      <Box component="picture" sx={{ display: "block", mt: 0.5, maxWidth: "100%", width: m.gif.width, lineHeight: 0 }}>
+        <source media="(prefers-reduced-motion: reduce)" srcSet={m.gif.stillUrl} />
+        <Box
+          component="img"
+          src={m.gif.url}
+          alt={m.gif.title ? `GIF: ${m.gif.title}` : "GIF"}
+          loading="lazy"
+          width={m.gif.width}
+          height={m.gif.height}
+          sx={{ display: "block", maxWidth: "100%", height: "auto", borderRadius: 1.5 }}
+        />
+      </Box>
+    ) : null;
+
   // How many replies the thread under this message has: a button that opens it.
   const threadChip =
     !deleted && m.thread && props.onOpenThread ? (
@@ -393,7 +410,9 @@ export default function MessageBubble(props: MessageBubbleProps) {
               <Typography variant="caption" noWrap>
                 {replyTarget
                   ? `Replying to ${nameFor(lookup, replyTarget.from, meId)}: ${
-                      replyTarget.deletedAt ? "Deleted message" : plainMessageText(replyTarget.body) || "Attachment"
+                      replyTarget.deletedAt
+                        ? "Deleted message"
+                        : plainMessageText(replyTarget.body) || (replyTarget.gif ? "GIF" : "Attachment")
                     }`
                   : "Replying to an earlier message"}
               </Typography>
@@ -442,6 +461,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </Box>
           )}
 
+          {gifView}
           {previews}
           {threadChip}
 
@@ -574,7 +594,9 @@ export default function MessageBubble(props: MessageBubbleProps) {
               >
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                   {nameFor(lookup, replyTarget.from, meId)} ·{" "}
-                  {replyTarget.deletedAt ? "Deleted message" : plainMessageText(replyTarget.body) || "Attachment"}
+                  {replyTarget.deletedAt
+                    ? "Deleted message"
+                    : plainMessageText(replyTarget.body) || (replyTarget.gif ? "GIF" : "Attachment")}
                 </Typography>
               </Box>
             )}
@@ -629,6 +651,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
           )}
         </Box>
 
+        {gifView}
         {previews}
         {threadChip}
 

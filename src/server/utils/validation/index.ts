@@ -18,5 +18,6 @@ export * from "./chat";
 export * from "./communities";
 export * from "./emoji";
 export * from "./presence";
+export * from "./gifs";
 export * from "./feed";
 export * from "./feedback";

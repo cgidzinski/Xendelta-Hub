@@ -3,6 +3,7 @@
 // Everything is a conversation. A conversation with two members is what people call a DM; there is no separate kind.
 // Messages are numbered 1, 2, 3... per conversation (`seq`), which is what paging, replies and "read up to here" use.
 import type { Cosmetics } from "./cosmetics";
+import type { ChatGif } from "./gif";
 
 export const CHAT_BODY_MAX = 10_000;
 export const CHAT_NAME_MAX = 100;
@@ -98,6 +99,8 @@ export interface ChatMessage {
   reactions: ChatReaction[];
   /** Previews of the links in the body, added a moment after sending. */
   embeds?: LinkEmbed[];
+  /** A GIF sent from the picker. */
+  gif?: ChatGif | null;
   /** For a reply in a thread: the number of the message the thread hangs off. Such replies are not in the main history. */
   threadRoot?: number | null;
   /** On a message that has a thread: its replies so far. */

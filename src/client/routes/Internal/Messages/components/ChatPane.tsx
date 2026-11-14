@@ -251,6 +251,7 @@ export default function ChatPane({
         replyTo: m.replyTo ?? undefined,
         attachmentIds: m.attachments.map((a) => a.fileId),
         attachments: m.attachments,
+        gif: m.gif ?? undefined,
       }),
     onDiscard: (m: LocalMessage) => discard(m._id),
     onOpenAttachment: async (m: LocalMessage, a: ChatAttachment) => {
@@ -381,6 +382,10 @@ export default function ChatPane({
             attach={<AttachButton onFiles={files.addFiles} onChooseFromDrive={() => setPickerOpen(true)} />}
             tray={<AttachmentTray items={files.items} onRemove={files.remove} />}
             onSend={sendText}
+            onSendGif={(gif) => {
+              send.mutate({ clientId: newClientId(), body: "", gif, replyTo: replyTo?.seq });
+              setReplyTo(undefined);
+            }}
             onSaveEdit={async (body) => {
               const target = editing;
               setEditing(undefined);

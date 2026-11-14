@@ -2,6 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Box, ButtonBase, IconButton, InputBase, Paper, Typography, useMediaQuery } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined";
+import GifBoxOutlinedIcon from "@mui/icons-material/GifBoxOutlined";
+import type { ChatGif } from "@shared/gif";
+import GifPicker from "../../../../components/chat/GifPicker";
+import { useGifsEnabled } from "../../../../hooks/chat/useGifs";
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
 import { loadEmoji, withTone, type EmojiEntry } from "../../../../components/emoji/emojiData";
 import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
@@ -37,6 +41,8 @@ interface ComposerProps {
   /** Send. Resolve when it has been handed off, so the box can clear. */
   onSend: (body: string) => void;
   onSaveEdit: (body: string) => void;
+  /** Send a GIF from the picker (the GIF button is shown only when this is given and GIFs are set up). */
+  onSendGif?: (gif: ChatGif) => void;
   /** The custom emoji of this community or chat, offered in the picker and when typing `:name`. */
   customEmoji?: CustomEmoji[];
   /** Who can be mentioned with `@name` here, and whether this person may also use @everyone and @here. */
@@ -75,6 +81,7 @@ export default function Composer({
   hasAttachments,
   onSend,
   onSaveEdit,
+  onSendGif,
   customEmoji = NO_CUSTOM,
   mentionable = NO_PEOPLE,
   canPingAll = false,
@@ -87,6 +94,8 @@ export default function Composer({
   const [picked, setPicked] = useState<Map<string, string>>(() => new Map());
   const input = useRef<HTMLTextAreaElement>(null);
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
+  const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null);
+  const gifsEnabled = useGifsEnabled();
   // `:smi` suggests emoji: the list loads the first time a colon-word is typed.
   const [emojiList, setEmojiList] = useState<EmojiEntry[] | null>(null);
   const [caret, setCaret] = useState(0);
@@ -234,7 +243,7 @@ export default function Composer({
               {editing ? "Editing message" : `Replying to ${nameFor(lookup, replyTo!.from, meId)}`}
             </Typography>
             <Typography variant="body2" color="text.secondary" noWrap>
-              {plainMessageText((editing ?? replyTo)!.body) || "Attachment"}
+              {plainMessageText((editing ?? replyTo)!.body) || ((editing ?? replyTo)!.gif ? "GIF" : "Attachment")}
             </Typography>
           </Box>
           <IconButton size="small" onClick={onCancelContext} aria-label="Cancel">
@@ -250,6 +259,11 @@ export default function Composer({
           <IconButton aria-label="Add emoji" onClick={(e) => setEmojiAnchor(e.currentTarget)}>
             <EmojiEmotionsOutlinedIcon />
           </IconButton>
+          {onSendGif && gifsEnabled && !editing && (
+            <IconButton aria-label="Add a GIF" aria-haspopup="dialog" onClick={(e) => setGifAnchor(e.currentTarget)}>
+              <GifBoxOutlinedIcon />
+            </IconButton>
+          )}
           <InputBase
             multiline
             maxRows={6}
@@ -352,6 +366,7 @@ export default function Composer({
           ))}
         </Paper>
       )}
+      {onSendGif && <GifPicker anchorEl={gifAnchor} onClose={() => setGifAnchor(null)} onPick={(g) => onSendGif(g)} />}
       <EmojiPopover
         anchorEl={emojiAnchor}
         onClose={() => setEmojiAnchor(null)}

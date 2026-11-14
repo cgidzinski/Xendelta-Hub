@@ -62,6 +62,7 @@ export function useSendThreadReply(conversationId: string, rootSeq: number) {
           replyTo: input.replyTo,
           threadRoot: rootSeq,
           attachmentIds: input.attachmentIds,
+          gif: input.gif,
         })
       ).message,
     onMutate: (input) => {
@@ -73,6 +74,7 @@ export function useSendThreadReply(conversationId: string, rootSeq: number) {
         kind: "text",
         body: input.body,
         attachments: input.attachments ?? [],
+        gif: input.gif ?? null,
         replyTo: input.replyTo ?? null,
         threadRoot: rootSeq,
         reactions: [],

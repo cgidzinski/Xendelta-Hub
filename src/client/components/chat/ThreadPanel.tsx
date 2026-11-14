@@ -226,6 +226,10 @@ export default function ThreadPanel({
             send.mutate({ clientId: newClientId(), body, replyTo: replyTo?.seq });
             setReplyTo(undefined);
           }}
+          onSendGif={(gif) => {
+            send.mutate({ clientId: newClientId(), body: "", gif, replyTo: replyTo?.seq });
+            setReplyTo(undefined);
+          }}
           onSaveEdit={async (body) => {
             const target = editing;
             setEditing(undefined);

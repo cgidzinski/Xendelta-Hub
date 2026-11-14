@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ChatGif } from "@shared/gif";
 import type {
   ChatAttachment,
   ChatConversation,
@@ -165,6 +166,8 @@ export interface SendInput {
   /** XenDrive file ids; `attachments` is what to draw while it sends. */
   attachmentIds?: string[];
   attachments?: ChatAttachment[];
+  /** A GIF from the picker. */
+  gif?: ChatGif;
 }
 
 export const newClientId = () =>
@@ -186,6 +189,7 @@ export function useSendMessage(conversationId: string) {
           body: input.body,
           replyTo: input.replyTo,
           attachmentIds: input.attachmentIds,
+          gif: input.gif,
         })
       ).message,
     onMutate: (input) => {
@@ -198,6 +202,7 @@ export function useSendMessage(conversationId: string) {
         kind: "text",
         body: input.body,
         attachments: input.attachments ?? [],
+        gif: input.gif ?? null,
         replyTo: input.replyTo ?? null,
         reactions: [],
         createdAt: new Date().toISOString(),

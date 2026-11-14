@@ -126,7 +126,7 @@ export function registerMessageRoutes(app: Application) {
       const context = await loadChatContext(req.params.conversationId as string, me);
       const { chat } = context;
       if (!canPostChat(context.access, me)) throw new AppError(403, "You can't post here");
-      const { clientId, body, replyTo, threadRoot, attachmentIds } = sendChatMessageSchema.parse(req.body);
+      const { clientId, body, replyTo, threadRoot, attachmentIds, gif } = sendChatMessageSchema.parse(req.body);
 
       // A retry of a send that already went through returns the stored message instead of sending it twice.
       if (clientId) {
@@ -167,6 +167,7 @@ export function registerMessageRoutes(app: Application) {
         body,
         replyTo,
         threadRoot,
+        gif,
         attachments,
         clientId,
         mentions: resolveMentions(context, me, body),

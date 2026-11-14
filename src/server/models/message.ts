@@ -47,6 +47,14 @@ const messageSchema = new Schema({
     name: { type: String },
   },
   attachments: [attachmentSchema],
+  // A GIF picked from the picker (shared/gif.ts): where the provider hosts it, a still frame, and its size.
+  gif: {
+    url: { type: String },
+    stillUrl: { type: String },
+    width: { type: Number },
+    height: { type: Number },
+    title: { type: String },
+  },
   embeds: [embedSchema],
   // Who the body mentions (people who could read the chat when it was sent), and whether it pings everyone or whoever is
   // online. See chat/mentions.ts.
