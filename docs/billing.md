@@ -113,3 +113,12 @@ A community's bills are paid from its fund. Any member can donate, including ahe
   shadow mode; otherwise yes while this month is inside the free tier with nothing unpaid, or while the balance is above
   this month's cost beyond the free tier (rounded up) plus anything unpaid. `assertCanSpend` throws a 402 with
   `billing: true` and a message that says what to do. **No cost center calls it yet**; each discussion wires it.
+
+## Admin billing report (`src/server/routes/admin/billing.ts`)
+
+`GET /api/admin/billing?month=YYYY-MM` sets, for a month and each cost center, what was measured (people, communities
+and the house together), what it billed and what it cost at the cost rate, beside what each provider actually charged.
+Actual costs are entered from the invoices with `PUT /api/admin/billing/costs/:month/:provider` `{ amountCents }`
+(audited as `provider_cost_set`) and converted at `BASE_GEMS_PER_DOLLAR`. Totals: free tier given to people and to
+communities, due, collected and unpaid from that month's statements. House centers keep the margin honest: what nobody
+is billed for still shows as a cost.
