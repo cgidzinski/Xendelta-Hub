@@ -281,3 +281,24 @@ export function monthProgress(month: string, now: Date = new Date()): number {
   const end = Date.UTC(y, m, 1);
   return Math.min(1, Math.max(0, (now.getTime() - start) / (end - start)));
 }
+
+/** One movement on a community fund's history, newest first. */
+export interface FundHistoryEntry {
+  _id: string;
+  kind: "donation" | "bill" | "other";
+  /** Positive when gems came in, negative when they went out. */
+  amount: number;
+  at: string;
+  /** Who donated (for a donation). */
+  by?: { _id: string; username: string; avatar: string } | null;
+  /** The month a bill paid for ("2026-11"). */
+  month?: string;
+}
+
+export interface CommunityFund {
+  communityId: string;
+  fund: number;
+  history: FundHistoryEntry[];
+  /** Whether donating is offered yet: only once something is billed to communities. */
+  donationsOpen: boolean;
+}

@@ -84,3 +84,15 @@ nothing is charged and nothing is blocked.
 2. Call `recordUsage` where the server observes the usage, with the account that pays.
 3. Call `canSpend(account)` before starting something that costs money (an upload, a call, a scan).
 4. Set its `costRate` and `status: "metered"` in `COST_CENTERS`, and add an `appGuide.ts` line if people should know.
+
+## Community funds (`src/server/billing/fund.ts`)
+
+A community's bills are paid from its fund. Any member can donate, including ahead of time; the fund carries over.
+
+- `POST /api/communities/:communityId/fund/donate` `{ gems, requestId }`: a ledger `donation` from the member, keyed by
+  `requestId` (made by the client), so a retried request can't donate twice. 402 when the member doesn't have the gems.
+- `GET /api/communities/:communityId/fund`: the balance and the last 50 movements (donations with who gave, bill
+  payments). Members only; anyone else gets 404.
+- Members get `community:fund` over realtime when it changes.
+- `donationsOpen` is `communitiesBilled()`: the Donate button stays hidden until some center billed to communities is
+  switched on, so nobody donates to a fund that pays for nothing.
