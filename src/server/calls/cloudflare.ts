@@ -42,7 +42,14 @@ async function ask<T>(url: string, token: string, method: string, body?: unknown
       signal: AbortSignal.timeout(10_000),
     });
   } catch (e) {
-    console.error("Cloudflare Realtime request failed:", e instanceof Error ? e.name : "error");
+    // What went wrong on the network, without the address or the secret: the error codes (ENETUNREACH, ETIMEDOUT,
+    // ECONNREFUSED...) and which address families were tried.
+    const cause: any = e instanceof Error ? (e as any).cause : undefined;
+    const attempts: any[] = cause?.errors ?? (cause ? [cause] : []);
+    const detail = attempts.map(
+      (a) => `${a.code ?? a.name}${a.address ? ` ${a.address.includes(":") ? "(IPv6)" : "(IPv4)"}` : ""}`,
+    );
+    console.error("Cloudflare Realtime request failed:", e instanceof Error ? e.name : "error", detail.join(", "));
     throw new AppError(502, "The call service isn't reachable right now. Try again in a moment.");
   }
   if (!res.ok) {
