@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Box, IconButton, InputBase, Typography, useMediaQuery } from "@mui/material";
+import { Box, ButtonBase, IconButton, InputBase, Paper, Typography, useMediaQuery } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined";
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
+import { loadEmoji, withTone, type EmojiEntry } from "../../../../components/emoji/emojiData";
+import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
+import { shortcodeBeforeCaret, suggestShortcodes } from "../../../../components/emoji/emojiText";
 import CloseIcon from "@mui/icons-material/Close";
 import { CHAT_BODY_MAX } from "@shared/chat";
 import type { LocalMessage } from "../../../../utils/chatCache";
@@ -48,6 +51,11 @@ export default function Composer({
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
+  // `:smi` suggests emoji: the list loads the first time a colon-word is typed.
+  const [emojiList, setEmojiList] = useState<EmojiEntry[] | null>(null);
+  const [caret, setCaret] = useState(0);
+  const [pick, setPick] = useState(0);
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const coarse = useMediaQuery("(pointer: coarse)");
   const { onInput, stop } = useTypingSender(conversationId);
 
@@ -56,6 +64,28 @@ export default function Composer({
     input.current?.focus();
   }, [editing, replyTo]);
   useEffect(() => setText(""), [conversationId]);
+
+  useEffect(() => {
+    if (!emojiList && /(^|\s):[a-z0-9_+-]{2}/i.test(text)) void loadEmoji().then(setEmojiList, () => undefined);
+  }, [text, emojiList]);
+  const match = emojiList ? shortcodeBeforeCaret(text, caret) : null;
+  const suggestions = match && emojiList ? suggestShortcodes(emojiList, match.query) : [];
+  const suggesting = !!match && suggestions.length > 0 && dismissedAt !== match.start;
+  useEffect(() => setPick(0), [match?.query]);
+
+  /** Swap the `:partial` for the emoji, in the person's skin tone, and put the cursor after it. */
+  const acceptSuggestion = (entry: EmojiEntry) => {
+    if (!match) return;
+    const emoji = withTone(entry, readSkinTone());
+    rememberEmoji(emoji);
+    setText(text.slice(0, match.start) + emoji + text.slice(caret));
+    const pos = match.start + emoji.length;
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(pos, pos);
+      setCaret(pos);
+    });
+  };
 
   // Put the emoji where the cursor is (replacing any selection), and leave the cursor after it.
   const insertEmoji = (emoji: string) => {
@@ -87,6 +117,7 @@ export default function Composer({
         pb: { xs: "calc(12px + env(safe-area-inset-bottom))", md: 2.5 },
         pt: 1,
         flexShrink: 0,
+        position: "relative",
       }}
     >
       {(replyTo || editing) && (
@@ -134,16 +165,40 @@ export default function Composer({
             placeholder={`Message ${title}`}
             onChange={(e) => {
               setText(e.target.value);
+              setCaret(e.target.selectionStart ?? e.target.value.length);
               onInput();
             }}
             onKeyDown={(e) => {
+              if (suggesting) {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setPick((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length);
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  acceptSuggestion(suggestions[pick]!);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setDismissedAt(match!.start);
+                  return;
+                }
+              }
               if (e.key === "Enter" && !e.shiftKey && !coarse) {
                 e.preventDefault();
                 submit();
               }
               if (e.key === "Escape" && (editing || replyTo)) onCancelContext();
             }}
-            slotProps={{ input: { "aria-label": `Message ${title}`, maxLength: CHAT_BODY_MAX } }}
+            slotProps={{
+              input: {
+                "aria-label": `Message ${title}`,
+                maxLength: CHAT_BODY_MAX,
+                onSelect: (e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0),
+              },
+            }}
             sx={{ px: 1, py: 1, fontSize: 14 }}
           />
           <IconButton
@@ -162,6 +217,47 @@ export default function Composer({
           </IconButton>
         </Box>
       </Box>
+      {suggesting && (
+        <Paper
+          variant="outlined"
+          role="listbox"
+          aria-label="Emoji suggestions"
+          sx={{
+            position: "absolute",
+            left: { xs: 8, md: 24 },
+            bottom: "100%",
+            mb: 0.5,
+            minWidth: 220,
+            maxWidth: "calc(100% - 16px)",
+            overflow: "hidden",
+            zIndex: 1,
+          }}
+        >
+          {suggestions.map((entry, i) => (
+            <ButtonBase
+              key={entry.order}
+              role="option"
+              aria-selected={i === pick}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => acceptSuggestion(entry)}
+              onMouseEnter={() => setPick(i)}
+              sx={{
+                display: "flex",
+                width: "100%",
+                justifyContent: "flex-start",
+                gap: 1.5,
+                px: 1.5,
+                py: 0.75,
+                fontSize: 14,
+                bgcolor: i === pick ? "action.selected" : "transparent",
+              }}
+            >
+              <span style={{ fontSize: 20 }}>{withTone(entry, readSkinTone())}</span>
+              <span>:{entry.shortcode}:</span>
+            </ButtonBase>
+          ))}
+        </Paper>
+      )}
       <EmojiPopover anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} onPick={insertEmoji} />
     </Box>
   );

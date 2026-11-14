@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Avatar, Box, Button, IconButton, Link, Menu, MenuItem, Typography } from "@mui/material";
+import { Avatar, Box, Button, IconButton, Link, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ReplyIcon from "@mui/icons-material/Reply";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -15,7 +15,8 @@ import { quickReactions, readRecentEmoji, rememberEmoji } from "../../../../comp
 import type { LocalMessage } from "../../../../utils/chatCache";
 import type { Theme } from "@mui/material/styles";
 import { roleTextColor } from "../../Communities/communityUi";
-import { clock, nameFor, type PeopleLookup } from "../chatUi";
+import { clock, nameFor, reactedBy, type PeopleLookup } from "../chatUi";
+import { isEmojiOnly } from "../../../../components/emoji/emojiText";
 
 function AttachmentCard({
   attachment,
@@ -100,6 +101,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
   const mine = m.from === meId;
   const sender = lookup(m.from);
   const deleted = !!m.deletedAt;
+  // One to three emoji and nothing else is drawn large, with no bubble.
+  const big = !deleted && m.attachments.length === 0 && isEmojiOnly(m.body);
   const stored = !m.status;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = () => setAnchor(null);
@@ -242,7 +245,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
             <Typography
               variant="body2"
               sx={{
-                lineHeight: 1.5,
+                lineHeight: big ? 1.25 : 1.5,
+                fontSize: big ? 36 : undefined,
                 whiteSpace: "pre-wrap",
                 overflowWrap: "anywhere",
                 opacity: m.status === "sending" ? 0.7 : 1,
@@ -278,25 +282,27 @@ export default function MessageBubble(props: MessageBubbleProps) {
               {m.reactions.map((r) => {
                 const on = r.userIds.includes(meId);
                 return (
-                  <Button
-                    key={r.emoji}
-                    size="small"
-                    variant="outlined"
-                    color={on ? "primary" : "inherit"}
-                    onClick={() => props.onReact(m, r.emoji)}
-                    aria-pressed={on}
-                    aria-label={`${r.emoji} ${r.userIds.length}`}
-                    sx={{
-                      minWidth: 0,
-                      px: 1,
-                      py: 0,
-                      borderRadius: 4,
-                      borderColor: on ? "primary.main" : "divider",
-                      fontSize: 13,
-                    }}
-                  >
-                    {r.emoji} {r.userIds.length}
-                  </Button>
+                  <Tooltip title={reactedBy(r.userIds, r.emoji, lookup, meId)}>
+                    <Button
+                      key={r.emoji}
+                      size="small"
+                      variant="outlined"
+                      color={on ? "primary" : "inherit"}
+                      onClick={() => props.onReact(m, r.emoji)}
+                      aria-pressed={on}
+                      aria-label={`${r.emoji} ${r.userIds.length}`}
+                      sx={{
+                        minWidth: 0,
+                        px: 1,
+                        py: 0,
+                        borderRadius: 4,
+                        borderColor: on ? "primary.main" : "divider",
+                        fontSize: 13,
+                      }}
+                    >
+                      {r.emoji} {r.userIds.length}
+                    </Button>
+                  </Tooltip>
                 );
               })}
             </Box>
@@ -413,10 +419,10 @@ export default function MessageBubble(props: MessageBubbleProps) {
             {(deleted || m.body) && (
               <Box
                 sx={{
-                  px: 1.75,
-                  py: 1,
+                  px: big ? 0.5 : 1.75,
+                  py: big ? 0 : 1,
                   borderRadius: 3,
-                  bgcolor: deleted ? "transparent" : mine ? "primary.main" : "action.hover",
+                  bgcolor: deleted || big ? "transparent" : mine ? "primary.main" : "action.hover",
                   color: deleted ? "text.secondary" : mine ? "primary.contrastText" : "text.primary",
                   border: deleted ? 1 : 0,
                   borderStyle: "dashed",
@@ -427,7 +433,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                   fontStyle: deleted ? "italic" : "normal",
                 }}
               >
-                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                <Typography variant="body2" sx={{ lineHeight: big ? 1.25 : 1.5, fontSize: big ? 40 : undefined }}>
                   {deleted ? "This message was deleted" : m.body}
                 </Typography>
               </Box>
@@ -451,25 +457,27 @@ export default function MessageBubble(props: MessageBubbleProps) {
             {m.reactions.map((r) => {
               const on = r.userIds.includes(meId);
               return (
-                <Button
-                  key={r.emoji}
-                  size="small"
-                  variant="outlined"
-                  color={on ? "primary" : "inherit"}
-                  onClick={() => props.onReact(m, r.emoji)}
-                  aria-pressed={on}
-                  aria-label={`${r.emoji} ${r.userIds.length}`}
-                  sx={{
-                    minWidth: 0,
-                    px: 1,
-                    py: 0,
-                    borderRadius: 4,
-                    borderColor: on ? "primary.main" : "divider",
-                    fontSize: 13,
-                  }}
-                >
-                  {r.emoji} {r.userIds.length}
-                </Button>
+                <Tooltip title={reactedBy(r.userIds, r.emoji, lookup, meId)}>
+                  <Button
+                    key={r.emoji}
+                    size="small"
+                    variant="outlined"
+                    color={on ? "primary" : "inherit"}
+                    onClick={() => props.onReact(m, r.emoji)}
+                    aria-pressed={on}
+                    aria-label={`${r.emoji} ${r.userIds.length}`}
+                    sx={{
+                      minWidth: 0,
+                      px: 1,
+                      py: 0,
+                      borderRadius: 4,
+                      borderColor: on ? "primary.main" : "divider",
+                      fontSize: 13,
+                    }}
+                  >
+                    {r.emoji} {r.userIds.length}
+                  </Button>
+                </Tooltip>
               );
             })}
           </Box>

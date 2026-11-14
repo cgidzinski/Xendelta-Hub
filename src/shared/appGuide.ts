@@ -63,6 +63,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/communities",
       },
       {
+        text: "Try typing a colon and a word, like :smile, in a message. Pick an emoji from the list that appears.",
+        link: "/internal/messages",
+      },
+      {
         text: "Open Messages to chat with a person or a group, and send photos in the conversation.",
         link: "/internal/messages",
       },
