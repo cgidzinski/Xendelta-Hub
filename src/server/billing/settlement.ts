@@ -233,8 +233,8 @@ export async function warnNearFreeTier(now: Date = new Date()): Promise<number> 
       await notify(userId, {
         title:
           account.type === "community"
-            ? "Your community's free allowance is nearly used"
-            : "Your free allowance is nearly used",
+            ? "Most of your community's free allowance is in use"
+            : "Most of your free allowance is in use",
         message: `${formatWholeGems(left)} left this month.`,
         link: billingLink(account),
         icon: "announcement",
