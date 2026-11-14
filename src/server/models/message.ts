@@ -68,6 +68,8 @@ const messageSchema = new Schema({
 });
 
 messageSchema.index({ conversationId: 1, seq: -1 }, { unique: true });
+// Word search (chat/search.ts). The search first narrows to the conversations the caller can read.
+messageSchema.index({ body: "text" }, { name: "body_text" });
 // "The pinned messages of this chat", newest pin first.
 messageSchema.index({ conversationId: 1, pinnedAt: -1 }, { partialFilterExpression: { pinnedAt: { $type: "date" } } });
 messageSchema.index(

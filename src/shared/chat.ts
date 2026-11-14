@@ -54,6 +54,20 @@ export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "rename
 
 /** How many messages a chat can have pinned at once. */
 export const CHAT_MAX_PINS = 50;
+export const CHAT_SEARCH_PAGE = 25;
+export const CHAT_SEARCH_MAX_QUERY = 100;
+/** What a search can ask a message to have. */
+export const CHAT_SEARCH_HAS = ["attachment", "link"] as const;
+export type ChatSearchHas = (typeof CHAT_SEARCH_HAS)[number];
+
+/** One hit of a message search: the message, and where it was said. */
+export interface ChatSearchResult {
+  message: ChatMessage;
+  /** The community the message was said in; null for a DM or group chat. */
+  communityId: string | null;
+  /** A community channel's name. A DM or group chat is named by the client from its own list. */
+  channelName: string | null;
+}
 
 /** A preview of a web page a message links to: what the page says about itself. No picture (that would tell the site who reads it). */
 export interface LinkEmbed {

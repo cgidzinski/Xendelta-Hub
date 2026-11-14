@@ -36,7 +36,15 @@ export default function ChannelView({
   const conversation = useMemo(() => channelConversation(community, channel, user.id), [community, channel, user.id]);
   const people = community.members.length;
 
-  const header = ({ typingNames, pins }: { typingNames: string[]; pins: React.ReactNode }) => {
+  const header = ({
+    typingNames,
+    pins,
+    search,
+  }: {
+    typingNames: string[];
+    pins: React.ReactNode;
+    search: React.ReactNode;
+  }) => {
     const subtitle =
       typingNames.length > 0
         ? `${typingNames.join(", ")} typing…`
@@ -83,6 +91,7 @@ export default function ChannelView({
             </Typography>
           </>
         )}
+        {search}
         {pins}
         <Tooltip title={membersOpen && !phone ? "Hide members" : "Members"}>
           <IconButton
@@ -114,6 +123,7 @@ export default function ChannelView({
       canPin={channel.permissions.includes("pinMessages")}
       canPingAll={channel.permissions.includes("mentionEveryone")}
       emojiScope={{ type: "community", id: community._id }}
+      communityId={community._id}
       emptyDescription={`This is the start of #${channel.name}.`}
     />
   );

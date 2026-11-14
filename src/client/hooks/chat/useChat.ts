@@ -1,6 +1,13 @@
 import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChatAttachment, ChatConversation, ChatMessage, ChatPerson } from "@shared/chat";
+import type {
+  ChatAttachment,
+  ChatConversation,
+  ChatMessage,
+  ChatPerson,
+  ChatSearchHas,
+  ChatSearchResult,
+} from "@shared/chat";
 import { api } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { chatKeys } from "./keys";
@@ -78,6 +85,37 @@ export function usePins(conversationId: string | undefined, enabled: boolean) {
     queryFn: () =>
       api.get<{ messages: ChatMessage[]; people: ChatPerson[] }>(`/api/chat/conversations/${conversationId}/pins`),
     enabled: isAuthenticated && !!conversationId && enabled,
+    retry: false,
+  });
+}
+
+export interface ChatSearchParams {
+  q: string;
+  conversationId?: string;
+  communityId?: string;
+  from?: string;
+  has?: ChatSearchHas;
+  after?: string;
+  before?: string;
+}
+
+/** Message search, a page at a time (newest first). Runs only when there is something to look for. */
+export function useChatSearch(params: ChatSearchParams, enabled: boolean) {
+  const { isAuthenticated } = useAuth();
+  const hasQuery = params.q.trim().length > 0 || !!params.from || !!params.has;
+  return useInfiniteQuery({
+    queryKey: chatKeys.search({ ...params }),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
+      if (pageParam > 0) query.set("offset", String(pageParam));
+      return api.get<{ results: ChatSearchResult[]; hasMore: boolean; people: ChatPerson[] }>(
+        `/api/chat/search?${query.toString()}`,
+      );
+    },
+    getNextPageParam: (last, pages) => (last.hasMore ? pages.reduce((n, p) => n + p.results.length, 0) : undefined),
+    enabled: isAuthenticated && enabled && hasQuery,
     retry: false,
   });
 }

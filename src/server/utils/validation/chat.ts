@@ -7,6 +7,9 @@ import {
   CHAT_MAX_MEMBERS,
   CHAT_NAME_MAX,
   CHAT_PAGE_SIZE,
+  CHAT_SEARCH_HAS,
+  CHAT_SEARCH_MAX_QUERY,
+  CHAT_SEARCH_PAGE,
 } from "../../../shared/chat";
 
 const seq = z.coerce.number().int().min(1);
@@ -81,3 +84,22 @@ export const sendChatMessageSchema = z
 export const editChatMessageSchema = z.object({
   body: z.string().trim().min(1, "Message cannot be empty").max(CHAT_BODY_MAX),
 });
+
+const isoDate = z
+  .string()
+  .max(40)
+  .refine((v) => !Number.isNaN(Date.parse(v)), { message: "Invalid date" });
+
+export const chatSearchQuerySchema = z
+  .object({
+    q: z.string().trim().max(CHAT_SEARCH_MAX_QUERY).optional(),
+    conversationId: objectIdSchema.optional(),
+    communityId: objectIdSchema.optional(),
+    from: objectIdSchema.optional(),
+    has: z.enum(CHAT_SEARCH_HAS).optional(),
+    before: isoDate.optional(),
+    after: isoDate.optional(),
+    offset: z.coerce.number().int().min(0).max(10000).default(0),
+    limit: z.coerce.number().int().min(1).max(50).default(CHAT_SEARCH_PAGE),
+  })
+  .refine((v) => !!v.q || !!v.from || !!v.has, { message: "Search for some words, a person or a kind of message" });

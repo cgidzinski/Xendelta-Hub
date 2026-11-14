@@ -17,6 +17,7 @@ import {
   serializeMessage,
   serializeMessages,
 } from "../../chat/service";
+import { readableChats, searchMessages } from "../../chat/search";
 import { realtime } from "../../realtime";
 import { AppError, callerId, loadCaller } from "../../utils/http";
 import {
@@ -28,6 +29,7 @@ import {
   chatMessageParamSchema,
   chatMessagesQuerySchema,
   chatReactionParamSchema,
+  chatSearchQuerySchema,
   editChatMessageSchema,
   sendChatMessageSchema,
 } from "../../utils/validation";
@@ -37,6 +39,20 @@ import { plainMessageText } from "@shared/messageText";
 import { CustomEmojiModel } from "../../models/customEmoji";
 
 export function registerMessageRoutes(app: Application) {
+  // Search the messages the caller can read: words, a sender, a kind of message, a date range.
+  app.get(
+    "/api/chat/search",
+    authenticateToken,
+    validateQuery(chatSearchQuerySchema),
+    async (req: Request, res: Response) => {
+      const query = chatSearchQuerySchema.parse(req.query);
+      const chats = await readableChats(callerId(req), query);
+      const { results, hasMore } = await searchMessages(chats, query);
+      const people = await loadPeople(results.map((r) => r.message.from).filter((id): id is string => !!id));
+      res.json({ status: true, message: "", data: { results, hasMore, people: [...people.values()] } });
+    },
+  );
+
   // A page of history, newest first. Ask for older ones with ?before=<the smallest seq you have>.
   app.get(
     "/api/chat/conversations/:conversationId/messages",

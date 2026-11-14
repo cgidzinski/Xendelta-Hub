@@ -19,6 +19,7 @@ import { chronological, peopleInHistory, type LocalMessage } from "../../../../u
 import EmptyState from "../../../../components/ui/EmptyState";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import PinsButton from "../../../../components/chat/PinsButton";
+import ChatSearchButton from "../../../../components/chat/ChatSearchButton";
 import AttachButton from "./AttachButton";
 import AttachmentTray from "./AttachmentTray";
 import Composer from "./Composer";
@@ -33,7 +34,7 @@ interface ChatPaneProps {
   /** What the composer says "Message ..." about. */
   title: string;
   /** The top bar. It gets who is typing, which a chat shows under its name. */
-  header: (context: { typingNames: string[]; pins: ReactNode }) => ReactNode;
+  header: (context: { typingNames: string[]; pins: ReactNode; search: ReactNode }) => ReactNode;
   /** A community channel draws a row per message instead of bubbles. */
   layout?: "bubbles" | "flat";
   /** Whether the viewer may delete anyone's message. By default only a chat's owner may. */
@@ -46,6 +47,8 @@ interface ChatPaneProps {
   canPin?: boolean;
   /** May this person use @everyone and @here here? */
   canPingAll?: boolean;
+  /** Set for a community channel, so a search can be widened to the whole community. */
+  communityId?: string;
   /** Whose custom emoji are used here: the community's for a channel, the chat's own otherwise. */
   emojiScope: CustomEmojiScope;
   emptyDescription: string;
@@ -67,6 +70,7 @@ export default function ChatPane({
   canPin = true,
   canPingAll = false,
   emojiScope,
+  communityId,
   emptyDescription,
 }: ChatPaneProps) {
   const { user } = useAuth();
@@ -183,7 +187,19 @@ export default function ChatPane({
 
   return (
     <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", height: "100%" }}>
-      {header({ typingNames, pins: <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} /> })}
+      {header({
+        typingNames,
+        pins: <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} />,
+        search: (
+          <ChatSearchButton
+            conversationId={conversationId}
+            communityId={communityId}
+            scopeNoun={communityId ? "channel" : "chat"}
+            people={conversation.people}
+            lookup={lookup}
+          />
+        ),
+      })}
 
       {messagesQuery.isLoading ? (
         <Box sx={{ flex: 1 }} aria-busy />
