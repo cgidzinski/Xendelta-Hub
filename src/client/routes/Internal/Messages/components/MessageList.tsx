@@ -22,6 +22,8 @@ interface MessageListProps {
   customEmoji?: CustomEmoji[];
   /** May this person pin and unpin here? */
   canPin?: boolean;
+  /** Whether a pinned message is marked as pinned. Off in a chat that has no pinning at all. */
+  showPinned?: boolean;
   /** A community channel draws a flat row per message instead of bubbles. */
   layout?: "bubbles" | "flat";
   /** Whether the viewer may delete anyone's message (a community's manage messages); by default, a chat's owner may. */
@@ -44,7 +46,8 @@ interface MessageListProps {
     onPin: (m: LocalMessage, on: boolean) => void;
     onJumpTo: (seq: number) => void;
     onCopyLink: (m: LocalMessage) => void;
-    onOpenThread: (m: LocalMessage) => void;
+    /** Absent where the chat has no threads, which is what takes the reply-in-thread action out of the menu. */
+    onOpenThread?: (m: LocalMessage) => void;
     onVote: (m: LocalMessage, optionIds: string[]) => void;
     onClosePoll: (m: LocalMessage) => void;
     onForward: (m: LocalMessage) => void;
@@ -76,6 +79,7 @@ export default function MessageList({
   typingNames,
   customEmoji,
   canPin,
+  showPinned = true,
   layout,
   canModerate,
   senderMeta,
@@ -248,6 +252,7 @@ export default function MessageList({
                 customEmoji={customEmoji}
                 customById={customById}
                 canPin={canPin}
+                showPinned={showPinned}
                 senderMeta={senderMeta?.(m.from)}
                 {...actions}
               />

@@ -50,12 +50,12 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Create a poll with up to ten options, let people vote live, and close it when you are done.",
       "Record a voice message and send it, then play it with a waveform, a speed button and a slider to jump around.",
       "Search for a GIF and send it in a chat.",
-      "Reply in a thread under any message to keep a side conversation out of the main chat, and follow a thread to hear about its replies.",
+      "Reply in a thread under a channel message to keep a side conversation out of the main chat, and follow a thread to hear about its replies.",
       "See who is online, idle or busy, and set your own status, with a line that can clear itself.",
       "Jump to your first unread message, to the message a reply quotes, or to a message someone shared a link to.",
       "Copy a link to any message so others can open the chat right at it.",
       "Search your messages by words, sender, files, links or date, in one chat, one community or everywhere.",
-      "Pin an important message so everyone can find it again from the pin button at the top of the chat.",
+      "Pin an important message in a channel so everyone can find it again from the pin button at the top.",
       "See a short preview of a web page when someone shares its link, and take it off your own message if you prefer.",
       "Format a message with bold, italic, strikethrough, code, quotes and lists, or hide a spoiler until it is clicked.",
       "Pick any emoji for a message or a reaction, with search, skin tones and the ones you used lately.",
@@ -95,7 +95,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/messages",
       },
       {
-        text: "Try Reply in thread in a message's menu to keep a side conversation tidy. The threads button lists them all.",
+        text: "Try Reply in thread in a channel message's menu to keep a side conversation tidy. The threads button lists them all.",
         link: "/internal/messages",
       },
       {

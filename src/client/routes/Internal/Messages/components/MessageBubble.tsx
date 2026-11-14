@@ -90,6 +90,8 @@ export interface MessageBubbleProps {
   layout?: "bubbles" | "flat";
   /** May this person pin and unpin here? */
   canPin?: boolean;
+  /** Whether a pinned message is marked as pinned. Off in a chat that has no pinning at all. */
+  showPinned?: boolean;
   /** The custom emoji of this community or chat: to draw them, and to offer in the reaction picker. */
   customEmoji?: CustomEmoji[];
   customById?: Map<string, CustomEmoji>;
@@ -132,6 +134,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
     canDelete,
     layout = "bubbles",
     senderMeta,
+    showPinned = true,
   } = props;
   const customList = props.customEmoji ?? NO_EMOJI;
   const customById = props.customById ?? NO_EMOJI_BY_ID;
@@ -454,7 +457,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </Box>
           )}
 
-          {m.pinnedAt && !deleted && (
+          {showPinned && m.pinnedAt && !deleted && (
             <Typography
               variant="caption"
               color="text.secondary"
@@ -552,9 +555,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
               {m.reactions.map((r) => {
                 const on = r.userIds.includes(meId);
                 return (
-                  <Tooltip title={reactedBy(r.userIds, reactionLabel(r.emoji, customById), lookup, meId)}>
+                  <Tooltip key={r.emoji} title={reactedBy(r.userIds, reactionLabel(r.emoji, customById), lookup, meId)}>
                     <Button
-                      key={r.emoji}
                       size="small"
                       variant="outlined"
                       color={on ? "primary" : "inherit"}
@@ -757,9 +759,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
             {m.reactions.map((r) => {
               const on = r.userIds.includes(meId);
               return (
-                <Tooltip title={reactedBy(r.userIds, reactionLabel(r.emoji, customById), lookup, meId)}>
+                <Tooltip key={r.emoji} title={reactedBy(r.userIds, reactionLabel(r.emoji, customById), lookup, meId)}>
                   <Button
-                    key={r.emoji}
                     size="small"
                     variant="outlined"
                     color={on ? "primary" : "inherit"}
@@ -804,7 +805,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             <>
               {clock(m.createdAt)}
               {m.editedAt && !deleted ? " · Edited" : ""}
-              {m.pinnedAt && !deleted ? " · Pinned" : ""}
+              {showPinned && m.pinnedAt && !deleted ? " · Pinned" : ""}
               {seenBy && seenBy.length > 0
                 ? ` · Seen${seenBy.length <= 3 ? ` by ${seenBy.join(", ")}` : ` by ${seenBy.length}`}`
                 : ""}

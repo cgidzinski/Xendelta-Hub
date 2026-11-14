@@ -3,7 +3,6 @@ import { Box, Button, Divider, Drawer, IconButton, Tooltip, Typography, useMedia
 import { useTheme } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import { chatTitle } from "@shared/chat";
 import { useAuth } from "../../../contexts/AuthContext";
 import { CallButtons } from "../../../components/calls/CallButtons";
@@ -86,17 +85,7 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
     />
   );
 
-  const header = ({
-    typingNames,
-    pins,
-    search,
-    threads,
-  }: {
-    typingNames: string[];
-    pins: React.ReactNode;
-    search: React.ReactNode;
-    threads: React.ReactNode;
-  }) => {
+  const header = ({ typingNames, search }: { typingNames: string[]; search: React.ReactNode }) => {
     const subtitle = subtitleFor(typingNames);
     return (
       <Box
@@ -131,13 +120,6 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
         </Box>
         <CallButtons conversationId={conversation._id} />
         {search}
-        {threads}
-        {pins}
-        <Tooltip title="Add people">
-          <IconButton onClick={() => setAddOpen(true)} aria-label="Add people">
-            <PersonAddAltIcon />
-          </IconButton>
-        </Tooltip>
         <Tooltip title="Chat details">
           <IconButton
             onClick={() => setDetailsOpen((v) => !v)}
@@ -158,6 +140,10 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
         conversation={conversation}
         title={title}
         header={header}
+        // A DM or group chat is a straight conversation: no reply threads to lose track of, and nothing to pin.
+        // Adding people lives in the details panel, not as another header button.
+        threads={false}
+        pinning={false}
         canPingAll={conversation.members.length > 2}
         emojiScope={{ type: "chat", id: conversationId }}
         emptyDescription={`Say hello to ${title}.`}

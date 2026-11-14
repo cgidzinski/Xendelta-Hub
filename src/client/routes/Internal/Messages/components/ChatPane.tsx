@@ -55,6 +55,10 @@ interface ChatPaneProps {
   senderMeta?: (userId: string | null) => { color: string; role: string } | undefined;
   /** May this person pin and unpin here? (A community says so with the pin permission; a chat lets any member.) */
   canPin?: boolean;
+  /** Threads: a reply panel under a message. A community channel has them; a DM or group chat does not. */
+  threads?: boolean;
+  /** Pinning, and the "Pinned" marker on a message. A DM or group chat does not have it. */
+  pinning?: boolean;
   /** May this person use @everyone and @here here? */
   canPingAll?: boolean;
   /** Set for a community channel, so a search can be widened to the whole community. */
@@ -78,6 +82,8 @@ export default function ChatPane({
   canPost = true,
   senderMeta,
   canPin = true,
+  threads = true,
+  pinning = true,
   canPingAll = false,
   emojiScope,
   communityId,
@@ -247,7 +253,8 @@ export default function ChatPane({
       ),
     onJumpTo: jumpTo,
     onCopyLink: copyLink,
-    onOpenThread: (m: LocalMessage) => setOpenThread(m.seq),
+    // Absent where there are no threads (a DM or group chat), which is what removes the reply-in-thread action.
+    onOpenThread: threads ? (m: LocalMessage) => setOpenThread(m.seq) : undefined,
     onForward: (m: LocalMessage) => setForwarding(m),
     onVote: (m: LocalMessage, optionIds: string[]) =>
       votePoll.mutate(
@@ -295,7 +302,7 @@ export default function ChatPane({
   };
 
   const threadPanel =
-    openThread === null ? null : (
+    openThread === null || !threads ? null : (
       <ThreadPanel
         conversationId={conversationId}
         rootSeq={openThread}
@@ -316,8 +323,10 @@ export default function ChatPane({
       <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", height: "100%" }}>
         {header({
           typingNames,
-          pins: <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} />,
-          threads: <ThreadsButton conversationId={conversationId} lookup={lookup} onOpen={setOpenThread} />,
+          pins: pinning ? <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} /> : null,
+          threads: threads ? (
+            <ThreadsButton conversationId={conversationId} lookup={lookup} onOpen={setOpenThread} />
+          ) : null,
           search: (
             <ChatSearchButton
               conversationId={conversationId}
@@ -384,7 +393,8 @@ export default function ChatPane({
             onLoadMore={() => messagesQuery.fetchNextPage()}
             typingNames={typingNames}
             customEmoji={customEmoji}
-            canPin={canPin}
+            canPin={canPin && pinning}
+            showPinned={pinning}
             layout={layout}
             canModerate={canModerate}
             senderMeta={senderMeta}
