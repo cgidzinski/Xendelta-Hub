@@ -220,7 +220,10 @@ export default function ItemEditor({
   const saveIcon = saving ? <CircularProgress size={16} color="inherit" /> : undefined;
   const status = dirty ? "Unsaved changes" : item ? "All changes saved" : "Not saved yet";
   const noun = layout === "instructions" ? "item" : "recipe";
-  const heading = item ? `Edit ${item.title || noun}` : `New ${noun}`;
+  const bookName =
+    (item ? books.find((b) => b._id === item.book_id)?.name : null) ??
+    editableBooks.find((b) => b._id === bookId)?.name;
+  const heading = item ? `Edit ${item.title || noun}` : bookName ? `New ${noun} in ${bookName}` : `New ${noun}`;
 
   // A new, still empty item can start from a recipe somewhere else: a web page or photos of it.
   const importBanner = !item && !draft.title.trim() && (
@@ -317,7 +320,8 @@ export default function ItemEditor({
       draft={draft}
       set={set}
       categories={categories}
-      books={item ? [] : editableBooks}
+      books={item ? books : editableBooks}
+      bookLocked={!!item}
       bookId={bookId}
       onBook={setBookId}
       stacked={wide}

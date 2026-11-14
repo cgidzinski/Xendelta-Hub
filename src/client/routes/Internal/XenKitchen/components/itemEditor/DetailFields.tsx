@@ -28,24 +28,70 @@ export function CategoryBookFields({
   books,
   bookId,
   onBook,
+  bookLocked = false,
   stacked = false,
 }: {
   draft: Draft;
   set: SetDraft;
   categories: KitchenCategory[];
-  /** Books a new item can go into; empty or a single one hides the picker. */
+  /** Books the item can go into. */
   books: KitchenBook[];
   bookId: string;
   onBook: (id: string) => void;
+  /** An item that already exists stays in its book: the book is shown but can't be changed here. */
+  bookLocked?: boolean;
   /** One field per line, full width (the desktop sidebar). */
   stacked?: boolean;
 }) {
   return (
-    <Stack
-      direction={stacked ? "column" : "row"}
-      spacing={stacked ? 1.5 : 1}
-      sx={stacked ? undefined : { flexWrap: "wrap", rowGap: 1 }}
-    >
+    <Stack direction={stacked ? "column" : "row"} spacing={stacked ? 1.5 : 1} useFlexGap flexWrap="wrap">
+      {/* Every recipe lives in a book, so the book is always shown: a picker when there is a choice, else the name. */}
+      {(() => {
+        const current = books.find((b) => b._id === bookId);
+        const choose = !bookLocked && books.length > 1;
+        return (
+          <TextField
+            select={choose}
+            size="small"
+            label="In book"
+            value={choose ? bookId : (current?.name ?? "")}
+            fullWidth={stacked}
+            sx={stacked ? undefined : { minWidth: 200 }}
+            onChange={(e) => {
+              onBook(e.target.value);
+              set({ category_id: null });
+            }}
+            helperText={choose || bookLocked ? undefined : "Recipes are kept in a book. Add more books from the list."}
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: { "aria-label": "Recipe book", readOnly: !choose },
+              input: choose
+                ? undefined
+                : {
+                    readOnly: true,
+                    startAdornment: current ? (
+                      <CategoryIconView
+                        icon={current.icon}
+                        sx={{ fontSize: 18, color: current.color, mr: 1, verticalAlign: "middle" }}
+                      />
+                    ) : undefined,
+                  },
+            }}
+          >
+            {choose &&
+              books.map((b) => (
+                <MenuItem key={b._id} value={b._id}>
+                  <CategoryIconView
+                    icon={b.icon}
+                    sx={{ fontSize: 18, color: b.color, mr: 1, verticalAlign: "middle" }}
+                  />
+                  {b.name}
+                </MenuItem>
+              ))}
+          </TextField>
+        );
+      })()}
+
       <TextField
         select
         size="small"
@@ -86,29 +132,6 @@ export function CategoryBookFields({
         })}
         <MenuItem value="">No category</MenuItem>
       </TextField>
-
-      {books.length > 1 && (
-        <TextField
-          select
-          size="small"
-          label={stacked ? "Recipe book" : undefined}
-          value={bookId}
-          fullWidth={stacked}
-          sx={stacked ? undefined : { minWidth: 160 }}
-          onChange={(e) => {
-            onBook(e.target.value);
-            set({ category_id: null });
-          }}
-          slotProps={{ htmlInput: { "aria-label": "Recipe book" } }}
-        >
-          {books.map((b) => (
-            <MenuItem key={b._id} value={b._id}>
-              <CategoryIconView icon={b.icon} sx={{ fontSize: 18, color: b.color, mr: 1, verticalAlign: "middle" }} />
-              {b.name}
-            </MenuItem>
-          ))}
-        </TextField>
-      )}
     </Stack>
   );
 }
