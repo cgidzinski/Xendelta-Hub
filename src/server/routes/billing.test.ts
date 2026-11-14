@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
+import { PERSON_FREE_TIER_GEMS } from "@shared/billing";
 
 // The Billing view's data: your own bill, and a community's for its members only.
 
@@ -19,7 +20,6 @@ describe("billing overview", () => {
   it("shows your month so far, everything free, nothing charged", async () => {
     const { recordUsage } = await import("../billing/usage.js");
     const { userAccount } = await import("../billing/ledger.js");
-    const { PERSON_FREE_TIER_GEMS } = await import("@shared/billing");
     const me = await createUser({ gems: 42 });
     await recordUsage(userAccount(me.user._id), "storage", 1234);
 
