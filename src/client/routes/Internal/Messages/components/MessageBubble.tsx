@@ -11,6 +11,7 @@ import type { ChatAttachment } from "@shared/chat";
 import { formatFileSize } from "../../../../utils/fileUtils";
 import AddReactionOutlinedIcon from "@mui/icons-material/AddReactionOutlined";
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
+import LinkEmbedCard from "../../../../components/chat/LinkEmbedCard";
 import { MessageMarkdown } from "../../../../components/chat/MessageMarkdown";
 import { EmojiText, ReactionEmoji, reactionLabel } from "../../../../components/emoji/EmojiText";
 import { customIdOfReaction, customReactionKey, plainEmojiText, type CustomEmoji } from "@shared/emoji";
@@ -87,6 +88,7 @@ export interface MessageBubbleProps {
   onEdit: (m: LocalMessage) => void;
   onDelete: (m: LocalMessage) => void;
   onReact: (m: LocalMessage, emoji: string) => void;
+  onRemoveEmbeds: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -126,6 +128,20 @@ export default function MessageBubble(props: MessageBubbleProps) {
     if (!customIdOfReaction(emoji)) rememberEmoji(emoji);
     props.onReact(m, emoji);
   };
+
+  // Who may take the previews off: the sender, or anyone who may delete the message.
+  const previews =
+    !deleted && stored && (m.embeds?.length ?? 0) > 0 ? (
+      <>
+        {m.embeds!.map((embed) => (
+          <LinkEmbedCard
+            key={embed.url}
+            embed={embed}
+            onRemove={mine || canDelete ? () => props.onRemoveEmbeds(m) : undefined}
+          />
+        ))}
+      </>
+    ) : null;
 
   const menu = (
     <>
@@ -301,6 +317,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
               ))}
             </Box>
           )}
+
+          {previews}
 
           {m.reactions.length > 0 && (
             <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
@@ -485,6 +503,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </IconButton>
           )}
         </Box>
+
+        {previews}
 
         {m.reactions.length > 0 && (
           <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>

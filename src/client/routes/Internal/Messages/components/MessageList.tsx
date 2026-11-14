@@ -29,6 +29,7 @@ interface MessageListProps {
     onEdit: (m: LocalMessage) => void;
     onDelete: (m: LocalMessage) => void;
     onReact: (m: LocalMessage, emoji: string) => void;
+    onRemoveEmbeds: (m: LocalMessage) => void;
     onRetry: (m: LocalMessage) => void;
     onDiscard: (m: LocalMessage) => void;
     onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;

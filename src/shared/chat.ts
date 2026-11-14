@@ -52,6 +52,17 @@ export interface ChatReaction {
  */
 export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "renamed" | "owner";
 
+/** A preview of a web page a message links to: what the page says about itself. No picture (that would tell the site who reads it). */
+export interface LinkEmbed {
+  /** Where the link ended up, after redirects. */
+  url: string;
+  title: string;
+  description: string;
+  siteName: string;
+}
+
+export const CHAT_MAX_EMBEDS = 3;
+
 export interface ChatMessage {
   _id: string;
   conversationId: string;
@@ -65,6 +76,8 @@ export interface ChatMessage {
   /** The `seq` of the message this one replies to. */
   replyTo?: number | null;
   reactions: ChatReaction[];
+  /** Previews of the links in the body, added a moment after sending. */
+  embeds?: LinkEmbed[];
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;

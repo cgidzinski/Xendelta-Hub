@@ -5,6 +5,7 @@ import { XenDriveFile } from "../../models/xendriveFile";
 import { generateSignedUrl } from "../../utils/gcsUtils";
 import { authenticateToken } from "../../middleware/auth";
 import { audienceOf, type ChatContext } from "../../chat/access";
+import { refreshEmbeds } from "../../chat/embeds";
 import { canDeleteChatMessage, canEditMessage, canPostChat } from "../../chat/policy";
 import {
   loadChatContext,
@@ -103,6 +104,8 @@ export function registerMessageRoutes(app: Application) {
       const user = await loadCaller(req);
       const message = await appendMessage(chat, { from: me, body, replyTo, attachments, clientId });
       await publishMessage(context, message, user.username ?? "Someone");
+      // Previews of any links arrive a moment later, as an update; nobody waits for them.
+      void refreshEmbeds(context, message._id);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
   );
@@ -146,6 +149,27 @@ export function registerMessageRoutes(app: Application) {
       message.editedAt = new Date();
       await message.save();
       await refreshLastPreview(chat._id, message.seq, plainMessageText(message.body));
+      await announceUpdate(context, message);
+      void refreshEmbeds(context, message._id);
+      res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
+    },
+  );
+
+  // Take the link previews off a message (its sender, or anyone who can delete it). Editing it doesn't bring them back.
+  app.delete(
+    "/api/chat/conversations/:conversationId/messages/:seq/embeds",
+    authenticateToken,
+    validateParams(chatMessageParamSchema),
+    async (req: Request, res: Response) => {
+      const me = callerId(req);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      const message = await loadMessage(context.chat._id, req.params.seq as string);
+      if (message.kind !== "text" || !canDeleteChatMessage(context.access, message, me)) {
+        throw new AppError(403, "You can't change that message");
+      }
+      message.set("embeds", []);
+      message.embedsOff = true;
+      await message.save();
       await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },

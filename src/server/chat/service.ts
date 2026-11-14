@@ -143,6 +143,14 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
           })),
       replyTo: m.replyTo ?? null,
       reactions: deleted ? [] : m.reactions.map((r) => ({ emoji: r.emoji, userIds: [...r.userIds] })),
+      embeds: deleted
+        ? []
+        : m.embeds.map((e) => ({
+            url: e.url,
+            title: e.title ?? "",
+            description: e.description ?? "",
+            siteName: e.siteName ?? "",
+          })),
       createdAt: m.createdAt.toISOString(),
       editedAt: iso(m.editedAt),
       deletedAt: iso(m.deletedAt),

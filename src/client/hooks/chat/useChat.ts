@@ -258,6 +258,14 @@ export function useChatActions() {
     onSuccess: setMessage,
   });
 
+  /** Take the link previews off a message. */
+  const removeEmbeds = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number }) =>
+      (await api.delete<{ message: ChatMessage }>(`${base(input.conversationId)}/messages/${input.seq}/embeds`))
+        .message,
+    onSuccess: setMessage,
+  });
+
   const react = useMutation({
     mutationFn: async (input: { conversationId: string; seq: number; emoji: string; on: boolean }) => {
       const url = `${base(input.conversationId)}/messages/${input.seq}/reactions/${encodeURIComponent(input.emoji)}`;
@@ -267,5 +275,17 @@ export function useChatActions() {
     onSuccess: setMessage,
   });
 
-  return { startChat, rename, addMembers, removeMember, makeOwner, setMine, markRead, edit, remove, react };
+  return {
+    startChat,
+    rename,
+    addMembers,
+    removeMember,
+    makeOwner,
+    setMine,
+    markRead,
+    edit,
+    remove,
+    react,
+    removeEmbeds,
+  };
 }

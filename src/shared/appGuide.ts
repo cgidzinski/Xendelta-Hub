@@ -43,6 +43,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
+      "See a short preview of a web page when someone shares its link, and take it off your own message if you prefer.",
       "Format a message with bold, italic, strikethrough, code, quotes and lists, or hide a spoiler until it is clicked.",
       "Pick any emoji for a message or a reaction, with search, skin tones and the ones you used lately.",
       "Add your own emoji to a community or a group chat, and use them in messages and reactions.",

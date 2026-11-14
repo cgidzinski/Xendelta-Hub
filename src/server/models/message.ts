@@ -22,6 +22,18 @@ const reactionSchema = new Schema(
   { _id: false },
 );
 
+// What a page a message links to says about itself (chat/linkPreview.ts). No picture is kept: loading another site's
+// image in a reader's browser would tell that site who is reading.
+const embedSchema = new Schema(
+  {
+    url: { type: String, required: true },
+    title: { type: String, default: "" },
+    description: { type: String, default: "" },
+    siteName: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
 const messageSchema = new Schema({
   conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
   seq: { type: Number, required: true },
@@ -35,6 +47,9 @@ const messageSchema = new Schema({
     name: { type: String },
   },
   attachments: [attachmentSchema],
+  embeds: [embedSchema],
+  // The sender took the previews off, so editing the message doesn't bring them back.
+  embedsOff: { type: Boolean, default: false },
   replyTo: { type: Number }, // the seq of the message replied to
   reactions: [reactionSchema],
   // Chosen by the sender's client, so a retried send is stored once.

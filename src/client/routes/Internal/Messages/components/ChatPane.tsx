@@ -69,7 +69,7 @@ export default function ChatPane({
   const allEmoji = useCustomEmoji().emoji;
   const customEmoji = useMemo(() => emojiOfScope(allEmoji, emojiScope), [allEmoji, emojiScope.type, emojiScope.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesQuery = useMessages(conversationId);
-  const { edit, remove, react, markRead } = useChatActions();
+  const { edit, remove, react, markRead, removeEmbeds } = useChatActions();
   const send = useSendMessage(conversationId);
   const discard = useDiscardLocalMessage(conversationId);
   const typingNames = useTypingUsers(conversationId);
@@ -146,6 +146,8 @@ export default function ChatPane({
       const on = !m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(user.id);
       react.mutate({ conversationId, seq: m.seq, emoji, on }, { onError: (e) => fail(e, "Couldn't react") });
     },
+    onRemoveEmbeds: (m: LocalMessage) =>
+      removeEmbeds.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't remove the preview") }),
     onRetry: (m: LocalMessage) =>
       send.mutate({
         clientId: m.clientId!,
