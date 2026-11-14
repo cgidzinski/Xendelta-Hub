@@ -14,8 +14,11 @@ import StatCard from "./components/StatCard";
 import StatusChip from "./components/StatusChip";
 
 const usd = (cents: number) => formatMoney(cents / 100, "USD", { symbol: "narrow" });
-const quantity = (q: number, unit: string) =>
-  `${q.toLocaleString("en-US", { maximumFractionDigits: q < 10 ? 2 : 0 })} ${unit}`;
+const quantity = (q: number, unit: string) => {
+  const counted = unit === "scan" || unit === "email";
+  const label = counted && q !== 1 ? `${unit}s` : unit;
+  return `${q.toLocaleString("en-US", { maximumFractionDigits: q < 10 ? 2 : 0 })} ${label}`;
+};
 
 function ActualCost({ row, month }: { row: AdminBillingProviderRow; month: string }) {
   const { enqueueSnackbar } = useSnackbar();
