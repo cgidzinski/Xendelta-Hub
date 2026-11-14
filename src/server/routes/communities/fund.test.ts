@@ -65,7 +65,9 @@ describe("community fund", () => {
     expect(await gemsOf(member)).toBe(60);
 
     const realtime = sent.filter((s) => s.event === "community:fund");
-    expect([...new Set(realtime.map((s) => s.room))].sort()).toEqual([`user:${id(member)}`, `user:${id(owner)}`].sort());
+    expect([...new Set(realtime.map((s) => s.room))].sort()).toEqual(
+      [`user:${id(member)}`, `user:${id(owner)}`].sort(),
+    );
 
     const history = (await fund(owner, c)).body.data.history;
     expect(history).toHaveLength(1);
