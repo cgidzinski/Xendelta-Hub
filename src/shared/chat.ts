@@ -51,7 +51,8 @@ export interface ChatReaction {
  * A line in the history that explains what happened to the chat itself. In a system message `userIds[0]` is who did
  * it and the rest are who it happened to (the people added or removed).
  */
-export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "renamed" | "owner" | "pinned";
+export type ChatSystemEvent =
+  "created" | "added" | "removed" | "left" | "renamed" | "owner" | "pinned" | "call_ended" | "call_missed";
 
 /** How many messages a chat can have pinned at once. */
 export const CHAT_MAX_PINS = 50;

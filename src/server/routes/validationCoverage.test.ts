@@ -29,6 +29,8 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/user/avatar": "multipart upload handled by multer, not JSON",
   "PUT /api/chat/conversations/:conversationId/messages/:seq/pin": "no body: the path names the message to pin",
   "POST /api/chat/conversations/:conversationId/messages/:seq/poll/close": "no body: the path names the poll to close",
+  "POST /api/calls/:conversationId/leave": "no body: the path names the call to leave",
+  "POST /api/calls/:conversationId/decline": "no body: the path names the call to turn down",
   "POST /api/emoji": "multipart upload: the text fields are validated after multer reads them (uploadEmojiSchema)",
   "POST /api/recipaint/upload-asset": "multipart upload handled by multer, not JSON",
   "POST /api/admin/blog/upload-asset": "multipart upload handled by multer, not JSON",

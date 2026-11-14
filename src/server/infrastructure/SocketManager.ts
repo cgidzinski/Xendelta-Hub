@@ -36,6 +36,11 @@ export class SocketManager {
   private static instance: SocketManager;
   private io!: SocketIOServer;
   private isInitialized: boolean = false;
+  /** Called when a person's last tab disconnects (calls use it to take them out of any call). */
+  private offlineHandlers: Array<(userId: string) => void> = [];
+  onUserOffline(handler: (userId: string) => void) {
+    this.offlineHandlers.push(handler);
+  }
   /** When each socket last announced it was typing, so a client can't flood a conversation with typing events. */
   private lastTyping = new Map<string, number>();
 
@@ -128,6 +133,9 @@ export class SocketManager {
       socket.on("disconnect", () => {
         this.lastTyping.delete(socket.id);
         presenceTracker.disconnect(socket.userId!, socket.id);
+        if (presenceTracker.state(socket.userId!) === "offline") {
+          for (const handler of this.offlineHandlers) handler(socket.userId!);
+        }
         scheduleAnnounce(socket.userId!, send);
       });
     });

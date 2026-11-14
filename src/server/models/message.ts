@@ -42,7 +42,10 @@ const messageSchema = new Schema({
   body: { type: String, default: "" },
   // For system messages: what happened and to whom, so the client can word it for each reader.
   system: {
-    event: { type: String, enum: ["created", "added", "removed", "left", "renamed", "owner", "pinned"] },
+    event: {
+      type: String,
+      enum: ["created", "added", "removed", "left", "renamed", "owner", "pinned", "call_ended", "call_missed"],
+    },
     userIds: [{ type: String }],
     name: { type: String },
   },

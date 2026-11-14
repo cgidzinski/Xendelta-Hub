@@ -6,6 +6,7 @@
 // conversation by guessing its id.
 import type { ChatMessage } from "./chat";
 import type { PresenceEntry } from "./presence";
+import type { CallState } from "./calls";
 
 export interface RealtimeEvents {
   // Chat
@@ -30,9 +31,11 @@ export interface RealtimeEvents {
   /** A channel in the community was added, changed, reordered or deleted. */
   "community:channels": { communityId: string };
 
-  // Calls: names reserved for the calls feature, not sent yet.
-  "call:started": { conversationId: string; startedBy: string };
-  "call:ended": { conversationId: string };
+  // Calls. `call` is null once the call has ended. A person who may join is told when it starts, and everyone in the chat
+  // hears of each change, so "Join call" and the participant list stay right.
+  "call:state": { conversationId: string; call: CallState | null };
+  /** Someone is calling you: it rings until you join or decline, or it times out. */
+  "call:ring": { conversationId: string; fromUserId: string; fromName: string; video: boolean; ringing: boolean };
 
   // Notifications
   "notification:new": { notification: unknown };
