@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { EmojiEntry } from "./emojiData";
-import { isEmojiOnly, shortcodeBeforeCaret, suggestShortcodes } from "./emojiText";
+import type { CustomEmoji } from "@shared/emoji";
+import { isEmojiOnly, shortcodeBeforeCaret, splitEmojiText, suggestCustom, suggestShortcodes } from "./emojiText";
 
 describe("shortcodeBeforeCaret", () => {
   it("finds the :partial before the cursor", () => {
@@ -64,5 +65,42 @@ describe("isEmojiOnly", () => {
     expect(isEmojiOnly("   ")).toBe(false);
     expect(isEmojiOnly("")).toBe(false);
     expect(isEmojiOnly("1")).toBe(false);
+  });
+});
+
+const ID = "64b64b64b64b64b64b64b64b";
+describe("custom emoji in text", () => {
+  it("counts a custom emoji as one emoji for the large display", () => {
+    expect(isEmojiOnly(`<:party:${ID}>`)).toBe(true);
+    expect(isEmojiOnly(`<:party:${ID}> 🎉`)).toBe(true);
+    expect(isEmojiOnly(`<:a_b:${ID}><:a_b:${ID}><:a_b:${ID}><:a_b:${ID}>`)).toBe(false);
+    expect(isEmojiOnly(`hi <:party:${ID}>`)).toBe(false);
+  });
+
+  it("splits a body into text and emoji, in order", () => {
+    expect(splitEmojiText(`hi <:party:${ID}> there <:cat_2:${ID}>`)).toEqual([
+      { type: "text", text: "hi " },
+      { type: "emoji", name: "party", id: ID },
+      { type: "text", text: " there " },
+      { type: "emoji", name: "cat_2", id: ID },
+    ]);
+    expect(splitEmojiText("plain")).toEqual([{ type: "text", text: "plain" }]);
+    expect(splitEmojiText("")).toEqual([]);
+    expect(splitEmojiText(`<:x:123> is not a token`)).toEqual([{ type: "text", text: "<:x:123> is not a token" }]);
+  });
+
+  it("suggests custom emoji by name", () => {
+    const e = (name: string): CustomEmoji => ({
+      _id: name,
+      name,
+      url: "u",
+      animated: false,
+      scope: { type: "chat", id: "c" },
+      createdBy: "a",
+    });
+    const list = [e("party_blob"), e("blob"), e("cat")];
+    expect(suggestCustom(list, "blo").map((x) => x.name)).toEqual(["blob", "party_blob"]);
+    expect(suggestCustom(list, "zz")).toEqual([]);
+    expect(suggestCustom(list, "a", 1)).toHaveLength(1);
   });
 });

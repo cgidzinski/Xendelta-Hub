@@ -1,16 +1,27 @@
 import { Popover } from "@mui/material";
+import type { CustomEmoji } from "@shared/emoji";
 import EmojiPicker from "./EmojiPicker";
 
 interface EmojiPopoverProps {
   anchorEl: HTMLElement | null;
   onClose: () => void;
   onPick: (emoji: string) => void;
+  /** The custom emoji to offer, and what picking one does (it closes the popover too). */
+  custom?: CustomEmoji[];
+  onPickCustom?: (emoji: CustomEmoji) => void;
   /** Which way it opens from the button. */
   placement?: "above" | "below";
 }
 
 /** The emoji picker in a popover under (or over) the button that opened it. It closes after a pick. */
-export default function EmojiPopover({ anchorEl, onClose, onPick, placement = "above" }: EmojiPopoverProps) {
+export default function EmojiPopover({
+  anchorEl,
+  onClose,
+  onPick,
+  custom,
+  onPickCustom,
+  placement = "above",
+}: EmojiPopoverProps) {
   return (
     <Popover
       open={!!anchorEl}
@@ -22,6 +33,14 @@ export default function EmojiPopover({ anchorEl, onClose, onPick, placement = "a
     >
       <EmojiPicker
         autoFocus
+        custom={custom}
+        onPickCustom={
+          onPickCustom &&
+          ((emoji) => {
+            onPickCustom(emoji);
+            onClose();
+          })
+        }
         onPick={(emoji) => {
           onPick(emoji);
           onClose();

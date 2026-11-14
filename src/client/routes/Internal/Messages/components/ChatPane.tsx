@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Box, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { ChatAttachment, ChatConversation } from "@shared/chat";
+import type { CustomEmojiScope } from "@shared/emoji";
+import { emojiOfScope, useCustomEmoji } from "../../../../hooks/emoji/useCustomEmoji";
 import { api } from "../../../../config/api";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
@@ -39,6 +41,8 @@ interface ChatPaneProps {
   canPost?: boolean;
   /** A sender's role label and colour, for a channel. */
   senderMeta?: (userId: string | null) => { color: string; role: string } | undefined;
+  /** Whose custom emoji are used here: the community's for a channel, the chat's own otherwise. */
+  emojiScope: CustomEmojiScope;
   emptyDescription: string;
 }
 
@@ -55,12 +59,15 @@ export default function ChatPane({
   canModerate,
   canPost = true,
   senderMeta,
+  emojiScope,
   emptyDescription,
 }: ChatPaneProps) {
   const { user } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
 
+  const allEmoji = useCustomEmoji().emoji;
+  const customEmoji = useMemo(() => emojiOfScope(allEmoji, emojiScope), [allEmoji, emojiScope.type, emojiScope.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesQuery = useMessages(conversationId);
   const { edit, remove, react, markRead } = useChatActions();
   const send = useSendMessage(conversationId);
@@ -180,6 +187,7 @@ export default function ChatPane({
           loadingMore={messagesQuery.isFetchingNextPage}
           onLoadMore={() => messagesQuery.fetchNextPage()}
           typingNames={typingNames}
+          customEmoji={customEmoji}
           layout={layout}
           canModerate={canModerate}
           senderMeta={senderMeta}
@@ -192,6 +200,7 @@ export default function ChatPane({
           conversationId={conversationId}
           title={title}
           lookup={lookup}
+          customEmoji={customEmoji}
           meId={user.id}
           replyTo={replyTo}
           editing={editing}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import type { CustomEmoji } from "@shared/emoji";
 import { Box, Button, Chip, CircularProgress, Typography } from "@mui/material";
 import type { ChatAttachment, ChatConversation } from "@shared/chat";
 import type { LocalMessage } from "../../../../utils/chatCache";
@@ -15,6 +16,8 @@ interface MessageListProps {
   loadingMore: boolean;
   onLoadMore: () => void;
   typingNames: string[];
+  /** The custom emoji of this community or chat. */
+  customEmoji?: CustomEmoji[];
   /** A community channel draws a flat row per message instead of bubbles. */
   layout?: "bubbles" | "flat";
   /** Whether the viewer may delete anyone's message (a community's manage messages); by default, a chat's owner may. */
@@ -50,6 +53,7 @@ export default function MessageList({
   loadingMore,
   onLoadMore,
   typingNames,
+  customEmoji,
   layout,
   canModerate,
   senderMeta,
@@ -59,6 +63,7 @@ export default function MessageList({
   const topRef = useRef<HTMLDivElement>(null);
   const isGroup = conversation.members.length > 2 || !!conversation.name;
 
+  const customById = useMemo(() => new Map((customEmoji ?? []).map((e) => [e._id, e])), [customEmoji]);
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages]);
 
   const rows = useMemo<Row[]>(() => {
@@ -160,6 +165,8 @@ export default function MessageList({
                 (canModerate ?? conversation.members.find((x) => x.user_id === meId)?.role === "owner")
               }
               layout={layout}
+              customEmoji={customEmoji}
+              customById={customById}
               senderMeta={senderMeta?.(m.from)}
               {...actions}
             />

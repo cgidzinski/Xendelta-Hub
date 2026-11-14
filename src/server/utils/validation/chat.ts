@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { objectIdSchema } from "./core";
+import { customIdOfReaction } from "../../../shared/emoji";
 import {
   CHAT_BODY_MAX,
   CHAT_MAX_ATTACHMENTS,
@@ -10,11 +11,18 @@ import {
 
 const seq = z.coerce.number().int().min(1);
 // One emoji (it may be several code points: skin tones, flags, joined sequences).
+// Or a custom emoji, written `c:<its id>` (the route checks it belongs to the chat).
 const emoji = z
   .string()
   .min(1)
-  .max(16)
-  .refine((v) => /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(v), { message: "Not an emoji" });
+  .max(26)
+  .refine(
+    (v) =>
+      customIdOfReaction(v) !== null || (v.length <= 16 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(v)),
+    {
+      message: "Not an emoji",
+    },
+  );
 
 export const chatConversationParamSchema = z.object({ conversationId: objectIdSchema });
 export const chatMessageParamSchema = z.object({ conversationId: objectIdSchema, seq });

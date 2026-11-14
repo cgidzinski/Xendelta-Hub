@@ -11,6 +11,8 @@ import type { ChatAttachment } from "@shared/chat";
 import { formatFileSize } from "../../../../utils/fileUtils";
 import AddReactionOutlinedIcon from "@mui/icons-material/AddReactionOutlined";
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
+import { EmojiText, ReactionEmoji, reactionLabel } from "../../../../components/emoji/EmojiText";
+import { customIdOfReaction, customReactionKey, plainEmojiText, type CustomEmoji } from "@shared/emoji";
 import { quickReactions, readRecentEmoji, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
 import type { LocalMessage } from "../../../../utils/chatCache";
 import type { Theme } from "@mui/material/styles";
@@ -74,6 +76,9 @@ export interface MessageBubbleProps {
   canDelete: boolean;
   /** "bubbles" is a DM or group chat; "flat" is a community channel (a row per message, the sender above it). */
   layout?: "bubbles" | "flat";
+  /** The custom emoji of this community or chat: to draw them, and to offer in the reaction picker. */
+  customEmoji?: CustomEmoji[];
+  customById?: Map<string, CustomEmoji>;
   /** The sender's role label and colour, shown in a channel. */
   senderMeta?: { color: string; role: string };
   onReply: (m: LocalMessage) => void;
@@ -86,6 +91,9 @@ export interface MessageBubbleProps {
 }
 
 /** One message: the bubble, what it replies to, its files, reactions and status, and its action menu. */
+const NO_EMOJI: CustomEmoji[] = [];
+const NO_EMOJI_BY_ID = new Map<string, CustomEmoji>();
+
 export default function MessageBubble(props: MessageBubbleProps) {
   const {
     message: m,
@@ -98,6 +106,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
     layout = "bubbles",
     senderMeta,
   } = props;
+  const customList = props.customEmoji ?? NO_EMOJI;
+  const customById = props.customById ?? NO_EMOJI_BY_ID;
   const mine = m.from === meId;
   const sender = lookup(m.from);
   const deleted = !!m.deletedAt;
@@ -111,13 +121,20 @@ export default function MessageBubble(props: MessageBubbleProps) {
   // What you used lately comes first, so the row adapts to you. Read when the menu opens, not on every render.
   const quick = anchor ? quickReactions(readRecentEmoji()) : [];
   const react = (emoji: string) => {
-    rememberEmoji(emoji);
+    if (!customIdOfReaction(emoji)) rememberEmoji(emoji);
     props.onReact(m, emoji);
   };
 
   const menu = (
     <>
-      <EmojiPopover anchorEl={pickerAnchor} onClose={() => setPickerAnchor(null)} onPick={react} placement="below" />
+      <EmojiPopover
+        anchorEl={pickerAnchor}
+        onClose={() => setPickerAnchor(null)}
+        onPick={react}
+        custom={customList}
+        onPickCustom={(e) => react(customReactionKey(e._id))}
+        placement="below"
+      />
       <Menu anchorEl={anchor} open={!!anchor} onClose={close}>
         <Box sx={{ display: "flex", gap: 0.5, px: 1.5, py: 0.5 }}>
           {quick.map((emoji) => (
@@ -155,7 +172,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
         {m.body && (
           <MenuItem
             onClick={() => {
-              void navigator.clipboard?.writeText(m.body);
+              void navigator.clipboard?.writeText(plainEmojiText(m.body));
               close();
             }}
           >
@@ -236,7 +253,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               <ReplyIcon sx={{ fontSize: 14 }} />
               <Typography variant="caption" noWrap>
                 Replying to {nameFor(lookup, replyTarget.from, meId)}:{" "}
-                {replyTarget.deletedAt ? "Deleted message" : replyTarget.body || "Attachment"}
+                {replyTarget.deletedAt ? "Deleted message" : plainEmojiText(replyTarget.body) || "Attachment"}
               </Typography>
             </Box>
           )}
@@ -254,7 +271,11 @@ export default function MessageBubble(props: MessageBubbleProps) {
                 fontStyle: deleted ? "italic" : "normal",
               }}
             >
-              {deleted ? "This message was deleted" : m.body}
+              {deleted ? (
+                "This message was deleted"
+              ) : (
+                <EmojiText body={m.body} byId={customById} size={big ? 1.1 : undefined} />
+              )}
               {m.editedAt && !deleted && (
                 <Typography component="span" variant="caption" color="text.secondary">
                   {" "}
@@ -282,7 +303,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               {m.reactions.map((r) => {
                 const on = r.userIds.includes(meId);
                 return (
-                  <Tooltip title={reactedBy(r.userIds, r.emoji, lookup, meId)}>
+                  <Tooltip title={reactedBy(r.userIds, reactionLabel(r.emoji, customById), lookup, meId)}>
                     <Button
                       key={r.emoji}
                       size="small"
@@ -290,7 +311,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                       color={on ? "primary" : "inherit"}
                       onClick={() => props.onReact(m, r.emoji)}
                       aria-pressed={on}
-                      aria-label={`${r.emoji} ${r.userIds.length}`}
+                      aria-label={`${reactionLabel(r.emoji, customById)} ${r.userIds.length}`}
                       sx={{
                         minWidth: 0,
                         px: 1,
@@ -300,7 +321,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                         fontSize: 13,
                       }}
                     >
-                      {r.emoji} {r.userIds.length}
+                      <ReactionEmoji reaction={r.emoji} byId={customById} /> {r.userIds.length}
                     </Button>
                   </Tooltip>
                 );
@@ -406,7 +427,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               >
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                   {nameFor(lookup, replyTarget.from, meId)} ·{" "}
-                  {replyTarget.deletedAt ? "Deleted message" : replyTarget.body || "Attachment"}
+                  {replyTarget.deletedAt ? "Deleted message" : plainEmojiText(replyTarget.body) || "Attachment"}
                 </Typography>
               </Box>
             )}
@@ -434,7 +455,11 @@ export default function MessageBubble(props: MessageBubbleProps) {
                 }}
               >
                 <Typography variant="body2" sx={{ lineHeight: big ? 1.25 : 1.5, fontSize: big ? 40 : undefined }}>
-                  {deleted ? "This message was deleted" : m.body}
+                  {deleted ? (
+                    "This message was deleted"
+                  ) : (
+                    <EmojiText body={m.body} byId={customById} size={big ? 1.1 : undefined} />
+                  )}
                 </Typography>
               </Box>
             )}
@@ -457,7 +482,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             {m.reactions.map((r) => {
               const on = r.userIds.includes(meId);
               return (
-                <Tooltip title={reactedBy(r.userIds, r.emoji, lookup, meId)}>
+                <Tooltip title={reactedBy(r.userIds, reactionLabel(r.emoji, customById), lookup, meId)}>
                   <Button
                     key={r.emoji}
                     size="small"
@@ -465,7 +490,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                     color={on ? "primary" : "inherit"}
                     onClick={() => props.onReact(m, r.emoji)}
                     aria-pressed={on}
-                    aria-label={`${r.emoji} ${r.userIds.length}`}
+                    aria-label={`${reactionLabel(r.emoji, customById)} ${r.userIds.length}`}
                     sx={{
                       minWidth: 0,
                       px: 1,
@@ -475,7 +500,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                       fontSize: 13,
                     }}
                   >
-                    {r.emoji} {r.userIds.length}
+                    <ReactionEmoji reaction={r.emoji} byId={customById} /> {r.userIds.length}
                   </Button>
                 </Tooltip>
               );

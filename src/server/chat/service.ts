@@ -12,6 +12,7 @@ import { ChannelState } from "../models/channelState";
 import { unreadChannelCount } from "../communities/channels";
 import { audienceOf, resolveChatAccess, type ChatContext } from "./access";
 import { canPostChat } from "./policy";
+import { plainEmojiText } from "@shared/emoji";
 import { deleteEmojiOf } from "../emoji/cleanup";
 import {
   CHAT_PREVIEW_MAX,
@@ -156,7 +157,8 @@ export async function serializeMessage(message: MessageDocument): Promise<ChatMe
 
 // ---------- sending ----------
 
-function previewOf(body: string, attachmentCount: number, attachmentName?: string): string {
+function previewOf(rawBody: string, attachmentCount: number, attachmentName?: string): string {
+  const body = plainEmojiText(rawBody);
   const text = body.trim().replace(/\s+/g, " ");
   if (text) return text.length > CHAT_PREVIEW_MAX ? text.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd() + "…" : text;
   if (attachmentCount === 1) return attachmentName ? `Sent ${attachmentName}` : "Sent a file";

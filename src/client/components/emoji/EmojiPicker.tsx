@@ -23,6 +23,9 @@ import PetsOutlinedIcon from "@mui/icons-material/PetsOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SportsSoccerOutlinedIcon from "@mui/icons-material/SportsSoccerOutlined";
 import { RADIUS } from "../../theme";
+import type { CustomEmoji } from "@shared/emoji";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import { CustomEmojiImage } from "./EmojiText";
 import {
   EMOJI_GROUPS,
   SKIN_TONES,
@@ -53,6 +56,9 @@ const TONE_NAMES = ["Default", "Light", "Medium-light", "Medium", "Medium-dark",
 interface EmojiPickerProps {
   onPick: (emoji: string) => void;
   autoFocus?: boolean;
+  /** The custom emoji to offer here (the community's or the chat's), and what picking one does. */
+  custom?: CustomEmoji[];
+  onPickCustom?: (emoji: CustomEmoji) => void;
 }
 
 const cell = {
@@ -76,7 +82,7 @@ function Grid({ children }: { children: React.ReactNode }) {
  * Pick any emoji: a search box, the categories, the ones you used lately, and your skin tone. The data loads the first
  * time one is opened. Your recent picks and tone are remembered on this device.
  */
-export default function EmojiPicker({ onPick, autoFocus }: EmojiPickerProps) {
+export default function EmojiPicker({ onPick, autoFocus, custom = [], onPickCustom }: EmojiPickerProps) {
   const [entries, setEntries] = useState<EmojiEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
@@ -104,6 +110,10 @@ export default function EmojiPicker({ onPick, autoFocus }: EmojiPickerProps) {
     return map;
   }, [entries]);
   const results = useMemo(() => (entries && query.trim() ? searchEmoji(entries, query) : []), [entries, query]);
+  const customResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? custom.filter((e) => e.name.includes(q)) : [];
+  }, [custom, query]);
   const searching = query.trim().length > 0;
 
   const pick = (emoji: string) => {
@@ -138,7 +148,22 @@ export default function EmojiPicker({ onPick, autoFocus }: EmojiPickerProps) {
     );
   };
 
+  const hasCustom = custom.length > 0 && !!onPickCustom;
+  const customButton = (e: CustomEmoji) => (
+    <ButtonBase
+      key={e._id}
+      aria-label={`:${e.name}:`}
+      title={`:${e.name}:`}
+      onClick={() => onPickCustom?.(e)}
+      onMouseEnter={() => setHovered(`:${e.name}:`)}
+      onFocus={() => setHovered(`:${e.name}:`)}
+      sx={cell}
+    >
+      <CustomEmojiImage emoji={e} size={1} />
+    </ButtonBase>
+  );
   const tabs = [
+    ...(hasCustom ? [{ key: "custom", label: "Custom emoji", Icon: StarBorderIcon }] : []),
     ...(recent.length > 0 ? [{ key: "recent", label: "Recently used", Icon: AccessTimeIcon }] : []),
     ...EMOJI_GROUPS.map((g) => ({ key: String(g.id), label: g.label, Icon: GROUP_ICONS[g.id]! })),
   ];
@@ -197,15 +222,31 @@ export default function EmojiPicker({ onPick, autoFocus }: EmojiPickerProps) {
             <CircularProgress size={24} />
           </Box>
         ) : searching ? (
-          results.length === 0 ? (
+          results.length === 0 && customResults.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
               No emoji match &ldquo;{query.trim()}&rdquo;.
             </Typography>
           ) : (
-            <Grid>{results.map(renderEntry)}</Grid>
+            <Grid>
+              {hasCustom && customResults.map(customButton)}
+              {results.map(renderEntry)}
+            </Grid>
           )
         ) : (
           <>
+            {hasCustom && (
+              <Box
+                ref={(el: HTMLElement | null) => {
+                  if (el) sections.current.set("custom", el);
+                }}
+                sx={{ pb: 1 }}
+              >
+                <Typography variant="overline" color="text.secondary" sx={{ display: "block", lineHeight: 2 }}>
+                  Custom emoji
+                </Typography>
+                <Grid>{custom.map(customButton)}</Grid>
+              </Box>
+            )}
             {recent.length > 0 && (
               <Box
                 ref={(el: HTMLElement | null) => {

@@ -28,3 +28,13 @@ export interface CustomEmoji {
 
 /** The token that puts a custom emoji in a message body. */
 export const emojiToken = (emoji: Pick<CustomEmoji, "name" | "_id">) => `<:${emoji.name}:${emoji._id}>`;
+
+/** A custom emoji token inside a message body: `<:name:id>`. */
+export const EMOJI_TOKEN = /<:([a-z0-9_]{2,32}):([a-f0-9]{24})>/g;
+
+/** A reaction's key for a custom emoji. A Unicode emoji is its own key. */
+export const customReactionKey = (emojiId: string) => `c:${emojiId}`;
+export const customIdOfReaction = (key: string): string | null => (/^c:[a-f0-9]{24}$/.test(key) ? key.slice(2) : null);
+
+/** The body as plain text, with each custom emoji written as `:name:` (for previews, notifications and quotes). */
+export const plainEmojiText = (body: string) => body.replace(EMOJI_TOKEN, ":$1:");

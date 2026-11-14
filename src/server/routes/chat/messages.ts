@@ -29,6 +29,8 @@ import {
   sendChatMessageSchema,
 } from "../../utils/validation";
 import { CHAT_REACTIONS_PER_MESSAGE } from "@shared/chat";
+import { customIdOfReaction, plainEmojiText } from "@shared/emoji";
+import { CustomEmojiModel } from "../../models/customEmoji";
 
 export function registerMessageRoutes(app: Application) {
   // A page of history, newest first. Ask for older ones with ?before=<the smallest seq you have>.
@@ -142,7 +144,7 @@ export function registerMessageRoutes(app: Application) {
       message.body = editChatMessageSchema.parse(req.body).body;
       message.editedAt = new Date();
       await message.save();
-      await refreshLastPreview(chat._id, message.seq, message.body);
+      await refreshLastPreview(chat._id, message.seq, plainEmojiText(message.body));
       await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
@@ -186,6 +188,11 @@ export function registerMessageRoutes(app: Application) {
       if (message.kind !== "text" || message.deletedAt) throw new AppError(400, "You can't react to that message");
 
       const emoji = req.params.emoji as string;
+      // A custom emoji can be used only in the community or chat it belongs to.
+      const customId = customIdOfReaction(emoji);
+      if (customId && !(await emojiBelongsHere(customId, context))) {
+        throw new AppError(400, "That emoji isn't available here");
+      }
       const existing = message.reactions.find((r) => r.emoji === emoji);
       if (existing) {
         if (!existing.userIds.includes(me)) existing.userIds.push(me);
@@ -246,4 +253,13 @@ async function refreshLastPreview(conversationId: unknown, seq: number, text: st
     { _id: conversationId, "lastMessage.seq": seq },
     { $set: { "lastMessage.preview": text } },
   ).exec();
+}
+
+/** Whether this custom emoji belongs to the community the channel is in, or to this chat. */
+async function emojiBelongsHere(emojiId: string, context: ChatContext): Promise<boolean> {
+  const emoji = await CustomEmojiModel.findById(emojiId, "communityId conversationId").lean().exec();
+  if (!emoji) return false;
+  return context.community
+    ? emoji.communityId === String(context.community._id)
+    : emoji.conversationId === String(context.chat._id);
 }

@@ -217,6 +217,72 @@ describe("what is refused", () => {
   });
 });
 
+describe("using custom emoji in messages", () => {
+  const send = (who: U, chatId: string, body: string) =>
+    request(t.app).post(`/api/chat/conversations/${chatId}/messages`).set(as(who)).send({ body });
+  const react = (who: U, chatId: string, seq: number, key: string) =>
+    request(t.app)
+      .put(`/api/chat/conversations/${chatId}/messages/${seq}/reactions/${encodeURIComponent(key)}`)
+      .set(as(who));
+
+  it("a community's emoji can be a reaction there, and the preview says :name: instead of the token", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const community = await makeCommunity(a);
+    await addToCommunity(community._id, b);
+    const emoji = (await upload(a, { name: "wave_blob", scopeType: "community", scopeId: community._id })).body.data
+      .emoji;
+    const [general] = (await request(t.app).get(`/api/communities/${community._id}/channels`).set(as(a))).body.data
+      .channels;
+
+    const sent = await send(b, general._id, `hi <:wave_blob:${emoji._id}>`);
+    expect(sent.status).toBe(200);
+    const channels = (await request(t.app).get(`/api/communities/${community._id}/channels`).set(as(a))).body.data
+      .channels;
+    expect(channels[0].lastMessage.preview).toBe("hi :wave_blob:");
+
+    const reacted = await react(a, general._id, sent.body.data.message.seq, `c:${emoji._id}`);
+    expect(reacted.status, JSON.stringify(reacted.body)).toBe(200);
+    expect(reacted.body.data.message.reactions).toEqual([{ emoji: `c:${emoji._id}`, userIds: [id(a)] }]);
+    // Taking your own reaction back works the same way.
+    const removed = await request(t.app)
+      .delete(
+        `/api/chat/conversations/${general._id}/messages/${sent.body.data.message.seq}/reactions/${encodeURIComponent(`c:${emoji._id}`)}`,
+      )
+      .set(as(a));
+    expect(removed.body.data.message.reactions).toEqual([]);
+  });
+
+  it("another community's emoji, a group chat's emoji in a channel, and a removed emoji are all refused", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const mine = await makeCommunity(a);
+    const other = await makeCommunity(b);
+    const theirs = (await upload(b, { name: "theirs", scopeType: "community", scopeId: other._id })).body.data.emoji;
+    const chat = await makeChat(a, [b]);
+    const chatEmoji = (await upload(a, { name: "chatonly", scopeType: "chat", scopeId: chat._id })).body.data.emoji;
+    const [general] = (await request(t.app).get(`/api/communities/${mine._id}/channels`).set(as(a))).body.data.channels;
+    const msg = (await send(a, general._id, "hello")).body.data.message;
+
+    expect((await react(a, general._id, msg.seq, `c:${theirs._id}`)).status).toBe(400);
+    expect((await react(a, general._id, msg.seq, `c:${chatEmoji._id}`)).status).toBe(400);
+    // In the chat it belongs to, it works; and it stops working once removed.
+    const chatMsg = (await send(a, chat._id, "hi")).body.data.message;
+    expect((await react(a, chat._id, chatMsg.seq, `c:${chatEmoji._id}`)).status).toBe(200);
+    await request(t.app).delete(`/api/emoji/${chatEmoji._id}`).set(as(a));
+    expect((await react(b, chat._id, chatMsg.seq, `c:${chatEmoji._id}`)).status).toBe(400);
+  });
+
+  it("a made-up custom key or a bad shape is a 400", async () => {
+    const a = await createUser();
+    const community = await makeCommunity(a);
+    const [general] = (await request(t.app).get(`/api/communities/${community._id}/channels`).set(as(a))).body.data
+      .channels;
+    const msg = (await send(a, general._id, "hello")).body.data.message;
+    expect((await react(a, general._id, msg.seq, "c:000000000000000000000000")).status).toBe(400);
+    expect((await react(a, general._id, msg.seq, "c:nope")).status).toBe(400);
+    expect((await react(a, general._id, msg.seq, "x".repeat(20))).status).toBe(400);
+  });
+});
+
 describe("when storage fails", () => {
   it("says so plainly, keeps the details out of the answer, and stores nothing", async () => {
     const a = await createUser();

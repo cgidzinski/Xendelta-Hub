@@ -160,6 +160,7 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
         conversation={conversation}
         title={title}
         header={header}
+        emojiScope={{ type: "chat", id: conversationId }}
         emptyDescription={`Say hello to ${title}.`}
       />
 

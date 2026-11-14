@@ -5,7 +5,9 @@ import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
 import { loadEmoji, withTone, type EmojiEntry } from "../../../../components/emoji/emojiData";
 import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
-import { shortcodeBeforeCaret, suggestShortcodes } from "../../../../components/emoji/emojiText";
+import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../../../components/emoji/emojiText";
+import { CustomEmojiImage } from "../../../../components/emoji/EmojiText";
+import { emojiToken, plainEmojiText, type CustomEmoji } from "@shared/emoji";
 import CloseIcon from "@mui/icons-material/Close";
 import { CHAT_BODY_MAX } from "@shared/chat";
 import type { LocalMessage } from "../../../../utils/chatCache";
@@ -25,11 +27,24 @@ interface ComposerProps {
   /** Send. Resolve when it has been handed off, so the box can clear. */
   onSend: (body: string) => void;
   onSaveEdit: (body: string) => void;
+  /** The custom emoji of this community or chat, offered in the picker and when typing `:name`. */
+  customEmoji?: CustomEmoji[];
   /** The attach button, and the tray of files about to be sent. */
   attach?: ReactNode;
   tray?: ReactNode;
   /** True while an attached file is still uploading. */
   busy?: boolean;
+}
+
+const NO_CUSTOM: CustomEmoji[] = [];
+
+/** One line of the `:name` list: what to draw, what it is called, and what to put in the message. */
+interface Suggestion {
+  key: string;
+  label: string;
+  glyph: ReactNode;
+  insert: string;
+  remember: boolean;
 }
 
 /** The message box: reply and edit bars, an attachment tray, Enter to send (a button on a phone), typing signals. */
@@ -44,6 +59,7 @@ export default function Composer({
   hasAttachments,
   onSend,
   onSaveEdit,
+  customEmoji = NO_CUSTOM,
   attach,
   tray,
   busy,
@@ -68,18 +84,32 @@ export default function Composer({
   useEffect(() => {
     if (!emojiList && /(^|\s):[a-z0-9_+-]{2}/i.test(text)) void loadEmoji().then(setEmojiList, () => undefined);
   }, [text, emojiList]);
-  const match = emojiList ? shortcodeBeforeCaret(text, caret) : null;
-  const suggestions = match && emojiList ? suggestShortcodes(emojiList, match.query) : [];
+  const match = shortcodeBeforeCaret(text, caret);
+  // The community's or chat's own emoji come first, then the standard ones (once their list has loaded).
+  const suggestions: Suggestion[] = match
+    ? [
+        ...suggestCustom(customEmoji, match.query).map((e) => ({
+          key: `c-${e._id}`,
+          label: `:${e.name}:`,
+          glyph: <CustomEmojiImage emoji={e} size={1} />,
+          insert: emojiToken(e),
+          remember: false,
+        })),
+        ...(emojiList ? suggestShortcodes(emojiList, match.query) : []).map((e) => {
+          const emoji = withTone(e, readSkinTone());
+          return { key: `u-${e.order}`, label: `:${e.shortcode}:`, glyph: emoji, insert: emoji, remember: true };
+        }),
+      ].slice(0, 8)
+    : [];
   const suggesting = !!match && suggestions.length > 0 && dismissedAt !== match.start;
   useEffect(() => setPick(0), [match?.query]);
 
-  /** Swap the `:partial` for the emoji, in the person's skin tone, and put the cursor after it. */
-  const acceptSuggestion = (entry: EmojiEntry) => {
+  /** Swap the `:partial` for the emoji, and put the cursor after it. */
+  const acceptSuggestion = (item: Suggestion) => {
     if (!match) return;
-    const emoji = withTone(entry, readSkinTone());
-    rememberEmoji(emoji);
-    setText(text.slice(0, match.start) + emoji + text.slice(caret));
-    const pos = match.start + emoji.length;
+    if (item.remember) rememberEmoji(item.insert);
+    setText(text.slice(0, match.start) + item.insert + text.slice(caret));
+    const pos = match.start + item.insert.length;
     requestAnimationFrame(() => {
       input.current?.focus();
       input.current?.setSelectionRange(pos, pos);
@@ -140,7 +170,7 @@ export default function Composer({
               {editing ? "Editing message" : `Replying to ${nameFor(lookup, replyTo!.from, meId)}`}
             </Typography>
             <Typography variant="body2" color="text.secondary" noWrap>
-              {(editing ?? replyTo)!.body || "Attachment"}
+              {plainEmojiText((editing ?? replyTo)!.body) || "Attachment"}
             </Typography>
           </Box>
           <IconButton size="small" onClick={onCancelContext} aria-label="Cancel">
@@ -235,7 +265,7 @@ export default function Composer({
         >
           {suggestions.map((entry, i) => (
             <ButtonBase
-              key={entry.order}
+              key={entry.key}
               role="option"
               aria-selected={i === pick}
               onMouseDown={(e) => e.preventDefault()}
@@ -252,13 +282,19 @@ export default function Composer({
                 bgcolor: i === pick ? "action.selected" : "transparent",
               }}
             >
-              <span style={{ fontSize: 20 }}>{withTone(entry, readSkinTone())}</span>
-              <span>:{entry.shortcode}:</span>
+              <span style={{ fontSize: 20, display: "inline-flex", alignItems: "center" }}>{entry.glyph}</span>
+              <span>{entry.label}</span>
             </ButtonBase>
           ))}
         </Paper>
       )}
-      <EmojiPopover anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} onPick={insertEmoji} />
+      <EmojiPopover
+        anchorEl={emojiAnchor}
+        onClose={() => setEmojiAnchor(null)}
+        onPick={insertEmoji}
+        custom={customEmoji}
+        onPickCustom={(e) => insertEmoji(emojiToken(e))}
+      />
     </Box>
   );
 }

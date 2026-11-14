@@ -44,6 +44,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Pick any emoji for a message or a reaction, with search, skin tones and the ones you used lately.",
+      "Add your own emoji to a community or a group chat, and use them in messages and reactions.",
       "Make a community for a group, with its own channels, roles and people, and invite hub users to join.",
       "Make a channel private or read-only, and give people roles with the permissions you choose.",
       "Find the people you share groups, books and notebooks with, and message them.",

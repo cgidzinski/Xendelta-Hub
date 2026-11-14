@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatConversation } from "@shared/chat";
+import { plainEmojiText } from "@shared/emoji";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../useSocket";
 import { useRealtime } from "../useRealtime";
@@ -35,7 +36,12 @@ export function useChatRealtime() {
               message.from === user.id
                 ? 0
                 : Math.max(c.seq, message.seq) - (c.members.find((m) => m.user_id === user.id)?.lastReadSeq ?? 0),
-            lastMessage: { seq: message.seq, from: message.from, preview: message.body, at: message.createdAt },
+            lastMessage: {
+              seq: message.seq,
+              from: message.from,
+              preview: plainEmojiText(message.body),
+              at: message.createdAt,
+            },
           }
         : c,
     );
