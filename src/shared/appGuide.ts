@@ -44,6 +44,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
+      "Create a poll with up to ten options, let people vote live, and close it when you are done.",
       "Record a voice message and send it, then play it with a waveform, a speed button and a slider to jump around.",
       "Search for a GIF and send it in a chat.",
       "Reply in a thread under any message to keep a side conversation out of the main chat, and follow a thread to hear about its replies.",
@@ -73,6 +74,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       {
         text: "Try Communities to chat with a group in separate channels. Use the invite button to ask people to join.",
         link: "/internal/communities",
+      },
+      {
+        text: "Try Create a poll from the paperclip menu to settle a question quickly.",
+        link: "/internal/messages",
       },
       {
         text: "Try the microphone button next to the message box to send a voice message of up to five minutes.",

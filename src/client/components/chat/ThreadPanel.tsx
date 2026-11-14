@@ -112,6 +112,8 @@ export default function ThreadPanel({
       react.mutate({ conversationId, seq: m.seq, emoji, on }, { onError: (e) => fail(e, "Couldn't react") });
     },
     onPin: () => undefined,
+    onVote: () => undefined,
+    onClosePoll: () => undefined,
     onJumpTo: () => undefined,
     onCopyLink,
     onRemoveEmbeds: (m: LocalMessage) =>

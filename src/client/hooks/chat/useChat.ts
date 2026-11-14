@@ -356,6 +356,43 @@ export function useChatActions() {
     },
   });
 
+  /** Start a poll in a chat (it arrives as a message through the usual live update). */
+  const createPoll = useMutation({
+    mutationFn: async (input: {
+      conversationId: string;
+      question: string;
+      options: string[];
+      multiple: boolean;
+      endsAt?: string;
+    }) => {
+      const { conversationId, ...poll } = input;
+      return (await api.post<{ message: ChatMessage }>(`${base(conversationId)}/polls`, poll)).message;
+    },
+    onSuccess: (message) =>
+      queryClient.setQueryData<MessagesData>(chatKeys.messages(message.conversationId), (data) =>
+        upsertMessage(data, message),
+      ),
+  });
+
+  /** Choose options in a poll, or take the vote back with an empty list. */
+  const votePoll = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number; optionIds: string[] }) =>
+      (
+        await api.put<{ message: ChatMessage }>(`${base(input.conversationId)}/messages/${input.seq}/poll/vote`, {
+          optionIds: input.optionIds,
+        })
+      ).message,
+    onSuccess: setMessage,
+  });
+
+  /** Close a poll early. */
+  const closePoll = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number }) =>
+      (await api.post<{ message: ChatMessage }>(`${base(input.conversationId)}/messages/${input.seq}/poll/close`))
+        .message,
+    onSuccess: setMessage,
+  });
+
   /** Take the link previews off a message. */
   const removeEmbeds = useMutation({
     mutationFn: async (input: { conversationId: string; seq: number }) =>
@@ -386,5 +423,8 @@ export function useChatActions() {
     react,
     removeEmbeds,
     pin,
+    createPoll,
+    votePoll,
+    closePoll,
   };
 }

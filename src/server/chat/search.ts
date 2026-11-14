@@ -64,7 +64,7 @@ export async function searchMessages(
   if (chats.length === 0) return { results: [], hasMore: false };
   const filter: Record<string, unknown> = {
     conversationId: { $in: chats.map((c) => c.id) },
-    kind: "text",
+    kind: { $in: ["text", "poll"] },
     deletedAt: { $exists: false },
   };
   if (input.q) filter.$text = { $search: input.q };

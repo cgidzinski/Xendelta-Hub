@@ -14,7 +14,7 @@ export const CHAT_REACTIONS_PER_MESSAGE = 20;
 export const CHAT_PREVIEW_MAX = 140;
 
 export type ChatRole = "owner" | "member";
-export type ChatMessageKind = "text" | "system" | "call";
+export type ChatMessageKind = "text" | "system" | "call" | "poll";
 
 /** What other people may see of a person (the same fields every app shows). */
 export interface ChatPerson {
@@ -55,6 +55,37 @@ export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "rename
 
 /** How many messages a chat can have pinned at once. */
 export const CHAT_MAX_PINS = 50;
+
+export const POLL_QUESTION_MAX = 300;
+export const POLL_OPTION_MAX = 100;
+export const POLL_MIN_OPTIONS = 2;
+export const POLL_MAX_OPTIONS = 10;
+/** The furthest ahead a poll may be set to end. */
+export const POLL_MAX_DAYS = 30;
+
+export interface ChatPollOption {
+  /** "0", "1", ... in the order written. */
+  id: string;
+  text: string;
+  /** Who chose it: voting is open, so the people behind each count can be shown. */
+  userIds: string[];
+}
+
+/** A poll message: its question is the message's body, and this is the rest. */
+export interface ChatPoll {
+  question: string;
+  options: ChatPollOption[];
+  /** More than one option may be chosen. */
+  multiple: boolean;
+  /** ISO time the poll closes by itself, or null. */
+  endsAt: string | null;
+  /** ISO time the creator (or a moderator) closed it early, or null. */
+  closedAt: string | null;
+}
+
+/** Whether voting has ended, by the clock or because it was closed. */
+export const isPollClosed = (poll: Pick<ChatPoll, "endsAt" | "closedAt">, now = Date.now()): boolean =>
+  !!poll.closedAt || (!!poll.endsAt && new Date(poll.endsAt).getTime() <= now);
 /** The longest voice message, in seconds, and how many bars its waveform has. */
 export const VOICE_MAX_SECONDS = 300;
 export const VOICE_WAVEFORM_BARS = 48;
@@ -112,6 +143,8 @@ export interface ChatMessage {
   embeds?: LinkEmbed[];
   /** A GIF sent from the picker. */
   gif?: ChatGif | null;
+  /** Set on a poll message (kind "poll"). */
+  poll?: ChatPoll | null;
   /** Set on a voice message: its one attachment is the audio. */
   voice?: ChatVoice | null;
   /** For a reply in a thread: the number of the message the thread hangs off. Such replies are not in the main history. */

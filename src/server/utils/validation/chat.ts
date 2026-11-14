@@ -11,6 +11,11 @@ import {
   CHAT_SEARCH_HAS,
   CHAT_SEARCH_MAX_QUERY,
   CHAT_SEARCH_PAGE,
+  POLL_MAX_DAYS,
+  POLL_MAX_OPTIONS,
+  POLL_MIN_OPTIONS,
+  POLL_OPTION_MAX,
+  POLL_QUESTION_MAX,
   VOICE_MAX_SECONDS,
   VOICE_WAVEFORM_BARS,
 } from "../../../shared/chat";
@@ -130,3 +135,27 @@ export const chatSearchQuerySchema = z
     limit: z.coerce.number().int().min(1).max(50).default(CHAT_SEARCH_PAGE),
   })
   .refine((v) => !!v.q || !!v.from || !!v.has, { message: "Search for some words, a person or a kind of message" });
+
+export const createPollSchema = z.object({
+  question: z.string().trim().min(1, "Ask a question").max(POLL_QUESTION_MAX),
+  options: z
+    .array(z.string().trim().min(1, "An option can't be empty").max(POLL_OPTION_MAX))
+    .min(POLL_MIN_OPTIONS, `Give at least ${POLL_MIN_OPTIONS} options`)
+    .max(POLL_MAX_OPTIONS)
+    .refine((o) => new Set(o.map((x) => x.toLowerCase())).size === o.length, {
+      message: "Each option must be different",
+    }),
+  multiple: z.boolean().default(false),
+  /** ISO time in the future, no more than POLL_MAX_DAYS ahead; omit for a poll that stays open until closed. */
+  endsAt: z
+    .string()
+    .max(40)
+    .refine((v) => !Number.isNaN(Date.parse(v)), { message: "Invalid time" })
+    .refine((v) => Date.parse(v) > Date.now() + 30_000, { message: "Pick a time in the future" })
+    .refine((v) => Date.parse(v) <= Date.now() + POLL_MAX_DAYS * 86_400_000, {
+      message: `A poll can run for at most ${POLL_MAX_DAYS} days`,
+    })
+    .optional(),
+});
+/** The options chosen; empty takes the vote back. */
+export const pollVoteSchema = z.object({ optionIds: z.array(z.string().regex(/^\d{1,2}$/)).max(POLL_MAX_OPTIONS) });

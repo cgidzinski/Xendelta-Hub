@@ -130,7 +130,7 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
       conversationId: String(m.conversationId),
       seq: m.seq,
       from: m.from ?? null,
-      kind: m.kind === "system" ? "system" : m.kind === "call" ? "call" : "text",
+      kind: m.kind === "system" ? "system" : m.kind === "call" ? "call" : m.kind === "poll" ? "poll" : "text",
       body: deleted ? "" : (m.body ?? ""),
       system,
       attachments: deleted
@@ -151,6 +151,16 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
               width: m.gif.width ?? 0,
               height: m.gif.height ?? 0,
               title: m.gif.title ?? "",
+            }
+          : null,
+      poll:
+        !deleted && m.kind === "poll" && m.poll?.options
+          ? {
+              question: m.body ?? "",
+              multiple: !!m.poll.multiple,
+              endsAt: iso(m.poll.endsAt),
+              closedAt: iso(m.poll.closedAt),
+              options: m.poll.options.map((o) => ({ id: o.id, text: o.text, userIds: [...(o.userIds ?? [])] })),
             }
           : null,
       voice:
@@ -207,13 +217,14 @@ function previewOf(
 
 export interface NewMessage {
   from: string | null;
-  kind?: "text" | "system";
+  kind?: "text" | "system" | "poll";
   body?: string;
   system?: { event: ChatSystemEvent; userIds?: string[]; name?: string };
   attachments?: Array<{ fileId: string; name: string; mimeType: string; size: number }>;
   replyTo?: number;
   gif?: { url: string; stillUrl: string; width: number; height: number; title: string };
   voice?: { duration: number; waveform: number[] };
+  poll?: { multiple: boolean; endsAt?: Date; options: Array<{ id: string; text: string }> };
   /** A reply in the thread of this message (kept out of the main history). */
   threadRoot?: number;
   clientId?: string;
@@ -246,6 +257,11 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     replyTo: input.replyTo,
     gif: input.gif,
     voice: input.voice,
+    poll: input.poll && {
+      multiple: input.poll.multiple,
+      endsAt: input.poll.endsAt,
+      options: input.poll.options.map((o) => ({ ...o, userIds: [] })),
+    },
     threadRoot: input.threadRoot,
     clientId: input.clientId,
     mentions: input.mentions?.userIds ?? [],
@@ -256,14 +272,16 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
   const preview =
     input.kind === "system"
       ? (input.body ?? "")
-      : previewOf(
-          input.body ?? "",
-          attachments.length,
-          attachments[0]?.name,
-          await mentionNames(input.body ?? ""),
-          !!input.gif,
-          !!input.voice,
-        );
+      : input.kind === "poll"
+        ? `Poll: ${input.body ?? ""}`
+        : previewOf(
+            input.body ?? "",
+            attachments.length,
+            attachments[0]?.name,
+            await mentionNames(input.body ?? ""),
+            !!input.gif,
+            !!input.voice,
+          );
   // Only the newest message may set the last-message summary, so two sends racing can't leave an older one in it.
   await Conversation.updateOne(
     { _id: chat._id, $or: [{ "lastMessage.seq": { $lt: seq } }, { "lastMessage.seq": { $exists: false } }] },
@@ -319,7 +337,7 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
   const audience = audienceOf(context);
   realtime.toUsers(audience, "chat:message", { conversationId, message: wire });
 
-  if (message.kind !== "text" || !message.from) return;
+  if ((message.kind !== "text" && message.kind !== "poll") || !message.from) return;
   const body = previewOf(
     message.body ?? "",
     message.attachments.length,

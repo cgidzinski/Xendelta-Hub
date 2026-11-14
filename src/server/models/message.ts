@@ -38,7 +38,7 @@ const messageSchema = new Schema({
   conversationId: { type: Schema.Types.ObjectId, ref: "Conversation", required: true },
   seq: { type: Number, required: true },
   from: { type: String, default: null }, // user id; null for system messages
-  kind: { type: String, enum: ["text", "system", "call"], default: "text" },
+  kind: { type: String, enum: ["text", "system", "call", "poll"], default: "text" },
   body: { type: String, default: "" },
   // For system messages: what happened and to whom, so the client can word it for each reader.
   system: {
@@ -47,6 +47,25 @@ const messageSchema = new Schema({
     name: { type: String },
   },
   attachments: [attachmentSchema],
+  // A poll (kind "poll"): the question is the body. One option holds the people who chose it.
+  poll: {
+    multiple: { type: Boolean },
+    endsAt: { type: Date },
+    closedAt: { type: Date },
+    options: {
+      type: [
+        new Schema(
+          {
+            id: { type: String, required: true },
+            text: { type: String, required: true },
+            userIds: { type: [String], default: [] },
+          },
+          { _id: false },
+        ),
+      ],
+      default: undefined,
+    },
+  },
   // A voice message: how long it is and its loudness bars. The audio is the message's one attachment.
   voice: {
     duration: { type: Number },

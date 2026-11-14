@@ -44,7 +44,13 @@ export function useChatRealtime() {
               from: message.from,
               preview:
                 plainMessageText(message.body) ||
-                (message.gif ? "Sent a GIF" : message.voice ? "Sent a voice message" : ""),
+                (message.gif
+                  ? "Sent a GIF"
+                  : message.voice
+                    ? "Sent a voice message"
+                    : message.poll
+                      ? `Poll: ${message.poll.question}`
+                      : ""),
               at: message.createdAt,
             },
           }

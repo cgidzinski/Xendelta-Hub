@@ -8,6 +8,9 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LinkIcon from "@mui/icons-material/Link";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import VoiceMessage from "../../../../components/chat/VoiceMessage";
+import PollCard from "../../../../components/chat/PollCard";
+import { isPollClosed } from "@shared/chat";
+import PollOutlinedIcon from "@mui/icons-material/PollOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -102,6 +105,9 @@ export interface MessageBubbleProps {
   onCopyLink: (m: LocalMessage) => void;
   /** Open the thread under this message (start it if it has none). Absent inside a thread, where there is no nesting. */
   onOpenThread?: (m: LocalMessage) => void;
+  /** Vote in a poll (an empty list takes the vote back), and close one early. */
+  onVote: (m: LocalMessage, optionIds: string[]) => void;
+  onClosePoll: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -131,7 +137,8 @@ export default function MessageBubble(props: MessageBubbleProps) {
   const sender = lookup(m.from);
   const deleted = !!m.deletedAt;
   // One to three emoji and nothing else is drawn large, with no bubble.
-  const big = !deleted && m.attachments.length === 0 && isEmojiOnly(m.body);
+  const isPoll = m.kind === "poll";
+  const big = !deleted && !isPoll && m.attachments.length === 0 && isEmojiOnly(m.body);
   const stored = !m.status;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = () => setAnchor(null);
@@ -156,6 +163,18 @@ export default function MessageBubble(props: MessageBubbleProps) {
           />
         ))}
       </>
+    ) : null;
+
+  // A poll replaces the text. Whoever sent it (or may delete it) can close it early.
+  const pollView =
+    !deleted && isPoll && m.poll ? (
+      <PollCard
+        poll={m.poll}
+        meId={meId}
+        lookup={lookup}
+        onVote={(ids) => props.onVote(m, ids)}
+        onClose={stored && (mine || canDelete) ? () => props.onClosePoll(m) : undefined}
+      />
     ) : null;
 
   // A voice message plays in place of its file card.
@@ -238,31 +257,33 @@ export default function MessageBubble(props: MessageBubbleProps) {
         placement="below"
       />
       <Menu anchorEl={anchor} open={!!anchor} onClose={close}>
-        <Box sx={{ display: "flex", gap: 0.5, px: 1.5, py: 0.5 }}>
-          {quick.map((emoji) => (
+        {!isPoll && (
+          <Box sx={{ display: "flex", gap: 0.5, px: 1.5, py: 0.5 }}>
+            {quick.map((emoji) => (
+              <IconButton
+                key={emoji}
+                size="small"
+                aria-label={`React with ${emoji}`}
+                onClick={() => {
+                  react(emoji);
+                  close();
+                }}
+              >
+                {emoji}
+              </IconButton>
+            ))}
             <IconButton
-              key={emoji}
               size="small"
-              aria-label={`React with ${emoji}`}
+              aria-label="More reactions"
               onClick={() => {
-                react(emoji);
+                setPickerAnchor(anchor);
                 close();
               }}
             >
-              {emoji}
+              <AddReactionOutlinedIcon fontSize="small" />
             </IconButton>
-          ))}
-          <IconButton
-            size="small"
-            aria-label="More reactions"
-            onClick={() => {
-              setPickerAnchor(anchor);
-              close();
-            }}
-          >
-            <AddReactionOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Box>
+          </Box>
+        )}
         <MenuItem
           onClick={() => {
             props.onReply(m);
@@ -281,7 +302,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             <ForumOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> {m.thread ? "Open thread" : "Reply in thread"}
           </MenuItem>
         )}
-        {props.canPin && (
+        {props.canPin && !isPoll && (
           <MenuItem
             onClick={() => {
               props.onPin(m, !m.pinnedAt);
@@ -294,6 +315,16 @@ export default function MessageBubble(props: MessageBubbleProps) {
               <PushPinOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} />
             )}{" "}
             {m.pinnedAt ? "Unpin message" : "Pin message"}
+          </MenuItem>
+        )}
+        {isPoll && !deleted && stored && (mine || canDelete) && m.poll && !isPollClosed(m.poll) && (
+          <MenuItem
+            onClick={() => {
+              props.onClosePoll(m);
+              close();
+            }}
+          >
+            <PollOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> Close poll
           </MenuItem>
         )}
         <MenuItem
@@ -442,7 +473,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </Box>
           )}
 
-          {(deleted || m.body) && (
+          {(deleted || (m.body && !isPoll)) && (
             <Typography
               component="div"
               variant="body2"
@@ -471,6 +502,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </Typography>
           )}
 
+          {pollView}
           {voiceView}
           {!deleted && showFiles && m.attachments.length > 0 && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, mt: 0.5 }}>
@@ -625,6 +657,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               </Box>
             )}
 
+            {pollView}
             {voiceView}
             {!deleted &&
               showFiles &&
@@ -632,7 +665,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                 <AttachmentCard key={a.fileId} attachment={a} mine={mine} onOpen={() => props.onOpenAttachment(m, a)} />
               ))}
 
-            {(deleted || m.body) && (
+            {(deleted || (m.body && !isPoll)) && (
               <Box
                 sx={{
                   px: big ? 0.5 : 1.75,

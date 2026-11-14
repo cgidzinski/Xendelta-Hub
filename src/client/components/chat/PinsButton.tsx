@@ -100,7 +100,8 @@ export default function PinsButton({ conversationId, lookup, canPin }: Props) {
                         wordBreak: "break-word",
                       }}
                     >
-                      {plainMessageText(m.body) || (m.gif ? "GIF" : m.voice ? "Voice message" : "Attachment")}
+                      {plainMessageText(m.body) ||
+                        (m.gif ? "GIF" : m.voice ? "Voice message" : m.poll ? "Poll" : "Attachment")}
                     </Typography>
                   </Box>
                   {canPin && (

@@ -45,6 +45,8 @@ interface MessageListProps {
     onJumpTo: (seq: number) => void;
     onCopyLink: (m: LocalMessage) => void;
     onOpenThread: (m: LocalMessage) => void;
+    onVote: (m: LocalMessage, optionIds: string[]) => void;
+    onClosePoll: (m: LocalMessage) => void;
     onRetry: (m: LocalMessage) => void;
     onDiscard: (m: LocalMessage) => void;
     onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;

@@ -25,6 +25,7 @@ import EmptyState from "../../../../components/ui/EmptyState";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import PinsButton from "../../../../components/chat/PinsButton";
 import ChatSearchButton from "../../../../components/chat/ChatSearchButton";
+import CreatePollDialog from "../../../../components/chat/CreatePollDialog";
 import ThreadPanel from "../../../../components/chat/ThreadPanel";
 import ThreadsButton from "../../../../components/chat/ThreadsButton";
 import AttachButton from "./AttachButton";
@@ -87,7 +88,7 @@ export default function ChatPane({
   const allEmoji = useCustomEmoji().emoji;
   const customEmoji = useMemo(() => emojiOfScope(allEmoji, emojiScope), [allEmoji, emojiScope.type, emojiScope.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesQuery = useMessages(conversationId);
-  const { edit, remove, react, markRead, removeEmbeds, pin } = useChatActions();
+  const { edit, remove, react, markRead, removeEmbeds, pin, createPoll, votePoll, closePoll } = useChatActions();
   const send = useSendMessage(conversationId);
   const discard = useDiscardLocalMessage(conversationId);
   const typingNames = useTypingUsers(conversationId);
@@ -95,6 +96,7 @@ export default function ChatPane({
   const [replyTo, setReplyTo] = useState<LocalMessage | undefined>();
   const [editing, setEditing] = useState<LocalMessage | undefined>();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
   // The thread open beside the chat (the number of the message it hangs off).
   const [openThread, setOpenThread] = useState<number | null>(null);
   const phone = useMediaQuery(useTheme().breakpoints.down("md"));
@@ -242,6 +244,20 @@ export default function ChatPane({
     onJumpTo: jumpTo,
     onCopyLink: copyLink,
     onOpenThread: (m: LocalMessage) => setOpenThread(m.seq),
+    onVote: (m: LocalMessage, optionIds: string[]) =>
+      votePoll.mutate(
+        { conversationId, seq: m.seq, optionIds },
+        { onError: (e) => fail(e, "Couldn't save your vote") },
+      ),
+    onClosePoll: async (m: LocalMessage) => {
+      const ok = await confirm({
+        title: "Close this poll?",
+        message: "Nobody will be able to vote any more. The results stay.",
+        confirmLabel: "Close poll",
+      });
+      if (!ok) return;
+      closePoll.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't close the poll") });
+    },
     onRemoveEmbeds: (m: LocalMessage) =>
       removeEmbeds.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't remove the preview") }),
     onRetry: (m: LocalMessage) =>
@@ -386,7 +402,13 @@ export default function ChatPane({
             }}
             hasAttachments={files.attachments.length > 0}
             busy={files.busy}
-            attach={<AttachButton onFiles={files.addFiles} onChooseFromDrive={() => setPickerOpen(true)} />}
+            attach={
+              <AttachButton
+                onFiles={files.addFiles}
+                onChooseFromDrive={() => setPickerOpen(true)}
+                onPoll={() => setPollOpen(true)}
+              />
+            }
             tray={<AttachmentTray items={files.items} onRemove={files.remove} />}
             onSend={sendText}
             onSendVoice={(attachment, voice) => {
@@ -421,6 +443,18 @@ export default function ChatPane({
               You can read this channel but not post in it.
             </Typography>
           </Box>
+        )}
+
+        {pollOpen && (
+          <CreatePollDialog
+            busy={createPoll.isPending}
+            error={(createPoll.error as any)?.response?.data?.message}
+            onClose={() => {
+              setPollOpen(false);
+              createPoll.reset();
+            }}
+            onCreate={(poll) => createPoll.mutate({ conversationId, ...poll }, { onSuccess: () => setPollOpen(false) })}
+          />
         )}
 
         <DriveFilePicker

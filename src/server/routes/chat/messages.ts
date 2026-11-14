@@ -339,7 +339,7 @@ export function registerMessageRoutes(app: Application) {
       const context = await loadChatContext(req.params.conversationId as string, me);
       const { chat } = context;
       const message = await loadMessage(chat._id, req.params.seq as string);
-      if (message.kind !== "text" || !canDeleteChatMessage(context.access, message, me)) {
+      if ((message.kind !== "text" && message.kind !== "poll") || !canDeleteChatMessage(context.access, message, me)) {
         throw new AppError(403, "You can't delete that message");
       }
 
