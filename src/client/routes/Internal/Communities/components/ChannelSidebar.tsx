@@ -2,6 +2,8 @@ import { Box, ButtonBase, IconButton, Tooltip, Typography } from "@mui/material"
 import { alpha, type Theme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TagIcon from "@mui/icons-material/Tag";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import type { Community, CommunityChannel } from "@shared/communities";
@@ -15,6 +17,10 @@ interface ChannelSidebarProps {
   onSelect: (channelId: string) => void;
   /** Add a channel, under this category when one is given. */
   onAddChannel: (category: string) => void;
+  /** Open the community's settings. */
+  onOpenSettings: () => void;
+  /** Invite people (shown to people who can). */
+  onInvite: () => void;
 }
 
 function Row({ channel, selected, onSelect }: { channel: CommunityChannel; selected: boolean; onSelect: () => void }) {
@@ -80,6 +86,8 @@ export default function ChannelSidebar({
   selectedId,
   onSelect,
   onAddChannel,
+  onOpenSettings,
+  onInvite,
 }: ChannelSidebarProps) {
   const canAdd = hasCommunityPermission(community, "manageChannels");
   const groups = groupChannels(channels);
@@ -97,9 +105,21 @@ export default function ChannelSidebar({
           borderColor: "divider",
         }}
       >
-        <Typography noWrap sx={{ fontWeight: 600, fontSize: 16 }}>
+        <Typography noWrap sx={{ fontWeight: 600, fontSize: 16, flex: 1, minWidth: 0 }}>
           {community.name}
         </Typography>
+        {hasCommunityPermission(community, "invite") && (
+          <Tooltip title="Invite people">
+            <IconButton size="small" aria-label="Invite people" onClick={onInvite}>
+              <PersonAddAltIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        <Tooltip title="Community settings">
+          <IconButton size="small" aria-label="Community settings" onClick={onOpenSettings}>
+            <SettingsOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 1.5, display: "flex", flexDirection: "column", gap: 0.25 }}>

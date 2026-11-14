@@ -1,5 +1,5 @@
 import type { Theme } from "@mui/material/styles";
-import type { Community } from "@shared/communities";
+import type { Community, CommunityPermission } from "@shared/communities";
 import { roleColorOf } from "../../../utils/communityChat";
 
 /** "Garden Club" → "GC". A single word gives its first two letters. */
@@ -62,3 +62,35 @@ export function memberGroups(
  */
 export const roleTextColor = (theme: Theme, color: string | undefined): string | undefined =>
   !color ? undefined : theme.palette.mode === "dark" ? `color-mix(in srgb, ${color}, white 45%)` : color;
+
+/** What each permission is called and what it lets someone do, in the order the role editor lists them. */
+export const PERMISSION_INFO: Array<{ key: CommunityPermission; label: string; description: string }> = [
+  { key: "readMessages", label: "Read messages", description: "See channels and what is said in them" },
+  { key: "sendMessages", label: "Send messages", description: "Post, reply and react" },
+  { key: "manageMessages", label: "Delete others' messages", description: "Remove what anyone has posted" },
+  { key: "pinMessages", label: "Pin messages", description: "Keep a message at the top" },
+  { key: "mentionEveryone", label: "Mention everyone", description: "Notify the whole community" },
+  { key: "invite", label: "Invite people", description: "Ask hub users to join" },
+  { key: "kickMembers", label: "Remove people", description: "Take someone out of the community" },
+  { key: "manageEmoji", label: "Manage emoji", description: "Add and remove custom emoji" },
+  { key: "manageChannels", label: "Manage channels", description: "Add, rename, reorder and delete channels" },
+  { key: "manageRoles", label: "Manage roles", description: "Make roles and give them to people" },
+  { key: "manageCommunity", label: "Manage the community", description: "Rename it. The owner always can." },
+];
+
+/** The settings tabs the viewer may open, in order. */
+export function settingsTabs(community: Pick<Community, "permissions">) {
+  const has = (p: CommunityPermission) => community.permissions.includes(p);
+  return [
+    { key: "overview", label: "Overview" },
+    ...(has("manageChannels") ? [{ key: "channels", label: "Channels" }] : []),
+    ...(has("manageRoles") ? [{ key: "roles", label: "Roles" }] : []),
+    { key: "members", label: "Members" },
+  ];
+}
+
+/** Whether the viewer has anything to do in the settings besides leaving. */
+export const canOpenSettings = (community: Pick<Community, "permissions">) =>
+  (["manageCommunity", "manageChannels", "manageRoles", "kickMembers", "invite"] as CommunityPermission[]).some((p) =>
+    community.permissions.includes(p),
+  );

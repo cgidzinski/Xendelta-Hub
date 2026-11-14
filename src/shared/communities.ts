@@ -42,6 +42,9 @@ export const CHANNEL_PERMISSIONS: readonly CommunityPermission[] = COMMUNITY_PER
   (p) => p !== "manageCommunity" && p !== "manageRoles" && p !== "manageChannels",
 );
 
+/** The colours offered for a role. They read on a light page; the dark theme lightens them (see roleTextColor). */
+export const ROLE_COLORS = ["#0f766e", "#7e22ce", "#b45309", "#1565c0", "#c62828", "#ad1457"] as const;
+
 /** What every member gets before any other role is added. */
 export const DEFAULT_EVERYONE_PERMISSIONS: readonly CommunityPermission[] = ["readMessages", "sendMessages", "invite"];
 

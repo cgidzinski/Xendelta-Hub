@@ -94,6 +94,7 @@ describe("query keys", () => {
     expect(communityKeys.detail("c1")).toEqual(["communities", "detail", "c1"]);
     expect(communityKeys.channels("c1")).toEqual(["communities", "channels", "c1"]);
     expect(communityKeys.invites()).toEqual(["communities", "invites"]);
+    expect(communityKeys.pendingInvites("c1")).toEqual(["communities", "pending-invites", "c1"]);
     for (const key of [communityKeys.list(), communityKeys.detail("c1"), communityKeys.channels("c1")]) {
       expect(key.slice(0, 1)).toEqual([...communityKeys.all]);
     }

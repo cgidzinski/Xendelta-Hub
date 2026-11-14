@@ -72,7 +72,7 @@ export default function CreateChannelDialog({
         </>
       }
     >
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
         <TextField
           autoFocus
           fullWidth

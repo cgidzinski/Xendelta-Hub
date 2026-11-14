@@ -20,6 +20,7 @@ import CommunityRail from "./components/CommunityRail";
 import CreateChannelDialog from "./components/CreateChannelDialog";
 import CreateCommunityDialog from "./components/CreateCommunityDialog";
 import MembersPanel from "./components/MembersPanel";
+import InvitePeopleDialog from "./settings/InvitePeopleDialog";
 import ChannelView from "./ChannelView";
 import { communityPath } from "./communityUi";
 
@@ -54,6 +55,7 @@ export default function Communities() {
   const [addChannel, setAddChannel] = useState<{ category: string } | undefined>();
   const [membersOpen, setMembersOpen] = useState(true);
   const [membersDrawer, setMembersDrawer] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   // On a phone the screen is pinned to the visible area (see chatLayout.ts), so the page behind it must not scroll.
   useEffect(() => {
@@ -119,6 +121,8 @@ export default function Communities() {
       selectedId={channelId}
       onSelect={openChannel}
       onAddChannel={(category) => setAddChannel({ category })}
+      onOpenSettings={() => navigate(`${communityPath(community._id)}/settings`)}
+      onInvite={() => setInviteOpen(true)}
     />
   ) : null;
 
@@ -231,7 +235,7 @@ export default function Communities() {
                 minHeight: 0,
               }}
             >
-              <MembersPanel community={community} />
+              <MembersPanel community={community} onInvite={() => setInviteOpen(true)} />
             </Box>
           )}
         </>
@@ -244,7 +248,7 @@ export default function Communities() {
           onClose={() => setMembersDrawer(false)}
           slotProps={{ paper: { sx: { width: 280 } } }}
         >
-          <MembersPanel community={community} />
+          <MembersPanel community={community} onInvite={() => setInviteOpen(true)} />
         </Drawer>
       )}
 
@@ -264,6 +268,7 @@ export default function Communities() {
           openCommunity(id);
         }}
       />
+      {community && <InvitePeopleDialog open={inviteOpen} onClose={() => setInviteOpen(false)} community={community} />}
       {community && (
         <CreateChannelDialog
           open={!!addChannel}

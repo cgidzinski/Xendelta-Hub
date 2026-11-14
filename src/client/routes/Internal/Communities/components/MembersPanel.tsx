@@ -1,13 +1,26 @@
-import { Avatar, Box, Typography } from "@mui/material";
+import { Avatar, Box, Button, Typography } from "@mui/material";
+import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import type { Community } from "@shared/communities";
 import type { Theme } from "@mui/material/styles";
 import { memberGroups, roleTextColor } from "../communityUi";
 
 /** Who is in the community, in sections: the owner, each role, then everyone else. */
-export default function MembersPanel({ community }: { community: Community }) {
+export default function MembersPanel({ community, onInvite }: { community: Community; onInvite?: () => void }) {
   const people = new Map(community.people.map((p) => [p._id, p]));
   return (
     <Box component="aside" aria-label="Members" sx={{ p: 1.5, overflowY: "auto", height: "100%" }}>
+      {onInvite && community.permissions.includes("invite") && (
+        <Button
+          fullWidth
+          variant="outlined"
+          size="small"
+          startIcon={<PersonAddAltIcon />}
+          onClick={onInvite}
+          sx={{ mb: 1.5 }}
+        >
+          Invite people
+        </Button>
+      )}
       {memberGroups(community).map((group) => (
         <Box key={group.key} sx={{ mb: 1.5 }}>
           <Typography

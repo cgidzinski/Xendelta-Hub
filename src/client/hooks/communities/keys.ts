@@ -6,4 +6,6 @@ export const communityKeys = {
   allChannels: () => [...communityKeys.all, "channels"] as const,
   channels: (id: string) => [...communityKeys.allChannels(), id] as const,
   invites: () => [...communityKeys.all, "invites"] as const,
+  /** Invitations a community has sent that nobody has answered yet. */
+  pendingInvites: (id: string) => [...communityKeys.all, "pending-invites", id] as const,
 };
