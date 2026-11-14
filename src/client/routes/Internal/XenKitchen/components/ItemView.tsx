@@ -119,14 +119,6 @@ export default function ItemView({ item, actions }: ItemViewProps) {
         </Typography>
       )}
 
-      {item.tags.length > 0 && (
-        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
-          {item.tags.map((t) => (
-            <Chip key={t} label={`#${t}`} size="small" variant="outlined" />
-          ))}
-        </Stack>
-      )}
-
       {item.layout === "instructions" ? (
         <InstructionsSection item={item} accent={accent} units={units} onUnits={setUnits} />
       ) : (

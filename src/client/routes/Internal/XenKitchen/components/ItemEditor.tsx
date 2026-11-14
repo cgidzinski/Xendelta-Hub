@@ -8,9 +8,6 @@ import {
   Dialog,
   DialogContent,
   IconButton,
-  InputAdornment,
-  ListSubheader,
-  MenuItem,
   Stack,
   TextField,
   Toolbar,
@@ -19,10 +16,12 @@ import {
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
-import AddIcon from "@mui/icons-material/Add";
 import LanguageIcon from "@mui/icons-material/Language";
+import LinkIcon from "@mui/icons-material/Link";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
 import { useSnackbar } from "notistack";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
+import { RADIUS } from "../../../../theme";
 import { MAX_KITCHEN_IMAGES, type KitchenLayout } from "@shared/xenkitchen/kitchen";
 import {
   canEditBook,
@@ -32,30 +31,18 @@ import {
   useKitchenBooks,
   useKitchenCategories,
   useUpdateKitchenItem,
+  usePhotoImportEnabled,
   useUploadKitchenImages,
   type ImportedKitchenRecipe,
   type KitchenItem,
 } from "../../../../hooks/xenkitchen/useKitchen";
-import { CategoryIconView } from "./kitchenIcons";
 import { Draft, newKey, draftFrom, draftFromImport, inputFrom, filledExtras, Extra } from "./itemEditor/itemDraft";
-import { ImportDialog } from "./itemEditor/ImportDialog";
+import { ImportDialog, type ImportMode } from "./itemEditor/ImportDialog";
 import { PhotoStrip } from "./itemEditor/PhotoStrip";
-import { SectionTitle, TagField, quietInput } from "./itemEditor/editorFields";
+import { SectionTitle, quietInput } from "./itemEditor/editorFields";
 import { RecipeFields } from "./itemEditor/RecipeFields";
 import { InstructionFields } from "./itemEditor/InstructionFields";
-const EXTRA_LABELS: Record<Extra, string> = {
-  description: "Description",
-  tags: "Tags",
-  times: "Servings & time",
-  brand: "Brand",
-  storage: "Storage",
-  notes: "Notes",
-};
-// Serves / time (recipes) and brand (box instructions) are always shown; these are the optional extras.
-const EXTRAS_FOR: Record<KitchenLayout, Extra[]> = {
-  recipe: ["description", "tags", "notes"],
-  instructions: ["storage", "description", "tags", "notes"],
-};
+import { CategoryBookFields, EXTRAS_FOR, ExtraFields, QuickFacts } from "./itemEditor/DetailFields";
 
 /** "food.example.com" for a recipe's source link. */
 const sourceHost = (url: string) => {
@@ -89,6 +76,8 @@ export default function ItemEditor({
 }: ItemEditorProps) {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
+  // Two panes (details sidebar, recipe main) from md up; below that the single-column flow.
+  const wide = useMediaQuery(theme.breakpoints.up("md"));
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const { books } = useKitchenBooks();
@@ -114,7 +103,8 @@ export default function ItemEditor({
   const [saving, setSaving] = useState(false);
   const [opened, setOpened] = useState<Set<Extra>>(new Set());
   // Importing from a web address: the dialog, and the page's photo, which is added once the item is saved.
-  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState<{ mode: ImportMode; url?: string } | null>(null);
+  const photoImport = usePhotoImportEnabled();
   const [importedImage, setImportedImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -226,23 +216,140 @@ export default function ItemEditor({
   const hidden = extras.filter((e) => !opened.has(e));
   const openExtra = (e: Extra) => setOpened((o) => new Set(o).add(e));
 
-  const timeField = (label: string, key: "prep_minutes" | "cook_minutes") => (
-    <TextField
-      label={label}
-      type="number"
-      size="small"
-      value={draft[key]}
-      onChange={(ev) => set({ [key]: ev.target.value })}
-      fullWidth
-      slotProps={{
-        htmlInput: { min: 0, inputMode: "numeric" },
-        input: { endAdornment: <InputAdornment position="end">min</InputAdornment> },
-      }}
-    />
-  );
   const saveLabel = saving ? "Saving" : item ? "Save" : "Save recipe";
   const saveIcon = saving ? <CircularProgress size={16} color="inherit" /> : undefined;
   const status = dirty ? "Unsaved changes" : item ? "All changes saved" : "Not saved yet";
+  const noun = layout === "instructions" ? "item" : "recipe";
+  const bookName =
+    (item ? books.find((b) => b._id === item.book_id)?.name : null) ??
+    editableBooks.find((b) => b._id === bookId)?.name;
+  const heading = item ? `Edit ${item.title || noun}` : bookName ? `New ${noun} in ${bookName}` : `New ${noun}`;
+
+  // A new, still empty item can start from a recipe somewhere else: a web page or photos of it.
+  const importBanner = !item && !draft.title.trim() && (
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      alignItems={{ xs: "stretch", sm: "center" }}
+      spacing={1}
+      sx={{
+        mb: 2,
+        p: 1.5,
+        borderRadius: RADIUS.lg,
+        border: "1px solid",
+        borderColor: (t) => alpha(t.palette.primary.main, 0.3),
+        bgcolor: (t) => alpha(t.palette.primary.main, 0.06),
+      }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          Already have this recipe somewhere?
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {photoImport
+            ? "Bring it in from a web page or photos, then check it over."
+            : "Bring it in from a web page, then check it over."}
+        </Typography>
+      </Box>
+      <Stack direction="row" spacing={1}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<LinkIcon />}
+          onClick={() => setImporting({ mode: "url" })}
+          sx={{ flex: { xs: 1, sm: "none" } }}
+        >
+          From a link
+        </Button>
+        {photoImport && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PhotoCameraOutlinedIcon />}
+            onClick={() => setImporting({ mode: "photo" })}
+            sx={{ flex: { xs: 1, sm: "none" } }}
+          >
+            From photos
+          </Button>
+        )}
+      </Stack>
+    </Stack>
+  );
+
+  const titleField = (
+    <TextField
+      variant="standard"
+      fullWidth
+      autoFocus={!item}
+      placeholder={
+        layout === "instructions" ? "What's in the box?" : item ? "Recipe name" : "Recipe name, or paste a link"
+      }
+      value={draft.title}
+      onChange={(e) => set({ title: e.target.value })}
+      // A recipe's web address pasted as the name of a new item is read as an import instead.
+      onPaste={(e) => {
+        if (item || draft.title.trim()) return;
+        const text = e.clipboardData.getData("text").trim();
+        if (/^https?:\/\/\S+$/i.test(text)) {
+          e.preventDefault();
+          setImporting({ mode: "url", url: text });
+        }
+      }}
+      sx={quietInput}
+      slotProps={{ htmlInput: { maxLength: 120, "aria-label": "Title", style: { fontSize: 26, fontWeight: 800 } } }}
+    />
+  );
+
+  const sourceChips = (draft.source_url || importedImage) && (
+    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
+      {draft.source_url && (
+        <Chip
+          size="small"
+          icon={<LanguageIcon />}
+          label={`From ${sourceHost(draft.source_url)}`}
+          onDelete={() => set({ source_url: "" })}
+        />
+      )}
+      {importedImage && !item && (
+        <Chip size="small" label="The page's photo will be added" onDelete={() => setImportedImage(null)} />
+      )}
+    </Stack>
+  );
+
+  const pickers = (
+    <CategoryBookFields
+      draft={draft}
+      set={set}
+      categories={categories}
+      books={item ? books : editableBooks}
+      bookLocked={!!item}
+      bookId={bookId}
+      onBook={setBookId}
+    />
+  );
+
+  const photoStrip = (
+    <PhotoStrip
+      photos={photos}
+      newFiles={newFiles}
+      accent={accent}
+      canAdd={totalPhotos < MAX_KITCHEN_IMAGES}
+      onAdd={addFiles}
+      onRemovePhoto={(id) => setPhotos((p) => p.filter((x) => x._id !== id))}
+      onCoverPhoto={(id) => setPhotos((p) => [...p.filter((x) => x._id === id), ...p.filter((x) => x._id !== id)])}
+      onRemoveNew={(key) => setNewFiles((f) => f.filter((x) => x.key !== key))}
+      hint={layout === "instructions" ? "Snap the box" : "Add a photo"}
+      wrap={wide}
+    />
+  );
+
+  const mainFields =
+    layout === "recipe" ? (
+      <RecipeFields draft={draft} set={set} accent={accent} />
+    ) : (
+      <InstructionFields draft={draft} set={set} accent={accent} />
+    );
+
+  const extraFields = <ExtraFields draft={draft} set={set} shown={shown} hidden={hidden} onOpen={openExtra} />;
 
   return (
     <Dialog
@@ -250,7 +357,9 @@ export default function ItemEditor({
       onClose={requestClose}
       fullScreen={phone}
       fullWidth
-      maxWidth={layout === "recipe" ? "md" : "sm"}
+      maxWidth={wide ? "lg" : layout === "recipe" ? "md" : "sm"}
+      // Desktop: a fixed height, so each pane scrolls on its own rather than the whole dialog.
+      slotProps={wide ? { paper: { sx: { height: "min(880px, 92vh)" } } } : undefined}
     >
       <AppBar
         position="sticky"
@@ -263,7 +372,7 @@ export default function ItemEditor({
             <CloseIcon />
           </IconButton>
           <Typography variant="subtitle1" sx={{ flex: 1, fontWeight: 700 }} noWrap>
-            {item ? "Edit" : "New"}
+            {heading}
           </Typography>
           {!phone && (
             <Typography variant="caption" color="text.secondary">
@@ -279,231 +388,53 @@ export default function ItemEditor({
         </Toolbar>
       </AppBar>
 
-      <DialogContent sx={{ px: { xs: 2, sm: 3 }, pt: 2, pb: 4 }}>
-        {!item && !draft.title.trim() && (
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            sx={{ mb: 2, px: 1.5, py: 0.75, borderRadius: 2, bgcolor: (t) => alpha(t.palette.primary.main, 0.08) }}
+      {wide ? (
+        <DialogContent
+          sx={{
+            p: 0,
+            display: "grid",
+            gridTemplateColumns: "300px minmax(0, 1fr)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Sidebar: the same details, in the same order, as the top of the phone editor */}
+          <Box
+            component="aside"
+            sx={{ overflowY: "auto", p: 2.5, borderRight: "1px solid", borderColor: "divider", minHeight: 0 }}
           >
-            <LanguageIcon fontSize="small" color="primary" />
-            <Typography variant="body2" sx={{ flex: 1 }}>
-              Have a link or a photo of a recipe?
-            </Typography>
-            <Button size="small" onClick={() => setImportOpen(true)}>
-              Import
-            </Button>
-          </Stack>
-        )}
-
-        <TextField
-          variant="standard"
-          fullWidth
-          autoFocus={!item}
-          placeholder={layout === "instructions" ? "What's in the box?" : "Recipe name"}
-          value={draft.title}
-          onChange={(e) => set({ title: e.target.value })}
-          sx={quietInput}
-          slotProps={{ htmlInput: { maxLength: 120, "aria-label": "Title", style: { fontSize: 26, fontWeight: 800 } } }}
-        />
-
-        {(draft.source_url || importedImage) && (
-          <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: "wrap", rowGap: 1 }}>
-            {draft.source_url && (
-              <Chip
-                size="small"
-                icon={<LanguageIcon />}
-                label={`From ${sourceHost(draft.source_url)}`}
-                onDelete={() => set({ source_url: "" })}
-              />
-            )}
-            {importedImage && !item && (
-              <Chip size="small" label="The page's photo will be added" onDelete={() => setImportedImage(null)} />
-            )}
-          </Stack>
-        )}
-
-        <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: "wrap", rowGap: 1 }}>
-          <TextField
-            select
-            size="small"
-            value={draft.category_id ?? ""}
-            onChange={(e) => set({ category_id: e.target.value || null })}
-            sx={{ minWidth: 180 }}
-            slotProps={{
-              select: {
-                displayEmpty: true,
-                renderValue: (v) => {
-                  const c = categories.find((x) => x._id === v);
-                  return (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <CategoryIconView icon={c?.icon} sx={{ fontSize: 18, color: c?.color ?? "text.disabled" }} />
-                      <span>{c?.name ?? "No category"}</span>
-                    </Stack>
-                  );
-                },
-              },
-              htmlInput: { "aria-label": "Category" },
-            }}
-          >
-            {(["recipe", "instructions"] as KitchenLayout[]).flatMap((group) => {
-              const list = categories.filter((c) => c.layout === group);
-              if (!list.length) return [];
-              return [
-                <ListSubheader key={`h-${group}`}>{group === "recipe" ? "Recipes" : "Instructions"}</ListSubheader>,
-                ...list.map((c) => (
-                  <MenuItem key={c._id} value={c._id}>
-                    <CategoryIconView icon={c.icon} sx={{ fontSize: 18, color: c.color, mr: 1.5 }} />
-                    {c.name}
-                  </MenuItem>
-                )),
-              ];
-            })}
-            <MenuItem value="">No category</MenuItem>
-          </TextField>
-
-          {!item && editableBooks.length > 1 && (
-            <TextField
-              select
-              size="small"
-              value={bookId}
-              sx={{ minWidth: 160 }}
-              onChange={(e) => {
-                setBookId(e.target.value);
-                set({ category_id: null });
-              }}
-              slotProps={{ htmlInput: { "aria-label": "Recipe book" } }}
-            >
-              {editableBooks.map((b) => (
-                <MenuItem key={b._id} value={b._id}>
-                  <CategoryIconView
-                    icon={b.icon}
-                    sx={{ fontSize: 18, color: b.color, mr: 1, verticalAlign: "middle" }}
-                  />
-                  {b.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-        </Stack>
-
-        {/* Quick facts, right under the title */}
-        <Stack direction="row" spacing={1.5} sx={{ mt: 2.5 }}>
-          {layout === "recipe" ? (
-            <>
-              <TextField
-                label="Serves"
-                type="number"
-                size="small"
-                value={draft.servings}
-                onChange={(ev) => set({ servings: ev.target.value })}
-                fullWidth
-                slotProps={{ htmlInput: { min: 0, inputMode: "numeric" } }}
-              />
-              {timeField("Prep", "prep_minutes")}
-              {timeField("Cook", "cook_minutes")}
-            </>
-          ) : (
-            <TextField
-              label="Brand"
-              size="small"
-              value={draft.brand}
-              onChange={(ev) => set({ brand: ev.target.value })}
-              fullWidth
-              slotProps={{ htmlInput: { maxLength: 80 } }}
-            />
-          )}
-        </Stack>
-
-        <Box sx={{ mt: 2 }}>
-          <PhotoStrip
-            photos={photos}
-            newFiles={newFiles}
-            accent={accent}
-            canAdd={totalPhotos < MAX_KITCHEN_IMAGES}
-            onAdd={addFiles}
-            onRemovePhoto={(id) => setPhotos((p) => p.filter((x) => x._id !== id))}
-            onCoverPhoto={(id) =>
-              setPhotos((p) => [...p.filter((x) => x._id === id), ...p.filter((x) => x._id !== id)])
-            }
-            onRemoveNew={(key) => setNewFiles((f) => f.filter((x) => x.key !== key))}
-            hint={layout === "instructions" ? "Snap the box" : "Add a photo"}
-          />
-        </Box>
-
-        {layout === "recipe" ? (
-          <RecipeFields draft={draft} set={set} accent={accent} />
-        ) : (
-          <InstructionFields draft={draft} set={set} accent={accent} />
-        )}
-
-        {/* Optional details */}
-        <SectionTitle>More details</SectionTitle>
-        {shown.length > 0 && (
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            {shown.map((e) => {
-              switch (e) {
-                case "description":
-                  return (
-                    <TextField
-                      key={e}
-                      label="Description"
-                      value={draft.description}
-                      onChange={(ev) => set({ description: ev.target.value })}
-                      fullWidth
-                      multiline
-                      minRows={2}
-                      slotProps={{ htmlInput: { maxLength: 2000 } }}
-                    />
-                  );
-                case "tags":
-                  return <TagField key={e} value={draft.tags} onChange={(tags) => set({ tags })} />;
-                case "storage":
-                  return (
-                    <TextField
-                      key={e}
-                      label="Storage"
-                      size="small"
-                      value={draft.storage_note}
-                      onChange={(ev) => set({ storage_note: ev.target.value })}
-                      fullWidth
-                      multiline
-                      placeholder="Keep frozen. Do not refreeze."
-                      slotProps={{ htmlInput: { maxLength: 500 } }}
-                    />
-                  );
-                case "notes":
-                  return (
-                    <TextField
-                      key={e}
-                      label="Notes"
-                      value={draft.notes}
-                      onChange={(ev) => set({ notes: ev.target.value })}
-                      fullWidth
-                      multiline
-                      minRows={2}
-                      slotProps={{ htmlInput: { maxLength: 4000 } }}
-                    />
-                  );
-              }
-            })}
-          </Stack>
-        )}
-        {hidden.length > 0 && (
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: shown.length ? 2 : 0.5 }}>
-            {hidden.map((e) => (
-              <Chip
-                key={e}
-                icon={<AddIcon />}
-                label={EXTRA_LABELS[e]}
-                variant="outlined"
-                onClick={() => openExtra(e)}
-              />
-            ))}
-          </Stack>
-        )}
-      </DialogContent>
+            <Stack spacing={2}>
+              {sourceChips}
+              {pickers}
+              <QuickFacts draft={draft} set={set} layout={layout} />
+              {photoStrip}
+            </Stack>
+            <SectionTitle>More details</SectionTitle>
+            {extraFields}
+          </Box>
+          {/* Main: the title, then what goes in and how to make it */}
+          <Box sx={{ overflowY: "auto", px: 4, pt: 2.5, pb: 4, minHeight: 0 }}>
+            {importBanner}
+            {titleField}
+            {mainFields}
+          </Box>
+        </DialogContent>
+      ) : (
+        <DialogContent sx={{ px: { xs: 2, sm: 3 }, pt: 2, pb: 4 }}>
+          {importBanner}
+          {titleField}
+          {sourceChips && <Box sx={{ mt: 1.5 }}>{sourceChips}</Box>}
+          <Box sx={{ mt: 1.5 }}>{pickers}</Box>
+          {/* Quick facts, right under the title */}
+          <Box sx={{ mt: 1.5 }}>
+            <QuickFacts draft={draft} set={set} layout={layout} />
+          </Box>
+          <Box sx={{ mt: 2 }}>{photoStrip}</Box>
+          {mainFields}
+          {/* Optional details */}
+          <SectionTitle>More details</SectionTitle>
+          {extraFields}
+        </DialogContent>
+      )}
       {phone && (
         <Stack
           direction="row"
@@ -519,7 +450,13 @@ export default function ItemEditor({
           </Button>
         </Stack>
       )}
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={applyImport} />
+      <ImportDialog
+        open={!!importing}
+        mode={importing?.mode}
+        initialUrl={importing?.url}
+        onClose={() => setImporting(null)}
+        onImported={applyImport}
+      />
     </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { normalizeTag, parseIngredientLine } from "@shared/xenkitchen/kitchen";
+import { parseIngredientLine } from "@shared/xenkitchen/kitchen";
 
 // Reads a recipe out of a web page. Nearly every recipe site describes its recipe for search engines as schema.org
 // "Recipe" data in a <script type="application/ld+json"> block, which is what this reads. A page that doesn't have it
@@ -21,7 +21,6 @@ export interface ImportedRecipe {
   cook_minutes: number | null;
   ingredients: ImportedIngredient[];
   steps: Array<{ text: string; timer_minutes: null }>;
-  tags: string[];
   /** Where the recipe came from (the page's address). */
   source_url: string;
   /** The recipe's main photo, when the page has one. Not fetched here. */
@@ -34,7 +33,6 @@ const MAX_DESCRIPTION = 2000;
 const MAX_INGREDIENTS = 100;
 const MAX_STEPS = 100;
 const MAX_STEP_TEXT = 2000;
-const MAX_TAGS = 20;
 const MAX_MINUTES = 10_000;
 const MAX_SERVINGS = 1000;
 
@@ -202,17 +200,6 @@ function stepsFrom(value: unknown): string[] {
   return out.slice(0, MAX_STEPS);
 }
 
-function tagsFrom(node: Record<string, unknown>): string[] {
-  const parts: string[] = [];
-  for (const key of ["recipeCategory", "recipeCuisine", "keywords"]) {
-    for (const v of asArray(node[key])) {
-      if (typeof v === "string") parts.push(...v.split(","));
-    }
-  }
-  const tags = parts.map((p) => normalizeTag(plain(p))).filter((t) => t.length > 0);
-  return [...new Set(tags)].slice(0, MAX_TAGS);
-}
-
 /** The first usable picture address (an http(s) URL), resolved against the page for a relative one. */
 function imageFrom(value: unknown, pageUrl: string): string | null {
   for (const v of asArray(value)) {
@@ -264,7 +251,6 @@ export function extractRecipe(html: string, pageUrl: string): ImportedRecipe | n
     cook_minutes: cook ?? (prep === null ? total : null),
     ingredients,
     steps: steps.map((text) => ({ text, timer_minutes: null })),
-    tags: tagsFrom(node),
     source_url: pageUrl.slice(0, 2000),
     image_url: imageFrom(node.image, pageUrl),
   };
@@ -283,7 +269,6 @@ export interface RecipeParts {
   ingredient_lines?: unknown;
   /** The method, one step per string (a single block with line breaks is split too). */
   steps?: unknown;
-  tags?: unknown;
   source_url?: string;
   image_url?: string | null;
 }
@@ -306,13 +291,6 @@ export function recipeFromParts(parts: RecipeParts): ImportedRecipe | null {
   const steps = stepsFrom(parts.steps);
   if (!title || (ingredients.length === 0 && steps.length === 0)) return null;
 
-  const tags = [
-    ...new Set(
-      asArray(parts.tags)
-        .map((t) => normalizeTag(plain(t)))
-        .filter((t) => t.length > 0),
-    ),
-  ];
   return {
     title,
     description: clip(plain(parts.description), MAX_DESCRIPTION),
@@ -321,7 +299,6 @@ export function recipeFromParts(parts: RecipeParts): ImportedRecipe | null {
     cook_minutes: minutesFrom(parts.cook_minutes),
     ingredients,
     steps: steps.map((text) => ({ text, timer_minutes: null })),
-    tags: tags.slice(0, MAX_TAGS),
     source_url: (parts.source_url ?? "").slice(0, 2000),
     image_url: parts.image_url ?? null,
   };

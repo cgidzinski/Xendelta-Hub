@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { AppError } from "../utils/http";
-import { recipeFromParts, type ImportedRecipe } from "../utils/recipeImport";
+import { recipeFromParts, type ImportedRecipe, type RecipeParts } from "../utils/recipeImport";
 
 /**
  * Reading a recipe out of a photo (a recipe card, a cookbook page, a screenshot), through Cloudflare Workers AI.
@@ -35,14 +35,13 @@ const RECIPE_SCHEMA = {
     cook_minutes: { type: "string" },
     ingredient_lines: { type: "array", items: { type: "string" } },
     steps: { type: "array", items: { type: "string" } },
-    tags: { type: "array", items: { type: "string" } },
   },
-  required: ["title", "description", "servings", "prep_minutes", "cook_minutes", "ingredient_lines", "steps", "tags"],
+  required: ["title", "description", "servings", "prep_minutes", "cook_minutes", "ingredient_lines", "steps"],
 };
 
 const STRUCTURE_PROMPT =
   "This picture is a recipe. Copy it into JSON: title, description, servings, prep_minutes, cook_minutes, " +
-  "ingredient_lines, steps, tags. Look for a title, a short description, how many it serves, prep and cook times (in " +
+  "ingredient_lines, steps. Look for a title, a short description, how many it serves, prep and cook times (in " +
   "whole minutes), the ingredient list and the method, and put anything the picture gives into the matching field. " +
   "Use only what the picture says: an empty string, or an empty list, when something is missing. Write one ingredient " +
   "per line as it appears (amount, unit, then the ingredient) and one instruction per step. Do not invent " +
@@ -113,11 +112,20 @@ async function runModel(body: Record<string, unknown>): Promise<unknown> {
   return payload?.result;
 }
 
-/**
- * A recipe read from a photo, or null when the picture doesn't hold one. Nothing is saved: the caller shows the result
- * in the editor for review.
- */
-export async function readRecipeFromImage(buffer: Buffer, mimetype: string): Promise<ImportedRecipe | null> {
+/** One photo, as the upload gave it. */
+export interface RecipePhoto {
+  buffer: Buffer;
+  mimetype: string;
+}
+
+/** What one photo says, plus whether it only came back as plain words (the fallback read). */
+interface PhotoParts {
+  parts: RecipeParts;
+  wordsOnly: boolean;
+}
+
+/** The fields one photo gives, or null when the model saw nothing in it. */
+async function partsFromPhoto({ buffer, mimetype }: RecipePhoto): Promise<PhotoParts | null> {
   if (!mimetype.startsWith("image/")) throw new AppError(400, "That file isn't a picture");
 
   // Downscaled and re-encoded first: the model reads text just as well from this, and this is what the cost is based on.
@@ -140,10 +148,10 @@ export async function readRecipeFromImage(buffer: Buffer, mimetype: string): Pro
     max_tokens: 2000,
     temperature: 0.1,
   });
-
   const fields = jsonObject(structured);
-  const recipe = fields ? recipeFromParts(fields) : null;
-  if (recipe) return recipe;
+  if (fields && (hasList(fields.ingredient_lines) || hasList(fields.steps) || text(fields.title))) {
+    return { parts: fields as RecipeParts, wordsOnly: false };
+  }
 
   // The answer didn't come back in a shape we could use: ask once more for the words alone rather than losing the
   // scan. They land as the recipe's steps, so nothing was invented and what was typed out is kept.
@@ -155,6 +163,40 @@ export async function readRecipeFromImage(buffer: Buffer, mimetype: string): Pro
     }),
   ).trim();
   if (!read) return null;
+  return { parts: { title: read.split("\n")[0], steps: read }, wordsOnly: true };
+}
 
-  return recipeFromParts({ title: read.split("\n")[0], steps: read });
+const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : text(v) ? [v] : []);
+const hasList = (v: unknown) => list(v).some((x) => text(x));
+
+/**
+ * Pages of one recipe put together, in the order they were taken: the first page that gives a title, servings or a
+ * time wins (a properly read page before a words-only one), and ingredients and steps run on from page to page — a
+ * cookbook often has the ingredients on one page and the method over the leaf.
+ */
+export function mergePhotoParts(pages: PhotoParts[]): RecipeParts {
+  const ordered = [...pages.filter((p) => !p.wordsOnly), ...pages.filter((p) => p.wordsOnly)];
+  const first = (key: keyof RecipeParts) =>
+    ordered.map((p) => p.parts[key]).find((v) => text(v) || typeof v === "number");
+  return {
+    title: first("title"),
+    description: first("description"),
+    servings: first("servings"),
+    prep_minutes: first("prep_minutes"),
+    cook_minutes: first("cook_minutes"),
+    ingredient_lines: pages.flatMap((p) => list(p.parts.ingredient_lines)),
+    steps: pages.flatMap((p) => list(p.parts.steps)),
+  };
+}
+
+/**
+ * A recipe read from one or more photos of it (a card, or the pages of a cookbook), or null when they don't hold one.
+ * Each photo is read on its own and the pages are then put together. Nothing is saved: the caller shows the result in
+ * the editor for review.
+ */
+export async function readRecipeFromImages(photos: RecipePhoto[]): Promise<ImportedRecipe | null> {
+  const pages = (await Promise.all(photos.map(partsFromPhoto))).filter((p): p is PhotoParts => p !== null);
+  if (pages.length === 0) return null;
+  return recipeFromParts(mergePhotoParts(pages));
 }

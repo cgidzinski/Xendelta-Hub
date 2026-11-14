@@ -30,9 +30,7 @@ export default function XenKitchenPublicBook() {
     return (data?.items ?? []).filter(
       (i) =>
         (!category || i.category?._id === category) &&
-        words.every((w) =>
-          [i.title, i.brand, ...i.tags, ...i.ingredients.map((x) => x.name)].join(" ").toLowerCase().includes(w),
-        ),
+        words.every((w) => [i.title, i.brand, ...i.ingredients.map((x) => x.name)].join(" ").toLowerCase().includes(w)),
     );
   }, [data, category, q]);
 

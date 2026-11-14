@@ -1,4 +1,5 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
+import multer from "multer";
 import sharp from "sharp";
 import { z } from "zod";
 import { rateLimit } from "express-rate-limit";
@@ -13,7 +14,7 @@ import { XENKITCHEN_SOURCE, removeKitchenPhotos, withPhotoUrls } from "../utils/
 import { AppError, callerId } from "../utils/http";
 import { fetchPublicImage, fetchPublicPage } from "../utils/safeFetch";
 import { extractRecipe } from "../utils/recipeImport";
-import { photoImportEnabled, readRecipeFromImage } from "../ai/vision";
+import { photoImportEnabled, readRecipeFromImages } from "../ai/vision";
 import { notify } from "../utils/notificationUtils";
 import { SocketManager } from "../infrastructure/SocketManager";
 import {
@@ -46,7 +47,6 @@ import {
   canView,
   CategoryLike,
   changeRole,
-  collectTags,
   generateShareToken,
   itemFieldsFromBody,
   pickTargetCategory,
@@ -55,7 +55,12 @@ import {
   serializeItem,
   suggestIngredients,
 } from "../utils/xenKitchen";
-import { CATEGORY_ICONS, filtersFromParams, STARTER_CATEGORIES } from "@shared/xenkitchen/kitchen";
+import {
+  CATEGORY_ICONS,
+  filtersFromParams,
+  MAX_RECIPE_SCAN_PHOTOS,
+  STARTER_CATEGORIES,
+} from "@shared/xenkitchen/kitchen";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { addRefused } from "../social/policy";
 
@@ -88,6 +93,21 @@ const scanLimiter = rateLimit({
   legacyHeaders: false,
   message: { status: false, message: "That's a lot of photos. Wait a minute and try again." },
 });
+
+/** The photos of a recipe to read: too many or too big is a 400 with a sentence, not a crash. */
+const receiveScanPhotos = (req: Request, res: Response, next: NextFunction) =>
+  uploadXenKitchenImages.array("image", MAX_RECIPE_SCAN_PHOTOS)(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      const message =
+        err.code === "LIMIT_UNEXPECTED_FILE"
+          ? `Up to ${MAX_RECIPE_SCAN_PHOTOS} photos of one recipe at a time`
+          : err.code === "LIMIT_FILE_SIZE"
+            ? "That picture is too big"
+            : err.message;
+      return next(new AppError(400, message));
+    }
+    next(err);
+  });
 
 const validIcon = (icon?: string) => (CATEGORY_ICONS as readonly string[]).includes(icon ?? "");
 
@@ -748,17 +768,6 @@ module.exports = function (app: any) {
     }),
   );
 
-  app.get(
-    "/api/xenkitchen/tags",
-    authenticateToken,
-    handle(async (req, res) => {
-      const items = await XenKitchenItem.find({ book_id: { $in: await myBookIds(callerId(req)) } }, "tags")
-        .lean()
-        .exec();
-      res.json({ status: true, message: "OK", data: { tags: collectTags(items) } });
-    }),
-  );
-
   // ---------- items ----------
 
   app.get(
@@ -1043,19 +1052,25 @@ module.exports = function (app: any) {
     }),
   );
 
-  // Read a recipe out of a photo (a recipe card, a cookbook page, a screenshot). Nothing is saved: like import-url, the
-  // editor shows the result for review and a person fixes whatever the model misread.
+  // Read a recipe out of photos of it (a recipe card, a few cookbook pages, a screenshot), sent as one to four `image`
+  // parts in the order they were taken. Nothing is saved: like import-url, the editor shows the result for review and
+  // a person fixes whatever the model misread.
   app.post(
     "/api/xenkitchen/import-photo",
     authenticateToken,
     scanLimiter,
-    uploadXenKitchenImages.single("image"),
+    receiveScanPhotos,
     handle(async (req, res) => {
-      const file = req.file as Express.Multer.File | undefined;
-      if (!file) throw new AppError(400, "Choose a photo of the recipe");
-      const recipe = await readRecipeFromImage(file.buffer, file.mimetype);
+      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      if (files.length === 0) throw new AppError(400, "Choose a photo of the recipe");
+      const recipe = await readRecipeFromImages(files.map((f) => ({ buffer: f.buffer, mimetype: f.mimetype })));
       if (!recipe) {
-        throw new AppError(422, "Couldn't find a recipe in that photo. Try a sharper picture of the whole recipe.");
+        throw new AppError(
+          422,
+          files.length > 1
+            ? "Couldn't find a recipe in those photos. Try sharper pictures of the whole recipe."
+            : "Couldn't find a recipe in that photo. Try a sharper picture of the whole recipe.",
+        );
       }
       res.json({ status: true, message: "Recipe found", data: { recipe } });
     }),

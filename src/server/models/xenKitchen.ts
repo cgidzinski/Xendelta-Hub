@@ -96,7 +96,6 @@ const itemSchema = new Schema({
   title: { type: String, default: "", maxlength: 120 },
   description: { type: String, default: "", maxlength: 2000 },
   category_id: { type: Schema.Types.ObjectId, ref: "XenKitchenCategory", default: null },
-  tags: { type: [String], default: [] },
   // Favorites are per person: each member stars things for themselves.
   favorited_by: { type: [String], default: [] },
   notes: { type: String, default: "", maxlength: 4000 },

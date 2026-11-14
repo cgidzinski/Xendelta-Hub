@@ -26,7 +26,7 @@ import { ingredientLine, parseIngredientLine } from "@shared/xenkitchen/kitchen"
 import { useIngredientSuggestions } from "../../../../../hooks/xenkitchen/useKitchen";
 import { IngredientRow, StepRow, Draft, newKey, moveIn, blankIngredient, blankStep } from "./itemDraft";
 import { PasteDialog } from "./PasteDialog";
-import { SectionTitle, quietInput } from "./editorFields";
+import { SectionTitle, editableRowSx, quietInput } from "./editorFields";
 
 export function RecipeFields({
   draft,
@@ -53,7 +53,7 @@ export function RecipeFields({
   const removeAt = (i: number) => setRows(rows.length > 1 ? rows.filter((_, j) => j !== i) : [blankIngredient()]);
 
   return (
-    <Box sx={{ display: "grid", columnGap: 4, gridTemplateColumns: { md: "minmax(0, 1fr) minmax(0, 1.25fr)" } }}>
+    <Box sx={{ display: "grid", columnGap: 4, gridTemplateColumns: { lg: "minmax(0, 1fr) minmax(0, 1.25fr)" } }}>
       <Box sx={{ minWidth: 0 }}>
         <SectionTitle
           action={
@@ -73,7 +73,7 @@ export function RecipeFields({
         <Stack spacing={0.25}>
           {rows.map((row, i) =>
             row.kind === "section" ? (
-              <Stack key={row.key} direction="row" alignItems="center" sx={{ pt: i ? 1 : 0 }}>
+              <Stack key={row.key} direction="row" alignItems="center" sx={{ ...editableRowSx, mt: i ? 1 : 0 }}>
                 <TextField
                   variant="standard"
                   placeholder="Section, e.g. Sauce"
@@ -88,21 +88,12 @@ export function RecipeFields({
                     },
                   }}
                 />
-                <IconButton size="small" onClick={() => removeAt(i)} aria-label="Remove section">
+                <IconButton className="row-more" size="small" onClick={() => removeAt(i)} aria-label="Remove section">
                   <CloseIcon fontSize="small" />
                 </IconButton>
               </Stack>
             ) : (
-              <Stack
-                key={row.key}
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{
-                  "& .row-more": { opacity: { sm: 0 } },
-                  "&:hover .row-more, &:focus-within .row-more": { opacity: 1 },
-                }}
-              >
+              <Stack key={row.key} direction="row" alignItems="center" spacing={1} sx={editableRowSx}>
                 <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: accent, flexShrink: 0, opacity: 0.7 }} />
                 <IngredientLineField
                   value={row.text}
@@ -332,10 +323,7 @@ export function StepsEditor({
             direction="row"
             spacing={1.5}
             alignItems="flex-start"
-            sx={{
-              "& .row-more": { opacity: { sm: 0 } },
-              "&:hover .row-more, &:focus-within .row-more": { opacity: 1 },
-            }}
+            sx={{ ...editableRowSx, py: { sm: 0.25 } }}
           >
             <Box
               sx={{

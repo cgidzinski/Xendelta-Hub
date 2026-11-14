@@ -108,7 +108,6 @@ describe("filters <-> params", () => {
       ...EMPTY_FILTERS,
       layout: "instructions" as const,
       q: "soup",
-      tags: ["quick", "vegan"],
       favorite: true,
       method: "oven" as const,
       maxMinutes: 30,
@@ -117,7 +116,7 @@ describe("filters <-> params", () => {
     const p = filtersToParams(f);
     expect(filtersFromParams(p)).toEqual(f);
     expect(filtersToParams(EMPTY_FILTERS).toString()).toBe("");
-    expect(activeFilterCount(f)).toBe(6);
+    expect(activeFilterCount(f)).toBe(4);
   });
   it("ignores junk values", () => {
     const f = filtersFromParams(new URLSearchParams("method=laser&sort=random&max_minutes=-4"));

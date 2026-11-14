@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   applyKitchenFilters,
-  collectTags,
   type CategoryLike,
   type BookLike,
   canEdit,
@@ -31,7 +30,6 @@ const items = [
     _id: "i1",
     title: "Chicken curry",
     category_id: "c1",
-    tags: ["spicy"],
     favorited_by: ["me"],
     prep_minutes: 15,
     cook_minutes: 30,
@@ -47,7 +45,6 @@ const items = [
     title: "Frozen pizza",
     category_id: "c2",
     brand: "Acme",
-    tags: [],
     updated_at: "2026-01-05",
     created_at: "2026-01-04",
     methods: [{ method: "oven", minutes_min: 12, minutes_max: 15 }],
@@ -56,7 +53,6 @@ const items = [
     _id: "i3",
     title: "Garlic bread",
     category_id: null,
-    tags: ["spicy", "quick"],
     updated_at: "2026-01-01",
     created_at: "2026-01-02",
     prep_minutes: 5,
@@ -95,14 +91,13 @@ describe("applyKitchenFilters", () => {
     const orphan = { ...items[0], _id: "i4", category_id: "gone" };
     expect(ids(applyKitchenFilters([orphan], { ...EMPTY_FILTERS, category: "none" }, cats))).toEqual(["i4"]);
   });
-  it("requires every tag and ingredient", () => {
-    expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, tags: ["spicy", "quick"] }, cats))).toEqual(["i3"]);
+  it("requires every ingredient", () => {
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, ingredients: ["Garlic"] }, cats))).toEqual(["i1", "i3"]);
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, ingredients: ["garlic", "bread"] }, cats))).toEqual([
       "i3",
     ]);
   });
-  it("searches title, brand, tags and ingredient names", () => {
+  it("searches title, brand and ingredient names", () => {
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, q: "acme" }, cats))).toEqual(["i2"]);
     expect(ids(applyKitchenFilters(items, { ...EMPTY_FILTERS, q: "thighs" }, cats))).toEqual(["i1"]);
   });
@@ -139,20 +134,11 @@ describe("suggestIngredients", () => {
   });
 });
 
-describe("collectTags", () => {
-  it("counts tags", () => {
-    expect(collectTags(items)).toEqual([
-      { tag: "spicy", count: 2 },
-      { tag: "quick", count: 1 },
-    ]);
-  });
-});
-
 describe("itemFieldsFromBody", () => {
   it("only returns keys that were sent", () => {
     expect(itemFieldsFromBody({ title: " Soup " })).toEqual({ title: "Soup" });
   });
-  it("normalises tags, drops empty rows and adds ingredient keys", () => {
+  it("ignores tags, drops empty rows and adds ingredient keys", () => {
     const out: any = itemFieldsFromBody({
       tags: ["Quick ", "quick", ""],
       ingredients: [
@@ -162,7 +148,7 @@ describe("itemFieldsFromBody", () => {
       steps: [{ text: "Stir" }, { text: "  " }],
       methods: [{ method: "oven", temp: 425, minutes_min: 18, minutes_max: 20, steps: ["", "Remove film"] }],
     });
-    expect(out.tags).toEqual(["quick"]);
+    expect(out).not.toHaveProperty("tags");
     expect(out.ingredients).toEqual([
       { name: "Olive Oil", name_key: "olive oil", quantity: "2", unit: "tbsp", note: "", section: "" },
     ]);

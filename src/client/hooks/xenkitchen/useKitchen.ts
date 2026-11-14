@@ -86,7 +86,6 @@ export interface KitchenItem {
   created_by?: string | null;
   updated_by?: string | null;
   layout: KitchenLayout;
-  tags: string[];
   favorite?: boolean;
   notes: string;
   images: KitchenImage[];
@@ -140,7 +139,6 @@ export const kitchenKeys = {
   items: (params: string) => [...kitchenKeys.all, "items", params] as const,
   item: (id: string) => [...kitchenKeys.all, "item", id] as const,
   suggest: (q: string) => [...kitchenKeys.all, "suggest", q] as const,
-  tags: () => [...kitchenKeys.all, "tags"] as const,
   public: (token: string) => ["xenkitchen-public", token] as const,
   publicBook: (token: string) => ["xenkitchen-public-book", token] as const,
   publicBookItem: (token: string, id: string) => ["xenkitchen-public-book", token, id] as const,
@@ -248,17 +246,7 @@ export function useIngredientSuggestions(q: string, enabled = true) {
   return { suggestions: data ?? [], isFetching };
 }
 
-export function useKitchenTags() {
-  const { data } = useQuery({
-    queryKey: kitchenKeys.tags(),
-    queryFn: async () =>
-      unwrap(await apiClient.get<ApiResponse<{ tags: Array<{ tag: string; count: number }> }>>(`${base}/tags`)).tags,
-    staleTime: 60_000,
-  });
-  return { tags: data ?? [] };
-}
-
-// Mutations invalidate the whole kitchen: lists, counts, suggestions and tags all derive
+// Mutations invalidate the whole kitchen: lists, counts and suggestions all derive
 // from items, and a personal collection is small enough to just refetch.
 function useKitchenMutation<TVars, TResult>(fn: (v: TVars) => Promise<TResult>) {
   const qc = useQueryClient();
@@ -317,7 +305,6 @@ export interface ImportedKitchenRecipe {
   cook_minutes: number | null;
   ingredients: Array<{ quantity: string; unit: string; name: string; note: string; section: string }>;
   steps: Array<{ text: string; timer_minutes: null }>;
-  tags: string[];
   source_url: string;
   /** The page's main photo; added to the item after it is saved. */
   image_url: string | null;
@@ -342,12 +329,12 @@ export function usePhotoImportEnabled() {
   return !!data;
 }
 
-/** Read a recipe out of a photo. Nothing is saved: the editor shows the result for review. */
+/** Read a recipe out of photos of it (a card, or a few cookbook pages, in order). Nothing is saved: the editor shows the result for review. */
 export const useImportKitchenRecipeFromPhoto = () =>
   useMutation({
-    mutationFn: async (photo: File) => {
+    mutationFn: async (photos: File[]) => {
       const form = new FormData();
-      form.append("image", photo);
+      photos.forEach((photo) => form.append("image", photo));
       return unwrap(await apiClient.post<ApiResponse<{ recipe: ImportedKitchenRecipe }>>(`${base}/import-photo`, form))
         .recipe;
     },

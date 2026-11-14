@@ -39,7 +39,6 @@ describe("extractRecipe", () => {
     expect(r.servings).toBe(4);
     expect(r.prep_minutes).toBe(10);
     expect(r.cook_minutes).toBe(65);
-    expect(r.tags).toEqual(["breakfast", "american", "pancakes", "brunch", "quick"]);
     expect(r.image_url).toBe("https://cdn.example.com/p/pancakes.jpg");
     expect(r.source_url).toBe(PAGE);
     expect(r.ingredients).toEqual([
@@ -140,8 +139,7 @@ describe("extractRecipe", () => {
     );
     expect(r.steps).toHaveLength(100);
     expect(r.steps.every((s) => s.text.length <= 2000)).toBe(true);
-    expect(r.tags).toHaveLength(20);
-    expect(r.tags.every((t) => t.length <= 30)).toBe(true);
+    expect(r).not.toHaveProperty("tags");
     expect(r.source_url.length).toBeLessThanOrEqual(2000);
   });
 

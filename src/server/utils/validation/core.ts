@@ -941,7 +941,6 @@ export const xenKitchenItemSchema = z.object({
   title: z.string().trim().max(120).optional(),
   description: shortStr(2000),
   category_id: optObjectId,
-  tags: z.array(z.string().max(30)).max(20).optional(),
   favorite: z.boolean().optional(),
   notes: shortStr(4000),
   servings: z.number().min(0).max(1000).nullable().optional(),

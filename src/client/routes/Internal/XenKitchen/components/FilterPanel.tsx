@@ -26,7 +26,7 @@ import {
   type KitchenFilters,
   type KitchenSort,
 } from "@shared/xenkitchen/kitchen";
-import { useIngredientSuggestions, useKitchenTags } from "../../../../hooks/xenkitchen/useKitchen";
+import { useIngredientSuggestions } from "../../../../hooks/xenkitchen/useKitchen";
 import { MethodIconView } from "./kitchenIcons";
 
 export const SORT_LABELS: Record<KitchenSort, string> = {
@@ -100,7 +100,6 @@ function FilterBody({
   onClose: () => void;
 }) {
   const set = (patch: Partial<KitchenFilters>) => onChange({ ...filters, ...patch });
-  const { tags } = useKitchenTags();
   const [ingQuery, setIngQuery] = useState("");
   const { suggestions } = useIngredientSuggestions(ingQuery);
 
@@ -172,17 +171,6 @@ function FilterBody({
             ))}
           </ToggleButtonGroup>
         </Box>
-
-        <Autocomplete
-          multiple
-          size="small"
-          options={tags.map((t) => t.tag)}
-          value={filters.tags}
-          onChange={(_, v) => set({ tags: v })}
-          renderInput={(p) => <TextField {...p} label="Tags" placeholder={filters.tags.length ? "" : "Any tag"} />}
-          noOptionsText="No tags yet"
-          slotProps={{ popper: { sx: { zIndex: "modal" } } }}
-        />
 
         <Autocomplete
           multiple
