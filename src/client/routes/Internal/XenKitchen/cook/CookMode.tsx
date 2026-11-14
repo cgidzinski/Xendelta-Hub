@@ -145,55 +145,62 @@ export default function CookMode({
             const dir = swipeDirection(dx, dy);
             if (dir) go(index + (dir === "next" ? 1 : -1));
           }}
+          // minHeight 0 lets a long step scroll inside the screen instead of pushing the buttons off it. The step is centred
+          // with auto margins, not justifyContent, which cuts off the top of a step taller than the screen where no scroll
+          // can reach it.
           sx={{
             flex: 1,
+            minHeight: 0,
             overflowY: "auto",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
             px: { xs: 2.5, sm: 6 },
             py: 2,
             touchAction: "pan-y",
           }}
         >
-          <Typography
-            component="p"
-            sx={{
-              fontSize: { xs: "1.6rem", sm: "2.25rem" },
-              lineHeight: 1.35,
-              fontWeight: 500,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}
-          >
-            {step.text}
-          </Typography>
-          {step.timer_minutes ? (
-            <Box sx={{ mt: 3 }}>
-              {thisTimer === undefined ? (
-                <Button
-                  variant="outlined"
-                  size="large"
-                  startIcon={<TimerIcon />}
-                  onClick={() => start(index, step.timer_minutes!)}
-                >
-                  Start {formatMinutes(step.timer_minutes)} timer
-                </Button>
-              ) : (
-                <Button
-                  variant="contained"
-                  size="large"
-                  color={thisTimer <= now ? "warning" : "primary"}
-                  startIcon={<TimerIcon />}
-                  onClick={() => stop(index)}
-                >
-                  {thisTimer <= now
-                    ? "Done! Tap to clear"
-                    : `${formatCountdown(remainingSeconds(thisTimer, now))} · tap to stop`}
-                </Button>
-              )}
-            </Box>
-          ) : null}
+          <Box sx={{ my: "auto" }}>
+            <Typography
+              component="p"
+              sx={{
+                fontSize: { xs: "1.6rem", sm: "2.25rem" },
+                lineHeight: 1.35,
+                fontWeight: 500,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {step.text}
+            </Typography>
+            {step.timer_minutes ? (
+              <Box sx={{ mt: 3 }}>
+                {thisTimer === undefined ? (
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    startIcon={<TimerIcon />}
+                    onClick={() => start(index, step.timer_minutes!)}
+                  >
+                    Start {formatMinutes(step.timer_minutes)} timer
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    size="large"
+                    color={thisTimer <= now ? "warning" : "primary"}
+                    startIcon={<TimerIcon />}
+                    onClick={() => stop(index)}
+                  >
+                    {thisTimer <= now
+                      ? "Done! Tap to clear"
+                      : `${formatCountdown(remainingSeconds(thisTimer, now))} · tap to stop`}
+                  </Button>
+                )}
+              </Box>
+            ) : null}
+          </Box>
         </Box>
 
         <Stack
@@ -229,7 +236,11 @@ export default function CookMode({
         sx={{ zIndex: (theme) => theme.zIndex.modal + 1 }}
         open={sheet}
         onClose={() => setSheet(false)}
-        slotProps={{ paper: { sx: { maxHeight: "75vh", borderRadius: "12px 12px 0 0" } } }}
+        slotProps={{
+          paper: {
+            sx: { maxHeight: "75dvh", overflowY: "auto", overscrollBehavior: "contain", borderRadius: "12px 12px 0 0" },
+          },
+        }}
       >
         <Box sx={{ p: 2 }}>
           <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
