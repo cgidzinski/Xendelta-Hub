@@ -115,7 +115,13 @@ const createAxiosInstance = (): AxiosInstance => {
           const errorMessages = data.errors.map((err: { path: string; message: string }) => err.message).join(", ");
           throw makeApiError(errorMessages || data.message || "Validation failed", error, status);
         } else {
-          throw makeApiError(data?.message || `Request failed: ${error.response.statusText}`, error, status);
+          // No message means the answer didn't come from our server (a proxy's error page, say). The status is the useful
+          // part: over HTTP/2 there is no status text at all.
+          throw makeApiError(
+            data?.message || `Request failed (${[status, error.response.statusText].filter(Boolean).join(" ")})`,
+            error,
+            status,
+          );
         }
       } else if (error.request) {
         // Request was made but no response received

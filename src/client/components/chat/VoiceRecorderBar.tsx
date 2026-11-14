@@ -7,6 +7,7 @@ import { VOICE_MAX_SECONDS, type ChatAttachment, type ChatVoice } from "@shared/
 import { useVoiceRecorder } from "../../hooks/chat/useVoiceRecorder";
 import { uploadOne } from "../../hooks/xendrive/useXendrive";
 import { formatDuration } from "../../utils/voice";
+import { mediaErrorText } from "../../utils/mediaErrors";
 
 interface Props {
   conversationId: string;
@@ -27,10 +28,7 @@ export default function VoiceRecorderBar({ conversationId, onSend, onClose }: Pr
     if (startedOnce.current) return;
     startedOnce.current = true;
     recorder.start().catch((e: unknown) => {
-      const denied = e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "SecurityError");
-      enqueueSnackbar(denied ? "Allow the microphone to record a voice message." : "Couldn't start the microphone.", {
-        variant: "error",
-      });
+      enqueueSnackbar(mediaErrorText(e, "microphone") ?? "Couldn't start the microphone.", { variant: "error" });
       onClose();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

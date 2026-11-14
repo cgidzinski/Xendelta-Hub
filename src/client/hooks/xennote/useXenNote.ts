@@ -102,9 +102,14 @@ export const useXenNoteActions = () => {
       (await api.put<{ note: XenNote }>(`/api/xennote/notes/${v.id}/reminder`, { at: v.at })).note,
     onSuccess: refresh,
   });
+  // Deleting must not wait on the shared refresh: that refetches the open note's backlinks, which are now a 404 and
+  // retry for several seconds, so the editor sat on a hung promise and never closed.
   const deleteNote = useMutation({
     mutationFn: (id: string) => api.delete(`/api/xennote/notes/${id}`),
-    onSuccess: refresh,
+    onSuccess: (_result, id) => {
+      queryClient.removeQueries({ queryKey: xennoteKeys.backlinks(id) });
+      void refresh();
+    },
   });
   const addImages = useMutation({
     mutationFn: async (v: { id: string; files: File[] }) => {

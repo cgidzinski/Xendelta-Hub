@@ -9,6 +9,7 @@ import { useRealtime } from "../hooks/useRealtime";
 import { callKeys } from "../hooks/calls/keys";
 import { CallSession } from "../utils/callSession";
 import { newTrackName, staleTracks, tracksToPull, type TrackKind } from "../utils/callMedia";
+import { mediaErrorText, type MediaWanted } from "../utils/mediaErrors";
 
 export interface RemoteStreams {
   audio?: MediaStream;
@@ -51,10 +52,9 @@ interface CallContextType {
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
 
-const errorText = (e: any, fallback: string) =>
-  e?.name === "NotAllowedError"
-    ? "Allow the microphone (and camera) in your browser to join the call."
-    : e?.response?.data?.message || e?.message || fallback;
+/** A failed microphone or camera says what to do about it (see utils/mediaErrors); anything else says what went wrong. */
+const errorText = (e: any, fallback: string, wanted?: MediaWanted) =>
+  (wanted && mediaErrorText(e, wanted)) || e?.response?.data?.message || e?.message || fallback;
 
 /**
  * The call the person is in, kept at the root of the app so it survives moving around. It owns the connection
@@ -234,8 +234,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
             camera.current = await navigator.mediaDevices.getUserMedia({
               video: { width: { ideal: 1280 }, height: { ideal: 720 } },
             });
-          } catch {
-            enqueueSnackbar("Couldn't use the camera. Joining with sound only.", { variant: "warning" });
+          } catch (e) {
+            const why = mediaErrorText(e, "camera");
+            enqueueSnackbar(`${why ?? "Couldn't use the camera."} Joining with sound only.`, { variant: "warning" });
           }
         }
         const joined = await api.post<JoinedCall>(`/api/calls/${conversationId}/join`, { video });
@@ -288,7 +289,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         await say(conversationId, { tracks: { ...names.current }, muted: false, cameraOn: !!cam });
         void sync(joined.call);
       } catch (e) {
-        enqueueSnackbar(errorText(e, "Couldn't join the call"), { variant: "error" });
+        enqueueSnackbar(errorText(e, "Couldn't join the call", "microphone"), { variant: "error" });
         // If the server already has me in it, take me out.
         void api.post(`/api/calls/${conversationId}/leave`).catch(() => undefined);
         cleanup();
@@ -364,7 +365,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
           stream: new MediaStream([...(mic.current?.getTracks() ?? []), ...(camera.current?.getTracks() ?? [])]),
         }));
       } catch (e) {
-        enqueueSnackbar(errorText(e, "Couldn't switch to that device"), { variant: "error" });
+        enqueueSnackbar(errorText(e, "Couldn't switch to that device", kind === "audio" ? "microphone" : "camera"), {
+          variant: "error",
+        });
       }
     },
     [cameraOn, enqueueSnackbar, muted],
@@ -407,7 +410,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       setLocal((l) => ({ ...l, stream: new MediaStream([...(mic.current?.getTracks() ?? []), track]) }));
       await say(id, { tracks: { ...names.current }, cameraOn: true });
     } catch (e) {
-      enqueueSnackbar(errorText(e, "Couldn't use the camera"), { variant: "error" });
+      enqueueSnackbar(errorText(e, "Couldn't use the camera", "camera"), { variant: "error" });
     }
   }, [cameraOn, enqueueSnackbar, say]);
 
