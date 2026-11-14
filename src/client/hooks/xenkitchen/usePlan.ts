@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../config/api";
+import { liveQuery } from "../liveQuery";
 import type { ShoppingLine } from "@shared/xenkitchen/shopping";
 
 // The XenKitchen meal plan: recipes planned for days in a book, and the shopping list made from them.
@@ -35,6 +36,7 @@ export const usePlan = (bookId: string | undefined, from: string, to: string) =>
       (await api.get<{ entries: PlanEntry[] }>(`/api/xenkitchen/books/${bookId}/plan`, { params: { from, to } }))
         .entries,
     enabled: !!bookId,
+    ...liveQuery,
   });
 
 /** Every plan mutation refetches the plan: the server decides what is still valid (a deleted recipe drops out). */

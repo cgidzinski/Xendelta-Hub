@@ -10,6 +10,7 @@ import type {
   XenNotebook,
 } from "../../types/XenNote";
 import { useSocketInvalidate } from "../useSocketEvent";
+import { liveQuery } from "../liveQuery";
 import { xennoteKeys } from "./keys";
 
 // ---------- reading ----------
@@ -29,6 +30,7 @@ export const useXenNotes = (filters: NoteFilters = {}) => {
       return (await api.get<{ notes: XenNote[] }>(`/api/xennote/notes${qs ? `?${qs}` : ""}`)).notes;
     },
     placeholderData: (previous) => previous,
+    ...liveQuery,
   });
 };
 
@@ -36,12 +38,14 @@ export const useXenNotebooks = () =>
   useQuery({
     queryKey: xennoteKeys.notebooks(),
     queryFn: async () => (await api.get<{ notebooks: XenNotebook[] }>("/api/xennote/notebooks")).notebooks,
+    ...liveQuery,
   });
 
 export const useXenNoteCounts = () =>
   useQuery({
     queryKey: xennoteKeys.counts(),
     queryFn: () => api.get<XenNoteCounts>("/api/xennote/counts"),
+    ...liveQuery,
   });
 
 export const useXenNoteLabels = () =>
@@ -49,6 +53,7 @@ export const useXenNoteLabels = () =>
     queryKey: xennoteKeys.labels(),
     queryFn: async () =>
       (await api.get<{ labels: Array<{ name: string; count: number }> }>("/api/xennote/labels")).labels,
+    ...liveQuery,
   });
 
 /** The notes that link to this one with [[its title]]. Only fetched while `noteId` is set. */

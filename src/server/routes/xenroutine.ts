@@ -41,8 +41,17 @@ import { sendActivityNotices } from "../utils/xenRoutineReminders";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { addRefused } from "../social/policy";
 import { AppError, callerId } from "../utils/http";
+import { SocketManager } from "../infrastructure/SocketManager";
 
 const actorName = (req: Request) => (req as AuthenticatedRequest).user!.username;
+
+/**
+ * Everyone on the routine hears it changed, plus anyone who just left it (their list has to drop it). Routines are
+ * shared, and a tick, a completion or a postponement changes what the other people see, so nothing here is private.
+ */
+function routineChanged(routine: { members: Array<{ user_id: string }> }, alsoNotify: string[] = []) {
+  SocketManager.getInstance().notifyXenRoutineUpdate([...routine.members.map((m) => m.user_id), ...alsoNotify]);
+}
 
 // Loads a routine and enforces the permission level in one place; throws the 404/403 otherwise.
 async function loadRoutine(req: Request, need: "edit" | "act") {
@@ -193,6 +202,7 @@ module.exports = function (app: any) {
       members: [{ user_id: uid, role: "owner" }],
     });
     const [out] = await serialize([routine], uid);
+    routineChanged(routine);
     return res.status(201).json({ status: true, message: "Routine created", data: { routine: out } });
   });
 
@@ -223,6 +233,7 @@ module.exports = function (app: any) {
       }
       await routine.save();
       const [out] = await serialize([routine], callerId(req));
+      routineChanged(routine);
       return res.json({ status: true, message: "Routine updated", data: { routine: out } });
     },
   );
@@ -232,10 +243,12 @@ module.exports = function (app: any) {
     validateParams(xenRoutineIdParamSchema),
     async (req: Request, res: Response) => {
       const routine = await loadRoutine(req, "edit");
+      const people: string[] = routine.members.map((m: any) => m.user_id);
       const history = routine.history.map((h: any) => ({ images: h.images }));
       await routine.deleteOne();
       // Their photos go with it (best effort: a storage hiccup must not make the delete fail).
       await removeHistoryPhotos(history).catch((e) => console.error("xenroutine photo cleanup failed:", e));
+      SocketManager.getInstance().notifyXenRoutineUpdate(people);
       return res.json({ status: true, message: "Routine deleted" });
     },
   );
@@ -293,6 +306,7 @@ module.exports = function (app: any) {
           );
         }
         const [out] = await serialize([routine], callerId(req));
+        routineChanged(routine);
         void sendActivityNotices(routine, callerId(req), actorName(req), `marked "${routine.name}" as done`);
         return res.json({ status: true, message: "Marked as done", data: { routine: out } });
       } catch (e) {
@@ -320,6 +334,8 @@ module.exports = function (app: any) {
       if (result.matchedCount === 0) throw new AppError(404, "Step not found");
       const fresh = await XenRoutine.findById(routine._id).exec();
       const [out] = await serialize([fresh], callerId(req));
+      // Anyone else looking at the routine sees the tick too (the tick is shared, not per person).
+      if (fresh) routineChanged(fresh);
       return res.json({ status: true, message: "Saved", data: { routine: out } });
     },
   );
@@ -343,6 +359,7 @@ module.exports = function (app: any) {
       routine.set(patch);
       await routine.save();
       const [out] = await serialize([routine], callerId(req));
+      routineChanged(routine);
       void sendActivityNotices(
         routine,
         callerId(req),
@@ -369,6 +386,8 @@ module.exports = function (app: any) {
       if (req.body.remind_again_days !== undefined) routine.remind_again_days = req.body.remind_again_days;
       await routine.save();
       const [out] = await serialize([routine], callerId(req));
+      // remind_again_days is routine-wide, so the others have something new to read; my own options are mine.
+      routineChanged(routine);
       return res.json({ status: true, message: "Notification options saved", data: { routine: out } });
     },
   );
@@ -390,6 +409,7 @@ module.exports = function (app: any) {
       }
       await routine.save();
       const [out] = await serialize([routine], callerId(req));
+      routineChanged(routine);
       return res.json({ status: true, message: "Shared", data: { routine: out } });
     },
   );
@@ -410,6 +430,7 @@ module.exports = function (app: any) {
       );
       await routine.save();
       const stillIn = routine.members.some((m: any) => m.user_id === uid);
+      routineChanged(routine, [target]);
       return res.json({
         status: true,
         message: "Removed",

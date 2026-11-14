@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
+import { liveQuery } from "../liveQuery";
 import { filtersToParams, type CookMethod, type KitchenFilters, type KitchenLayout } from "@shared/xenkitchen/kitchen";
 import type { Cosmetics } from "@shared/cosmetics";
 
@@ -162,6 +163,7 @@ export function useKitchenBooks() {
   const { data, isLoading } = useQuery({
     queryKey: kitchenKeys.books(),
     queryFn: async () => unwrap(await apiClient.get<ApiResponse<{ books: KitchenBook[] }>>(`${base}/books`)).books,
+    ...liveQuery,
   });
   return { books: data ?? [], isLoading };
 }
@@ -177,6 +179,7 @@ export function useKitchenCategories(book: BookScope = "all") {
         ),
       ),
     placeholderData: keepPreviousData,
+    ...liveQuery,
   });
   return {
     categories: data?.categories ?? [],
@@ -195,6 +198,7 @@ export function useKitchenItems(filters: KitchenFilters, book: BookScope = "all"
     queryFn: async () =>
       unwrap(await apiClient.get<ApiResponse<{ items: KitchenItem[]; total: number }>>(`${base}/items?${params}`)),
     placeholderData: keepPreviousData,
+    ...liveQuery,
   });
   return { items: data?.items ?? [], total: data?.total ?? 0, isLoading, isFetching, isError, error, refetch };
 }
@@ -204,6 +208,7 @@ export function useKitchenItem(id: string | undefined) {
     queryKey: kitchenKeys.item(id ?? ""),
     queryFn: async () => unwrap(await apiClient.get<ApiResponse<{ item: KitchenItem }>>(`${base}/items/${id}`)).item,
     enabled: !!id,
+    ...liveQuery,
   });
   return { item: data, isLoading, isError, error, refetch };
 }

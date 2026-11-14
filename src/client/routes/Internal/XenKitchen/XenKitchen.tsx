@@ -63,6 +63,7 @@ import {
   type KitchenBook,
   type KitchenItem,
 } from "../../../hooks/xenkitchen/useKitchen";
+import { useKitchenSocket } from "../../../hooks/xenkitchen/useKitchenSocket";
 import ItemCard from "./components/ItemCard";
 import CategoryPicker from "./components/CategoryPicker";
 import SortMenu from "./components/SortMenu";
@@ -87,6 +88,8 @@ function bookSubtitle(b: KitchenBook): string {
 
 export default function XenKitchen() {
   useTitle("XenKitchen");
+  // Someone else's edit (a recipe, a category, the book itself) reaches this screen without a reload.
+  useKitchenSocket();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();

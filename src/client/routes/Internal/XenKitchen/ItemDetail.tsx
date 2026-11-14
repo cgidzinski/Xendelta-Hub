@@ -44,6 +44,7 @@ import {
   useMoveKitchenItem,
   useToggleKitchenFavorite,
 } from "../../../hooks/xenkitchen/useKitchen";
+import { useKitchenSocket } from "../../../hooks/xenkitchen/useKitchenSocket";
 import ItemView from "./components/ItemView";
 import ItemEditor from "./components/ItemEditor";
 import ShareDialog from "./components/ShareDialog";
@@ -51,6 +52,8 @@ import { CategoryIconView } from "./components/kitchenIcons";
 
 export default function ItemDetail() {
   const { id } = useParams<{ id: string }>();
+  // An edit made by someone else in this book reaches the open recipe without a reload.
+  useKitchenSocket();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();

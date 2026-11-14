@@ -16,6 +16,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { canEditBook, useKitchenBooks } from "../../../hooks/xenkitchen/useKitchen";
+import { useKitchenSocket } from "../../../hooks/xenkitchen/useKitchenSocket";
 import {
   useAddPlanEntry,
   usePlan,
@@ -101,6 +102,8 @@ function MealRow({ entry, canEdit }: { entry: PlanEntry; canEdit: boolean }) {
 /** Plan the week's meals from a recipe book, then make the shopping list for them. */
 export default function MealPlan() {
   useTitle("Meal plan");
+  // Plans are shared per book: a meal someone else adds shows up here.
+  useKitchenSocket();
   const { enqueueSnackbar } = useSnackbar();
   const { books, isLoading: booksLoading } = useKitchenBooks();
   const [savedBook, setSavedBook] = useLocalStorageState<string>(

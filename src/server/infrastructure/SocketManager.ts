@@ -193,4 +193,19 @@ export class SocketManager {
   notifyXenNoteUpdate(userIds: string[]) {
     this.emit(userIds, "xennote:update");
   }
+
+  // Tell everyone in a XenKitchen book that a recipe, category or planned meal changed, so their open screens refresh
+  notifyXenKitchenBookUpdate(bookId: string, memberIds: string[]) {
+    this.emit(memberIds, "xenkitchen:book_update", { bookId });
+  }
+
+  // Tell people their list of recipe books changed (one was created, renamed or deleted, or they joined or left one)
+  notifyXenKitchenBooksUpdated(memberIds: string[]) {
+    this.emit(memberIds, "xenkitchen:books_updated");
+  }
+
+  // Tell everyone on a routine that it changed: edited, ticked off, completed, postponed, or the people changed
+  notifyXenRoutineUpdate(memberIds: string[]) {
+    this.emit(memberIds, "xenroutine:update");
+  }
 }

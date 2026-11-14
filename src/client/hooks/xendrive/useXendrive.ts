@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UPLOAD_TIMEOUT_MS, api } from "../../config/api";
+import { liveQuery } from "../liveQuery";
 import type {
   AppFilesResult,
   BrowseResult,
@@ -118,6 +119,7 @@ export const useXendriveBrowse = (folderId?: string | null, search?: string, opt
     retry: 1,
     retryDelay: 1000,
     placeholderData: (previous) => previous,
+    ...liveQuery,
   });
 
 export const useXendriveFile = (fileId: string | undefined) =>
@@ -126,6 +128,7 @@ export const useXendriveFile = (fileId: string | undefined) =>
     queryFn: () => api.get<FileDetailResult>(`/api/xendrive/files/${fileId}`),
     enabled: !!fileId,
     retry: false,
+    ...liveQuery,
   });
 
 /** The newest files, the totals, and how many things have a public link (the home card and the sidebar). */
@@ -141,6 +144,7 @@ export const useXendriveRecent = () =>
         /** What apps have stored in the drive; counted in `spaceUsed` but not shown in My Drive. */
         appFiles: { count: number; size: number };
       }>("/api/xendrive/recent"),
+    ...liveQuery,
   });
 
 /** Everything apps have stored on the person's behalf, grouped by app and by where it came from. */
@@ -149,6 +153,7 @@ export const useXendriveAppFiles = (enabled = true) =>
     queryKey: xendriveKeys.appFiles(),
     queryFn: () => api.get<AppFilesResult>("/api/xendrive/app-files"),
     enabled,
+    ...liveQuery,
   });
 
 /** What deleting or sharing a folder involves. Only fetched while `folderId` is set. */
@@ -158,6 +163,7 @@ export const useXendriveFolderStats = (folderId: string | null) =>
     queryFn: () => api.get<FolderStats>(`/api/xendrive/folders/${folderId}/stats`),
     enabled: !!folderId,
     gcTime: 0,
+    ...liveQuery,
   });
 
 /** Whether a folder link wants a password (and its name), before anything is opened. */

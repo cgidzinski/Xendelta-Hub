@@ -14,6 +14,7 @@ import { AppError, callerId } from "../utils/http";
 import { fetchPublicImage, fetchPublicPage } from "../utils/safeFetch";
 import { extractRecipe } from "../utils/recipeImport";
 import { notify } from "../utils/notificationUtils";
+import { SocketManager } from "../infrastructure/SocketManager";
 import {
   validate,
   validateParams,
@@ -191,6 +192,22 @@ async function serializeFor(uid: string, rawItems: any[], books: any[]) {
 async function respondItem(res: Response, item: any, book: any, uid: string) {
   const [serialized] = await serializeFor(uid, [item], [book]);
   res.json({ status: true, message: "OK", data: { item: serialized } });
+}
+
+/**
+ * Tell everyone in a book (and the caller's other tabs, which are separate caches) that a recipe, category or planned
+ * meal changed, so their open lists and recipes refresh instead of showing what they saw five minutes ago.
+ */
+function bookChanged(book: any) {
+  SocketManager.getInstance().notifyXenKitchenBookUpdate(
+    String(book._id),
+    book.members.map((m: any) => m.user_id),
+  );
+}
+
+/** Tell these people their list of books changed: one was created, renamed or deleted, or its people changed. */
+function booksChanged(userIds: Iterable<string>) {
+  SocketManager.getInstance().notifyXenKitchenBooksUpdated([...new Set(userIds)]);
 }
 
 async function serializeBook(book: any, uid: string) {
@@ -392,6 +409,7 @@ module.exports = function (app: any) {
         : books.find((b) => canEdit(b, uid));
       if (!target) throw new AppError(400, "You don't have a book you can add to");
       const copy = await cloneItem(src, target._id, uid, await targetCategory(src, target._id));
+      bookChanged(target);
       await respondItem(res, copy, target, uid);
     }),
   );
@@ -422,6 +440,7 @@ module.exports = function (app: any) {
       const owned = await XenKitchenBook.countDocuments({ members: { $elemMatch: { user_id: uid, role: "owner" } } });
       if (owned >= 30) throw new AppError(400, "30 books is the limit");
       const book = await createBook(uid, body);
+      booksChanged([uid]);
       res.json({ status: true, message: "Book created", data: { book: await serializeBook(book.toObject(), uid) } });
     }),
   );
@@ -437,6 +456,9 @@ module.exports = function (app: any) {
       if (body.icon && !validIcon(body.icon)) delete body.icon;
       book.set(body);
       await book.save();
+      // The name and colour are on the books list too, so both keys change.
+      bookChanged(book);
+      booksChanged(book.members.map((m: any) => m.user_id));
       res.json({ status: true, message: "Saved", data: { book: await serializeBook(book.toObject(), callerId(req)) } });
     }),
   );
@@ -448,12 +470,14 @@ module.exports = function (app: any) {
     handle(async (req, res) => {
       const uid = callerId(req);
       const book = await loadBook(req, req.params.id, "manage");
+      const people: string[] = book.members.map((m: any) => m.user_id);
       const items = await XenKitchenItem.find({ book_id: book._id }, "images").lean().exec();
       await XenKitchenItem.deleteMany({ book_id: book._id }).exec();
       await XenKitchenCategory.deleteMany({ book_id: book._id }).exec();
       await book.deleteOne();
       await removeKitchenPhotos(items.flatMap((i: any) => i.images || []));
       await ensureBooks(uid);
+      booksChanged(people);
       res.json({ status: true, message: "Book deleted" });
     }),
   );
@@ -476,6 +500,8 @@ module.exports = function (app: any) {
       if (book.members.length + added.length > 50) throw new AppError(400, "50 people per book is the limit");
       added.forEach((id: string) => book.members.push({ user_id: id, role }));
       await book.save();
+      bookChanged(book);
+      booksChanged(book.members.map((m: any) => m.user_id));
       await Promise.all(
         added.map((id: string) =>
           notify(id, {
@@ -508,6 +534,7 @@ module.exports = function (app: any) {
       // marker lets them get a fresh one if they later leave and have none.
       if (req.body.role === "owner") book.default_for = undefined;
       await book.save();
+      booksChanged(book.members.map((m: any) => m.user_id));
       res.json({ status: true, message: "Saved", data: { book: await serializeBook(book.toObject(), uid) } });
     }),
   );
@@ -527,6 +554,9 @@ module.exports = function (app: any) {
       // Their stars on this book's items go with them.
       await XenKitchenItem.updateMany({ book_id: book._id }, { $pull: { favorited_by: target } }).exec();
       if (target === uid) await ensureBooks(uid);
+      // Whoever left hears it too: their book list has to drop it.
+      bookChanged(book);
+      booksChanged([...book.members.map((m: any) => m.user_id), target]);
       res.json({
         status: true,
         message: target === uid ? "You left the book" : "Removed",
@@ -626,6 +656,7 @@ module.exports = function (app: any) {
         icon: validIcon(body.icon) ? body.icon : "restaurant",
         order: count,
       });
+      bookChanged(book);
       res.json({ status: true, message: "Category created", data: { category: cat } });
     }),
   );
@@ -642,6 +673,7 @@ module.exports = function (app: any) {
       await XenKitchenCategory.bulkWrite(
         ids.map((id, i) => ({ updateOne: { filter: { _id: id, book_id: book._id }, update: { $set: { order: i } } } })),
       );
+      bookChanged(book);
       res.json({ status: true, message: "Order saved" });
     }),
   );
@@ -649,8 +681,8 @@ module.exports = function (app: any) {
   async function loadCategory(req: Request) {
     const cat = await XenKitchenCategory.findById(req.params.id).exec();
     if (!cat) throw new AppError(404, "Category not found");
-    await loadBook(req, cat.book_id, "edit");
-    return cat;
+    const book = await loadBook(req, cat.book_id, "edit");
+    return { cat, book };
   }
 
   app.put(
@@ -659,11 +691,12 @@ module.exports = function (app: any) {
     validateParams(xenKitchenIdParamSchema),
     validate(xenKitchenCategoryUpdateSchema),
     handle(async (req, res) => {
-      const cat = await loadCategory(req);
+      const { cat, book } = await loadCategory(req);
       const body = xenKitchenCategoryUpdateSchema.parse(req.body);
       if (body.icon && !validIcon(body.icon)) delete body.icon;
       cat.set(body);
       await cat.save();
+      bookChanged(book);
       res.json({ status: true, message: "Category saved", data: { category: cat } });
     }),
   );
@@ -673,13 +706,14 @@ module.exports = function (app: any) {
     authenticateToken,
     validateParams(xenKitchenIdParamSchema),
     handle(async (req, res) => {
-      const cat = await loadCategory(req);
+      const { cat, book } = await loadCategory(req);
       await cat.deleteOne();
       // Items are kept, just uncategorised.
       await XenKitchenItem.updateMany(
         { book_id: cat.book_id, category_id: cat._id },
         { $set: { category_id: null } },
       ).exec();
+      bookChanged(book);
       res.json({ status: true, message: "Category deleted" });
     }),
   );
@@ -759,6 +793,7 @@ module.exports = function (app: any) {
         created_by: uid,
         updated_by: uid,
       });
+      bookChanged(book);
       await respondItem(res, item, book.toObject(), uid);
     }),
   );
@@ -805,6 +840,8 @@ module.exports = function (app: any) {
           ).exec()
         ).modifiedCount;
       }
+      const touched = await XenKitchenBook.find({ _id: { $in: items.map((i: any) => i.book_id) } }).exec();
+      for (const book of touched) bookChanged(book);
       res.json({ status: true, message: `Moved ${moved}`, data: { moved } });
     }),
   );
@@ -819,6 +856,8 @@ module.exports = function (app: any) {
       const items = await editableIds(uid, ids);
       await XenKitchenItem.deleteMany({ _id: { $in: items.map((i) => i._id) } }).exec();
       await removeKitchenPhotos(items.flatMap((i) => i.images || []));
+      const touched = await XenKitchenBook.find({ _id: { $in: items.map((i: any) => i.book_id) } }).exec();
+      for (const book of touched) bookChanged(book);
       res.json({ status: true, message: `Deleted ${items.length}`, data: { deleted: items.length } });
     }),
   );
@@ -854,6 +893,7 @@ module.exports = function (app: any) {
         );
       }
       await item.save();
+      bookChanged(book);
       await respondItem(res, item, book, uid);
     }),
   );
@@ -867,6 +907,7 @@ module.exports = function (app: any) {
       const images = loaded.item.images.map((i: any) => ({ file_id: i.file_id, gcs_path: i.gcs_path }));
       await loaded.item.deleteOne();
       await removeKitchenPhotos(images);
+      bookChanged(loaded.book);
       res.json({ status: true, message: "Deleted" });
     }),
   );
@@ -911,6 +952,7 @@ module.exports = function (app: any) {
         item.category_id,
         `${item.title || "Untitled"} (copy)`,
       );
+      bookChanged(book);
       await respondItem(res, copy, book, uid);
     }),
   );
@@ -927,6 +969,7 @@ module.exports = function (app: any) {
       const target = await loadBook(req, req.body.book_id, "edit");
       const src = loaded.item.toObject();
       const copy = await cloneItem(src, target._id, uid, await targetCategory(src, target._id, req.body.category_id));
+      bookChanged(target);
       await respondItem(res, copy, target.toObject(), uid);
     }),
   );
@@ -940,7 +983,7 @@ module.exports = function (app: any) {
       const uid = callerId(req);
       const loaded = await loadItem(req, "edit");
       const target = await loadBook(req, req.body.book_id, "edit");
-      const { item } = loaded;
+      const { item, book: source } = loaded;
       if (String(item.book_id) !== String(target._id)) {
         item.set("category_id", await targetCategory(item, target._id, req.body.category_id));
         item.book_id = target._id;
@@ -949,7 +992,10 @@ module.exports = function (app: any) {
         item.favorited_by = item.favorited_by.filter((u: string) => members.has(u));
         item.updated_by = uid;
         await item.save();
+        // It left one book and joined another: both lists change.
+        bookChanged(source);
       }
+      bookChanged(target);
       await respondItem(res, item, target.toObject(), uid);
     }),
   );
@@ -1012,6 +1058,7 @@ module.exports = function (app: any) {
         await removeAppFiles(stored.map((f) => f._id));
         throw error;
       }
+      bookChanged(book);
       await respondItem(res, item, book, uid);
     }),
   );
@@ -1056,6 +1103,7 @@ module.exports = function (app: any) {
         await removeAppFiles(stored.map((f) => f._id));
         throw error;
       }
+      bookChanged(book);
       await respondItem(res, item, book, uid);
     }),
   );
@@ -1073,6 +1121,7 @@ module.exports = function (app: any) {
       img.deleteOne();
       await item.save();
       await removeKitchenPhotos([removed]);
+      bookChanged(book);
       await respondItem(res, item, book, callerId(req));
     }),
   );

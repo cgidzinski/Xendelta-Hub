@@ -16,6 +16,7 @@ import {
   type Routine,
 } from "../../../hooks/xenroutine/useRoutines";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
+import { useRoutineSocket } from "../../../hooks/xenroutine/useRoutineSocket";
 import { browserTimezone } from "../../../constants/timezones";
 import RoutineDialog from "./components/RoutineDialog";
 import ReminderSettingsDialog from "./components/ReminderSettingsDialog";
@@ -29,6 +30,8 @@ const TABS = [
 /** Layout for XenRoutine: title, the Overview/Routines tabs, and the create/edit dialog both tabs share. */
 export default function XenRoutine() {
   useTitle("XenRoutine");
+  // Routines are shared: someone else ticking a step or marking one done shows up here.
+  useRoutineSocket();
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   const { pathname } = useLocation();

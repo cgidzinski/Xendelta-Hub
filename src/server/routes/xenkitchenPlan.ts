@@ -14,6 +14,7 @@ import {
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
 import { canEdit, canView } from "../utils/xenKitchen";
+import { SocketManager } from "../infrastructure/SocketManager";
 import { buildShoppingList } from "../../shared/xenkitchen/shopping";
 
 // The meal plan (utils/validation/xenkitchenPlan.ts): recipes planned for days, per book. Everyone in the book sees it;
@@ -56,6 +57,14 @@ const serialize = ({ entry, item }: Awaited<ReturnType<typeof planFor>>[number])
   recipe_servings: item.servings ?? null,
 });
 
+/** Everyone in the book plans together, so every change is pushed to them (and to the caller's other tabs). */
+function planChanged(book: { _id: unknown; members: Array<{ user_id: string }> }) {
+  SocketManager.getInstance().notifyXenKitchenBookUpdate(
+    String(book._id),
+    book.members.map((m) => m.user_id),
+  );
+}
+
 module.exports = function (app: express.Application) {
   app.get(
     "/api/xenkitchen/books/:bookId/plan",
@@ -78,7 +87,7 @@ module.exports = function (app: express.Application) {
     async (req, res) => {
       const bookId = req.params.bookId as string;
       const body = xenKitchenPlanCreateSchema.parse(req.body);
-      await loadBook(callerId(req), bookId, "edit");
+      const book = await loadBook(callerId(req), bookId, "edit");
       const item = await XenKitchenItem.findOne({ _id: body.item_id, book_id: bookId }, "title servings").lean();
       if (!item) throw new AppError(404, "That recipe isn't in this book");
       if ((await XenKitchenPlan.countDocuments({ book_id: bookId, date: body.date })) >= MAX_PER_DAY) {
@@ -94,6 +103,7 @@ module.exports = function (app: express.Application) {
         servings: body.servings ?? null,
         created_by: callerId(req),
       });
+      planChanged(book);
       res.status(201).json({ status: true, data: { entry: serialize({ entry: entry.toObject(), item }) } });
     },
   );
@@ -101,8 +111,8 @@ module.exports = function (app: express.Application) {
   async function loadEntry(req: express.Request, need: "view" | "edit") {
     const entry = await XenKitchenPlan.findById(req.params.entryId);
     if (!entry) throw new AppError(404, "Not found");
-    await loadBook(callerId(req), String(entry.book_id), need);
-    return entry;
+    const book = await loadBook(callerId(req), String(entry.book_id), need);
+    return { entry, book };
   }
 
   app.put(
@@ -112,7 +122,7 @@ module.exports = function (app: express.Application) {
     validate(xenKitchenPlanUpdateSchema),
     async (req, res) => {
       const body = xenKitchenPlanUpdateSchema.parse(req.body);
-      const entry = await loadEntry(req, "edit");
+      const { entry, book } = await loadEntry(req, "edit");
       if (body.date !== undefined) entry.date = body.date;
       if (body.servings !== undefined) entry.servings = body.servings;
       await entry.save();
@@ -121,6 +131,7 @@ module.exports = function (app: express.Application) {
         "title servings",
       ).lean();
       if (!item) throw new AppError(404, "That recipe is gone");
+      planChanged(book);
       res.json({ status: true, data: { entry: serialize({ entry: entry.toObject(), item }) } });
     },
   );
@@ -130,8 +141,9 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validateParams(xenKitchenPlanEntryParamSchema),
     async (req, res) => {
-      const entry = await loadEntry(req, "edit");
+      const { entry, book } = await loadEntry(req, "edit");
       await entry.deleteOne();
+      planChanged(book);
       res.json({ status: true, message: "Removed" });
     },
   );

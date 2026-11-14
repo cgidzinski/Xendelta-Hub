@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosProgressEvent } from "axios";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
+import { liveQuery } from "../liveQuery";
 import type { Cosmetics } from "@shared/cosmetics";
 
 export type IntervalUnit = "days" | "weeks" | "months" | "years";
@@ -87,6 +88,7 @@ export function useRoutines() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: routineKeys.list(),
     queryFn: async () => (await apiClient.get<ApiResponse<{ routines: Routine[] }>>(base)).data.data!.routines,
+    ...liveQuery,
   });
   return { routines: data ?? [], isLoading, isError, error, refetch };
 }
@@ -214,6 +216,7 @@ export function useRoutineSettings() {
     queryKey: routineSettingsKey,
     queryFn: async () =>
       (await apiClient.get<ApiResponse<{ settings: RoutineSettings }>>("/api/xenroutine/settings")).data.data!.settings,
+    ...liveQuery,
   });
   return { settings: data, isLoading };
 }
