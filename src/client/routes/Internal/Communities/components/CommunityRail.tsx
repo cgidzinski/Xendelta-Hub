@@ -4,6 +4,8 @@ import AddIcon from "@mui/icons-material/Add";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import type { Community } from "@shared/communities";
+import { chatTitle, type ChatConversation } from "@shared/chat";
+import ChatAvatar from "../../Messages/components/ChatAvatar";
 import { RADIUS } from "../../../../theme";
 import { initialsOf } from "../communityUi";
 
@@ -14,6 +16,13 @@ interface CommunityRailProps {
   directSelected?: boolean;
   /** Something unread in a DM or group chat. */
   directUnread?: boolean;
+  /** DMs and group chats with unread messages, most recent first: each is shown under the DM tile. */
+  unreadChats?: ChatConversation[];
+  /** The signed-in person (to name a chat by the others). */
+  meId?: string;
+  /** The open DM or group chat. */
+  selectedChatId?: string;
+  onOpenChat?: (conversationId: string) => void;
   /** Invites waiting for an answer. */
   inviteCount: number;
   /** Narrower on a phone, where it sits beside the channel list. */
@@ -45,6 +54,10 @@ export default function CommunityRail({
   selectedId,
   directSelected,
   directUnread,
+  unreadChats = [],
+  meId = "",
+  selectedChatId,
+  onOpenChat,
   inviteCount,
   compact,
   onSelect,
@@ -104,23 +117,48 @@ export default function CommunityRail({
             <ChatBubbleOutlineIcon />
           </ButtonBase>
         </Tooltip>
-        {directUnread && (
-          <Box
-            aria-hidden
-            sx={{
-              position: "absolute",
-              top: -2,
-              right: -2,
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              bgcolor: "primary.main",
-              border: 2,
-              borderColor: "background.paper",
-            }}
-          />
-        )}
       </Box>
+      {unreadChats.slice(0, 6).map((chat) => {
+        const title = chatTitle(chat, meId);
+        const open = chat._id === selectedChatId;
+        return (
+          <Box key={chat._id} sx={{ position: "relative" }}>
+            <Tooltip title={title} placement="right">
+              <ButtonBase
+                onClick={() => onOpenChat?.(chat._id)}
+                aria-label={`${title}, ${chat.unread} unread`}
+                aria-current={open ? "true" : undefined}
+                sx={{ borderRadius: "50%", outline: open ? 2 : 0, outlineStyle: "solid", outlineColor: "primary.main" }}
+              >
+                <ChatAvatar conversation={chat} meId={meId} size={size - 6} />
+              </ButtonBase>
+            </Tooltip>
+            <Box
+              aria-hidden
+              sx={{
+                position: "absolute",
+                right: -6,
+                bottom: -4,
+                minWidth: 18,
+                height: 18,
+                px: 0.5,
+                borderRadius: 9,
+                bgcolor: "error.main",
+                color: "error.contrastText",
+                fontSize: 11,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: 2,
+                borderColor: "background.paper",
+              }}
+            >
+              {chat.unread > 99 ? "99+" : chat.unread}
+            </Box>
+          </Box>
+        );
+      })}
       <Divider flexItem sx={{ mx: 2 }} />
 
       {communities.map((community) => {

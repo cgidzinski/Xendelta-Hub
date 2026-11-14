@@ -14,7 +14,8 @@ import {
 } from "../../../hooks/communities/useCommunities";
 import { firstChannel, unreadChannelCount } from "../../../utils/communityChat";
 import { rememberChatPlace } from "../../../utils/chatLastPlace";
-import { useChatUnread } from "../../../hooks/chat/useChat";
+import { useChatUnread, useConversations } from "../../../hooks/chat/useChat";
+import { useAuth } from "../../../contexts/AuthContext";
 import EmptyState from "../../../components/ui/EmptyState";
 import { chatShellStyle } from "../Messages/chatLayout";
 import ConversationList from "../Messages/components/ConversationList";
@@ -61,6 +62,16 @@ export default function Chat() {
 
   useTitle(direct ? "Direct messages" : (community?.name ?? "Communities"));
   const dmUnread = useChatUnread().count > 0;
+  const { user } = useAuth();
+  // Chats with something unread, newest first, shown on the rail under the direct messages tile.
+  const allChats = useConversations().conversations;
+  const unreadChats = useMemo(
+    () =>
+      allChats
+        .filter((c) => c.unread > 0 && !c.muted && c._id !== conversationId)
+        .sort((a, b) => (b.lastMessage?.at ?? "").localeCompare(a.lastMessage?.at ?? "")),
+    [allChats, conversationId],
+  );
   const [newChatOpen, setNewChatOpen] = useState(false);
 
   // The Chat button reopens the last DM or channel.
@@ -126,6 +137,10 @@ export default function Chat() {
       selectedId={direct ? undefined : communityId}
       directSelected={direct}
       directUnread={dmUnread && !direct}
+      unreadChats={unreadChats}
+      meId={user.id}
+      selectedChatId={conversationId}
+      onOpenChat={openConversation}
       inviteCount={inviteCount}
       compact={compact}
       onSelect={openCommunity}
