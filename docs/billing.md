@@ -45,3 +45,42 @@ finishes every pending row older than a minute; the `$ne` guards make each side 
 To move gems, call `transfer({ from, to, amount, kind, idempotencyKey })` with `userAccount(id)`,
 `communityAccount(id)` or `HOUSE`. Pick a key that names the movement (`gem-purchase:<purchaseId>`,
 `voucher:<inventoryItemId>`), so a retry of the same thing can't pay twice.
+
+## Cost centers (`src/shared/billing.ts`)
+
+`COST_CENTERS` lists everything that costs money, each with its unit, rate, who pays and its status. **Every center
+starts free** (`status: "free"`, `costRate: 0`); its discussion issue decides the rate and switches it to `metered`.
+
+| Center | Unit stored | Billed in | Paid by | Discussion |
+|---|---|---|---|---|
+| `storage` | byte-days | GB-month | the person or community | #370 |
+| `downloads` | bytes | GB | the person or community | #370 |
+| `calls` | bytes (SFU and TURN are one cost) | GB | the person or community | #371 |
+| `recipe_scans` | scans | scan | the person | #372 |
+| `public_assets` | byte-days | GB-month | house | #373 |
+| `backups` | byte-days | GB-month | house | #373 |
+| `email` | emails | email | house | #373 |
+
+- **Billed rate** = `costRate × BILLING_MARGIN`. House centers are never billed; they are recorded so the admin report
+  shows what they cost.
+- **Free tier:** `PERSON_FREE_TIER_GEMS` / `COMMUNITY_FREE_TIER_GEMS` a month, taken off the whole bill. No roll-over.
+- **Rounding:** usage is stored in whole units and gems are worked out from them as fractions. A bill's lines show
+  one decimal, rounded up (`formatGems`: "0.4 gems", "less than 0.1 gems"). The amount due is the month's total
+  beyond the free tier, rounded up to a whole gem **once** (`ceilGems`), so the lines still add up to it.
+- Months are calendar months in UTC (`billingMonth`).
+
+## The usage meter (`src/server/billing/usage.ts`)
+
+`recordUsage(account, center, units)` adds to a `UsageRecord` (one per account, month and center, upserted with
+`$inc`). It never throws: a tally that can't be kept must not break the request. `usageFor(account, month)` reads it
+back. Usage is only ever what the server observes, never what a client reports.
+
+**Shadow mode:** while `BILLING_ENFORCED` is not `true` (the default), usage is measured and bills are shown, but
+nothing is charged and nothing is blocked.
+
+### Wiring a cost center
+
+1. Agree its rules and rate in its discussion issue.
+2. Call `recordUsage` where the server observes the usage, with the account that pays.
+3. Call `canSpend(account)` before starting something that costs money (an upload, a call, a scan).
+4. Set its `costRate` and `status: "metered"` in `COST_CENTERS`, and add an `appGuide.ts` line if people should know.
