@@ -47,6 +47,8 @@ const messageSchema = new Schema({
     name: { type: String },
   },
   attachments: [attachmentSchema],
+  // A message forwarded here from another chat: the id of the person who first said it.
+  forwardedFrom: { type: String },
   // A poll (kind "poll"): the question is the body. One option holds the people who chose it.
   poll: {
     multiple: { type: Boolean },

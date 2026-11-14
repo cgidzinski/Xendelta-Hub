@@ -11,6 +11,7 @@ import VoiceMessage from "../../../../components/chat/VoiceMessage";
 import PollCard from "../../../../components/chat/PollCard";
 import { isPollClosed } from "@shared/chat";
 import PollOutlinedIcon from "@mui/icons-material/PollOutlined";
+import ShortcutOutlinedIcon from "@mui/icons-material/ShortcutOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -108,6 +109,7 @@ export interface MessageBubbleProps {
   /** Vote in a poll (an empty list takes the vote back), and close one early. */
   onVote: (m: LocalMessage, optionIds: string[]) => void;
   onClosePoll: (m: LocalMessage) => void;
+  onForward: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -163,6 +165,19 @@ export default function MessageBubble(props: MessageBubbleProps) {
           />
         ))}
       </>
+    ) : null;
+
+  // "Forwarded from Sam", above the message.
+  const forwardedLine =
+    !deleted && m.forwardedFrom ? (
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "flex", alignItems: "center", gap: 0.5, fontStyle: "italic" }}
+      >
+        <ShortcutOutlinedIcon sx={{ fontSize: 14 }} aria-hidden /> Forwarded from{" "}
+        {nameFor(lookup, m.forwardedFrom, meId)}
+      </Typography>
     ) : null;
 
   // A poll replaces the text. Whoever sent it (or may delete it) can close it early.
@@ -317,6 +332,16 @@ export default function MessageBubble(props: MessageBubbleProps) {
             {m.pinnedAt ? "Unpin message" : "Pin message"}
           </MenuItem>
         )}
+        {!isPoll && !deleted && stored && m.kind === "text" && !m.threadRoot && (
+          <MenuItem
+            onClick={() => {
+              props.onForward(m);
+              close();
+            }}
+          >
+            <ShortcutOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> Forward
+          </MenuItem>
+        )}
         {isPoll && !deleted && stored && (mine || canDelete) && m.poll && !isPollClosed(m.poll) && (
           <MenuItem
             onClick={() => {
@@ -438,6 +463,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               <PushPinIcon sx={{ fontSize: 13 }} aria-hidden /> Pinned
             </Typography>
           )}
+          {forwardedLine}
           {m.replyTo && !deleted && (
             <Box
               component="button"
@@ -636,9 +662,18 @@ export default function MessageBubble(props: MessageBubbleProps) {
               minWidth: 0,
             }}
           >
-            {replyTarget && !deleted && (
+            {forwardedLine}
+            {m.replyTo && !deleted && (
               <Box
+                component="button"
+                type="button"
+                onClick={() => props.onJumpTo(m.replyTo!)}
+                aria-label="Go to the message this replies to"
                 sx={{
+                  font: "inherit",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  border: 0,
                   px: 1.5,
                   py: 0.5,
                   borderLeft: 3,
@@ -649,10 +684,13 @@ export default function MessageBubble(props: MessageBubbleProps) {
                 }}
               >
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                  {nameFor(lookup, replyTarget.from, meId)} ·{" "}
-                  {replyTarget.deletedAt
-                    ? "Deleted message"
-                    : plainMessageText(replyTarget.body) || (replyTarget.gif ? "GIF" : "Attachment")}
+                  {replyTarget
+                    ? `${nameFor(lookup, replyTarget.from, meId)} · ${
+                        replyTarget.deletedAt
+                          ? "Deleted message"
+                          : plainMessageText(replyTarget.body) || (replyTarget.gif ? "GIF" : "Attachment")
+                      }`
+                    : "Replying to an earlier message"}
                 </Typography>
               </Box>
             )}

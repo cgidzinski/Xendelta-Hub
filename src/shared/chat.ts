@@ -55,6 +55,8 @@ export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "rename
 
 /** How many messages a chat can have pinned at once. */
 export const CHAT_MAX_PINS = 50;
+/** The most chats one message may be forwarded to at once. */
+export const CHAT_MAX_FORWARD_TARGETS = 5;
 
 export const POLL_QUESTION_MAX = 300;
 export const POLL_OPTION_MAX = 100;
@@ -143,6 +145,8 @@ export interface ChatMessage {
   embeds?: LinkEmbed[];
   /** A GIF sent from the picker. */
   gif?: ChatGif | null;
+  /** Set on a message copied here from another chat: who said it originally. */
+  forwardedFrom?: string | null;
   /** Set on a poll message (kind "poll"). */
   poll?: ChatPoll | null;
   /** Set on a voice message: its one attachment is the audio. */

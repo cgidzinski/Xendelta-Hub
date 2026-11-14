@@ -356,6 +356,15 @@ export function useChatActions() {
     },
   });
 
+  /** Send a copy of a message to other chats. Chats you can't post in are skipped and listed. */
+  const forward = useMutation({
+    mutationFn: (input: { conversationId: string; seq: number; toConversationIds: string[] }) =>
+      api.post<{ sent: string[]; skipped: string[] }>(`${base(input.conversationId)}/messages/${input.seq}/forward`, {
+        toConversationIds: input.toConversationIds,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: chatKeys.conversations() }),
+  });
+
   /** Start a poll in a chat (it arrives as a message through the usual live update). */
   const createPoll = useMutation({
     mutationFn: async (input: {
@@ -423,6 +432,7 @@ export function useChatActions() {
     react,
     removeEmbeds,
     pin,
+    forward,
     createPoll,
     votePoll,
     closePoll,

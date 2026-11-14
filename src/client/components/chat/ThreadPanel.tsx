@@ -114,6 +114,7 @@ export default function ThreadPanel({
     onPin: () => undefined,
     onVote: () => undefined,
     onClosePoll: () => undefined,
+    onForward: () => undefined,
     onJumpTo: () => undefined,
     onCopyLink,
     onRemoveEmbeds: (m: LocalMessage) =>

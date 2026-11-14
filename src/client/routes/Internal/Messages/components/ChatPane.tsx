@@ -25,6 +25,7 @@ import EmptyState from "../../../../components/ui/EmptyState";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import PinsButton from "../../../../components/chat/PinsButton";
 import ChatSearchButton from "../../../../components/chat/ChatSearchButton";
+import ForwardDialog from "../../../../components/chat/ForwardDialog";
 import CreatePollDialog from "../../../../components/chat/CreatePollDialog";
 import ThreadPanel from "../../../../components/chat/ThreadPanel";
 import ThreadsButton from "../../../../components/chat/ThreadsButton";
@@ -88,7 +89,8 @@ export default function ChatPane({
   const allEmoji = useCustomEmoji().emoji;
   const customEmoji = useMemo(() => emojiOfScope(allEmoji, emojiScope), [allEmoji, emojiScope.type, emojiScope.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesQuery = useMessages(conversationId);
-  const { edit, remove, react, markRead, removeEmbeds, pin, createPoll, votePoll, closePoll } = useChatActions();
+  const { edit, remove, react, markRead, removeEmbeds, pin, createPoll, votePoll, closePoll, forward } =
+    useChatActions();
   const send = useSendMessage(conversationId);
   const discard = useDiscardLocalMessage(conversationId);
   const typingNames = useTypingUsers(conversationId);
@@ -97,6 +99,7 @@ export default function ChatPane({
   const [editing, setEditing] = useState<LocalMessage | undefined>();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pollOpen, setPollOpen] = useState(false);
+  const [forwarding, setForwarding] = useState<LocalMessage | null>(null);
   // The thread open beside the chat (the number of the message it hangs off).
   const [openThread, setOpenThread] = useState<number | null>(null);
   const phone = useMediaQuery(useTheme().breakpoints.down("md"));
@@ -244,6 +247,7 @@ export default function ChatPane({
     onJumpTo: jumpTo,
     onCopyLink: copyLink,
     onOpenThread: (m: LocalMessage) => setOpenThread(m.seq),
+    onForward: (m: LocalMessage) => setForwarding(m),
     onVote: (m: LocalMessage, optionIds: string[]) =>
       votePoll.mutate(
         { conversationId, seq: m.seq, optionIds },
@@ -443,6 +447,33 @@ export default function ChatPane({
               You can read this channel but not post in it.
             </Typography>
           </Box>
+        )}
+
+        {forwarding && (
+          <ForwardDialog
+            communityId={communityId}
+            busy={forward.isPending}
+            onClose={() => setForwarding(null)}
+            onForward={(ids) =>
+              forward.mutate(
+                { conversationId, seq: forwarding.seq, toConversationIds: ids },
+                {
+                  onSuccess: ({ sent, skipped }) => {
+                    setForwarding(null);
+                    enqueueSnackbar(
+                      skipped.length > 0
+                        ? `Forwarded to ${sent.length}. You can't post in ${skipped.length}.`
+                        : sent.length === 1
+                          ? "Message forwarded"
+                          : `Message forwarded to ${sent.length} chats`,
+                      { variant: skipped.length > 0 ? "warning" : "success" },
+                    );
+                  },
+                  onError: (e) => fail(e, "Couldn't forward the message"),
+                },
+              )
+            }
+          />
         )}
 
         {pollOpen && (

@@ -165,6 +165,7 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
           : null,
       voice:
         !deleted && m.voice?.duration ? { duration: m.voice.duration, waveform: [...(m.voice.waveform ?? [])] } : null,
+      forwardedFrom: deleted ? null : (m.forwardedFrom ?? null),
       threadRoot: m.threadRoot ?? null,
       thread:
         m.thread?.lastAt && (m.thread.count ?? 0) > 0
@@ -224,6 +225,7 @@ export interface NewMessage {
   replyTo?: number;
   gif?: { url: string; stillUrl: string; width: number; height: number; title: string };
   voice?: { duration: number; waveform: number[] };
+  forwardedFrom?: string;
   poll?: { multiple: boolean; endsAt?: Date; options: Array<{ id: string; text: string }> };
   /** A reply in the thread of this message (kept out of the main history). */
   threadRoot?: number;
@@ -257,6 +259,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     replyTo: input.replyTo,
     gif: input.gif,
     voice: input.voice,
+    forwardedFrom: input.forwardedFrom,
     poll: input.poll && {
       multiple: input.poll.multiple,
       endsAt: input.poll.endsAt,

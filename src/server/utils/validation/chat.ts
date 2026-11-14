@@ -5,6 +5,7 @@ import { isGifHost } from "../../../shared/gif";
 import {
   CHAT_BODY_MAX,
   CHAT_MAX_ATTACHMENTS,
+  CHAT_MAX_FORWARD_TARGETS,
   CHAT_MAX_MEMBERS,
   CHAT_NAME_MAX,
   CHAT_PAGE_SIZE,
@@ -159,3 +160,11 @@ export const createPollSchema = z.object({
 });
 /** The options chosen; empty takes the vote back. */
 export const pollVoteSchema = z.object({ optionIds: z.array(z.string().regex(/^\d{1,2}$/)).max(POLL_MAX_OPTIONS) });
+
+export const forwardMessageSchema = z.object({
+  toConversationIds: z
+    .array(objectIdSchema)
+    .min(1, "Pick a chat")
+    .max(CHAT_MAX_FORWARD_TARGETS)
+    .refine((ids) => new Set(ids).size === ids.length, { message: "Pick each chat once" }),
+});
