@@ -7,7 +7,8 @@ import { loadEmoji, withTone, type EmojiEntry } from "../../../../components/emo
 import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
 import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../../../components/emoji/emojiText";
 import { CustomEmojiImage } from "../../../../components/emoji/EmojiText";
-import { emojiToken, plainEmojiText, type CustomEmoji } from "@shared/emoji";
+import { emojiToken, type CustomEmoji } from "@shared/emoji";
+import { plainMessageText } from "@shared/messageText";
 import CloseIcon from "@mui/icons-material/Close";
 import { CHAT_BODY_MAX } from "@shared/chat";
 import type { LocalMessage } from "../../../../utils/chatCache";
@@ -170,7 +171,7 @@ export default function Composer({
               {editing ? "Editing message" : `Replying to ${nameFor(lookup, replyTo!.from, meId)}`}
             </Typography>
             <Typography variant="body2" color="text.secondary" noWrap>
-              {plainEmojiText((editing ?? replyTo)!.body) || "Attachment"}
+              {plainMessageText((editing ?? replyTo)!.body) || "Attachment"}
             </Typography>
           </Box>
           <IconButton size="small" onClick={onCancelContext} aria-label="Cancel">

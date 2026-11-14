@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatConversation } from "@shared/chat";
-import { plainEmojiText } from "@shared/emoji";
+import { plainMessageText } from "@shared/messageText";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../useSocket";
 import { useRealtime } from "../useRealtime";
@@ -39,7 +39,7 @@ export function useChatRealtime() {
             lastMessage: {
               seq: message.seq,
               from: message.from,
-              preview: plainEmojiText(message.body),
+              preview: plainMessageText(message.body),
               at: message.createdAt,
             },
           }

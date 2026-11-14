@@ -11,8 +11,10 @@ import type { ChatAttachment } from "@shared/chat";
 import { formatFileSize } from "../../../../utils/fileUtils";
 import AddReactionOutlinedIcon from "@mui/icons-material/AddReactionOutlined";
 import EmojiPopover from "../../../../components/emoji/EmojiPopover";
+import { MessageMarkdown } from "../../../../components/chat/MessageMarkdown";
 import { EmojiText, ReactionEmoji, reactionLabel } from "../../../../components/emoji/EmojiText";
 import { customIdOfReaction, customReactionKey, plainEmojiText, type CustomEmoji } from "@shared/emoji";
+import { plainMessageText } from "@shared/messageText";
 import { quickReactions, readRecentEmoji, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
 import type { LocalMessage } from "../../../../utils/chatCache";
 import type { Theme } from "@mui/material/styles";
@@ -253,18 +255,18 @@ export default function MessageBubble(props: MessageBubbleProps) {
               <ReplyIcon sx={{ fontSize: 14 }} />
               <Typography variant="caption" noWrap>
                 Replying to {nameFor(lookup, replyTarget.from, meId)}:{" "}
-                {replyTarget.deletedAt ? "Deleted message" : plainEmojiText(replyTarget.body) || "Attachment"}
+                {replyTarget.deletedAt ? "Deleted message" : plainMessageText(replyTarget.body) || "Attachment"}
               </Typography>
             </Box>
           )}
 
           {(deleted || m.body) && (
             <Typography
+              component="div"
               variant="body2"
               sx={{
                 lineHeight: big ? 1.25 : 1.5,
                 fontSize: big ? 36 : undefined,
-                whiteSpace: "pre-wrap",
                 overflowWrap: "anywhere",
                 opacity: m.status === "sending" ? 0.7 : 1,
                 color: deleted ? "text.secondary" : "text.primary",
@@ -273,8 +275,10 @@ export default function MessageBubble(props: MessageBubbleProps) {
             >
               {deleted ? (
                 "This message was deleted"
+              ) : big ? (
+                <EmojiText body={m.body} byId={customById} size={1.1} />
               ) : (
-                <EmojiText body={m.body} byId={customById} size={big ? 1.1 : undefined} />
+                <MessageMarkdown body={m.body} byId={customById} />
               )}
               {m.editedAt && !deleted && (
                 <Typography component="span" variant="caption" color="text.secondary">
@@ -427,7 +431,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               >
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                   {nameFor(lookup, replyTarget.from, meId)} ·{" "}
-                  {replyTarget.deletedAt ? "Deleted message" : plainEmojiText(replyTarget.body) || "Attachment"}
+                  {replyTarget.deletedAt ? "Deleted message" : plainMessageText(replyTarget.body) || "Attachment"}
                 </Typography>
               </Box>
             )}
@@ -449,16 +453,21 @@ export default function MessageBubble(props: MessageBubbleProps) {
                   borderStyle: "dashed",
                   borderColor: "divider",
                   opacity: m.status === "sending" ? 0.7 : 1,
-                  whiteSpace: "pre-wrap",
                   overflowWrap: "anywhere",
                   fontStyle: deleted ? "italic" : "normal",
                 }}
               >
-                <Typography variant="body2" sx={{ lineHeight: big ? 1.25 : 1.5, fontSize: big ? 40 : undefined }}>
+                <Typography
+                  component="div"
+                  variant="body2"
+                  sx={{ lineHeight: big ? 1.25 : 1.5, fontSize: big ? 40 : undefined }}
+                >
                   {deleted ? (
                     "This message was deleted"
+                  ) : big ? (
+                    <EmojiText body={m.body} byId={customById} size={1.1} />
                   ) : (
-                    <EmojiText body={m.body} byId={customById} size={big ? 1.1 : undefined} />
+                    <MessageMarkdown body={m.body} byId={customById} />
                   )}
                 </Typography>
               </Box>

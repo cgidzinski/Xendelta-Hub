@@ -252,6 +252,26 @@ describe("using custom emoji in messages", () => {
     expect(removed.body.data.message.reactions).toEqual([]);
   });
 
+  it("the preview and an edit's preview are plain words, without the formatting marks", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const community = await makeCommunity(a);
+    await addToCommunity(community._id, b);
+    const [general] = (await request(t.app).get(`/api/communities/${community._id}/channels`).set(as(a))).body.data
+      .channels;
+    const sent = await send(b, general._id, "**bold** and `code` and ||the butler|| see [docs](https://example.com)");
+    expect(sent.status).toBe(200);
+    const preview = async () =>
+      (await request(t.app).get(`/api/communities/${community._id}/channels`).set(as(a))).body.data.channels[0]
+        .lastMessage.preview;
+    expect(await preview()).toBe("bold and code and ▒▒▒ see docs");
+    const edited = await request(t.app)
+      .patch(`/api/chat/conversations/${general._id}/messages/${sent.body.data.message.seq}`)
+      .set(as(b))
+      .send({ body: "now _italic_ and ~~gone~~" });
+    expect(edited.status).toBe(200);
+    expect(await preview()).toBe("now italic and gone");
+  });
+
   it("another community's emoji, a group chat's emoji in a channel, and a removed emoji are all refused", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const mine = await makeCommunity(a);

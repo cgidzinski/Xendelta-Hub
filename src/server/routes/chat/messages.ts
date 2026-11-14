@@ -29,7 +29,8 @@ import {
   sendChatMessageSchema,
 } from "../../utils/validation";
 import { CHAT_REACTIONS_PER_MESSAGE } from "@shared/chat";
-import { customIdOfReaction, plainEmojiText } from "@shared/emoji";
+import { customIdOfReaction } from "@shared/emoji";
+import { plainMessageText } from "@shared/messageText";
 import { CustomEmojiModel } from "../../models/customEmoji";
 
 export function registerMessageRoutes(app: Application) {
@@ -144,7 +145,7 @@ export function registerMessageRoutes(app: Application) {
       message.body = editChatMessageSchema.parse(req.body).body;
       message.editedAt = new Date();
       await message.save();
-      await refreshLastPreview(chat._id, message.seq, plainEmojiText(message.body));
+      await refreshLastPreview(chat._id, message.seq, plainMessageText(message.body));
       await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },
