@@ -94,6 +94,8 @@ export interface Community {
   permissions: CommunityPermission[];
   /** How many of its channels have something the person hasn't read (muted ones don't count). */
   unreadChannels: number;
+  /** How many unread messages in it mention the person (or everyone). */
+  unreadMentions: number;
   createdAt: string;
 }
 
@@ -112,6 +114,8 @@ export interface CommunityChannel {
   lastMessage?: { seq: number; from: string | null; preview: string; at: string } | null;
   /** Messages the caller has not read. */
   unread: number;
+  /** Of those, how many mention the caller (or everyone). */
+  mentions: number;
   muted: boolean;
   /** Who this channel is closed to, or open only to. Empty means it follows the community's roles. */
   overrides: ChannelOverride[];

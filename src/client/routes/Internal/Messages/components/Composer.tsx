@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Box, ButtonBase, IconButton, InputBase, Paper, Typography, useMediaQuery } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined";
@@ -8,6 +8,15 @@ import { readSkinTone, rememberEmoji } from "../../../../components/emoji/emojiP
 import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../../../components/emoji/emojiText";
 import { CustomEmojiImage } from "../../../../components/emoji/EmojiText";
 import { emojiToken, type CustomEmoji } from "@shared/emoji";
+import type { ChatPerson } from "@shared/chat";
+import { Avatar } from "@mui/material";
+import {
+  mentionBeforeCaret,
+  mentionLabel,
+  mentionsToTokens,
+  suggestMentions,
+  tokensToMentions,
+} from "../../../../components/chat/mentionText";
 import { plainMessageText } from "@shared/messageText";
 import CloseIcon from "@mui/icons-material/Close";
 import { CHAT_BODY_MAX } from "@shared/chat";
@@ -30,6 +39,9 @@ interface ComposerProps {
   onSaveEdit: (body: string) => void;
   /** The custom emoji of this community or chat, offered in the picker and when typing `:name`. */
   customEmoji?: CustomEmoji[];
+  /** Who can be mentioned with `@name` here, and whether this person may also use @everyone and @here. */
+  mentionable?: ChatPerson[];
+  canPingAll?: boolean;
   /** The attach button, and the tray of files about to be sent. */
   attach?: ReactNode;
   tray?: ReactNode;
@@ -38,6 +50,7 @@ interface ComposerProps {
 }
 
 const NO_CUSTOM: CustomEmoji[] = [];
+const NO_PEOPLE: ChatPerson[] = [];
 
 /** One line of the `:name` list: what to draw, what it is called, and what to put in the message. */
 interface Suggestion {
@@ -46,6 +59,8 @@ interface Suggestion {
   glyph: ReactNode;
   insert: string;
   remember: boolean;
+  /** Called when it is chosen (a mention remembers who it was). */
+  onChoose?: () => void;
 }
 
 /** The message box: reply and edit bars, an attachment tray, Enter to send (a button on a phone), typing signals. */
@@ -61,11 +76,15 @@ export default function Composer({
   onSend,
   onSaveEdit,
   customEmoji = NO_CUSTOM,
+  mentionable = NO_PEOPLE,
+  canPingAll = false,
   attach,
   tray,
   busy,
 }: ComposerProps) {
   const [text, setText] = useState("");
+  // The people picked with @, by name, so the message can be stored with their ids (see components/chat/mentionText).
+  const [picked, setPicked] = useState<Map<string, string>>(() => new Map());
   const input = useRef<HTMLTextAreaElement>(null);
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   // `:smi` suggests emoji: the list loads the first time a colon-word is typed.
@@ -77,45 +96,90 @@ export default function Composer({
   const { onInput, stop } = useTypingSender(conversationId);
 
   useEffect(() => {
-    if (editing) setText(editing.body);
+    if (editing) {
+      const { text: shown, picked: names } = tokensToMentions(editing.body, (id) => lookup(id)?.username);
+      setText(shown);
+      setPicked(names);
+    }
     input.current?.focus();
-  }, [editing, replyTo]);
-  useEffect(() => setText(""), [conversationId]);
+  }, [editing, replyTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setText("");
+    setPicked(new Map());
+  }, [conversationId]);
 
   useEffect(() => {
     if (!emojiList && /(^|\s):[a-z0-9_+-]{2}/i.test(text)) void loadEmoji().then(setEmojiList, () => undefined);
   }, [text, emojiList]);
-  const match = shortcodeBeforeCaret(text, caret);
+  const emojiMatch = shortcodeBeforeCaret(text, caret);
+  const atMatch = mentionBeforeCaret(text, caret);
+  // Whichever of `@name` and `:name` is being typed.
+  const match = atMatch ?? emojiMatch;
   // The community's or chat's own emoji come first, then the standard ones (once their list has loaded).
-  const suggestions: Suggestion[] = match
-    ? [
-        ...suggestCustom(customEmoji, match.query).map((e) => ({
-          key: `c-${e._id}`,
-          label: `:${e.name}:`,
-          glyph: <CustomEmojiImage emoji={e} size={1} />,
-          insert: emojiToken(e),
+  const mentionSuggestions: Suggestion[] = atMatch
+    ? suggestMentions(mentionable, meId, atMatch.query, canPingAll).map((choice) => {
+        const name = mentionLabel(choice);
+        return {
+          key: `m-${choice.kind === "person" ? choice.person._id : choice.kind}`,
+          label: `@${name}`,
+          glyph:
+            choice.kind === "person" ? (
+              <Avatar src={choice.person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 12 }}>
+                {name[0]?.toUpperCase()}
+              </Avatar>
+            ) : (
+              "@"
+            ),
+          insert: `@${name} `,
           remember: false,
-        })),
-        ...(emojiList ? suggestShortcodes(emojiList, match.query) : []).map((e) => {
-          const emoji = withTone(e, readSkinTone());
-          return { key: `u-${e.order}`, label: `:${e.shortcode}:`, glyph: emoji, insert: emoji, remember: true };
-        }),
-      ].slice(0, 8)
+          onChoose:
+            choice.kind === "person" ? () => setPicked((p) => new Map(p).set(name, choice.person._id)) : undefined,
+        };
+      })
     : [];
+  const emojiSuggestions: Suggestion[] =
+    emojiMatch && !atMatch
+      ? [
+          ...suggestCustom(customEmoji, emojiMatch.query).map((e) => ({
+            key: `c-${e._id}`,
+            label: `:${e.name}:`,
+            glyph: <CustomEmojiImage emoji={e} size={1} />,
+            insert: emojiToken(e),
+            remember: false,
+          })),
+          ...(emojiList ? suggestShortcodes(emojiList, emojiMatch.query) : []).map((e) => {
+            const emoji = withTone(e, readSkinTone());
+            return { key: `u-${e.order}`, label: `:${e.shortcode}:`, glyph: emoji, insert: emoji, remember: true };
+          }),
+        ].slice(0, 8)
+      : [];
+  const suggestions = atMatch ? mentionSuggestions : emojiSuggestions;
   const suggesting = !!match && suggestions.length > 0 && dismissedAt !== match.start;
   useEffect(() => setPick(0), [match?.query]);
+
+  // Where the cursor goes once the new text is on screen. It is set right after the update, before anything else can be
+  // typed, so a key pressed straight after choosing a suggestion lands after it and not before.
+  const pendingCaret = useRef<number | null>(null);
+  const placeCaret = (position: number) => {
+    pendingCaret.current = position;
+    setCaret(position);
+  };
+  useLayoutEffect(() => {
+    const position = pendingCaret.current;
+    const el = input.current;
+    if (position === null || !el) return;
+    pendingCaret.current = null;
+    el.focus();
+    el.setSelectionRange(position, position);
+  }, [text]);
 
   /** Swap the `:partial` for the emoji, and put the cursor after it. */
   const acceptSuggestion = (item: Suggestion) => {
     if (!match) return;
     if (item.remember) rememberEmoji(item.insert);
+    item.onChoose?.();
     setText(text.slice(0, match.start) + item.insert + text.slice(caret));
-    const pos = match.start + item.insert.length;
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(pos, pos);
-      setCaret(pos);
-    });
+    placeCaret(match.start + item.insert.length);
   };
 
   // Put the emoji where the cursor is (replacing any selection), and leave the cursor after it.
@@ -125,10 +189,7 @@ export default function Composer({
     const end = el?.selectionEnd ?? start;
     setText((text.slice(0, start) + emoji + text.slice(end)).slice(0, CHAT_BODY_MAX));
     onInput();
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(start + emoji.length, start + emoji.length);
-    });
+    placeCaret(start + emoji.length);
   };
 
   const canSend = (text.trim().length > 0 || (!editing && hasAttachments)) && !busy;
@@ -136,9 +197,11 @@ export default function Composer({
   const submit = () => {
     if (!canSend) return;
     stop();
-    if (editing) onSaveEdit(text.trim());
-    else onSend(text.trim());
+    const body = mentionsToTokens(text.trim(), picked);
+    if (editing) onSaveEdit(body);
+    else onSend(body);
     setText("");
+    setPicked(new Map());
   };
 
   return (
@@ -252,7 +315,7 @@ export default function Composer({
         <Paper
           variant="outlined"
           role="listbox"
-          aria-label="Emoji suggestions"
+          aria-label={atMatch ? "Mention suggestions" : "Emoji suggestions"}
           sx={{
             position: "absolute",
             left: { xs: 8, md: 24 },

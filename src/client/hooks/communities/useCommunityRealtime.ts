@@ -33,8 +33,10 @@ export function useCommunityRealtime() {
   // A message in a channel moves that channel's unread count, and reading one clears it.
   useRealtime("chat:message", () => {
     queryClient.invalidateQueries({ queryKey: communityKeys.allChannels() });
+    queryClient.invalidateQueries({ queryKey: communityKeys.list() }); // the rail's unread dots and mention counts
   });
   useRealtime("chat:read", () => {
     queryClient.invalidateQueries({ queryKey: communityKeys.allChannels() });
+    queryClient.invalidateQueries({ queryKey: communityKeys.list() });
   });
 }

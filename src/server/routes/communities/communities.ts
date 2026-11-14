@@ -2,7 +2,7 @@ import type { Application, Request, Response } from "express";
 import { authenticateToken } from "../../middleware/auth";
 import { Community } from "../../models/community";
 import { loadPeople } from "../../chat/service";
-import { createChannel, unreadChannelsByCommunity } from "../../communities/channels";
+import { createChannel, unreadSummaryByCommunity } from "../../communities/channels";
 import { hasPermission, isCommunityOwner } from "../../communities/policy";
 import {
   announceCommunity,
@@ -33,9 +33,12 @@ export function registerCommunityRoutes(app: Application) {
     const me = callerId(req);
     const communities = await Community.find({ "members.user_id": me }).sort({ createdAt: -1 }).exec();
     const people = await loadPeople(communities.flatMap((s) => s.members.map((m) => m.user_id)));
-    const unread = await unreadChannelsByCommunity(me);
+    const unread = await unreadSummaryByCommunity(me);
     ok(res, {
-      communities: communities.map((s) => serializeCommunity(s, me, people, unread.get(String(s._id)) ?? 0)),
+      communities: communities.map((s) => {
+        const mine = unread.get(String(s._id));
+        return serializeCommunity(s, me, people, mine?.channels ?? 0, mine?.mentions ?? 0);
+      }),
     });
   });
 

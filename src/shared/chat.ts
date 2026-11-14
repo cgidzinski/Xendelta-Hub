@@ -78,6 +78,10 @@ export interface ChatMessage {
   reactions: ChatReaction[];
   /** Previews of the links in the body, added a moment after sending. */
   embeds?: LinkEmbed[];
+  /** The people the body mentions (who can read it), and whether it pings everyone or whoever is online. */
+  mentions?: string[];
+  mentionsEveryone?: boolean;
+  mentionsHere?: boolean;
   createdAt: string;
   editedAt?: string | null;
   deletedAt?: string | null;

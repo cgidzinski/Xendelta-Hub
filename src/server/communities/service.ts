@@ -4,7 +4,7 @@ import { AppError } from "../utils/http";
 import { loadPeople } from "../chat/service";
 import { realtime } from "../realtime";
 import { deleteEmojiOf } from "../emoji/cleanup";
-import { deleteChannelsOf, unreadChannelsByCommunity } from "./channels";
+import { deleteChannelsOf, unreadSummaryByCommunity } from "./channels";
 import { communityPermissions } from "./policy";
 import type { ChatPerson } from "@shared/chat";
 import type { Community as CommunityWire } from "@shared/communities";
@@ -26,6 +26,7 @@ export function serializeCommunity(
   viewerId: string,
   people: Map<string, ChatPerson>,
   unreadChannels = 0,
+  unreadMentions = 0,
 ): CommunityWire {
   const owner = community.members.find((m) => m.role === "owner");
   return {
@@ -52,6 +53,7 @@ export function serializeCommunity(
       })),
     permissions: [...communityPermissions(community, viewerId)],
     unreadChannels,
+    unreadMentions,
     createdAt: iso(community.createdAt),
   };
 }
@@ -60,9 +62,10 @@ export function serializeCommunity(
 export async function presentCommunity(community: CommunityDocument, viewerId: string): Promise<CommunityWire> {
   const [people, unread] = await Promise.all([
     loadPeople(communityMemberIds(community)),
-    unreadChannelsByCommunity(viewerId),
+    unreadSummaryByCommunity(viewerId),
   ]);
-  return serializeCommunity(community, viewerId, people, unread.get(String(community._id)) ?? 0);
+  const mine = unread.get(String(community._id));
+  return serializeCommunity(community, viewerId, people, mine?.channels ?? 0, mine?.mentions ?? 0);
 }
 
 /** Tell everyone in the community (and anyone just removed from it) that it changed, so their lists refetch. */

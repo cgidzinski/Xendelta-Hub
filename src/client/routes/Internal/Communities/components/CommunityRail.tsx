@@ -94,7 +94,13 @@ export default function CommunityRail({
             <Tooltip title={community.name} placement="right">
               <ButtonBase
                 onClick={() => onSelect(community._id)}
-                aria-label={unread ? `${community.name}, unread` : community.name}
+                aria-label={
+                  community.unreadMentions > 0 && !selected
+                    ? `${community.name}, ${community.unreadMentions} unread ${community.unreadMentions === 1 ? "mention" : "mentions"}`
+                    : unread
+                      ? `${community.name}, unread`
+                      : community.name
+                }
                 aria-current={selected ? "true" : undefined}
                 sx={{
                   ...tile(size),
@@ -109,6 +115,29 @@ export default function CommunityRail({
                 {initialsOf(community.name)}
               </ButtonBase>
             </Tooltip>
+            {community.unreadMentions > 0 && !selected && (
+              <Box
+                aria-hidden
+                sx={{
+                  position: "absolute",
+                  right: -6,
+                  top: -6,
+                  minWidth: 18,
+                  height: 18,
+                  px: 0.5,
+                  borderRadius: 9,
+                  bgcolor: "error.main",
+                  color: "error.contrastText",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {community.unreadMentions > 99 ? "99+" : community.unreadMentions}
+              </Box>
+            )}
             {unread && (
               <Box
                 sx={{

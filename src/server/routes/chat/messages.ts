@@ -6,6 +6,7 @@ import { generateSignedUrl } from "../../utils/gcsUtils";
 import { authenticateToken } from "../../middleware/auth";
 import { audienceOf, type ChatContext } from "../../chat/access";
 import { refreshEmbeds } from "../../chat/embeds";
+import { resolveMentions } from "../../chat/mentions";
 import { canDeleteChatMessage, canEditMessage, canPostChat } from "../../chat/policy";
 import {
   loadChatContext,
@@ -102,7 +103,14 @@ export function registerMessageRoutes(app: Application) {
       }
 
       const user = await loadCaller(req);
-      const message = await appendMessage(chat, { from: me, body, replyTo, attachments, clientId });
+      const message = await appendMessage(chat, {
+        from: me,
+        body,
+        replyTo,
+        attachments,
+        clientId,
+        mentions: resolveMentions(context, me, body),
+      });
       await publishMessage(context, message, user.username ?? "Someone");
       // Previews of any links arrive a moment later, as an update; nobody waits for them.
       void refreshEmbeds(context, message._id);
@@ -146,6 +154,11 @@ export function registerMessageRoutes(app: Application) {
         throw new AppError(403, "You can only edit your own messages");
 
       message.body = editChatMessageSchema.parse(req.body).body;
+      // Editing can change who is mentioned, but it doesn't notify anyone again.
+      const mentions = resolveMentions(context, me, message.body);
+      message.set("mentions", mentions.userIds);
+      message.mentionsEveryone = mentions.everyone;
+      message.mentionsHere = mentions.here;
       message.editedAt = new Date();
       await message.save();
       await refreshLastPreview(chat._id, message.seq, plainMessageText(message.body));

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Avatar, Box, Button, IconButton, Link, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ReplyIcon from "@mui/icons-material/Reply";
@@ -18,7 +18,7 @@ import { customIdOfReaction, customReactionKey, plainEmojiText, type CustomEmoji
 import { plainMessageText } from "@shared/messageText";
 import { quickReactions, readRecentEmoji, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
 import type { LocalMessage } from "../../../../utils/chatCache";
-import type { Theme } from "@mui/material/styles";
+import { alpha, type Theme } from "@mui/material/styles";
 import { roleTextColor } from "../../Communities/communityUi";
 import { clock, nameFor, reactedBy, type PeopleLookup } from "../chatUi";
 import { isEmojiOnly } from "../../../../components/emoji/emojiText";
@@ -143,6 +143,19 @@ export default function MessageBubble(props: MessageBubbleProps) {
       </>
     ) : null;
 
+  // Who the message names, as the server accepted it: only they get a chip, and the sender isn't one of them.
+  const mentionContext = useMemo(
+    () => ({
+      nameOf: (id: string) => lookup(id)?.username,
+      ids: new Set(m.mentions ?? []),
+      everyone: !!m.mentionsEveryone,
+      here: !!m.mentionsHere,
+    }),
+    [lookup, m.mentions, m.mentionsEveryone, m.mentionsHere],
+  );
+  // A message that names you (or everyone) is marked, so it isn't missed in a busy channel.
+  const toMe = !mine && !deleted && ((m.mentions ?? []).includes(meId) || !!m.mentionsEveryone);
+
   const menu = (
     <>
       <EmojiPopover
@@ -225,7 +238,22 @@ export default function MessageBubble(props: MessageBubbleProps) {
   if (layout === "flat") {
     const name = sender?.username ?? "Former member";
     return (
-      <Box className="chat-message" sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", position: "relative" }}>
+      <Box
+        className="chat-message"
+        data-mentions-me={toMe ? "true" : undefined}
+        sx={{
+          display: "flex",
+          gap: 1.5,
+          alignItems: "flex-start",
+          position: "relative",
+          ...(toMe && {
+            bgcolor: (t: Theme) => alpha(t.palette.primary.main, 0.1),
+            boxShadow: (t: Theme) =>
+              `-12px 0 0 0 ${alpha(t.palette.primary.main, 0.1)}, inset 3px 0 0 -0px ${t.palette.primary.main}`,
+            borderRadius: 1,
+          }),
+        }}
+      >
         <Avatar
           src={showSender ? sender?.avatar || undefined : undefined}
           sx={{ width: 36, height: 36, visibility: showSender ? "visible" : "hidden" }}
@@ -294,7 +322,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
               ) : big ? (
                 <EmojiText body={m.body} byId={customById} size={1.1} />
               ) : (
-                <MessageMarkdown body={m.body} byId={customById} />
+                <MessageMarkdown body={m.body} byId={customById} mentions={mentionContext} meId={meId} />
               )}
               {m.editedAt && !deleted && (
                 <Typography component="span" variant="caption" color="text.secondary">
@@ -485,7 +513,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
                   ) : big ? (
                     <EmojiText body={m.body} byId={customById} size={1.1} />
                   ) : (
-                    <MessageMarkdown body={m.body} byId={customById} />
+                    <MessageMarkdown body={m.body} byId={customById} mentions={mentionContext} meId={meId} />
                   )}
                 </Typography>
               </Box>

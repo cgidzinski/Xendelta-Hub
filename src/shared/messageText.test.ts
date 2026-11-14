@@ -30,4 +30,10 @@ describe("plainMessageText", () => {
   it("writes custom emoji as :name: and strips the marks", () => {
     expect(plainMessageText(`**hi** <:party:${ID}>`)).toBe("hi :party:");
   });
+
+  it("writes a mention as @name, or @someone when the name isn't known", () => {
+    const id = "64b64b64b64b64b64b64b64b";
+    expect(plainMessageText(`hey <@${id}>, **look**`, new Map([[id, "Sam"]]))).toBe("hey @Sam, look");
+    expect(plainMessageText(`hey <@${id}>`)).toBe("hey @someone");
+  });
 });

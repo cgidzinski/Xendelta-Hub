@@ -41,6 +41,8 @@ interface ChatPaneProps {
   canPost?: boolean;
   /** A sender's role label and colour, for a channel. */
   senderMeta?: (userId: string | null) => { color: string; role: string } | undefined;
+  /** May this person use @everyone and @here here? */
+  canPingAll?: boolean;
   /** Whose custom emoji are used here: the community's for a channel, the chat's own otherwise. */
   emojiScope: CustomEmojiScope;
   emptyDescription: string;
@@ -59,6 +61,7 @@ export default function ChatPane({
   canModerate,
   canPost = true,
   senderMeta,
+  canPingAll = false,
   emojiScope,
   emptyDescription,
 }: ChatPaneProps) {
@@ -203,6 +206,8 @@ export default function ChatPane({
           title={title}
           lookup={lookup}
           customEmoji={customEmoji}
+          mentionable={conversation.people}
+          canPingAll={canPingAll}
           meId={user.id}
           replyTo={replyTo}
           editing={editing}

@@ -48,6 +48,11 @@ const messageSchema = new Schema({
   },
   attachments: [attachmentSchema],
   embeds: [embedSchema],
+  // Who the body mentions (people who could read the chat when it was sent), and whether it pings everyone or whoever is
+  // online. See chat/mentions.ts.
+  mentions: [{ type: String }],
+  mentionsEveryone: { type: Boolean, default: false },
+  mentionsHere: { type: Boolean, default: false },
   // The sender took the previews off, so editing the message doesn't bring them back.
   embedsOff: { type: Boolean, default: false },
   replyTo: { type: Number }, // the seq of the message replied to

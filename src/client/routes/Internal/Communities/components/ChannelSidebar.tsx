@@ -30,7 +30,13 @@ function Row({ channel, selected, onSelect }: { channel: CommunityChannel; selec
     <ButtonBase
       onClick={onSelect}
       aria-current={selected ? "true" : undefined}
-      aria-label={unread ? `${channel.name}, ${channel.unread} unread` : channel.name}
+      aria-label={
+        channel.mentions > 0
+          ? `${channel.name}, ${channel.mentions} ${channel.mentions === 1 ? "mention" : "mentions"}`
+          : unread
+            ? `${channel.name}, ${channel.unread} unread`
+            : channel.name
+      }
       sx={{
         display: "flex",
         justifyContent: "flex-start",
@@ -55,6 +61,27 @@ function Row({ channel, selected, onSelect }: { channel: CommunityChannel; selec
         {channel.name}
       </Box>
       {channel.muted && <VolumeOffIcon sx={{ fontSize: 16 }} aria-label="Muted" />}
+      {channel.mentions > 0 && !selected && (
+        <Box
+          component="span"
+          aria-hidden
+          sx={{
+            minWidth: 20,
+            height: 20,
+            px: 0.75,
+            borderRadius: 10,
+            bgcolor: "error.main",
+            color: "error.contrastText",
+            fontSize: 11,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          @{channel.mentions > 99 ? "99+" : channel.mentions}
+        </Box>
+      )}
       {unread && !selected && (
         <Box
           component="span"

@@ -43,6 +43,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
+      "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
       "See a short preview of a web page when someone shares its link, and take it off your own message if you prefer.",
       "Format a message with bold, italic, strikethrough, code, quotes and lists, or hide a spoiler until it is clicked.",
       "Pick any emoji for a message or a reaction, with search, skin tones and the ones you used lately.",
@@ -64,6 +65,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       {
         text: "Try Communities to chat with a group in separate channels. Use the invite button to ask people to join.",
         link: "/internal/communities",
+      },
+      {
+        text: "Try typing @ and a name in a message to mention someone. They are told even if they muted the chat.",
+        link: "/internal/messages",
       },
       {
         text: "Try putting ** around words to make them bold, or || around words to hide them as a spoiler.",

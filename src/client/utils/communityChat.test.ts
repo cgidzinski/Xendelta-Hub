@@ -22,6 +22,7 @@ const community: Community = {
   ],
   permissions: ["readMessages"],
   unreadChannels: 0,
+  unreadMentions: 0,
   createdAt: "2026-01-01T00:00:00Z",
 };
 const channel = (over: Partial<CommunityChannel>): CommunityChannel => ({
@@ -34,6 +35,7 @@ const channel = (over: Partial<CommunityChannel>): CommunityChannel => ({
   seq: 10,
   lastMessage: null,
   unread: 0,
+  mentions: 0,
   muted: false,
   overrides: [],
   permissions: ["readMessages", "sendMessages"],

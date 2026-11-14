@@ -5,7 +5,16 @@ import { Box, Link } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import type { CustomEmoji } from "@shared/emoji";
 import { CustomEmojiImage } from "../emoji/EmojiText";
-import { EMOJI_SCHEME, SPOILER_SCHEME, emojiIdFromHref, isSpoilerHref, prepareMarkdown } from "./markdownPrep";
+import {
+  EMOJI_SCHEME,
+  MENTION_SCHEME,
+  SPOILER_SCHEME,
+  emojiIdFromHref,
+  isSpoilerHref,
+  mentionFromHref,
+  prepareMarkdown,
+  type MentionContext,
+} from "./markdownPrep";
 
 // A chat message's Markdown: bold, italic, strikethrough, code, quotes, lists, links, and ||spoilers||. It is drawn as
 // React elements, never as an HTML string, and raw HTML is dropped, so a message can't inject markup or script. Headings,
@@ -43,7 +52,29 @@ const sx: SxProps<Theme> = {
 };
 
 const urlTransform = (url: string) =>
-  url.startsWith(EMOJI_SCHEME) || url.startsWith(SPOILER_SCHEME) ? url : defaultUrlTransform(url);
+  url.startsWith(EMOJI_SCHEME) || url.startsWith(SPOILER_SCHEME) || url.startsWith(MENTION_SCHEME)
+    ? url
+    : defaultUrlTransform(url);
+
+/** `@name`: set apart from the words around it, and stronger when it is you (or everyone) who is named. */
+function MentionChip({ children, toMe }: { children: React.ReactNode; toMe: boolean }) {
+  return (
+    <Box
+      component="span"
+      sx={{
+        px: 0.5,
+        borderRadius: 0.5,
+        fontWeight: 500,
+        color: toMe ? "primary.main" : "inherit",
+        bgcolor: toMe
+          ? "color-mix(in srgb, currentColor 18%, transparent)"
+          : "color-mix(in srgb, currentColor 10%, transparent)",
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
 
 /** Words hidden until someone clicks (or presses Enter on) them. */
 function Spoiler({ children }: { children: React.ReactNode }) {
@@ -77,7 +108,18 @@ function Spoiler({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MessageMarkdownView({ body, byId }: { body: string; byId: Map<string, CustomEmoji> }) {
+function MessageMarkdownView({
+  body,
+  byId,
+  mentions,
+  meId,
+}: {
+  body: string;
+  byId: Map<string, CustomEmoji>;
+  mentions?: MentionContext;
+  /** Who is reading, so a mention of them stands out. */
+  meId?: string;
+}) {
   return (
     <Box component="div" sx={sx}>
       <ReactMarkdown
@@ -95,6 +137,13 @@ function MessageMarkdownView({ body, byId }: { body: string; byId: Map<string, C
               return emoji ? <CustomEmojiImage emoji={emoji} /> : <>{children}</>;
             }
             if (isSpoilerHref(href)) return <Spoiler>{children}</Spoiler>;
+            const target = mentionFromHref(href);
+            if (target !== null)
+              return (
+                <MentionChip toMe={target === meId || target === "everyone" || target === "here"}>
+                  {children}
+                </MentionChip>
+              );
             return (
               <Link href={href} target="_blank" rel="noopener noreferrer nofollow" onClick={(e) => e.stopPropagation()}>
                 {children}
@@ -103,7 +152,7 @@ function MessageMarkdownView({ body, byId }: { body: string; byId: Map<string, C
           },
         }}
       >
-        {prepareMarkdown(body)}
+        {prepareMarkdown(body, mentions)}
       </ReactMarkdown>
     </Box>
   );

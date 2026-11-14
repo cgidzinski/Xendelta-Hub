@@ -1,4 +1,5 @@
 import { plainEmojiText } from "./emoji";
+import { MENTION_TOKEN } from "./mentions";
 
 // A message may use a little Markdown (bold, italic, strikethrough, code, quotes, spoilers, links). This is the other
 // direction: the same message as plain words, for the one-line preview in a list, a push notification, or a quote.
@@ -24,5 +25,9 @@ export function stripMarkdown(body: string): string {
   );
 }
 
-/** The body as one plain line of words: custom emoji as `:name:`, and no formatting marks. */
-export const plainMessageText = (body: string) => stripMarkdown(plainEmojiText(body));
+/**
+ * The body as one plain line of words: custom emoji as `:name:`, a mention as `@name` (`@someone` when the name isn't
+ * known), and no formatting marks.
+ */
+export const plainMessageText = (body: string, names?: ReadonlyMap<string, string>) =>
+  stripMarkdown(plainEmojiText(body).replace(MENTION_TOKEN, (_m, id: string) => `@${names?.get(id) ?? "someone"}`));

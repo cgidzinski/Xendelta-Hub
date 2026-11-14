@@ -12,6 +12,7 @@ import { ChannelState } from "../models/channelState";
 import { unreadChannelCount } from "../communities/channels";
 import { audienceOf, resolveChatAccess, type ChatContext } from "./access";
 import { canPostChat } from "./policy";
+import { mentionNames } from "./mentions";
 import { plainMessageText } from "@shared/messageText";
 import { deleteEmojiOf } from "../emoji/cleanup";
 import {
@@ -143,6 +144,9 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
           })),
       replyTo: m.replyTo ?? null,
       reactions: deleted ? [] : m.reactions.map((r) => ({ emoji: r.emoji, userIds: [...r.userIds] })),
+      mentions: deleted ? [] : [...(m.mentions ?? [])],
+      mentionsEveryone: deleted ? false : !!m.mentionsEveryone,
+      mentionsHere: deleted ? false : !!m.mentionsHere,
       embeds: deleted
         ? []
         : m.embeds.map((e) => ({
@@ -165,8 +169,13 @@ export async function serializeMessage(message: MessageDocument): Promise<ChatMe
 
 // ---------- sending ----------
 
-function previewOf(rawBody: string, attachmentCount: number, attachmentName?: string): string {
-  const body = plainMessageText(rawBody);
+function previewOf(
+  rawBody: string,
+  attachmentCount: number,
+  attachmentName?: string,
+  names?: ReadonlyMap<string, string>,
+): string {
+  const body = plainMessageText(rawBody, names);
   const text = body.trim().replace(/\s+/g, " ");
   if (text) return text.length > CHAT_PREVIEW_MAX ? text.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd() + "…" : text;
   if (attachmentCount === 1) return attachmentName ? `Sent ${attachmentName}` : "Sent a file";
@@ -181,6 +190,8 @@ export interface NewMessage {
   attachments?: Array<{ fileId: string; name: string; mimeType: string; size: number }>;
   replyTo?: number;
   clientId?: string;
+  /** Who the body mentions (see chat/mentions.ts resolveMentions). */
+  mentions?: { userIds: string[]; everyone: boolean; here: boolean };
 }
 
 /**
@@ -207,12 +218,15 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     attachments,
     replyTo: input.replyTo,
     clientId: input.clientId,
+    mentions: input.mentions?.userIds ?? [],
+    mentionsEveryone: input.mentions?.everyone ?? false,
+    mentionsHere: input.mentions?.here ?? false,
   });
 
   const preview =
     input.kind === "system"
       ? (input.body ?? "")
-      : previewOf(input.body ?? "", attachments.length, attachments[0]?.name);
+      : previewOf(input.body ?? "", attachments.length, attachments[0]?.name, await mentionNames(input.body ?? ""));
   // Only the newest message may set the last-message summary, so two sends racing can't leave an older one in it.
   await Conversation.updateOne(
     { _id: chat._id, $or: [{ "lastMessage.seq": { $lt: seq } }, { "lastMessage.seq": { $exists: false } }] },
@@ -269,7 +283,12 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
   realtime.toUsers(audience, "chat:message", { conversationId, message: wire });
 
   if (message.kind !== "text" || !message.from) return;
-  const body = previewOf(message.body ?? "", message.attachments.length, message.attachments[0]?.name);
+  const body = previewOf(
+    message.body ?? "",
+    message.attachments.length,
+    message.attachments[0]?.name,
+    await mentionNames(message.body ?? ""),
+  );
   const now = Date.now();
 
   // Who has silenced it: a chat member's own setting, or a channel's ChannelState.
@@ -288,10 +307,20 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
     title = chat.name ? `${senderName} in ${chat.name}` : senderName;
     url = `/internal/messages/${conversationId}`;
   }
+  // Someone named in the message is told even if they have muted the chat; a message to everyone says so.
+  const named = new Set(message.mentions ?? []);
+  const where = community ? `#${chat.name ?? "channel"} · ${community.name}` : chat.name ? chat.name : "a chat";
   for (const userId of audience) {
-    if (userId === message.from || silenced.has(userId) || realtime.isOnline(userId)) continue;
+    if (userId === message.from || realtime.isOnline(userId)) continue;
+    const mentioned = named.has(userId);
+    if (silenced.has(userId) && !mentioned) continue;
+    const heading = mentioned
+      ? `${senderName} mentioned you in ${where}`
+      : message.mentionsEveryone
+        ? `${senderName} pinged everyone in ${where}`
+        : title;
     // One notification per conversation on the lock screen (the tag), and never a failed push breaking a send.
-    void sendPushToUser(userId, { title, body, url, tag: `chat-${conversationId}` }).catch(() => undefined);
+    void sendPushToUser(userId, { title: heading, body, url, tag: `chat-${conversationId}` }).catch(() => undefined);
   }
 }
 

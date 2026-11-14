@@ -110,6 +110,7 @@ export default function ChannelView({
       canPost={channel.permissions.includes("sendMessages")}
       canModerate={channel.permissions.includes("manageMessages")}
       senderMeta={(id) => senderMetaFor(community, id)}
+      canPingAll={channel.permissions.includes("mentionEveryone")}
       emojiScope={{ type: "community", id: community._id }}
       emptyDescription={`This is the start of #${channel.name}.`}
     />
