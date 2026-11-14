@@ -149,3 +149,37 @@ describe("searching messages", () => {
     expect((await request(t.app).get("/api/chat/search").query({ q: "x" })).status).toBe(401);
   });
 });
+
+describe("history around a message", () => {
+  it("returns a window with the target in the middle, and says whether more lies either way", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await dm(a, b);
+    for (let i = 1; i <= 30; i++) await send(a, chat, `line ${i}`);
+    const around = (seq: number, limit = 10) =>
+      request(t.app).get(`/api/chat/conversations/${chat}/messages`).set(as(b)).query({ around: seq, limit });
+
+    const mid = await around(15);
+    expect(mid.status, JSON.stringify(mid.body)).toBe(200);
+    const seqs = (mid.body.data.messages as any[]).map((m) => m.seq);
+    expect(seqs).toEqual([20, 19, 18, 17, 16, 15, 14, 13, 12, 11]);
+    expect(mid.body.data).toMatchObject({ hasMore: true, hasNewer: true });
+
+    const near = await around(29);
+    expect((near.body.data.messages as any[])[0].seq).toBe(30);
+    expect(near.body.data.hasNewer).toBe(false);
+
+    const start = await around(2);
+    expect((start.body.data.messages as any[]).at(-1).seq).toBe(1);
+    expect(start.body.data.hasMore).toBe(false);
+  });
+
+  it("is limited to chats you can read, and can't be mixed with before", async () => {
+    const [a, b, outsider] = [await createUser(), await createUser(), await createUser()];
+    const chat = await dm(a, b);
+    await send(a, chat, "hello");
+    const url = `/api/chat/conversations/${chat}/messages`;
+    expect((await request(t.app).get(url).set(as(outsider)).query({ around: 1 })).status).toBe(404);
+    expect((await request(t.app).get(url).set(as(a)).query({ around: 1, before: 5 })).status).toBe(400);
+    expect((await request(t.app).get(url).set(as(a)).query({ around: 0 })).status).toBe(400);
+  });
+});

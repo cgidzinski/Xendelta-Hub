@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, IconButton, Typography } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import type { ChatAttachment, ChatConversation } from "@shared/chat";
 import type { CustomEmojiScope } from "@shared/emoji";
@@ -8,6 +10,7 @@ import { api } from "../../../../config/api";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
   newClientId,
+  useAroundMessages,
   useChatActions,
   useDiscardLocalMessage,
   useMessages,
@@ -16,6 +19,7 @@ import {
 import { useTypingUsers } from "../../../../hooks/chat/useTyping";
 import { useChatAttachments } from "../../../../hooks/chat/useChatAttachments";
 import { chronological, peopleInHistory, type LocalMessage } from "../../../../utils/chatCache";
+import { firstUnreadSeq, jumpTarget, messageLink, unreadDivider } from "../../../../utils/chatJump";
 import EmptyState from "../../../../components/ui/EmptyState";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import PinsButton from "../../../../components/chat/PinsButton";
@@ -90,15 +94,72 @@ export default function ChatPane({
   const [pickerOpen, setPickerOpen] = useState(false);
   const files = useChatAttachments(conversationId);
 
-  const messages = useMemo(() => chronological(messagesQuery.data), [messagesQuery.data]);
-  const history = useMemo(() => peopleInHistory(messagesQuery.data), [messagesQuery.data]);
+  // Jumping: a link, a reply's quote or "first unread" asks for a message that may not be loaded. If it is, scroll to it;
+  // if not, show a window of history around it (kept apart from the live history) until the person goes back to the present.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [windowSeq, setWindowSeq] = useState<number | null>(null);
+  const [focus, setFocus] = useState<{ seq: number; token: number } | null>(null);
+  const around = useAroundMessages(conversationId, windowSeq);
+  const windowReady = windowSeq !== null && !!around.data;
+  const liveMessages = useMemo(() => chronological(messagesQuery.data), [messagesQuery.data]);
+  const windowMessages = useMemo(() => chronological(around.data?.data), [around.data]);
+  const messages = windowReady ? windowMessages : liveMessages;
+  const history = useMemo(
+    () => peopleInHistory(windowReady ? around.data!.data : messagesQuery.data),
+    [windowReady, around.data, messagesQuery.data],
+  );
   const lookup = usePeopleLookup(conversation, history);
 
   // Switching chats clears what was half done.
   useEffect(() => {
     setReplyTo(undefined);
     setEditing(undefined);
+    setWindowSeq(null);
+    setFocus(null);
   }, [conversationId]);
+
+  const jumpTo = useCallback(
+    (seq: number) => {
+      const loaded = windowSeq === null ? liveMessages : windowMessages;
+      if (loaded.some((m) => m.seq === seq)) setFocus({ seq, token: Date.now() });
+      else {
+        setWindowSeq(seq);
+        setFocus({ seq, token: Date.now() });
+      }
+    },
+    [windowSeq, liveMessages, windowMessages],
+  );
+  const jumpToPresent = useCallback(() => {
+    setWindowSeq(null);
+    setFocus(null);
+  }, []);
+
+  // A link to a message (?seq=) opens at that message. The number is taken out of the address so reloading stays put.
+  const linked = jumpTarget(location.search);
+  useEffect(() => {
+    if (linked === null) return;
+    jumpTo(linked);
+    const rest = new URLSearchParams(location.search);
+    rest.delete("seq");
+    navigate({ pathname: location.pathname, search: rest.toString() }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked, conversationId]);
+
+  // Where "new messages" starts is fixed when the chat opens: reading it marks it read, but the divider stays for now.
+  const [unread, setUnread] = useState<{ from: number; count: number } | null>(null);
+  const [barDismissed, setBarDismissed] = useState(false);
+  const unreadFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (unreadFor.current === conversationId) return;
+    unreadFor.current = conversationId;
+    const mine = conversation.members.find((m) => m.user_id === user.id)?.lastReadSeq ?? 0;
+    const from = firstUnreadSeq(mine, conversation.unread);
+    setUnread(from === null ? null : { from, count: conversation.unread });
+    setBarDismissed(false);
+  }, [conversationId, conversation, user.id]);
+  const hasOlder = windowReady ? !!around.data?.data.pages[0]?.hasMore : !!messagesQuery.hasNextPage;
+  const divider = unread ? unreadDivider(messages, unread.from, hasOlder) : null;
 
   // Opening a chat, or a message arriving while it is open, marks it read.
   const readUpTo = useRef(0);
@@ -162,6 +223,15 @@ export default function ChatPane({
         { conversationId, seq: m.seq, on },
         { onError: (e) => fail(e, on ? "Couldn't pin the message" : "Couldn't unpin the message") },
       ),
+    onJumpTo: jumpTo,
+    onCopyLink: async (m: LocalMessage) => {
+      try {
+        await navigator.clipboard.writeText(messageLink(window.location.origin, location.pathname, m.seq));
+        enqueueSnackbar("Message link copied", { variant: "success" });
+      } catch {
+        enqueueSnackbar("Couldn't copy the link", { variant: "error" });
+      }
+    },
     onRemoveEmbeds: (m: LocalMessage) =>
       removeEmbeds.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't remove the preview") }),
     onRetry: (m: LocalMessage) =>
@@ -201,6 +271,38 @@ export default function ChatPane({
         ),
       })}
 
+      {unread && !barDismissed && !windowReady && divider && divider.state !== "none" && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            px: 2,
+            py: 0.5,
+            flexShrink: 0,
+            bgcolor: "primary.main",
+            color: "primary.contrastText",
+          }}
+        >
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            {unread.count} new {unread.count === 1 ? "message" : "messages"}
+          </Typography>
+          <Button
+            size="small"
+            color="inherit"
+            onClick={() => {
+              jumpTo(unread.from);
+              setBarDismissed(true);
+            }}
+          >
+            Jump to first unread
+          </Button>
+          <IconButton size="small" color="inherit" aria-label="Dismiss" onClick={() => setBarDismissed(true)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
+
       {messagesQuery.isLoading ? (
         <Box sx={{ flex: 1 }} aria-busy />
       ) : messages.length === 0 ? (
@@ -213,8 +315,12 @@ export default function ChatPane({
           messages={messages}
           lookup={lookup}
           meId={user.id}
-          hasMore={!!messagesQuery.hasNextPage}
+          hasMore={!windowReady && !!messagesQuery.hasNextPage}
           loadingMore={messagesQuery.isFetchingNextPage}
+          focus={focus}
+          unreadFromSeq={divider?.state === "at" ? divider.seq : undefined}
+          windowMode={windowSeq !== null}
+          onJumpToPresent={jumpToPresent}
           onLoadMore={() => messagesQuery.fetchNextPage()}
           typingNames={typingNames}
           customEmoji={customEmoji}

@@ -50,6 +50,11 @@ export function useChatRealtime() {
 
   useRealtime("chat:message_update", ({ conversationId, message }) => {
     queryClient.setQueryData<MessagesData>(chatKeys.messages(conversationId), (data) => patchMessage(data, message));
+    // A window opened by a jump gets the same edit, delete, reaction or pin.
+    queryClient.setQueriesData<{ data: MessagesData; hasNewer: boolean }>(
+      { queryKey: chatKeys.around(conversationId) },
+      (w) => (w ? { ...w, data: patchMessage(w.data, message) ?? w.data } : w),
+    );
     queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) });
     queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
   });
@@ -59,6 +64,7 @@ export function useChatRealtime() {
     if (removed) {
       queryClient.removeQueries({ queryKey: chatKeys.conversation(conversationId) });
       queryClient.removeQueries({ queryKey: chatKeys.messages(conversationId) });
+      queryClient.removeQueries({ queryKey: chatKeys.around(conversationId) });
     } else {
       queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) });
     }

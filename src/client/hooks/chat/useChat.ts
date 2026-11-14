@@ -77,6 +77,28 @@ export function useMessages(conversationId: string | undefined) {
   });
 }
 
+/**
+ * A window of history around one message, for a jump to a link, a reply or the first unread. It is kept apart from the
+ * live history so the live pages never have a hole in them. `hasNewer` says the window stops short of the present.
+ */
+export function useAroundMessages(conversationId: string | undefined, seq: number | null) {
+  const { isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: chatKeys.around(conversationId ?? "", seq ?? 0),
+    queryFn: async () => {
+      const page = await api.get<MessagesPage & { hasNewer?: boolean }>(
+        `/api/chat/conversations/${conversationId}/messages`,
+        { params: { around: seq } },
+      );
+      const data: MessagesData = { pages: [page], pageParams: [undefined] };
+      return { data, hasNewer: !!page.hasNewer };
+    },
+    enabled: isAuthenticated && !!conversationId && seq !== null,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
 /** The messages pinned in a chat (loaded when the pins panel is open), newest pin first. */
 export function usePins(conversationId: string | undefined, enabled: boolean) {
   const { isAuthenticated } = useAuth();

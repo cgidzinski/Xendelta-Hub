@@ -5,6 +5,7 @@ import ReplyIcon from "@mui/icons-material/Reply";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import LinkIcon from "@mui/icons-material/Link";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -94,6 +95,9 @@ export interface MessageBubbleProps {
   onReact: (m: LocalMessage, emoji: string) => void;
   onRemoveEmbeds: (m: LocalMessage) => void;
   onPin: (m: LocalMessage, on: boolean) => void;
+  /** Scroll to a message (a reply's original). */
+  onJumpTo: (seq: number) => void;
+  onCopyLink: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -220,6 +224,14 @@ export default function MessageBubble(props: MessageBubbleProps) {
             {m.pinnedAt ? "Unpin message" : "Pin message"}
           </MenuItem>
         )}
+        <MenuItem
+          onClick={() => {
+            props.onCopyLink(m);
+            close();
+          }}
+        >
+          <LinkIcon fontSize="small" sx={{ mr: 1.5 }} /> Copy message link
+        </MenuItem>
         {m.body && (
           <MenuItem
             onClick={() => {
@@ -323,12 +335,35 @@ export default function MessageBubble(props: MessageBubbleProps) {
               <PushPinIcon sx={{ fontSize: 13 }} aria-hidden /> Pinned
             </Typography>
           )}
-          {replyTarget && !deleted && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "text.secondary", mb: 0.25 }}>
+          {m.replyTo && !deleted && (
+            <Box
+              component="button"
+              type="button"
+              onClick={() => props.onJumpTo(m.replyTo!)}
+              aria-label="Go to the message this replies to"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                color: "text.secondary",
+                mb: 0.25,
+                p: 0,
+                border: 0,
+                bgcolor: "transparent",
+                font: "inherit",
+                textAlign: "left",
+                maxWidth: "100%",
+                cursor: "pointer",
+                "&:hover": { color: "text.primary" },
+              }}
+            >
               <ReplyIcon sx={{ fontSize: 14 }} />
               <Typography variant="caption" noWrap>
-                Replying to {nameFor(lookup, replyTarget.from, meId)}:{" "}
-                {replyTarget.deletedAt ? "Deleted message" : plainMessageText(replyTarget.body) || "Attachment"}
+                {replyTarget
+                  ? `Replying to ${nameFor(lookup, replyTarget.from, meId)}: ${
+                      replyTarget.deletedAt ? "Deleted message" : plainMessageText(replyTarget.body) || "Attachment"
+                    }`
+                  : "Replying to an earlier message"}
               </Typography>
             </Box>
           )}

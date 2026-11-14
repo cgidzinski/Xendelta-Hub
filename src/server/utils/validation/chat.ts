@@ -42,11 +42,15 @@ export const chatListQuerySchema = z.object({
     .optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
-export const chatMessagesQuerySchema = z.object({
-  /** Messages older than this number. Omit for the newest. */
-  before: seq.optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(CHAT_PAGE_SIZE),
-});
+export const chatMessagesQuerySchema = z
+  .object({
+    /** Messages older than this number. Omit for the newest. */
+    before: seq.optional(),
+    /** A window of history centred on this message (a jump to a link, a reply or the first unread). */
+    around: seq.optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(CHAT_PAGE_SIZE),
+  })
+  .refine((v) => !(v.before && v.around), { message: "Ask for before or around, not both" });
 
 export const createChatSchema = z.object({
   userIds: z

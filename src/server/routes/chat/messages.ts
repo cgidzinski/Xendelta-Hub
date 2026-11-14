@@ -1,5 +1,5 @@
 import type { Application, Request, Response } from "express";
-import { Message } from "../../models/message";
+import { Message, type MessageDocument } from "../../models/message";
 import { Conversation } from "../../models/conversation";
 import { XenDriveFile } from "../../models/xendriveFile";
 import { generateSignedUrl } from "../../utils/gcsUtils";
@@ -62,12 +62,32 @@ export function registerMessageRoutes(app: Application) {
     async (req: Request, res: Response) => {
       const context = await loadChatContext(req.params.conversationId as string, callerId(req));
       const { chat } = context;
-      const { before, limit } = chatMessagesQuerySchema.parse(req.query);
-      const found = await Message.find({ conversationId: chat._id, ...(before ? { seq: { $lt: before } } : {}) })
-        .sort({ seq: -1 })
-        .limit(limit + 1)
-        .exec();
-      const page = found.slice(0, limit);
+      const { before, around, limit } = chatMessagesQuerySchema.parse(req.query);
+      let page: MessageDocument[];
+      let hasMore: boolean;
+      let hasNewer: boolean | undefined;
+      if (around) {
+        // A window with the target in the middle: half the page older (and the target), half newer.
+        const half = Math.max(1, Math.floor(limit / 2));
+        const older = await Message.find({ conversationId: chat._id, seq: { $lte: around } })
+          .sort({ seq: -1 })
+          .limit(half + 1)
+          .exec();
+        const newer = await Message.find({ conversationId: chat._id, seq: { $gt: around } })
+          .sort({ seq: 1 })
+          .limit(half + 1)
+          .exec();
+        page = [...newer.slice(0, half).reverse(), ...older.slice(0, half)];
+        hasMore = older.length > half;
+        hasNewer = newer.length > half;
+      } else {
+        const found = await Message.find({ conversationId: chat._id, ...(before ? { seq: { $lt: before } } : {}) })
+          .sort({ seq: -1 })
+          .limit(limit + 1)
+          .exec();
+        page = found.slice(0, limit);
+        hasMore = found.length > limit;
+      }
       // Senders who have since left the chat are not in the conversation's people, so they come with the page.
       const people = await loadPeople(page.map((m) => m.from).filter((id): id is string => !!id));
       res.json({
@@ -75,7 +95,8 @@ export function registerMessageRoutes(app: Application) {
         message: "",
         data: {
           messages: await serializeMessages(page),
-          hasMore: found.length > limit,
+          hasMore,
+          ...(hasNewer === undefined ? {} : { hasNewer }),
           people: [...people.values()],
         },
       });
