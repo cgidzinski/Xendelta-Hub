@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Box, Button, Drawer, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import { useTitle } from "../../../hooks/useTitle";
 import { useVisualViewport } from "../../../hooks/useVisualViewport";
 import {
@@ -12,27 +13,38 @@ import {
   useMyCommunityInvites,
 } from "../../../hooks/communities/useCommunities";
 import { firstChannel, unreadChannelCount } from "../../../utils/communityChat";
+import { rememberChatPlace } from "../../../utils/chatLastPlace";
+import { useChatUnread, useConversations } from "../../../hooks/chat/useChat";
+import { useAuth } from "../../../contexts/AuthContext";
 import EmptyState from "../../../components/ui/EmptyState";
 import { chatShellStyle } from "../Messages/chatLayout";
-import ChannelSidebar from "./components/ChannelSidebar";
-import CommunityInvitesDialog from "./components/CommunityInvitesDialog";
-import CommunityRail from "./components/CommunityRail";
-import CreateChannelDialog from "./components/CreateChannelDialog";
-import CreateCommunityDialog from "./components/CreateCommunityDialog";
-import MembersPanel from "./components/MembersPanel";
-import InvitePeopleDialog from "./settings/InvitePeopleDialog";
-import ChannelView from "./ChannelView";
-import { communityPath } from "./communityUi";
+import ConversationList from "../Messages/components/ConversationList";
+import NewChatDialog from "../Messages/components/NewChatDialog";
+import Thread from "../Messages/Thread";
+import ChannelSidebar from "../Communities/components/ChannelSidebar";
+import CommunityInvitesDialog from "../Communities/components/CommunityInvitesDialog";
+import CommunityRail from "../Communities/components/CommunityRail";
+import CreateChannelDialog from "../Communities/components/CreateChannelDialog";
+import CreateCommunityDialog from "../Communities/components/CreateCommunityDialog";
+import MembersPanel from "../Communities/components/MembersPanel";
+import InvitePeopleDialog from "../Communities/settings/InvitePeopleDialog";
+import ChannelView from "../Communities/ChannelView";
+import { communityPath } from "../Communities/communityUi";
 
 /**
- * Communities: the rail of communities, the open community's channels, one channel and its people. On a computer they
- * sit side by side; on a phone one shows at a time, and the rail and channels share a screen (the "drawer").
- *   /internal/communities                        the first community
- *   /internal/communities/:communityId           its channels (a phone) or its first channel (a computer)
- *   /internal/communities/:communityId/:channelId  a channel
+ * Chat: the rail (direct messages, then each community), the list beside it (your DMs and group chats, or the open
+ * community's channels), and the open conversation or channel with its people. On a computer they sit side by side; on a
+ * phone one shows at a time, and the rail and list share a screen (the "drawer").
+ *   /internal/messages                              direct messages: the list
+ *   /internal/messages/:conversationId              a DM or group chat
+ *   /internal/communities                           the first community
+ *   /internal/communities/:communityId              its channels (a phone) or its first channel (a computer)
+ *   /internal/communities/:communityId/:channelId   a channel
  */
-export default function Communities() {
-  const { communityId, channelId } = useParams();
+export default function Chat() {
+  const { communityId, channelId, conversationId } = useParams();
+  const { pathname } = useLocation();
+  const direct = pathname.startsWith("/internal/messages");
   const navigate = useNavigate();
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("md"));
@@ -48,7 +60,22 @@ export default function Communities() {
   const channels = useMemo(() => channelsQuery.data ?? [], [channelsQuery.data]);
   const channel = channels.find((c) => c._id === channelId);
 
-  useTitle(community?.name ?? "Communities");
+  useTitle(direct ? "Direct messages" : (community?.name ?? "Communities"));
+  const dmUnread = useChatUnread().count > 0;
+  const { user } = useAuth();
+  // Chats with something unread, newest first, shown on the rail under the direct messages tile.
+  const allChats = useConversations().conversations;
+  const unreadChats = useMemo(
+    () =>
+      allChats
+        .filter((c) => c.unread > 0 && !c.muted && c._id !== conversationId)
+        .sort((a, b) => (b.lastMessage?.at ?? "").localeCompare(a.lastMessage?.at ?? "")),
+    [allChats, conversationId],
+  );
+  const [newChatOpen, setNewChatOpen] = useState(false);
+
+  // The Chat button reopens the last DM or channel.
+  useEffect(() => rememberChatPlace(pathname), [pathname]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [invitesOpen, setInvitesOpen] = useState(false);
@@ -72,39 +99,48 @@ export default function Communities() {
 
   // No community in the address: open the first one.
   useEffect(() => {
-    if (!communityId && communities.length > 0) navigate(communityPath(communities[0]!._id), { replace: true });
-  }, [communityId, communities, navigate]);
+    if (!direct && !communityId && communities.length > 0)
+      navigate(communityPath(communities[0]!._id), { replace: true });
+  }, [direct, communityId, communities, navigate]);
 
   // A community you are no longer in (left, removed, deleted): back to the list.
   useEffect(() => {
-    if (communityId && communitiesQuery.isSuccess && !communities.some((c) => c._id === communityId)) {
+    if (!direct && communityId && communitiesQuery.isSuccess && !communities.some((c) => c._id === communityId)) {
       navigate("/internal/communities", { replace: true });
     }
-  }, [communityId, communitiesQuery.isSuccess, communities, navigate]);
+  }, [direct, communityId, communitiesQuery.isSuccess, communities, navigate]);
 
   // A computer shows a channel next to the list, so a community opens on its first unread (else first) channel.
   useEffect(() => {
-    if (phone || !communityId || channelId || !channelsQuery.isSuccess) return;
+    if (direct || phone || !communityId || channelId || !channelsQuery.isSuccess) return;
     const first = firstChannel(channels);
     if (first) navigate(communityPath(communityId, first._id), { replace: true });
-  }, [phone, communityId, channelId, channelsQuery.isSuccess, channels, navigate]);
+  }, [direct, phone, communityId, channelId, channelsQuery.isSuccess, channels, navigate]);
 
   // A channel that has gone (deleted, or closed to you): back to the community.
   useEffect(() => {
-    if (communityId && channelId && channelsQuery.isSuccess && !channel) {
+    if (!direct && communityId && channelId && channelsQuery.isSuccess && !channel) {
       navigate(communityPath(communityId), { replace: true });
     }
-  }, [communityId, channelId, channelsQuery.isSuccess, channel, navigate]);
+  }, [direct, communityId, channelId, channelsQuery.isSuccess, channel, navigate]);
 
   const openCommunity = (id: string) => navigate(communityPath(id));
   const openChannel = (id: string) => navigate(communityPath(communityId, id));
-  const showDrawerScreen = phone && !channelId;
+  const openConversation = (id: string) => navigate(`/internal/messages/${id}`);
+  const open = direct ? !!conversationId : !!channelId;
+  const showDrawerScreen = phone && !open;
   const otherUnread = unreadChannelCount(channels.filter((c) => c._id !== channelId)) > 0;
 
   const rail = (compact: boolean) => (
     <CommunityRail
       communities={communities}
-      selectedId={communityId}
+      selectedId={direct ? undefined : communityId}
+      directSelected={direct}
+      directUnread={dmUnread && !direct}
+      unreadChats={unreadChats}
+      meId={user.id}
+      selectedChatId={conversationId}
+      onOpenChat={openConversation}
       inviteCount={inviteCount}
       compact={compact}
       onSelect={openCommunity}
@@ -114,7 +150,12 @@ export default function Communities() {
     />
   );
 
-  const sidebar = community ? (
+  const directSidebar = (
+    <ConversationList selectedId={conversationId} onSelect={openConversation} onNewChat={() => setNewChatOpen(true)} />
+  );
+  const sidebar = direct ? (
+    directSidebar
+  ) : community ? (
     <ChannelSidebar
       community={community}
       channels={channels}
@@ -127,10 +168,24 @@ export default function Communities() {
   ) : null;
 
   const noCommunities = communitiesQuery.isSuccess && communities.length === 0;
-  const unavailable = !!communityId && communityQuery.isError;
+  const unavailable = !direct && !!communityId && communityQuery.isError;
 
   let main;
-  if (noCommunities) {
+  if (direct) {
+    main = conversationId ? (
+      <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+        <Thread key={conversationId} conversationId={conversationId} onBack={() => navigate("/internal/messages")} />
+      </Box>
+    ) : (
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <EmptyState
+          icon={<ChatBubbleOutlineIcon />}
+          title="Select a chat"
+          description="Pick a conversation, or start a new one."
+        />
+      </Box>
+    );
+  } else if (noCommunities) {
     main = (
       <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", p: 2 }}>
         <EmptyState
@@ -190,7 +245,7 @@ export default function Communities() {
         display: "flex",
         ...chatShellStyle({
           phone,
-          inThread: phone && !!channelId,
+          inThread: phone && open,
           viewport,
           landscape,
           zIndex: theme.zIndex.modal - 10,
@@ -210,7 +265,7 @@ export default function Communities() {
           {!phone && sidebar && (
             <Box
               sx={{
-                width: 240,
+                width: direct ? 340 : 240,
                 flexShrink: 0,
                 display: "flex",
                 flexDirection: "column",
@@ -224,7 +279,7 @@ export default function Communities() {
             </Box>
           )}
           <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", bgcolor: "background.paper" }}>{main}</Box>
-          {!phone && community && channel && membersOpen && (
+          {!phone && !direct && community && channel && membersOpen && (
             <Box
               sx={{
                 width: 220,
@@ -241,7 +296,7 @@ export default function Communities() {
         </>
       )}
 
-      {phone && community && (
+      {phone && !direct && community && (
         <Drawer
           anchor="right"
           open={membersDrawer}
@@ -252,6 +307,7 @@ export default function Communities() {
         </Drawer>
       )}
 
+      <NewChatDialog open={newChatOpen} onClose={() => setNewChatOpen(false)} onOpened={openConversation} />
       <CreateCommunityDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}

@@ -20,8 +20,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
-import MailIcon from "@mui/icons-material/Mail";
-import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
+import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PersonIcon from "@mui/icons-material/Person";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
@@ -97,7 +96,7 @@ export default function BaseNavBar({
   footerNavItems = [],
   showNotifications = false,
   showMessages = false,
-  messagesPath = "/internal/messages",
+  messagesPath = "/internal/chat",
   drawerHeaderPath = "/internal",
   drawerHeaderText = BRAND_NAME,
   showProfile = true,
@@ -349,22 +348,12 @@ export default function BaseNavBar({
               {showMessages && (
                 <IconButton
                   color="inherit"
-                  aria-label="Communities"
-                  sx={{ width: 50, height: 50 }}
-                  onClick={() => navigate("/internal/communities")}
-                >
-                  <GroupsOutlinedIcon />
-                </IconButton>
-              )}
-              {showMessages && (
-                <IconButton
-                  color="inherit"
-                  aria-label="Messages"
+                  aria-label="Chat"
                   sx={{ width: 50, height: 50 }}
                   onClick={() => navigate(messagesPath)}
                 >
                   <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
-                    <MailIcon />
+                    <ChatBubbleOutlineIcon />
                   </Badge>
                 </IconButton>
               )}

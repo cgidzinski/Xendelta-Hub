@@ -4,12 +4,25 @@ import AddIcon from "@mui/icons-material/Add";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import type { Community } from "@shared/communities";
+import { chatTitle, type ChatConversation } from "@shared/chat";
+import ChatAvatar from "../../Messages/components/ChatAvatar";
 import { RADIUS } from "../../../../theme";
 import { initialsOf } from "../communityUi";
 
 interface CommunityRailProps {
   communities: Community[];
   selectedId?: string;
+  /** Direct messages are open. */
+  directSelected?: boolean;
+  /** Something unread in a DM or group chat. */
+  directUnread?: boolean;
+  /** DMs and group chats with unread messages, most recent first: each is shown under the DM tile. */
+  unreadChats?: ChatConversation[];
+  /** The signed-in person (to name a chat by the others). */
+  meId?: string;
+  /** The open DM or group chat. */
+  selectedChatId?: string;
+  onOpenChat?: (conversationId: string) => void;
   /** Invites waiting for an answer. */
   inviteCount: number;
   /** Narrower on a phone, where it sits beside the channel list. */
@@ -39,6 +52,12 @@ const tile = (size: number) =>
 export default function CommunityRail({
   communities,
   selectedId,
+  directSelected,
+  directUnread,
+  unreadChats = [],
+  meId = "",
+  selectedChatId,
+  onOpenChat,
   inviteCount,
   compact,
   onSelect,
@@ -65,11 +84,81 @@ export default function CommunityRail({
         overflowY: "auto",
       }}
     >
-      <Tooltip title="Messages" placement="right">
-        <ButtonBase aria-label="Messages" onClick={onMessages} sx={tile(size)}>
-          <ChatBubbleOutlineIcon />
-        </ButtonBase>
-      </Tooltip>
+      <Box sx={{ position: "relative" }}>
+        {directSelected && (
+          <Box
+            sx={{
+              position: "absolute",
+              left: compact ? -10 : -12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 4,
+              height: 28,
+              borderRadius: "0 4px 4px 0",
+              bgcolor: "primary.main",
+            }}
+          />
+        )}
+        <Tooltip title="Direct messages" placement="right">
+          <ButtonBase
+            aria-label={directUnread ? "Direct messages, unread" : "Direct messages"}
+            aria-current={directSelected ? "true" : undefined}
+            onClick={onMessages}
+            sx={{
+              ...tile(size),
+              ...(directSelected && {
+                color: "primary.main",
+                borderColor: "primary.main",
+                bgcolor: (t: Theme) => alpha(t.palette.primary.main, 0.14),
+              }),
+              ...(directUnread && { color: "text.primary" }),
+            }}
+          >
+            <ChatBubbleOutlineIcon />
+          </ButtonBase>
+        </Tooltip>
+      </Box>
+      {unreadChats.slice(0, 6).map((chat) => {
+        const title = chatTitle(chat, meId);
+        const open = chat._id === selectedChatId;
+        return (
+          <Box key={chat._id} sx={{ position: "relative" }}>
+            <Tooltip title={title} placement="right">
+              <ButtonBase
+                onClick={() => onOpenChat?.(chat._id)}
+                aria-label={`${title}, ${chat.unread} unread`}
+                aria-current={open ? "true" : undefined}
+                sx={{ borderRadius: "50%", outline: open ? 2 : 0, outlineStyle: "solid", outlineColor: "primary.main" }}
+              >
+                <ChatAvatar conversation={chat} meId={meId} size={size - 6} />
+              </ButtonBase>
+            </Tooltip>
+            <Box
+              aria-hidden
+              sx={{
+                position: "absolute",
+                right: -6,
+                bottom: -4,
+                minWidth: 18,
+                height: 18,
+                px: 0.5,
+                borderRadius: 9,
+                bgcolor: "error.main",
+                color: "error.contrastText",
+                fontSize: 11,
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: 2,
+                borderColor: "background.paper",
+              }}
+            >
+              {chat.unread > 99 ? "99+" : chat.unread}
+            </Box>
+          </Box>
+        );
+      })}
       <Divider flexItem sx={{ mx: 2 }} />
 
       {communities.map((community) => {
