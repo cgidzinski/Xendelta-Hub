@@ -122,7 +122,7 @@ module.exports = function (app: Application) {
 
       // Check it really is a picture (the declared type can lie), and shrink it. A moving picture stays moving.
       let processed: Buffer;
-      let animated = false;
+      let animated: boolean;
       try {
         const source = sharp(req.file.buffer, { animated: true });
         animated = ((await source.metadata()).pages ?? 1) > 1;
