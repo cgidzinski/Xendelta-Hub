@@ -45,6 +45,8 @@ interface CallContextType {
   toggleMute: () => void;
   toggleCamera: () => Promise<void>;
   toggleScreen: () => Promise<void>;
+  /** Use another microphone or camera (by device id) for the rest of the call. */
+  switchDevice: (kind: "audio" | "video", deviceId: string) => Promise<void>;
 }
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
@@ -86,6 +88,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const activeRef = useRef(active);
   activeRef.current = active;
   const session = useRef<CallSession | null>(null);
+  const lostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retries = useRef(0);
+  const rejoin = useRef<(() => void) | null>(null);
   const conversation = useRef<string | null>(null);
   const names = useRef<{ audio?: string; video?: string; screen?: string }>({});
   const pulled = useRef(new Set<string>());
@@ -101,6 +106,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   /** Let go of everything: the connection, the devices, the streams. */
   const cleanup = useCallback(() => {
+    if (lostTimer.current) clearTimeout(lostTimer.current);
+    lostTimer.current = null;
     session.current?.close();
     session.current = null;
     for (const s of [mic, camera, screen]) {
@@ -241,9 +248,25 @@ export function CallProvider({ children }: { children: ReactNode }) {
               return next;
             }),
           onConnectionState: (state) => {
-            if (state === "failed" || state === "disconnected")
+            if (state === "connected") {
+              if (lostTimer.current) clearTimeout(lostTimer.current);
+              lostTimer.current = null;
+              retries.current = 0;
+              setActive((a) => (a ? { ...a, connection: "ok" } : a));
+            }
+            if (state === "failed" || state === "disconnected") {
               setActive((a) => (a ? { ...a, connection: "lost" } : a));
-            if (state === "connected") setActive((a) => (a ? { ...a, connection: "ok" } : a));
+              // A short drop mends itself. If it doesn't, join the call again with a fresh connection (a few tries).
+              if (!lostTimer.current) {
+                lostTimer.current = setTimeout(
+                  () => {
+                    lostTimer.current = null;
+                    rejoin.current?.();
+                  },
+                  state === "failed" ? 3000 : 8000,
+                );
+              }
+            }
           },
         });
         session.current = s;
@@ -289,6 +312,63 @@ export function CallProvider({ children }: { children: ReactNode }) {
     setIncoming(null);
     if (id) await api.post(`/api/calls/${id}/decline`).catch(() => undefined);
   }, [incoming]);
+
+  // The connection dropped and did not come back: start over in the same call, keeping mute and camera as they were.
+  rejoin.current = () => {
+    const id = conversation.current;
+    if (!id) return;
+    if (retries.current >= 3) {
+      enqueueSnackbar("Couldn't reconnect to the call", { variant: "error" });
+      void leave(true);
+      return;
+    }
+    retries.current += 1;
+    const wasMuted = muted;
+    const video = cameraOn;
+    const tries = retries.current;
+    enqueueSnackbar("Reconnecting to the call…", { variant: "warning" });
+    cleanup();
+    void join(id, video).then(() => {
+      retries.current = tries;
+      if (wasMuted) toggleMute();
+    });
+  };
+
+  const switchDevice = useCallback(
+    async (kind: "audio" | "video", deviceId: string) => {
+      const id = conversation.current;
+      const s = session.current;
+      if (!id || !s) return;
+      try {
+        if (kind === "audio") {
+          const next = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
+          const track = next.getAudioTracks()[0];
+          track.enabled = !muted;
+          await s.replace("audio", track);
+          mic.current?.getTracks().forEach((t) => t.stop());
+          mic.current = next;
+        } else {
+          // The camera may be off: remember the choice by turning it on with the new device.
+          const next = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } });
+          const track = next.getVideoTracks()[0];
+          if (!cameraOn) {
+            next.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          await s.replace("video", track);
+          camera.current?.getTracks().forEach((t) => t.stop());
+          camera.current = next;
+        }
+        setLocal((l) => ({
+          ...l,
+          stream: new MediaStream([...(mic.current?.getTracks() ?? []), ...(camera.current?.getTracks() ?? [])]),
+        }));
+      } catch (e) {
+        enqueueSnackbar(errorText(e, "Couldn't switch to that device"), { variant: "error" });
+      }
+    },
+    [cameraOn, enqueueSnackbar, muted],
+  );
 
   const toggleMute = useCallback(() => {
     const id = conversation.current;
@@ -388,6 +468,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       toggleMute,
       toggleCamera,
       toggleScreen,
+      switchDevice,
     }),
     [
       status.data,

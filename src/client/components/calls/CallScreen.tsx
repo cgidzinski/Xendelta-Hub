@@ -15,6 +15,7 @@ import { useChatCall } from "../../hooks/calls/useChatCall";
 import { useSpeaking } from "../../hooks/calls/useSpeaking";
 import { callClock, canShareScreen, gridColumns } from "../../utils/callMedia";
 import CallTile from "./CallTile";
+import DeviceMenu from "./DeviceMenu";
 
 /** Plays everyone else's sound. Hidden: the pictures are drawn by the tiles, which stay muted so nothing plays twice. */
 export function RemoteAudio() {
@@ -124,6 +125,7 @@ export default function CallScreen() {
               Connection lost, trying to reconnect…
             </Typography>
           )}
+          <DeviceMenu />
           <Tooltip title="Back to the chat">
             <IconButton onClick={() => call.setExpanded(false)} aria-label="Minimise call">
               <CloseFullscreenIcon />

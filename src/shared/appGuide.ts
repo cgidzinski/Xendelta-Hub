@@ -44,7 +44,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
-      "Start a voice or video call with anyone in a chat or group, and share your screen during it.",
+      "Start a voice or video call with anyone in a chat or group, and share your screen during it, and pick which microphone or camera to use.",
       "Add voice channels to a community: drop in to talk (with video or a shared screen), see who is there, and keep talking while you browse the app.",
       "Forward a message to other chats, with the original sender named.",
       "Create a poll with up to ten options, let people vote live, and close it when you are done.",
