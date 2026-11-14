@@ -8,6 +8,7 @@ import { CHAT_NAME_MAX, type ChatConversation } from "@shared/chat";
 import { useChatActions } from "../../../../hooks/chat/useChat";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import SectionLabel from "../../../../components/ui/SectionLabel";
+import CustomEmojiManager from "../../../../components/emoji/CustomEmojiManager";
 import UserName from "../../../../components/user/UserName";
 import PersonLink from "../../../../components/user/PersonLink";
 
@@ -137,6 +138,17 @@ export default function DetailsPanel({ conversation, meId, onAddPeople, onLeft }
             You&apos;re the owner: you can remove people or hand the chat over.
           </Typography>
         )}
+      </Box>
+
+      <Box>
+        <SectionLabel>Emoji</SectionLabel>
+        <Box sx={{ mt: 0.5 }}>
+          <CustomEmojiManager
+            scope={{ type: "chat", id: conversation._id }}
+            canAdd
+            canChange={(createdBy) => createdBy === meId || iAmOwner}
+          />
+        </Box>
       </Box>
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: "auto" }}>

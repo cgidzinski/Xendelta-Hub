@@ -1,6 +1,9 @@
 import { registerConversationRoutes } from "./conversations";
 import { registerMessageRoutes } from "./messages";
 import { registerMemberRoutes } from "./members";
+import { registerThreadRoutes } from "./threads";
+import { registerPollRoutes } from "./polls";
+import { registerForwardRoutes } from "./forward";
 
 // Chat: every conversation is a group, and a conversation with two members is a DM (see models/conversation.ts).
 // The rules live in chat/policy.ts and the shared pieces in chat/service.ts. Routes here only validate, call those
@@ -9,4 +12,7 @@ module.exports = function (app: any) {
   registerConversationRoutes(app);
   registerMessageRoutes(app);
   registerMemberRoutes(app);
+  registerThreadRoutes(app);
+  registerPollRoutes(app);
+  registerForwardRoutes(app);
 };

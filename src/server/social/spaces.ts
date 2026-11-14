@@ -5,6 +5,7 @@ import { XenNotebook } from "../models/xenNote";
 import { XenKitchenBook } from "../models/xenKitchen";
 import { XenRoutine } from "../models/xenRoutine";
 import { Conversation } from "../models/conversation";
+import { Community } from "../models/community";
 
 // Every kind of shared thing, in one list. "Who do I know?" and "what do we share?" are answered by asking each of
 // these who is in it, so a person you have never been added alongside is a stranger and nothing needs maintaining.
@@ -59,6 +60,14 @@ export const SPACE_SOURCES: SpaceSource[] = [
     model: XenRoutine,
     memberPath: "members.user_id",
     link: () => "/internal/xenroutine",
+    listOnProfile: true,
+  },
+  {
+    app: "community",
+    label: "Communities",
+    model: Community,
+    memberPath: "members.user_id",
+    link: (id) => `/internal/communities/${id}`,
     listOnProfile: true,
   },
   {

@@ -5,6 +5,8 @@
 // Events go to a person's own room (`user:<id>`), never to a room a client joins itself, so nobody can listen in on a
 // conversation by guessing its id.
 import type { ChatMessage } from "./chat";
+import type { PresenceEntry } from "./presence";
+import type { CallState } from "./calls";
 
 export interface RealtimeEvents {
   // Chat
@@ -16,9 +18,24 @@ export interface RealtimeEvents {
   "chat:read": { conversationId: string; userId: string; seq: number };
   "chat:typing": { conversationId: string; userId: string; username: string; typing: boolean };
 
-  // Calls: names reserved for the calls feature, not sent yet.
-  "call:started": { conversationId: string; startedBy: string };
-  "call:ended": { conversationId: string };
+  /** Someone who shares a chat or community with you came online, went idle or away, or changed their status line. */
+  "presence:update": PresenceEntry;
+
+  // Communities: the community changed (renamed, members, roles). `removed` means you are out of it or it was deleted.
+  "community:updated": { communityId: string; removed?: boolean };
+
+  /** A community's or group chat's custom emoji changed. `scopeId` is the community or conversation. */
+  "emoji:changed": { scopeId: string };
+  /** You were invited to a community, or an invite to you was taken back. Your list of invites changed. */
+  "community:invite": { communityId: string };
+  /** A channel in the community was added, changed, reordered or deleted. */
+  "community:channels": { communityId: string };
+
+  // Calls. `call` is null once the call has ended. A person who may join is told when it starts, and everyone in the chat
+  // hears of each change, so "Join call" and the participant list stay right.
+  "call:state": { conversationId: string; call: CallState | null };
+  /** Someone is calling you: it rings until you join or decline, or it times out. */
+  "call:ring": { conversationId: string; fromUserId: string; fromName: string; video: boolean; ringing: boolean };
 
   // Notifications
   "notification:new": { notification: unknown };
@@ -40,4 +57,6 @@ export type RealtimeEvent = keyof RealtimeEvents;
 /** Events a client may send to the server. */
 export interface ClientEvents {
   "chat:typing": { conversationId: string; typing: boolean };
+  /** This tab has been left alone (idle) or is in use again. */
+  "presence:activity": { idle: boolean };
 }

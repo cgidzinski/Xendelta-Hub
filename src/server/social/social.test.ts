@@ -69,6 +69,7 @@ describe("policy", () => {
   it("knows every app with members, each with an indexed member path", () => {
     expect(SPACE_SOURCES.map((s) => s.app).sort()).toEqual([
       "chat",
+      "community",
       "xenbudget",
       "xenkitchen",
       "xennote",

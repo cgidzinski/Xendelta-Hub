@@ -20,6 +20,8 @@ export type MessagesData = InfiniteData<MessagesPage, number | undefined>;
  */
 export function upsertMessage(data: MessagesData | undefined, message: LocalMessage): MessagesData | undefined {
   if (!data || data.pages.length === 0) return data;
+  // A reply in a thread belongs to its thread (upsertReply), never the main history.
+  if (typeof message.threadRoot === "number") return data;
   const matches = (m: LocalMessage) =>
     m._id === message._id || (!!message.clientId && m.clientId === message.clientId && m._id !== message._id);
 
@@ -71,4 +73,39 @@ export function peopleInHistory(data: MessagesData | undefined): Map<string, Cha
   const map = new Map<string, ChatPerson>();
   for (const page of data?.pages ?? []) for (const p of page.people) map.set(p._id, p);
   return map;
+}
+
+/** An open thread as the client holds it: its first message, the latest replies (oldest first), and whether you follow it. */
+export interface ThreadData {
+  root: LocalMessage;
+  replies: LocalMessage[];
+  hasMore: boolean;
+  following: boolean;
+  people: ChatPerson[];
+}
+
+/** Put a reply into a thread (the same rules as `upsertMessage`: a sent copy replaces its optimistic one). */
+export function upsertReply(data: ThreadData | undefined, reply: LocalMessage): ThreadData | undefined {
+  if (!data || reply.threadRoot !== data.root.seq) return data;
+  const same = (m: LocalMessage) =>
+    m._id === reply._id || (!!reply.clientId && m.clientId === reply.clientId && m._id !== reply._id);
+  const rest = data.replies.filter((m) => !same(m));
+  return { ...data, replies: [...rest, reply].sort((a, b) => a.seq - b.seq) };
+}
+
+/** Change the first message or a reply of a thread in place (an edit, a delete, a reaction, a new reply count). */
+export function patchThread(data: ThreadData | undefined, message: LocalMessage): ThreadData | undefined {
+  if (!data) return data;
+  if (data.root._id === message._id) return { ...data, root: message };
+  return { ...data, replies: data.replies.map((m) => (m._id === message._id ? message : m)) };
+}
+
+/** Drop a reply that failed and was dismissed. */
+export function removeLocalReply(data: ThreadData | undefined, id: string): ThreadData | undefined {
+  return data && { ...data, replies: data.replies.filter((m) => m._id !== id) };
+}
+
+/** Whether a thread has had no reply for `days` days (shown as archived; a new reply brings it back). */
+export function isArchivedThread(lastAt: string | null | undefined, days: number, now = Date.now()): boolean {
+  return !!lastAt && now - new Date(lastAt).getTime() > days * 86_400_000;
 }

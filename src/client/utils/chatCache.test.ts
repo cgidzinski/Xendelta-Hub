@@ -89,3 +89,72 @@ describe("chat wording", () => {
     expect(dayLabel("2026-03-09T08:00:00", now)).toBe("Yesterday");
   });
 });
+
+describe("threads in the cache", () => {
+  const msg = (over: Record<string, unknown>) =>
+    ({
+      _id: "m",
+      conversationId: "c",
+      seq: 1,
+      from: "u",
+      kind: "text",
+      body: "x",
+      attachments: [],
+      reactions: [],
+      createdAt: "2026-01-01T00:00:00Z",
+      ...over,
+    }) as any;
+  const thread = (replies: any[] = []) => ({
+    root: msg({ _id: "root", seq: 5 }),
+    replies,
+    hasMore: false,
+    following: false,
+    people: [],
+  });
+
+  it("keeps a reply out of the main history", async () => {
+    const { upsertMessage } = await import("./chatCache");
+    const data = {
+      pages: [{ messages: [msg({ _id: "a", seq: 5 })], hasMore: false, people: [] }],
+      pageParams: [undefined],
+    };
+    expect(upsertMessage(data, msg({ _id: "r", seq: 6, threadRoot: 5 }))).toBe(data);
+  });
+
+  it("adds replies in order, and swaps a sent reply for its stored copy", async () => {
+    const { upsertReply } = await import("./chatCache");
+    let data = upsertReply(
+      thread(),
+      msg({ _id: "local-1", seq: Number.MAX_SAFE_INTEGER, threadRoot: 5, clientId: "cid-1", status: "sending" }),
+    );
+    data = upsertReply(data, msg({ _id: "r6", seq: 6, threadRoot: 5 }));
+    expect(data!.replies.map((r) => r._id)).toEqual(["r6", "local-1"]);
+    data = upsertReply(data, msg({ _id: "r7", seq: 7, threadRoot: 5, clientId: "cid-1" }));
+    expect(data!.replies.map((r) => r._id)).toEqual(["r6", "r7"]);
+  });
+
+  it("ignores a reply that belongs to another thread", async () => {
+    const { upsertReply } = await import("./chatCache");
+    const data = thread();
+    expect(upsertReply(data, msg({ _id: "x", seq: 9, threadRoot: 8 }))).toBe(data);
+  });
+
+  it("patches the first message or a reply, and drops a failed one", async () => {
+    const { patchThread, removeLocalReply } = await import("./chatCache");
+    const data = thread([msg({ _id: "r6", seq: 6, threadRoot: 5, body: "old" })]);
+    expect(patchThread(data, msg({ _id: "r6", seq: 6, threadRoot: 5, body: "new" }))!.replies[0].body).toBe("new");
+    expect(
+      patchThread(data, msg({ _id: "root", seq: 5, thread: { count: 3, lastAt: null, lastBy: null } }))!.root.thread!
+        .count,
+    ).toBe(3);
+    expect(removeLocalReply(data, "r6")!.replies).toEqual([]);
+  });
+
+  it("calls a thread archived after days without a reply", async () => {
+    const { isArchivedThread } = await import("./chatCache");
+    const now = Date.parse("2026-01-20T00:00:00Z");
+    expect(isArchivedThread("2026-01-10T00:00:00Z", 7, now)).toBe(true);
+    expect(isArchivedThread("2026-01-15T00:00:00Z", 7, now)).toBe(false);
+    expect(isArchivedThread(null, 7, now)).toBe(false);
+  });
+});

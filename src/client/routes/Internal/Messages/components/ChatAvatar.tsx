@@ -1,5 +1,6 @@
 import { Avatar, Box } from "@mui/material";
 import type { ChatConversation } from "@shared/chat";
+import { PresenceBadge } from "../../../../components/presence/PresenceDot";
 
 interface ChatAvatarProps {
   conversation: Pick<ChatConversation, "people" | "name">;
@@ -14,9 +15,11 @@ export default function ChatAvatar({ conversation, meId, size = 44 }: ChatAvatar
 
   if (others.length <= 1 && !conversation.name) {
     return (
-      <Avatar src={others[0]?.avatar || undefined} sx={{ width: size, height: size, flexShrink: 0 }}>
-        {letter}
-      </Avatar>
+      <PresenceBadge userId={others[0]?._id} size={Math.max(8, Math.round(size / 4))}>
+        <Avatar src={others[0]?.avatar || undefined} sx={{ width: size, height: size, flexShrink: 0 }}>
+          {letter}
+        </Avatar>
+      </PresenceBadge>
     );
   }
 

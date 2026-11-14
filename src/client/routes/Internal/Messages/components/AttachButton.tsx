@@ -4,16 +4,19 @@ import { Link as RouterLink } from "react-router-dom";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
+import PollOutlinedIcon from "@mui/icons-material/PollOutlined";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import { formatFileSize } from "../../../../utils/fileUtils";
 
 interface AttachButtonProps {
   onFiles: (files: File[]) => void;
   onChooseFromDrive: () => void;
+  /** Start a poll (the menu item is shown when this is given). */
+  onPoll?: () => void;
 }
 
 /** The paperclip: upload from this device, or choose from XenDrive, with how much storage you have left. */
-export default function AttachButton({ onFiles, onChooseFromDrive }: AttachButtonProps) {
+export default function AttachButton({ onFiles, onChooseFromDrive, onPoll }: AttachButtonProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const { profile } = useUserProfile();
@@ -76,6 +79,22 @@ export default function AttachButton({ onFiles, onChooseFromDrive }: AttachButto
             </Typography>
           </Box>
         </MenuItem>
+        {onPoll && (
+          <MenuItem
+            onClick={() => {
+              setAnchor(null);
+              onPoll();
+            }}
+          >
+            <PollOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} />
+            <Box>
+              <Typography variant="body2">Create a poll</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Ask a question and let people vote
+              </Typography>
+            </Box>
+          </MenuItem>
+        )}
         {usage && (
           <Box sx={{ px: 2, pt: 1, pb: 1, borderTop: 1, borderColor: "divider", mt: 0.5, minWidth: 260 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>

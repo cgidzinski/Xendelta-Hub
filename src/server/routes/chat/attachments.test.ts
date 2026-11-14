@@ -10,7 +10,7 @@ vi.mock("../../config/gcs", () => ({
   privateBucket: {
     file: (path: string) => ({
       createResumableUpload: async () => ["https://storage.example.test/upload?id=1"],
-      getMetadata: async () => [{ size: "6", contentType: "text/plain" }],
+      getMetadata: async () => [{ size: "6", contentType: path.endsWith(".webm") ? "audio/webm" : "text/plain" }],
       exists: async () => [true],
       delete: async () => void deleted.push(path),
     }),
@@ -206,5 +206,56 @@ describe("downloading an attachment", () => {
     expect(gone.status).toBe(404);
     const history = await request(t.app).get(`/api/chat/conversations/${chatId}/messages`).set(as(b.token));
     expect(history.body.data.messages[0].attachments[0].removed).toBe(true);
+  });
+});
+
+describe("voice messages", () => {
+  const voice = { duration: 12.4, waveform: Array.from({ length: 48 }, (_, i) => (i * 5) % 256) };
+  const post = (me: U, chat: string, body: Record<string, unknown>) =>
+    request(t.app).post(`/api/chat/conversations/${chat}/messages`).set(as(me.token)).send(body);
+
+  it("is one audio recording with its length and waveform, shown as a voice message in the list", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await openChat(a, [b]);
+    const fileId = await uploadForChat(a, chat, "voice-message.webm");
+    const res = await post(a, chat, { attachmentIds: [fileId], voice });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.data.message).toMatchObject({ body: "", voice });
+    expect(res.body.data.message.attachments).toHaveLength(1);
+    const list = (await request(t.app).get("/api/chat/conversations").set(as(b.token))).body.data.conversations;
+    expect(list[0].lastMessage.preview).toBe("Sent a voice message");
+    // the other person can fetch the audio the usual way
+    const url = await request(t.app)
+      .get(`/api/chat/conversations/${chat}/messages/${res.body.data.message.seq}/attachments/${fileId}`)
+      .set(as(b.token));
+    expect(url.status).toBe(200);
+  });
+
+  it("must be exactly one audio file, within the length and waveform limits", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await openChat(a, [b]);
+    const audio = await uploadForChat(a, chat, "voice-message.webm");
+    const second = await uploadForChat(a, chat, "voice-two.webm");
+    const pdf = await uploadForChat(a, chat, "plan.pdf");
+    expect((await post(a, chat, { body: "hi", voice })).status).toBe(400); // no recording
+    expect((await post(a, chat, { attachmentIds: [pdf], voice })).status).toBe(400); // not audio
+    expect((await post(a, chat, { attachmentIds: [audio, second], voice })).status).toBe(400); // two files
+    expect((await post(a, chat, { attachmentIds: [audio], voice: { ...voice, duration: 301 } })).status).toBe(400);
+    expect((await post(a, chat, { attachmentIds: [audio], voice: { ...voice, duration: 0.1 } })).status).toBe(400);
+    expect((await post(a, chat, { attachmentIds: [audio], voice: { ...voice, waveform: [1, 2, 3] } })).status).toBe(
+      400,
+    );
+    expect(
+      (await post(a, chat, { attachmentIds: [audio], voice: { ...voice, waveform: Array(48).fill(300) } })).status,
+    ).toBe(400);
+  });
+
+  it("is gone when the message is deleted", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await openChat(a, [b]);
+    const fileId = await uploadForChat(a, chat, "voice-message.webm");
+    const sent = (await post(a, chat, { attachmentIds: [fileId], voice })).body.data.message;
+    const del = await request(t.app).delete(`/api/chat/conversations/${chat}/messages/${sent.seq}`).set(as(a.token));
+    expect(del.body.data.message.voice).toBeNull();
   });
 });

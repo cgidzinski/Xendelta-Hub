@@ -36,4 +36,28 @@ describe("model indexes", () => {
     await import("./conversation.js");
     expect(await indexKeys("Conversation")).toContain("members.user_id,lastMessage.at");
   });
+
+  it("communities are indexed by member (the my-communities query)", async () => {
+    await import("./community.js");
+    expect(await indexKeys("Community")).toContain("members.user_id");
+  });
+
+  it("channels are indexed by community, and read state is one row per person and channel", async () => {
+    await import("./conversation.js");
+    await import("./channelState.js");
+    expect(await indexKeys("Conversation")).toContain("communityId,channel.position");
+    expect(await indexKeys("ChannelState")).toContain("userId,conversationId");
+    const unique = (await mongoose.model("ChannelState").collection.indexes()).find((i) => i.unique && i.key.userId);
+    expect(unique?.key).toEqual({ userId: 1, conversationId: 1 });
+  });
+
+  it("community invites are one per person per community, and expire", async () => {
+    await import("./communityInvite.js");
+    const indexes = await (async () => {
+      await mongoose.model("CommunityInvite").init();
+      return mongoose.model("CommunityInvite").collection.indexes();
+    })();
+    expect(indexes.find((i) => i.unique && i.key.communityId)?.key).toEqual({ communityId: 1, userId: 1 });
+    expect(indexes.find((i) => i.expireAfterSeconds)?.key).toEqual({ createdAt: 1 });
+  });
 });
