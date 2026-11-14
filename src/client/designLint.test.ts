@@ -17,7 +17,7 @@ const ALLOWED: Record<string, string> = {
   "constants/xensplitCategoryIcons.tsx": "per-category identity colours",
   "constants/xensplit.ts": "per-category identity colours",
   "constants/xenbudget.ts": "label colour defaults",
-  "routes/Internal/Profile/components/AuthButton.tsx": "third-party brand colours",
+  "routes/Internal/Settings/components/AuthButton.tsx": "third-party brand colours",
   "routes/External/Auth/Login.tsx": "Google/GitHub/Discord brand buttons",
   "routes/External/Auth/Signup.tsx": "Google/GitHub/Discord brand buttons",
   "routes/External/Auth/Reset.tsx": "Google/GitHub/Discord brand buttons",

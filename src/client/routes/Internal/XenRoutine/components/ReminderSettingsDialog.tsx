@@ -80,8 +80,8 @@ export default function ReminderSettingsDialog({ open, onClose }: Props) {
           <Typography variant="body2" color="text.secondary">
             Timezone: <strong>{settings?.timezone ?? "…"}</strong>
             {settings && !settings.profile_timezone && " (following your browser)"}.{" "}
-            <Link component={RouterLink} to="/internal/profile">
-              Change it in your Profile
+            <Link component={RouterLink} to="/internal/settings/account">
+              Change it in Settings
             </Link>
             .
           </Typography>

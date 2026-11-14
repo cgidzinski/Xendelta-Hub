@@ -52,10 +52,10 @@ export default function EtransferPromptDialog({ open, onClose }: Props) {
           variant="contained"
           onClick={() => {
             close();
-            navigate("/internal/profile");
+            navigate("/internal/settings/account");
           }}
         >
-          Go to Profile
+          Go to Settings
         </Button>
       </DialogActions>
     </Dialog>

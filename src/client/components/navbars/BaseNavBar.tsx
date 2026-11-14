@@ -270,12 +270,12 @@ export default function BaseNavBar({
                 {showProfile && (
                   <ProfileListItem
                     profile={profile}
-                    isSelected={location.pathname.endsWith("/internal/profile")}
+                    isSelected={location.pathname.startsWith("/internal/settings")}
                     onNavigate={() => {
                       if (isMobile && isNavBarOpen) {
                         onToggleNavBar();
                       }
-                      navigate("/internal/profile");
+                      navigate("/internal/settings/account");
                     }}
                   />
                 )}

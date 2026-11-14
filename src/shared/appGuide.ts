@@ -127,7 +127,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       },
       {
         text: "Install XenSuite on your phone from your browser's menu to get it as an app, with reminders as notifications.",
-        link: "/internal/profile",
+        link: "/internal/settings/notifications",
       },
       { text: "Use your phone's Share button to send a link, some text or a photo straight to XenSuite." },
       {

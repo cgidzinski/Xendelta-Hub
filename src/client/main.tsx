@@ -58,7 +58,7 @@ const XenDriveFolderPublic = lazyPage(() => import("./routes/External/XenDriveFo
 const Home = lazyPage(() => import("./routes/Internal/Home/Home"));
 const People = lazyPage(() => import("./routes/Internal/People/People"));
 const PersonProfile = lazyPage(() => import("./routes/Internal/People/PersonProfile"));
-const Profile = lazyPage(() => import("./routes/Internal/Profile/Profile"));
+const Settings = lazyPage(() => import("./routes/Internal/Settings/Settings"));
 const Chat = lazyPage(() => import("./routes/Internal/Chat/Chat"));
 const ChatHome = lazyPage(() => import("./routes/Internal/Chat/ChatHome"));
 const CommunitySettings = lazyPage(() => import("./routes/Internal/Communities/settings/CommunitySettings"));
@@ -185,7 +185,10 @@ const router = createBrowserRouter(
         errorElement={<ErrorPage />}
       >
         <Route index element={<Home />} />
-        <Route path="profile" element={<Profile />} />
+        {/* Settings split out of the old Profile page; the old address still lands somewhere useful. */}
+        <Route path="settings" element={<Settings />} />
+        <Route path="settings/:tab" element={<Settings />} />
+        <Route path="profile" element={<Navigate to="/internal/settings/account" replace />} />
         <Route path="people" element={<People />} />
         <Route path="people/:userId" element={<PersonProfile />} />
         <Route path="chat" element={<ChatHome />} />

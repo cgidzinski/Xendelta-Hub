@@ -78,7 +78,11 @@ export default function PersonProfile() {
         }
         actions={
           isSelf ? (
-            <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => navigate("/internal/profile")}>
+            <Button
+              variant="outlined"
+              startIcon={<EditOutlinedIcon />}
+              onClick={() => navigate("/internal/settings/account")}
+            >
               Edit profile
             </Button>
           ) : (
