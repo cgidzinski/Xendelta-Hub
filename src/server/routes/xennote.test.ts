@@ -321,7 +321,7 @@ describe("photos", () => {
     expect(stored.size).toBe(0);
   });
 
-  it("stores photos as tagged XenDrive files that don't count toward storage, and the file can be deleted there", async () => {
+  it("stores photos as tagged XenDrive files that don't count toward storage, and XenDrive won't delete them", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
     const n = await note(me, { type: "image", title: "Garden", notebook_id: undefined });
@@ -348,13 +348,13 @@ describe("photos", () => {
     expect(apps.apps[0]).toMatchObject({ app: "xennote", label: "XenNote" });
     expect(apps.apps[0].groups[0].label).toBe("Garden");
 
-    // deleting the file in XenDrive takes the photo off the note
+    // the file doesn't count toward storage, so XenDrive won't delete it: the note owns it
     const del = await request(t.app)
       .delete(`/api/xendrive/files/${files[0]._id}`)
       .set({ Authorization: `Bearer ${me.token}` });
-    expect(del.status).toBe(200);
+    expect(del.status).toBe(400);
     const read = await api(me).get(`/notes/${n._id}`);
-    expect(read.body.data.note.images).toHaveLength(1);
+    expect(read.body.data.note.images).toHaveLength(2);
   });
 
   it("a viewer cannot add photos", async () => {

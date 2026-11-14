@@ -15,7 +15,8 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { addInterval } from "../../../../hooks/xenroutine/routineViews";
 import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenroutine/useRoutines";
 
@@ -35,6 +36,10 @@ const UNITS: IntervalUnit[] = ["days", "weeks", "months", "years"];
 const toIso = (d: string) => new Date(`${d}T12:00:00`).toISOString();
 // Start of the local day: a "not done yet" routine starting today is due immediately.
 const toDayStartIso = (d: string) => new Date(`${d}T00:00:00`).toISOString();
+
+// The pickers hold Dates; the form keeps yyyy-MM-dd strings ("" while empty or mid-typing).
+const toDate = (d: string) => (d ? new Date(`${d}T12:00:00`) : null);
+const fromDate = (d: Date | null) => (d && isValid(d) ? format(d, "yyyy-MM-dd") : "");
 
 export default function RoutineDialog({ open, routine, onClose, onSubmit }: Props) {
   const [name, setName] = useState("");
@@ -152,23 +157,20 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
             </TextField>
           </Stack>
           {routine ? (
-            <TextField
+            <DatePicker
               label="Next due"
-              type="date"
-              value={dueAt}
-              onChange={(e) => setDueAt(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
+              value={toDate(dueAt)}
+              onChange={(d) => setDueAt(fromDate(d))}
+              slotProps={{ textField: { fullWidth: true } }}
             />
           ) : (
             <>
-              <TextField
+              <DatePicker
                 label="Start date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true }, htmlInput: alreadyDone ? { max: today } : {} }}
-                fullWidth
+                value={toDate(startDate)}
+                onChange={(d) => setStartDate(fromDate(d))}
+                maxDate={alreadyDone ? new Date() : undefined}
+                slotProps={{ textField: { fullWidth: true } }}
               />
               <ToggleButtonGroup
                 exclusive

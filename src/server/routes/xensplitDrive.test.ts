@@ -118,13 +118,13 @@ describe("XenSplit photos in XenDrive", () => {
     expect(stored.size).toBe(1);
   });
 
-  it("deleting the file in XenDrive takes the photo off the expense", async () => {
+  it("XenDrive will not delete a photo that belongs to an expense", async () => {
     const { owner, uid, photos, urls } = await setup();
     await photos(2);
     const file = await XenDriveFile.findOne({ owner_id: uid });
     const del = await request(t.app).delete(`/api/xendrive/files/${file!._id}`).set(auth(owner.token));
-    expect(del.status).toBe(200);
-    expect(await urls()).toHaveLength(1);
+    expect(del.status).toBe(400);
+    expect(await urls()).toHaveLength(2);
   });
 
   it("deleting the group deletes its photos", async () => {

@@ -21,6 +21,8 @@ export interface AttentionResponse {
   cards: AttentionCard[];
   /** Per sub-app key: how many things are waiting. */
   counts: Record<string, number>;
+  /** Per sub-app key: how much the person has in it (recipes, notes...), shown as a quiet count, not an alert. */
+  totals?: Record<string, number>;
 }
 
 export interface FeedPage {

@@ -13,6 +13,8 @@ export interface AppRegistryItem {
   icon: React.ElementType;
   path: string;
   description: string;
+  /** What the quiet count under the name counts: [singular, plural]. */
+  noun?: [string, string];
 }
 
 /** What is pinned when nothing is: someone who has pinned nothing (or everything was unpinned) still sees these three. */
@@ -32,6 +34,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: BrushIcon,
     path: "/internal/recipaint",
     description: "Create and manage your recipes",
+    noun: ["recipe", "recipes"],
   },
   {
     key: "xendrive",
@@ -39,6 +42,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: FolderIcon,
     path: "/internal/xendrive",
     description: "Store files in folders and share them",
+    noun: ["file", "files"],
   },
   {
     key: "xenlink",
@@ -46,6 +50,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: LinkIcon,
     path: "/internal/xenlink",
     description: "Shorten and manage your links",
+    noun: ["link", "links"],
   },
   {
     key: "xensplit",
@@ -53,6 +58,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: ReceiptLongIcon,
     path: "/internal/xensplit",
     description: "Split expenses with friends",
+    noun: ["group", "groups"],
   },
   {
     key: "xenbudget",
@@ -60,6 +66,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: AccountBalanceWalletIcon,
     path: "/internal/xenbudget",
     description: "Track spending and set budgets",
+    noun: ["book", "books"],
   },
   {
     key: "xenroutine",
@@ -67,6 +74,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: EventRepeatIcon,
     path: "/internal/xenroutine",
     description: "Get reminded of recurring chores like filters and oil changes",
+    noun: ["routine", "routines"],
   },
   {
     key: "xenkitchen",
@@ -74,6 +82,7 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: RestaurantMenuIcon,
     path: "/internal/xenkitchen",
     description: "Save recipes and the cooking instructions off the box",
+    noun: ["recipe", "recipes"],
   },
   {
     key: "xennote",
@@ -81,5 +90,6 @@ export const APPS_REGISTRY: AppRegistryItem[] = [
     icon: StickyNote2Icon,
     path: "/internal/xennote",
     description: "Quick notes, lists, photos and links, in notebooks you can share",
+    noun: ["note", "notes"],
   },
 ];

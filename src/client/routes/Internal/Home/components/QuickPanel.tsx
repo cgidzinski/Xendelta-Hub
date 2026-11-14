@@ -10,6 +10,8 @@ interface QuickPanelProps {
   pinnedApps: string[];
   /** Per sub-app: how many things are waiting (from the attention API). */
   counts: Record<string, number>;
+  /** Per sub-app: how much is in it, shown quietly under the name. */
+  totals?: Record<string, number>;
 }
 
 const gridSx = {
@@ -23,7 +25,7 @@ const gridSx = {
  * with an Edit button. Edit swaps the tiles for every app, each a toggle that pins or unpins it; Done goes back to just the
  * pinned ones. There is no limit on how many are pinned. With none pinned the app shows its default two.
  */
-export default function QuickPanel({ pinnedApps, counts }: QuickPanelProps) {
+export default function QuickPanel({ pinnedApps, counts, totals = {} }: QuickPanelProps) {
   const navigate = useNavigate();
   const { setPinnedApps, isUpdating } = usePinnedApps();
   const [editing, setEditing] = useState(false);
@@ -49,6 +51,7 @@ export default function QuickPanel({ pinnedApps, counts }: QuickPanelProps) {
             key={app.key}
             app={app}
             count={counts[app.key] ?? 0}
+            total={totals[app.key]}
             onClick={() => (editing ? void setPinnedApps(toggledPins(pinnedApps, app.key)) : navigate(app.path))}
             pinChoice={editing ? { pinned: pinnedApps.includes(app.key), disabled: isUpdating } : undefined}
           />

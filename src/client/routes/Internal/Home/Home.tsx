@@ -27,7 +27,11 @@ export default function Home() {
     <PageContainer width="default">
       <CompactHomeHeader />
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <QuickPanel pinnedApps={resolvePinnedApps(profile.pinnedApps)} counts={attention.data?.counts ?? {}} />
+        <QuickPanel
+          pinnedApps={resolvePinnedApps(profile.pinnedApps)}
+          counts={attention.data?.counts ?? {}}
+          totals={attention.data?.totals ?? {}}
+        />
         <AttentionStrip cards={attention.data?.cards ?? []} />
         <ActivityFeed />
         <HomeLinks />
