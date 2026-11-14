@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Avatar, Box, Button, IconButton, Link, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ReplyIcon from "@mui/icons-material/Reply";
+import PushPinIcon from "@mui/icons-material/PushPin";
+import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -79,6 +81,8 @@ export interface MessageBubbleProps {
   canDelete: boolean;
   /** "bubbles" is a DM or group chat; "flat" is a community channel (a row per message, the sender above it). */
   layout?: "bubbles" | "flat";
+  /** May this person pin and unpin here? */
+  canPin?: boolean;
   /** The custom emoji of this community or chat: to draw them, and to offer in the reaction picker. */
   customEmoji?: CustomEmoji[];
   customById?: Map<string, CustomEmoji>;
@@ -89,6 +93,7 @@ export interface MessageBubbleProps {
   onDelete: (m: LocalMessage) => void;
   onReact: (m: LocalMessage, emoji: string) => void;
   onRemoveEmbeds: (m: LocalMessage) => void;
+  onPin: (m: LocalMessage, on: boolean) => void;
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -200,6 +205,21 @@ export default function MessageBubble(props: MessageBubbleProps) {
         >
           <ReplyIcon fontSize="small" sx={{ mr: 1.5 }} /> Reply
         </MenuItem>
+        {props.canPin && (
+          <MenuItem
+            onClick={() => {
+              props.onPin(m, !m.pinnedAt);
+              close();
+            }}
+          >
+            {m.pinnedAt ? (
+              <PushPinIcon fontSize="small" sx={{ mr: 1.5 }} />
+            ) : (
+              <PushPinOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} />
+            )}{" "}
+            {m.pinnedAt ? "Unpin message" : "Pin message"}
+          </MenuItem>
+        )}
         {m.body && (
           <MenuItem
             onClick={() => {
@@ -294,6 +314,15 @@ export default function MessageBubble(props: MessageBubbleProps) {
             </Box>
           )}
 
+          {m.pinnedAt && !deleted && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+            >
+              <PushPinIcon sx={{ fontSize: 13 }} aria-hidden /> Pinned
+            </Typography>
+          )}
           {replyTarget && !deleted && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "text.secondary", mb: 0.25 }}>
               <ReplyIcon sx={{ fontSize: 14 }} />
@@ -586,6 +615,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
             <>
               {clock(m.createdAt)}
               {m.editedAt && !deleted ? " · Edited" : ""}
+              {m.pinnedAt && !deleted ? " · Pinned" : ""}
               {seenBy && seenBy.length > 0
                 ? ` · Seen${seenBy.length <= 3 ? ` by ${seenBy.join(", ")}` : ` by ${seenBy.length}`}`
                 : ""}

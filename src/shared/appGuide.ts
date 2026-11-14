@@ -44,6 +44,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
+      "Pin an important message so everyone can find it again from the pin button at the top of the chat.",
       "See a short preview of a web page when someone shares its link, and take it off your own message if you prefer.",
       "Format a message with bold, italic, strikethrough, code, quotes and lists, or hide a spoiler until it is clicked.",
       "Pick any emoji for a message or a reaction, with search, skin tones and the ones you used lately.",

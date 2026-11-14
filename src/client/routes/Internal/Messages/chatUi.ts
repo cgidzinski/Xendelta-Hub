@@ -43,6 +43,8 @@ export function systemText(message: ChatMessage, lookup: PeopleLookup, meId: str
       return s.name ? `${who} named the chat “${s.name}”` : `${who} removed the chat name`;
     case "owner":
       return targets.length > 0 ? `${who} made ${others} the owner` : `${who} ${verb("are", "is")} now the owner`;
+    case "pinned":
+      return `${who} pinned a message`;
     default:
       return message.body;
   }

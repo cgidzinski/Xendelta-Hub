@@ -144,6 +144,8 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
           })),
       replyTo: m.replyTo ?? null,
       reactions: deleted ? [] : m.reactions.map((r) => ({ emoji: r.emoji, userIds: [...r.userIds] })),
+      pinnedAt: deleted ? null : iso(m.pinnedAt),
+      pinnedBy: deleted ? null : (m.pinnedBy ?? null),
       mentions: deleted ? [] : [...(m.mentions ?? [])],
       mentionsEveryone: deleted ? false : !!m.mentionsEveryone,
       mentionsHere: deleted ? false : !!m.mentionsHere,

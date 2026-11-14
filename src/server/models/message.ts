@@ -42,7 +42,7 @@ const messageSchema = new Schema({
   body: { type: String, default: "" },
   // For system messages: what happened and to whom, so the client can word it for each reader.
   system: {
-    event: { type: String, enum: ["created", "added", "removed", "left", "renamed", "owner"] },
+    event: { type: String, enum: ["created", "added", "removed", "left", "renamed", "owner", "pinned"] },
     userIds: [{ type: String }],
     name: { type: String },
   },
@@ -62,9 +62,14 @@ const messageSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   editedAt: { type: Date },
   deletedAt: { type: Date },
+  // Pinned to the top of the chat: when, and by whom. Cleared when it is unpinned or deleted.
+  pinnedAt: { type: Date },
+  pinnedBy: { type: String },
 });
 
 messageSchema.index({ conversationId: 1, seq: -1 }, { unique: true });
+// "The pinned messages of this chat", newest pin first.
+messageSchema.index({ conversationId: 1, pinnedAt: -1 }, { partialFilterExpression: { pinnedAt: { $type: "date" } } });
 messageSchema.index(
   { conversationId: 1, clientId: 1 },
   { unique: true, partialFilterExpression: { clientId: { $type: "string" } } },

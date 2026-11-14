@@ -50,6 +50,7 @@ export function useChatRealtime() {
 
   useRealtime("chat:message_update", ({ conversationId, message }) => {
     queryClient.setQueryData<MessagesData>(chatKeys.messages(conversationId), (data) => patchMessage(data, message));
+    queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) });
     queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
   });
 

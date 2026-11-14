@@ -18,6 +18,8 @@ interface MessageListProps {
   typingNames: string[];
   /** The custom emoji of this community or chat. */
   customEmoji?: CustomEmoji[];
+  /** May this person pin and unpin here? */
+  canPin?: boolean;
   /** A community channel draws a flat row per message instead of bubbles. */
   layout?: "bubbles" | "flat";
   /** Whether the viewer may delete anyone's message (a community's manage messages); by default, a chat's owner may. */
@@ -30,6 +32,7 @@ interface MessageListProps {
     onDelete: (m: LocalMessage) => void;
     onReact: (m: LocalMessage, emoji: string) => void;
     onRemoveEmbeds: (m: LocalMessage) => void;
+    onPin: (m: LocalMessage, on: boolean) => void;
     onRetry: (m: LocalMessage) => void;
     onDiscard: (m: LocalMessage) => void;
     onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -55,6 +58,7 @@ export default function MessageList({
   onLoadMore,
   typingNames,
   customEmoji,
+  canPin,
   layout,
   canModerate,
   senderMeta,
@@ -168,6 +172,7 @@ export default function MessageList({
               layout={layout}
               customEmoji={customEmoji}
               customById={customById}
+              canPin={canPin}
               senderMeta={senderMeta?.(m.from)}
               {...actions}
             />

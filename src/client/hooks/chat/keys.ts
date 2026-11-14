@@ -3,5 +3,7 @@ export const chatKeys = {
   conversations: () => [...chatKeys.all, "conversations"] as const,
   conversation: (id: string) => [...chatKeys.all, "conversation", id] as const,
   messages: (id: string) => [...chatKeys.all, "messages", id] as const,
+  /** The messages pinned in one chat. */
+  pins: (id: string) => [...chatKeys.all, "pins", id] as const,
   unread: () => [...chatKeys.all, "unread"] as const,
 };

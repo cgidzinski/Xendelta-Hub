@@ -88,7 +88,7 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
     />
   );
 
-  const header = ({ typingNames }: { typingNames: string[] }) => {
+  const header = ({ typingNames, pins }: { typingNames: string[]; pins: React.ReactNode }) => {
     const subtitle = subtitleFor(typingNames);
     return (
       <Box
@@ -135,6 +135,7 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
             </Tooltip>
           </>
         )}
+        {pins}
         <Tooltip title="Add people">
           <IconButton onClick={() => setAddOpen(true)} aria-label="Add people">
             <PersonAddAltIcon />

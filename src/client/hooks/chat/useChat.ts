@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChatAttachment, ChatConversation, ChatMessage } from "@shared/chat";
+import type { ChatAttachment, ChatConversation, ChatMessage, ChatPerson } from "@shared/chat";
 import { api } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { chatKeys } from "./keys";
@@ -66,6 +66,18 @@ export function useMessages(conversationId: string | undefined) {
     enabled: isAuthenticated && !!conversationId,
     // The cache is patched live; refetching every loaded page on focus would only repeat that.
     refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+/** The messages pinned in a chat (loaded when the pins panel is open), newest pin first. */
+export function usePins(conversationId: string | undefined, enabled: boolean) {
+  const { isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: chatKeys.pins(conversationId ?? ""),
+    queryFn: () =>
+      api.get<{ messages: ChatMessage[]; people: ChatPerson[] }>(`/api/chat/conversations/${conversationId}/pins`),
+    enabled: isAuthenticated && !!conversationId && enabled,
     retry: false,
   });
 }
@@ -258,6 +270,19 @@ export function useChatActions() {
     onSuccess: setMessage,
   });
 
+  /** Pin a message, or take its pin off. */
+  const pin = useMutation({
+    mutationFn: async (input: { conversationId: string; seq: number; on: boolean }) => {
+      const url = `${base(input.conversationId)}/messages/${input.seq}/pin`;
+      return (await (input.on ? api.put<{ message: ChatMessage }>(url) : api.delete<{ message: ChatMessage }>(url)))
+        .message;
+    },
+    onSuccess: (message) => {
+      setMessage(message);
+      queryClient.invalidateQueries({ queryKey: chatKeys.pins(message.conversationId) });
+    },
+  });
+
   /** Take the link previews off a message. */
   const removeEmbeds = useMutation({
     mutationFn: async (input: { conversationId: string; seq: number }) =>
@@ -287,5 +312,6 @@ export function useChatActions() {
     remove,
     react,
     removeEmbeds,
+    pin,
   };
 }

@@ -50,7 +50,10 @@ export interface ChatReaction {
  * A line in the history that explains what happened to the chat itself. In a system message `userIds[0]` is who did
  * it and the rest are who it happened to (the people added or removed).
  */
-export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "renamed" | "owner";
+export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "renamed" | "owner" | "pinned";
+
+/** How many messages a chat can have pinned at once. */
+export const CHAT_MAX_PINS = 50;
 
 /** A preview of a web page a message links to: what the page says about itself. No picture (that would tell the site who reads it). */
 export interface LinkEmbed {
@@ -78,6 +81,9 @@ export interface ChatMessage {
   reactions: ChatReaction[];
   /** Previews of the links in the body, added a moment after sending. */
   embeds?: LinkEmbed[];
+  /** When it was pinned, and by whom; null when it isn't pinned. */
+  pinnedAt?: string | null;
+  pinnedBy?: string | null;
   /** The people the body mentions (who can read it), and whether it pings everyone or whoever is online. */
   mentions?: string[];
   mentionsEveryone?: boolean;

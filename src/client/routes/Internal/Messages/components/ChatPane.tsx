@@ -18,6 +18,7 @@ import { useChatAttachments } from "../../../../hooks/chat/useChatAttachments";
 import { chronological, peopleInHistory, type LocalMessage } from "../../../../utils/chatCache";
 import EmptyState from "../../../../components/ui/EmptyState";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
+import PinsButton from "../../../../components/chat/PinsButton";
 import AttachButton from "./AttachButton";
 import AttachmentTray from "./AttachmentTray";
 import Composer from "./Composer";
@@ -32,7 +33,7 @@ interface ChatPaneProps {
   /** What the composer says "Message ..." about. */
   title: string;
   /** The top bar. It gets who is typing, which a chat shows under its name. */
-  header: (context: { typingNames: string[] }) => ReactNode;
+  header: (context: { typingNames: string[]; pins: ReactNode }) => ReactNode;
   /** A community channel draws a row per message instead of bubbles. */
   layout?: "bubbles" | "flat";
   /** Whether the viewer may delete anyone's message. By default only a chat's owner may. */
@@ -41,6 +42,8 @@ interface ChatPaneProps {
   canPost?: boolean;
   /** A sender's role label and colour, for a channel. */
   senderMeta?: (userId: string | null) => { color: string; role: string } | undefined;
+  /** May this person pin and unpin here? (A community says so with the pin permission; a chat lets any member.) */
+  canPin?: boolean;
   /** May this person use @everyone and @here here? */
   canPingAll?: boolean;
   /** Whose custom emoji are used here: the community's for a channel, the chat's own otherwise. */
@@ -61,6 +64,7 @@ export default function ChatPane({
   canModerate,
   canPost = true,
   senderMeta,
+  canPin = true,
   canPingAll = false,
   emojiScope,
   emptyDescription,
@@ -72,7 +76,7 @@ export default function ChatPane({
   const allEmoji = useCustomEmoji().emoji;
   const customEmoji = useMemo(() => emojiOfScope(allEmoji, emojiScope), [allEmoji, emojiScope.type, emojiScope.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesQuery = useMessages(conversationId);
-  const { edit, remove, react, markRead, removeEmbeds } = useChatActions();
+  const { edit, remove, react, markRead, removeEmbeds, pin } = useChatActions();
   const send = useSendMessage(conversationId);
   const discard = useDiscardLocalMessage(conversationId);
   const typingNames = useTypingUsers(conversationId);
@@ -149,6 +153,11 @@ export default function ChatPane({
       const on = !m.reactions.find((r) => r.emoji === emoji)?.userIds.includes(user.id);
       react.mutate({ conversationId, seq: m.seq, emoji, on }, { onError: (e) => fail(e, "Couldn't react") });
     },
+    onPin: (m: LocalMessage, on: boolean) =>
+      pin.mutate(
+        { conversationId, seq: m.seq, on },
+        { onError: (e) => fail(e, on ? "Couldn't pin the message" : "Couldn't unpin the message") },
+      ),
     onRemoveEmbeds: (m: LocalMessage) =>
       removeEmbeds.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't remove the preview") }),
     onRetry: (m: LocalMessage) =>
@@ -174,7 +183,7 @@ export default function ChatPane({
 
   return (
     <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", height: "100%" }}>
-      {header({ typingNames })}
+      {header({ typingNames, pins: <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} /> })}
 
       {messagesQuery.isLoading ? (
         <Box sx={{ flex: 1 }} aria-busy />
@@ -193,6 +202,7 @@ export default function ChatPane({
           onLoadMore={() => messagesQuery.fetchNextPage()}
           typingNames={typingNames}
           customEmoji={customEmoji}
+          canPin={canPin}
           layout={layout}
           canModerate={canModerate}
           senderMeta={senderMeta}

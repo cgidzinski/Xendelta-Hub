@@ -7,10 +7,11 @@ import { authenticateToken } from "../../middleware/auth";
 import { audienceOf, type ChatContext } from "../../chat/access";
 import { refreshEmbeds } from "../../chat/embeds";
 import { resolveMentions } from "../../chat/mentions";
-import { canDeleteChatMessage, canEditMessage, canPostChat } from "../../chat/policy";
+import { canDeleteChatMessage, canEditMessage, canManageChat, canPostChat } from "../../chat/policy";
 import {
   loadChatContext,
   loadPeople,
+  postSystemMessage,
   publishMessage,
   appendMessage,
   serializeMessage,
@@ -30,7 +31,7 @@ import {
   editChatMessageSchema,
   sendChatMessageSchema,
 } from "../../utils/validation";
-import { CHAT_REACTIONS_PER_MESSAGE } from "@shared/chat";
+import { CHAT_MAX_PINS, CHAT_REACTIONS_PER_MESSAGE } from "@shared/chat";
 import { customIdOfReaction } from "@shared/emoji";
 import { plainMessageText } from "@shared/messageText";
 import { CustomEmojiModel } from "../../models/customEmoji";
@@ -168,6 +169,78 @@ export function registerMessageRoutes(app: Application) {
     },
   );
 
+  // The messages pinned in this chat, newest pin first.
+  app.get(
+    "/api/chat/conversations/:conversationId/pins",
+    authenticateToken,
+    validateParams(chatConversationParamSchema),
+    async (req: Request, res: Response) => {
+      const { chat } = await loadChatContext(req.params.conversationId as string, callerId(req));
+      const pinned = await Message.find({
+        conversationId: chat._id,
+        pinnedAt: { $type: "date" },
+        deletedAt: { $exists: false },
+      })
+        .sort({ pinnedAt: -1 })
+        .limit(CHAT_MAX_PINS)
+        .exec();
+      // Senders who have since left are not in the chat's people, so they come with the pins (as with a page of history).
+      const people = await loadPeople(pinned.map((m) => m.from).filter((id): id is string => !!id));
+      res.json({
+        status: true,
+        message: "",
+        data: { messages: await serializeMessages(pinned), people: [...people.values()] },
+      });
+    },
+  );
+
+  // Pin a message. In a community that needs the pin permission; in a group chat any member may.
+  app.put(
+    "/api/chat/conversations/:conversationId/messages/:seq/pin",
+    authenticateToken,
+    validateParams(chatMessageParamSchema),
+    async (req: Request, res: Response) => {
+      const me = callerId(req);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      if (!canPinIn(context, me)) throw new AppError(403, "You can't pin messages here");
+      const message = await loadMessage(context.chat._id, req.params.seq as string);
+      if (message.kind !== "text" || message.deletedAt) throw new AppError(400, "You can't pin that message");
+      if (!message.pinnedAt) {
+        const count = await Message.countDocuments({
+          conversationId: context.chat._id,
+          pinnedAt: { $type: "date" },
+        }).exec();
+        if (count >= CHAT_MAX_PINS) throw new AppError(400, `A chat can have at most ${CHAT_MAX_PINS} pinned messages`);
+        message.pinnedAt = new Date();
+        message.pinnedBy = me;
+        await message.save();
+        const who = (await loadCaller(req)).username ?? "Someone";
+        await postSystemMessage(context.chat, me, "pinned", `${who} pinned a message`, {}, audienceOf(context));
+        await announceUpdate(context, message);
+      }
+      res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
+    },
+  );
+
+  app.delete(
+    "/api/chat/conversations/:conversationId/messages/:seq/pin",
+    authenticateToken,
+    validateParams(chatMessageParamSchema),
+    async (req: Request, res: Response) => {
+      const me = callerId(req);
+      const context = await loadChatContext(req.params.conversationId as string, me);
+      if (!canPinIn(context, me)) throw new AppError(403, "You can't unpin messages here");
+      const message = await loadMessage(context.chat._id, req.params.seq as string);
+      if (message.pinnedAt) {
+        message.pinnedAt = undefined;
+        message.pinnedBy = undefined;
+        await message.save();
+        await announceUpdate(context, message);
+      }
+      res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
+    },
+  );
+
   // Take the link previews off a message (its sender, or anyone who can delete it). Editing it doesn't bring them back.
   app.delete(
     "/api/chat/conversations/:conversationId/messages/:seq/embeds",
@@ -203,6 +276,8 @@ export function registerMessageRoutes(app: Application) {
       }
 
       message.deletedAt = new Date();
+      message.pinnedAt = undefined;
+      message.pinnedBy = undefined;
       message.body = "";
       message.set("attachments", []);
       message.set("reactions", []);
@@ -301,3 +376,7 @@ async function emojiBelongsHere(emojiId: string, context: ChatContext): Promise<
     ? emoji.communityId === String(context.community._id)
     : emoji.conversationId === String(context.chat._id);
 }
+
+/** Who may pin and unpin: in a community, people with the pin permission; in a group chat, any member. */
+const canPinIn = (context: ChatContext, userId: string) =>
+  context.community ? canManageChat(context.access, userId, "pinMessages") : true;
