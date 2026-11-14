@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Box, Button, ButtonBase, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { formatMoney } from "@shared/money";
@@ -13,13 +14,15 @@ const bonusOf = (pack: ShopItem) => gemBonusPercent(pack.grantsGems ?? 0, pack.p
 interface PackButtonProps {
   pack: ShopItem;
   selected: boolean;
+  onSelect: () => void;
 }
 
-/** Looks like a pack you can pick, but buying gems is not open yet, so clicking it does nothing. */
-function PackButton({ pack, selected }: PackButtonProps) {
+/** A pack you can pick to see what you would get. Paying is still switched off, so only the pay button is disabled. */
+function PackButton({ pack, selected, onSelect }: PackButtonProps) {
   const bonus = bonusOf(pack);
   return (
     <ButtonBase
+      onClick={onSelect}
       aria-pressed={selected}
       sx={{
         ...cardSx,
@@ -57,10 +60,13 @@ interface GemHeroProps {
 }
 
 /**
- * The top of the Shop: the gem packs on the left, what you would have and the pay button on the right. Buying gems
- * is switched off for now, so nothing here reacts to a click. To turn it on, pass `onBuy` and a selection again.
+ * The top of the Shop: the gem packs on the left, what you would have and the pay button on the right. The packs can
+ * be picked to compare them; buying is switched off for now, so the pay button is disabled and says so. To turn it on,
+ * pass `onBuy` and send the picked pack to it.
  */
 export default function GemHero({ packs, balance }: GemHeroProps) {
+  const [pickedId, setPickedId] = useState<string | null>(null);
+
   if (packs.length === 0) {
     return (
       <Box sx={{ ...cardSx, p: 3 }}>
@@ -74,7 +80,7 @@ export default function GemHero({ packs, balance }: GemHeroProps) {
     );
   }
 
-  const selected = packs.find((p) => p.badge === "Popular") ?? packs[0];
+  const selected = packs.find((p) => p.id === pickedId) ?? packs.find((p) => p.badge === "Popular") ?? packs[0];
   const bonus = bonusOf(selected);
   const gems = selected.grantsGems ?? 0;
 
@@ -92,7 +98,12 @@ export default function GemHero({ packs, balance }: GemHeroProps) {
         </Typography>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 1.25, mt: 1 }}>
           {packs.map((pack) => (
-            <PackButton key={pack.id} pack={pack} selected={pack.id === selected.id} />
+            <PackButton
+              key={pack.id}
+              pack={pack}
+              selected={pack.id === selected.id}
+              onSelect={() => setPickedId(pack.id)}
+            />
           ))}
         </Box>
       </Box>
@@ -122,9 +133,14 @@ export default function GemHero({ packs, balance }: GemHeroProps) {
         <Typography variant="body2" color="text.secondary">
           You would have {(balance + gems).toLocaleString()} gems.
         </Typography>
-        <Button variant="contained" size="large" disableRipple>
-          Pay {cost(selected)}
-        </Button>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+          <Button variant="contained" size="large" disabled disableRipple>
+            Pay {cost(selected)}
+          </Button>
+          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+            Buying gems isn&apos;t open yet.
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );
