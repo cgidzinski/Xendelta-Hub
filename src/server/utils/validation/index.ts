@@ -17,5 +17,6 @@ export * from "./apiKeys";
 export * from "./chat";
 export * from "./communities";
 export * from "./emoji";
+export * from "./presence";
 export * from "./feed";
 export * from "./feedback";

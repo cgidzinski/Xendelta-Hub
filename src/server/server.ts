@@ -203,6 +203,7 @@ require("./routes/push.ts")(app);
 require("./routes/chat")(app);
 require("./routes/communities")(app);
 require("./routes/emoji.ts")(app);
+require("./routes/presence.ts")(app);
 require("./routes/blog.ts")(app);
 require("./routes/admin")(app);
 require("./routes/recipaint.ts")(app);

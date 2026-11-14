@@ -4,6 +4,7 @@ import { User } from "../models/user";
 import { audienceOf, resolveChatAccess } from "../chat/access";
 import { canPostChat } from "../chat/policy";
 import { getJwtSecret } from "../config/env";
+import { presenceTracker, scheduleAnnounce, type Send } from "../presence/tracker";
 import type { ClientEvents, RealtimeEvent, RealtimeEvents } from "@shared/realtime";
 
 interface AuthenticatedSocket extends Socket {
@@ -89,6 +90,16 @@ export class SocketManager {
       // joins it, and none disconnects another. Clients cannot join any other room.
       socket.join(`user:${socket.userId}`);
 
+      // Presence: a first tab opening, or the last one closing, changes how the person looks to others.
+      const send: Send = (ids, event, payload) => this.emitToUsers(ids, event, payload);
+      presenceTracker.connect(socket.userId, socket.id);
+      scheduleAnnounce(socket.userId, send);
+      socket.on("presence:activity", (data: ClientEvents["presence:activity"]) => {
+        if (typeof data?.idle !== "boolean") return;
+        presenceTracker.setIdle(socket.userId!, socket.id, data.idle);
+        scheduleAnnounce(socket.userId!, send);
+      });
+
       socket.on("chat:typing", async (data: ClientEvents["chat:typing"]) => {
         const conversationId = typeof data?.conversationId === "string" ? data.conversationId : "";
         if (!/^[a-f0-9]{24}$/i.test(conversationId)) return;
@@ -116,6 +127,8 @@ export class SocketManager {
 
       socket.on("disconnect", () => {
         this.lastTyping.delete(socket.id);
+        presenceTracker.disconnect(socket.userId!, socket.id);
+        scheduleAnnounce(socket.userId!, send);
       });
     });
   }

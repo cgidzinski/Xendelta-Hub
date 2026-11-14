@@ -5,6 +5,7 @@
 // Events go to a person's own room (`user:<id>`), never to a room a client joins itself, so nobody can listen in on a
 // conversation by guessing its id.
 import type { ChatMessage } from "./chat";
+import type { PresenceEntry } from "./presence";
 
 export interface RealtimeEvents {
   // Chat
@@ -15,6 +16,9 @@ export interface RealtimeEvents {
   "chat:conversation": { conversationId: string; removed?: boolean };
   "chat:read": { conversationId: string; userId: string; seq: number };
   "chat:typing": { conversationId: string; userId: string; username: string; typing: boolean };
+
+  /** Someone who shares a chat or community with you came online, went idle or away, or changed their status line. */
+  "presence:update": PresenceEntry;
 
   // Communities: the community changed (renamed, members, roles). `removed` means you are out of it or it was deleted.
   "community:updated": { communityId: string; removed?: boolean };
@@ -50,4 +54,6 @@ export type RealtimeEvent = keyof RealtimeEvents;
 /** Events a client may send to the server. */
 export interface ClientEvents {
   "chat:typing": { conversationId: string; typing: boolean };
+  /** This tab has been left alone (idle) or is in use again. */
+  "presence:activity": { idle: boolean };
 }

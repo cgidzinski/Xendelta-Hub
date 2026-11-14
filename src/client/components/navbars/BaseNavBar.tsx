@@ -33,6 +33,7 @@ import { formatDistance } from "date-fns";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useRef } from "react";
 import ProfileListItem from "../ProfileListItem";
+import StatusMenu from "../presence/StatusMenu";
 import GemBalance from "../GemBalance";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useUserNotifications, Notification } from "../../hooks/user/useUserNotifications";
@@ -279,6 +280,7 @@ export default function BaseNavBar({
                     }}
                   />
                 )}
+                {showProfile && <StatusMenu />}
                 {showGems && (
                   <GemBalance
                     gems={profile?.gems}

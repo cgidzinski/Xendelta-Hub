@@ -1,6 +1,7 @@
 import { useChatRealtime } from "./chat/useChatRealtime";
 import { useCommunityRealtime } from "./communities/useCommunityRealtime";
 import { useEmojiRealtime } from "./emoji/useCustomEmoji";
+import { usePresenceActivity, usePresenceRealtime } from "./presence/usePresence";
 import { useRealtime } from "./useRealtime";
 
 interface UseNavBarSocketOptions {
@@ -16,5 +17,7 @@ export function useNavBarSocket(options: UseNavBarSocketOptions = {}) {
   useChatRealtime();
   useCommunityRealtime();
   useEmojiRealtime();
+  usePresenceRealtime();
+  usePresenceActivity();
   useRealtime("notification:new", () => onNewNotification?.());
 }
