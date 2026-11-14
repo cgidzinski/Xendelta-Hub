@@ -10,6 +10,7 @@
 require("dotenv").config({ quiet: true });
 
 import mongoose from "mongoose";
+import { ledgerMismatches } from "../src/server/utils/dbStats";
 
 const LIMIT = 16 * 1024 * 1024;
 const mb = (n: number) => (n / 1024 / 1024).toFixed(2) + " MB";
@@ -143,6 +144,16 @@ async function main() {
       ])
       .toArray();
     console.log(`  XenSplit expenses: ${r[0]?.noisy ?? 0} of ${r[0]?.total ?? 0}`);
+  }
+
+  // ---- Gem ledger: does every balance match its transactions? ----
+  console.log("\nGem ledger (balances vs applied transactions)");
+  const { checked, mismatches } = await ledgerMismatches();
+  console.log(`  accounts checked: ${checked}, mismatches: ${mismatches.length}`);
+  for (const m of mismatches) {
+    console.log(
+      `    ${m.type} ${m.id}: balance ${m.balance}, ledger says ${m.ledger} (${m.balance - m.ledger > 0 ? "+" : ""}${m.balance - m.ledger})`,
+    );
   }
 
   // ---- Whole database ----

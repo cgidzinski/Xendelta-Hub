@@ -192,6 +192,34 @@ describe("buying from the shop", () => {
     expect(fresh.inventory.map((i: any) => i.itemKey)).toEqual(["1gb-xendrive-voucher"]);
   });
 
+  it("records every gem movement in the ledger, so the balance matches its history", async () => {
+    const { transfer, HOUSE, userAccount } = await import("../billing/ledger.js");
+    const { ledgerMismatches } = await import("../utils/dbStats.js");
+    const { user, token } = await createUser();
+    await transfer({
+      from: HOUSE,
+      to: userAccount(user._id),
+      amount: 2000,
+      kind: "admin_adjustment",
+      idempotencyKey: `t:${user._id}`,
+    });
+    await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
+    const tx = await mongoose.model("GemTransaction").find({ "from.id": user._id, kind: "shop_purchase" }).lean();
+    expect(tx).toHaveLength(1);
+    expect((await reload(user._id)).gems).toBe(1000);
+    const { mismatches } = await ledgerMismatches(10_000);
+    expect(mismatches.find((m) => m.id === String(user._id))).toBeUndefined();
+  });
+
+  it("refuses a purchase the balance can't cover, without granting the item", async () => {
+    const { user, token } = await createUser({ gems: 10 });
+    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
+    expect(res.body).toMatchObject({ status: false, message: "Not enough gems" });
+    const fresh = await reload(user._id);
+    expect(fresh.gems).toBe(10);
+    expect(fresh.inventory).toHaveLength(0);
+  });
+
   it("no longer sells the point voucher that used to pay the buyer", async () => {
     const { user, token } = await createUser({ gems: 0 });
     const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "1" });

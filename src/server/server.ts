@@ -107,6 +107,14 @@ mongoConnection.on("connected", async () => {
       handler: runDueTasks,
     });
     scheduler.register({ name: "xendrive-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+    // Finish gem transfers a crash or restart interrupted (billing/ledger.ts).
+    const { reconcilePendingGems } = require("./billing/ledger");
+    scheduler.register({
+      name: "gem-ledger-reconcile",
+      everyMs: 60 * 60 * 1000,
+      runOnStart: true,
+      handler: () => reconcilePendingGems(),
+    });
     scheduler.register({
       name: "xenroutine-reminders",
       everyMs: 60 * 60 * 1000,

@@ -25,6 +25,7 @@ import { ITEMS } from "../../constants/items";
 import { unequipIfNotOwned } from "../../utils/cosmetics";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { recordAudit } from "../../utils/adminAudit";
+import { HOUSE, balanceOf, transfer, userAccount } from "../../billing/ledger";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import type { AdminUserDetail, AdminUserRow, UserFilter, UserSort } from "@shared/admin";
 
@@ -243,12 +244,22 @@ export function registerAdminUserRoutes(app: express.Application) {
     async (req, res) => {
       const { amount, reason } = adminGemAdjustSchema.parse(req.body);
       const user = await loadUser(req.params.userId as string);
-      const updated = await User.findOneAndUpdate(
-        { _id: user._id, ...(amount < 0 ? { gems: { $gte: -amount } } : {}) },
-        { $inc: { gems: amount } },
-        { new: true, projection: "gems" },
-      ).exec();
-      if (!updated) throw new AppError(400, "That would take the balance below zero");
+      const person = userAccount(user._id);
+      try {
+        await transfer({
+          from: amount > 0 ? HOUSE : person,
+          to: amount > 0 ? person : HOUSE,
+          amount: Math.abs(amount),
+          kind: "admin_adjustment",
+          idempotencyKey: `admin-adjust:${new Types.ObjectId()}`,
+          meta: { reason, by: callerId(req) },
+        });
+      } catch (e) {
+        if (e instanceof AppError && e.status === 402)
+          throw new AppError(400, "That would take the balance below zero");
+        throw e;
+      }
+      const updated = { gems: await balanceOf(person) };
       await recordAudit(req, {
         action: "gem_adjust",
         target: { type: "user", id: String(user._id), label: user.username ?? "" },

@@ -1,5 +1,6 @@
 import { User } from "../models/user";
 import { Item } from "../types/item";
+import { HOUSE, transfer, userAccount } from "../billing/ledger";
 import { GEM_PACKS, STORAGE_VOUCHER_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
 
 // Gem packs are items too. They never reach an inventory (the Shop adds them with addToInventory: false); the
@@ -27,8 +28,15 @@ export const ITEMS: Record<string, Item> = {
     image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDjzenTPwlSFWa0lUXHTtHLoX18nv8D4fyTA&s",
     redeemable: true,
     legacy: true,
-    apply: async (userId) => {
-      await User.updateOne({ _id: userId }, { $inc: { gems: 1000 } }).exec();
+    apply: async (userId, inventoryItemId) => {
+      await transfer({
+        from: HOUSE,
+        to: userAccount(userId),
+        amount: 1000,
+        kind: "voucher_redeem",
+        idempotencyKey: `voucher:${inventoryItemId}`,
+        meta: { itemKey: "1000-gem-voucher" },
+      });
     },
   },
   [STORAGE_VOUCHER_KEY]: {

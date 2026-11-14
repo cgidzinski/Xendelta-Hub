@@ -50,9 +50,8 @@ thinking is not lost. Only the "built" section exists in code today.
    the call that moves the purchase from `pending` to `completed` credits the gems.
 3. Return the new provider from `getPaymentProvider()` and set `PAYMENTS_PROVIDER=stripe`.
 
-Known limit: `fulfilGemPurchase` marks the purchase completed and then credits the gems as two writes, so a crash
-between them would leave a completed purchase without gems. The ledger design below closes that gap; build it
-before real money is involved.
+`fulfilGemPurchase` credits the gems through the gem ledger before marking the purchase completed, so a crash in
+between leaves a pending purchase whose retry finds the same transfer (`docs/billing.md`).
 
 ## Decided, not built yet
 
@@ -120,6 +119,9 @@ text. Frames and name colours are not built; they need the shared avatar compone
 - Not allowed: the dummy provider cannot create gems from a sale; a seller cannot buy their own listing.
 
 ### A crash-safe gem ledger (no database transactions)
+
+**Built** (#353): see `docs/billing.md`. Every gem movement now goes through it, which also closes the
+`fulfilGemPurchase` gap described above. The original design is kept below for reference.
 
 The test database and possibly production have no replica set, so Mongo transactions are not available.
 

@@ -16,5 +16,6 @@ export interface Item {
   /** Set on items that are worn rather than redeemed: which slot of how someone looks they fill. */
   cosmetic?: { slot: CosmeticSlot };
   /** The effect of redeeming. Must change the user with a single atomic update, never read-modify-save. */
-  apply?: (userId: string) => Promise<void>;
+  /** The item's effect. `inventoryItemId` is the copy being redeemed, so an effect can be made idempotent per copy. */
+  apply?: (userId: string, inventoryItemId: string) => Promise<void>;
 }

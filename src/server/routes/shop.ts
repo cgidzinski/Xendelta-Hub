@@ -9,6 +9,7 @@ import { SHOP_ITEMS } from "../constants/shopItems";
 import { ITEMS } from "../constants/items";
 import { AppError, callerId, loadCaller } from "../utils/http";
 import { canUseProvider, fulfilGemPurchase, getPaymentProvider } from "../payments";
+import { HOUSE, transfer, userAccount } from "../billing/ledger";
 
 const isAdmin = (roles: string[] | undefined) => (roles || []).some((r) => r.toLowerCase() === "admin");
 
@@ -47,48 +48,56 @@ async function buyWithGems(req: express.Request, res: express.Response, shopItem
   const price = shopItem.price;
   if (price === undefined) throw new AppError(500, "Item has no price");
 
-  // One atomic update: the balance check, the deduction and the inventory grant happen
-  // together in Mongo, so two simultaneous purchases can't both pass the check and
-  // spend the same gems (the old read-modify-save allowed that).
+  // One ledger transfer (billing/ledger.ts): the balance check, the deduction and the inventory grant happen in one
+  // guarded write, so two simultaneous purchases can't both spend the same gems, and a crash can't take the gems
+  // without the item.
   const inventoryId = new mongoose.Types.ObjectId();
   const grant = shopItem.addToInventory !== false;
   const item = ITEMS[shopItem.itemKey];
-  const update: any = { $inc: { gems: -price } };
-  if (grant) {
-    update.$push = {
-      inventory: {
-        _id: inventoryId,
-        itemKey: shopItem.itemKey,
-        name: item.name,
-        description: item.description,
-        image: item.image,
-        redeemable: item.redeemable,
-        purchasedAt: new Date(),
-        used: false,
-      },
-    };
-  }
+  const inventoryEntry = {
+    _id: inventoryId,
+    itemKey: shopItem.itemKey,
+    name: item.name,
+    description: item.description,
+    image: item.image,
+    redeemable: item.redeemable,
+    purchasedAt: new Date(),
+    used: false,
+  };
 
-  const updated = await User.findOneAndUpdate({ _id: userId, gems: { $gte: price } }, update, {
-    new: true,
-  }).exec();
-
-  if (!updated) {
-    const exists = await User.exists({ _id: userId });
-    if (!exists) throw new AppError(404, "User not found");
-    return res.json({ status: false, message: "Not enough gems" });
+  if (!(await User.exists({ _id: userId }))) throw new AppError(404, "User not found");
+  try {
+    await transfer({
+      from: userAccount(userId),
+      to: HOUSE,
+      amount: price,
+      kind: "shop_purchase",
+      idempotencyKey: `shop:${inventoryId}`,
+      ...(grant ? { debitPush: { inventory: inventoryEntry } } : {}),
+      meta: { shopItemId: shopItem.id, itemKey: shopItem.itemKey },
+    });
+  } catch (e) {
+    if (e instanceof AppError && e.status === 402) return res.json({ status: false, message: "Not enough gems" });
+    throw e;
   }
 
   if (shopItem.onPurchase) {
+    const updated = await User.findById(userId).exec();
     try {
+      if (!updated) throw new Error("The buyer disappeared");
       await shopItem.onPurchase(updated);
     } catch (e) {
       // Roll the purchase back rather than keep the gems for nothing.
       console.error("Shop onPurchase failed, refunding:", e);
-      await User.updateOne(
-        { _id: userId },
-        { $inc: { gems: price }, ...(grant ? { $pull: { inventory: { _id: inventoryId } } } : {}) },
-      ).exec();
+      if (grant) await User.updateOne({ _id: userId }, { $pull: { inventory: { _id: inventoryId } } }).exec();
+      await transfer({
+        from: HOUSE,
+        to: userAccount(userId),
+        amount: price,
+        kind: "shop_refund",
+        idempotencyKey: `shop-refund:${inventoryId}`,
+        meta: { shopItemId: shopItem.id },
+      });
       throw new AppError(500, "Purchase failed");
     }
   }

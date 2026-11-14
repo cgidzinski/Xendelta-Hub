@@ -44,3 +44,62 @@ export async function largestDocuments(limit = 6): Promise<DocumentSize[]> {
   }
   return rows.sort((a, b) => b.bytes - a.bytes).slice(0, limit);
 }
+
+export interface LedgerMismatch {
+  type: "user" | "community";
+  id: string;
+  balance: number;
+  ledger: number;
+}
+
+/**
+ * Accounts whose balance differs from what the gem ledger says it should be (applied credits minus applied debits).
+ * Each one is a gem movement that bypassed billing/ledger.ts. Read-only.
+ */
+export async function ledgerMismatches(limit = 50): Promise<{ checked: number; mismatches: LedgerMismatch[] }> {
+  const db = mongoose.connection.db;
+  if (!db) return { checked: 0, mismatches: [] };
+  const net = new Map<string, number>();
+  const add = (type: string, id: unknown, amount: number) => {
+    if (type === "house" || id == null) return;
+    const key = `${type}:${String(id)}`;
+    net.set(key, (net.get(key) ?? 0) + amount);
+  };
+  const sides = await db
+    .collection("gemtransactions")
+    .aggregate<{ _id: { side: string; type: string; id: unknown }; total: number }>([
+      { $match: { status: "applied" } },
+      {
+        $facet: {
+          credits: [{ $group: { _id: { side: "to", type: "$to.type", id: "$to.id" }, total: { $sum: "$amount" } } }],
+          debits: [
+            { $group: { _id: { side: "from", type: "$from.type", id: "$from.id" }, total: { $sum: "$amount" } } },
+          ],
+        },
+      },
+      { $project: { all: { $concatArrays: ["$credits", "$debits"] } } },
+      { $unwind: "$all" },
+      { $replaceRoot: { newRoot: "$all" } },
+    ])
+    .toArray();
+  for (const s of sides) add(s._id.type, s._id.id, s._id.side === "to" ? s.total : -s.total);
+
+  const mismatches: LedgerMismatch[] = [];
+  let checked = 0;
+  const accounts = [
+    { type: "user" as const, collection: "users", field: "gems" },
+    { type: "community" as const, collection: "communities", field: "fund" },
+  ];
+  for (const a of accounts) {
+    const cursor = db.collection(a.collection).find({}, { projection: { [a.field]: 1 } });
+    for await (const doc of cursor) {
+      checked++;
+      const balance = Number(doc[a.field] ?? 0);
+      const ledger = net.get(`${a.type}:${String(doc._id)}`) ?? 0;
+      if (balance !== ledger && mismatches.length < limit) {
+        mismatches.push({ type: a.type, id: String(doc._id), balance, ledger });
+      }
+    }
+  }
+  return { checked, mismatches };
+}

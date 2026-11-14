@@ -562,7 +562,7 @@ module.exports = function (app: express.Application) {
       // Not every item has an effect to apply (apply is optional on the item definition).
       if (itemDef?.apply) {
         try {
-          await itemDef.apply(String(userId));
+          await itemDef.apply(String(userId), String(inventoryItemId));
         } catch (e) {
           // Hand the item back rather than consume it for nothing.
           await User.updateOne(
