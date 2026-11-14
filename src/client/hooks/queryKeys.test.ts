@@ -7,6 +7,7 @@ import { xendriveKeys } from "./xendrive/keys";
 import { xennoteKeys } from "./xennote/keys";
 import { chatKeys } from "./chat/keys";
 import { peopleKeys } from "./people/keys";
+import { communityKeys } from "./communities/keys";
 
 describe("query keys", () => {
   it("XenSplit keys are the arrays the screens always used", () => {
@@ -88,6 +89,17 @@ describe("query keys", () => {
     }
   });
 
+  it("community keys nest under one root, and every channel list sits under allChannels", () => {
+    expect(communityKeys.list()).toEqual(["communities", "list"]);
+    expect(communityKeys.detail("c1")).toEqual(["communities", "detail", "c1"]);
+    expect(communityKeys.channels("c1")).toEqual(["communities", "channels", "c1"]);
+    expect(communityKeys.invites()).toEqual(["communities", "invites"]);
+    for (const key of [communityKeys.list(), communityKeys.detail("c1"), communityKeys.channels("c1")]) {
+      expect(key.slice(0, 1)).toEqual([...communityKeys.all]);
+    }
+    expect(communityKeys.channels("c1").slice(0, 2)).toEqual([...communityKeys.allChannels()]);
+  });
+
   it("no screen spells these keys out by hand again", () => {
     const root = join(__dirname, "..");
     const bad: string[] = [];
@@ -98,7 +110,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xendrive|xennote|chat|people)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendrive|xennote|chat|people|communities)"[,\]]/.test(readFileSync(full, "utf8"))
         )
           bad.push(relative(root, full));
       }

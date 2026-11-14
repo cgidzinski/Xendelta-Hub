@@ -15,6 +15,12 @@ interface MessageListProps {
   loadingMore: boolean;
   onLoadMore: () => void;
   typingNames: string[];
+  /** A community channel draws a flat row per message instead of bubbles. */
+  layout?: "bubbles" | "flat";
+  /** Whether the viewer may delete anyone's message (a community's manage messages); by default, a chat's owner may. */
+  canModerate?: boolean;
+  /** A sender's role label and colour, for a channel. */
+  senderMeta?: (userId: string | null) => { color: string; role: string } | undefined;
   actions: {
     onReply: (m: LocalMessage) => void;
     onEdit: (m: LocalMessage) => void;
@@ -44,6 +50,9 @@ export default function MessageList({
   loadingMore,
   onLoadMore,
   typingNames,
+  layout,
+  canModerate,
+  senderMeta,
   actions,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -146,7 +155,12 @@ export default function MessageList({
               showSender={row.showSender}
               replyTarget={m.replyTo ? bySeq.get(m.replyTo) : undefined}
               seenBy={seen?.id === m._id ? seen.names : undefined}
-              canDelete={m.from === meId || conversation.members.find((x) => x.user_id === meId)?.role === "owner"}
+              canDelete={
+                m.from === meId ||
+                (canModerate ?? conversation.members.find((x) => x.user_id === meId)?.role === "owner")
+              }
+              layout={layout}
+              senderMeta={senderMeta?.(m.from)}
               {...actions}
             />
           </Box>

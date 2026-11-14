@@ -4,6 +4,7 @@ import type { ChatAttachment, ChatConversation, ChatMessage } from "@shared/chat
 import { api } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { chatKeys } from "./keys";
+import { communityKeys } from "../communities/keys";
 import {
   patchMessage,
   removeLocalMessage,
@@ -235,6 +236,8 @@ export function useChatActions() {
     onSuccess: (_data, input) => {
       queryClient.invalidateQueries({ queryKey: chatKeys.unread() });
       queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
+      // A community channel keeps its read state with its channel list.
+      queryClient.invalidateQueries({ queryKey: communityKeys.allChannels() });
       void input;
     },
   });

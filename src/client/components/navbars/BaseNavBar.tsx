@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import MailIcon from "@mui/icons-material/Mail";
+import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PersonIcon from "@mui/icons-material/Person";
 import AnnouncementIcon from "@mui/icons-material/Announcement";
@@ -343,6 +344,16 @@ export default function BaseNavBar({
           </Typography>
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
+              {showMessages && (
+                <IconButton
+                  color="inherit"
+                  aria-label="Communities"
+                  sx={{ width: 50, height: 50 }}
+                  onClick={() => navigate("/internal/communities")}
+                >
+                  <GroupsOutlinedIcon />
+                </IconButton>
+              )}
               {showMessages && (
                 <IconButton
                   color="inherit"
