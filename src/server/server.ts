@@ -1,4 +1,9 @@
 require("dotenv").config({ quiet: true });
+// Look up IPv4 addresses first, and try the next address when one can't be reached. A host with no IPv6 route (many home
+// servers and VPSs) otherwise fails requests to a service whose name also has an IPv6 address (ENETUNREACH), even though
+// IPv4 works. This affects every outgoing request of the server (storage, Cloudflare calls, GIFs, link previews).
+require("dns").setDefaultResultOrder("ipv4first");
+if (typeof require("net").setDefaultAutoSelectFamily === "function") require("net").setDefaultAutoSelectFamily(true);
 // Refuse to boot without the secrets the server cannot run safely without.
 require("./config/env").validateEnv();
 const Bugsnag = require("./config/bugsnag").default;
