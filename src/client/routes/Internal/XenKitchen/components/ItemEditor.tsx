@@ -324,7 +324,6 @@ export default function ItemEditor({
       bookLocked={!!item}
       bookId={bookId}
       onBook={setBookId}
-      stacked={wide}
     />
   );
 
@@ -406,7 +405,7 @@ export default function ItemEditor({
             <Stack spacing={2}>
               {sourceChips}
               {pickers}
-              <QuickFacts draft={draft} set={set} layout={layout} stacked />
+              <QuickFacts draft={draft} set={set} layout={layout} />
               {photoStrip}
             </Stack>
             <SectionTitle>More details</SectionTitle>
@@ -426,7 +425,7 @@ export default function ItemEditor({
           {sourceChips && <Box sx={{ mt: 1.5 }}>{sourceChips}</Box>}
           <Box sx={{ mt: 1.5 }}>{pickers}</Box>
           {/* Quick facts, right under the title */}
-          <Box sx={{ mt: 2.5 }}>
+          <Box sx={{ mt: 1.5 }}>
             <QuickFacts draft={draft} set={set} layout={layout} />
           </Box>
           <Box sx={{ mt: 2 }}>{photoStrip}</Box>
