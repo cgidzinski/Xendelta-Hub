@@ -79,6 +79,8 @@ export const sendChatMessageSchema = z
     clientId: z.string().min(8).max(64).optional(),
     body: z.string().max(CHAT_BODY_MAX).default(""),
     replyTo: z.number().int().min(1).optional(),
+    /** Post into the thread of this message instead of the main chat. */
+    threadRoot: z.number().int().min(1).optional(),
     /** XenDrive files the sender owns. */
     attachmentIds: z.array(objectIdSchema).max(CHAT_MAX_ATTACHMENTS).optional(),
   })

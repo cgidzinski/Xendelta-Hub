@@ -54,6 +54,9 @@ export type ChatSystemEvent = "created" | "added" | "removed" | "left" | "rename
 
 /** How many messages a chat can have pinned at once. */
 export const CHAT_MAX_PINS = 50;
+export const CHAT_THREAD_PAGE = 100;
+/** A thread with no reply for this long is shown as archived (a new reply brings it back). */
+export const CHAT_THREAD_ARCHIVE_DAYS = 7;
 export const CHAT_SEARCH_PAGE = 25;
 export const CHAT_SEARCH_MAX_QUERY = 100;
 /** What a search can ask a message to have. */
@@ -95,6 +98,10 @@ export interface ChatMessage {
   reactions: ChatReaction[];
   /** Previews of the links in the body, added a moment after sending. */
   embeds?: LinkEmbed[];
+  /** For a reply in a thread: the number of the message the thread hangs off. Such replies are not in the main history. */
+  threadRoot?: number | null;
+  /** On a message that has a thread: its replies so far. */
+  thread?: { count: number; lastAt: string | null; lastBy: string | null } | null;
   /** When it was pinned, and by whom; null when it isn't pinned. */
   pinnedAt?: string | null;
   pinnedBy?: string | null;

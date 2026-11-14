@@ -143,6 +143,11 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
             ...(existing.has(String(a.fileId)) ? {} : { removed: true }),
           })),
       replyTo: m.replyTo ?? null,
+      threadRoot: m.threadRoot ?? null,
+      thread:
+        m.thread?.lastAt && (m.thread.count ?? 0) > 0
+          ? { count: m.thread.count ?? 0, lastAt: iso(m.thread.lastAt), lastBy: m.thread.lastBy ?? null }
+          : null,
       reactions: deleted ? [] : m.reactions.map((r) => ({ emoji: r.emoji, userIds: [...r.userIds] })),
       pinnedAt: deleted ? null : iso(m.pinnedAt),
       pinnedBy: deleted ? null : (m.pinnedBy ?? null),
@@ -191,6 +196,8 @@ export interface NewMessage {
   system?: { event: ChatSystemEvent; userIds?: string[]; name?: string };
   attachments?: Array<{ fileId: string; name: string; mimeType: string; size: number }>;
   replyTo?: number;
+  /** A reply in the thread of this message (kept out of the main history). */
+  threadRoot?: number;
   clientId?: string;
   /** Who the body mentions (see chat/mentions.ts resolveMentions). */
   mentions?: { userIds: string[]; everyone: boolean; here: boolean };
@@ -219,6 +226,7 @@ export async function appendMessage(chat: { _id: unknown }, input: NewMessage): 
     system: input.system && { event: input.system.event, userIds: input.system.userIds ?? [], name: input.system.name },
     attachments,
     replyTo: input.replyTo,
+    threadRoot: input.threadRoot,
     clientId: input.clientId,
     mentions: input.mentions?.userIds ?? [],
     mentionsEveryone: input.mentions?.everyone ?? false,
@@ -311,16 +319,28 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
   }
   // Someone named in the message is told even if they have muted the chat; a message to everyone says so.
   const named = new Set(message.mentions ?? []);
+  // A reply in a thread tells only the people following it (and anyone named), not the whole chat.
+  const inThread = typeof message.threadRoot === "number";
+  const followers = new Set<string>(
+    inThread
+      ? ((
+          await Message.findOne({ conversationId: chat._id, seq: message.threadRoot }, "thread.followers").lean().exec()
+        )?.thread?.followers ?? [])
+      : [],
+  );
   const where = community ? `#${chat.name ?? "channel"} · ${community.name}` : chat.name ? chat.name : "a chat";
   for (const userId of audience) {
     if (userId === message.from || realtime.isOnline(userId)) continue;
     const mentioned = named.has(userId);
+    if (inThread && !followers.has(userId) && !mentioned && !message.mentionsEveryone) continue;
     if (silenced.has(userId) && !mentioned) continue;
     const heading = mentioned
       ? `${senderName} mentioned you in ${where}`
       : message.mentionsEveryone
         ? `${senderName} pinged everyone in ${where}`
-        : title;
+        : inThread
+          ? `${title} (thread)`
+          : title;
     // One notification per conversation on the lock screen (the tag), and never a failed push breaking a send.
     void sendPushToUser(userId, { title: heading, body, url, tag: `chat-${conversationId}` }).catch(() => undefined);
   }

@@ -7,6 +7,7 @@ import { useSocket } from "../useSocket";
 import { useRealtime } from "../useRealtime";
 import { userProfileKeys } from "../user/useUserProfile";
 import { chatKeys } from "./keys";
+import { patchThreads, receiveReply } from "./useThread";
 import { patchMessage, upsertMessage, type MessagesData } from "../../utils/chatCache";
 
 /**
@@ -25,7 +26,9 @@ export function useChatRealtime() {
   };
 
   useRealtime("chat:message", ({ conversationId, message }) => {
+    // A reply in a thread goes to its thread; everything else to the history.
     queryClient.setQueryData<MessagesData>(chatKeys.messages(conversationId), (data) => upsertMessage(data, message));
+    receiveReply(queryClient, message);
     // The open chat's own numbers move with the message, so its unread count is right without a refetch.
     queryClient.setQueryData<ChatConversation>(chatKeys.conversation(conversationId), (c) =>
       c
@@ -55,7 +58,12 @@ export function useChatRealtime() {
       { queryKey: chatKeys.around(conversationId) },
       (w) => (w ? { ...w, data: patchMessage(w.data, message) ?? w.data } : w),
     );
+    patchThreads(queryClient, message);
     queryClient.invalidateQueries({ queryKey: chatKeys.pins(conversationId) });
+    // The list of threads shows reply counts and last activity.
+    if (message.thread || typeof message.threadRoot === "number") {
+      queryClient.invalidateQueries({ queryKey: chatKeys.threads(conversationId) });
+    }
     queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
   });
 
@@ -65,6 +73,7 @@ export function useChatRealtime() {
       queryClient.removeQueries({ queryKey: chatKeys.conversation(conversationId) });
       queryClient.removeQueries({ queryKey: chatKeys.messages(conversationId) });
       queryClient.removeQueries({ queryKey: chatKeys.around(conversationId) });
+      queryClient.removeQueries({ queryKey: chatKeys.thread(conversationId) });
     } else {
       queryClient.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) });
     }

@@ -11,6 +11,7 @@ import type {
 import { api } from "../../config/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { chatKeys } from "./keys";
+import { patchThreads } from "./useThread";
 import { communityKeys } from "../communities/keys";
 import {
   patchMessage,
@@ -244,10 +245,12 @@ export function useChatActions() {
     queryClient.setQueryData(chatKeys.conversation(conversation._id), conversation);
     queryClient.invalidateQueries({ queryKey: chatKeys.conversations() });
   };
-  const setMessage = (message: ChatMessage) =>
+  const setMessage = (message: ChatMessage) => {
     queryClient.setQueryData<MessagesData>(chatKeys.messages(message.conversationId), (data) =>
       patchMessage(data, message),
     );
+    patchThreads(queryClient, message);
+  };
 
   const startChat = useMutation({
     mutationFn: (input: { userIds: string[]; name?: string }) =>

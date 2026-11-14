@@ -40,10 +40,12 @@ export default function ChannelView({
     typingNames,
     pins,
     search,
+    threads,
   }: {
     typingNames: string[];
     pins: React.ReactNode;
     search: React.ReactNode;
+    threads: React.ReactNode;
   }) => {
     const subtitle =
       typingNames.length > 0
@@ -92,6 +94,7 @@ export default function ChannelView({
           </>
         )}
         {search}
+        {threads}
         {pins}
         <Tooltip title={membersOpen && !phone ? "Hide members" : "Members"}>
           <IconButton

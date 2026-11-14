@@ -92,10 +92,12 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
     typingNames,
     pins,
     search,
+    threads,
   }: {
     typingNames: string[];
     pins: React.ReactNode;
     search: React.ReactNode;
+    threads: React.ReactNode;
   }) => {
     const subtitle = subtitleFor(typingNames);
     return (
@@ -144,6 +146,7 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
           </>
         )}
         {search}
+        {threads}
         {pins}
         <Tooltip title="Add people">
           <IconButton onClick={() => setAddOpen(true)} aria-label="Add people">

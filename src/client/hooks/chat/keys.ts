@@ -6,6 +6,10 @@ export const chatKeys = {
   /** A window of history around one message, loaded for a jump. */
   around: (id: string, seq?: number) =>
     (seq === undefined ? [...chatKeys.all, "around", id] : [...chatKeys.all, "around", id, seq]) as readonly unknown[],
+  /** One thread (its first message and replies), and the list of a chat's threads. */
+  thread: (id: string, seq?: number) =>
+    (seq === undefined ? [...chatKeys.all, "thread", id] : [...chatKeys.all, "thread", id, seq]) as readonly unknown[],
+  threads: (id: string) => [...chatKeys.all, "threads", id] as const,
   /** The messages pinned in one chat. */
   pins: (id: string) => [...chatKeys.all, "pins", id] as const,
   /** A message search: its words, filters and scope. */

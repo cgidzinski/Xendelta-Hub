@@ -62,12 +62,30 @@ const messageSchema = new Schema({
   createdAt: { type: Date, default: Date.now },
   editedAt: { type: Date },
   deletedAt: { type: Date },
+  // A reply in a thread: the number of the message the thread hangs off. Replies are kept out of the chat's main history.
+  threadRoot: { type: Number },
+  // On the message that starts a thread: how many replies it has, when and by whom the last came, and who follows it.
+  thread: {
+    count: { type: Number, default: 0 },
+    lastAt: { type: Date },
+    lastBy: { type: String },
+    followers: { type: [String], default: [] },
+  },
   // Pinned to the top of the chat: when, and by whom. Cleared when it is unpinned or deleted.
   pinnedAt: { type: Date },
   pinnedBy: { type: String },
 });
 
 messageSchema.index({ conversationId: 1, seq: -1 }, { unique: true });
+// "The replies of this thread", oldest first, and "the threads of this chat", most recently active first.
+messageSchema.index(
+  { conversationId: 1, threadRoot: 1, seq: 1 },
+  { partialFilterExpression: { threadRoot: { $type: "number" } } },
+);
+messageSchema.index(
+  { conversationId: 1, "thread.lastAt": -1 },
+  { partialFilterExpression: { "thread.lastAt": { $type: "date" } } },
+);
 // Word search (chat/search.ts). The search first narrows to the conversations the caller can read.
 messageSchema.index({ body: "text" }, { name: "body_text" });
 // "The pinned messages of this chat", newest pin first.

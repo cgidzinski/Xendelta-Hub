@@ -18,6 +18,7 @@ import {
   serializeMessages,
 } from "../../chat/service";
 import { readableChats, searchMessages } from "../../chat/search";
+import { recordThreadReply, recordThreadReplyDeleted } from "../../chat/threads";
 import { realtime } from "../../realtime";
 import { AppError, callerId, loadCaller } from "../../utils/http";
 import {
@@ -69,11 +70,19 @@ export function registerMessageRoutes(app: Application) {
       if (around) {
         // A window with the target in the middle: half the page older (and the target), half newer.
         const half = Math.max(1, Math.floor(limit / 2));
-        const older = await Message.find({ conversationId: chat._id, seq: { $lte: around } })
+        const older = await Message.find({
+          conversationId: chat._id,
+          threadRoot: { $exists: false },
+          seq: { $lte: around },
+        })
           .sort({ seq: -1 })
           .limit(half + 1)
           .exec();
-        const newer = await Message.find({ conversationId: chat._id, seq: { $gt: around } })
+        const newer = await Message.find({
+          conversationId: chat._id,
+          threadRoot: { $exists: false },
+          seq: { $gt: around },
+        })
           .sort({ seq: 1 })
           .limit(half + 1)
           .exec();
@@ -81,7 +90,11 @@ export function registerMessageRoutes(app: Application) {
         hasMore = older.length > half;
         hasNewer = newer.length > half;
       } else {
-        const found = await Message.find({ conversationId: chat._id, ...(before ? { seq: { $lt: before } } : {}) })
+        const found = await Message.find({
+          conversationId: chat._id,
+          threadRoot: { $exists: false },
+          ...(before ? { seq: { $lt: before } } : {}),
+        })
           .sort({ seq: -1 })
           .limit(limit + 1)
           .exec();
@@ -113,7 +126,7 @@ export function registerMessageRoutes(app: Application) {
       const context = await loadChatContext(req.params.conversationId as string, me);
       const { chat } = context;
       if (!canPostChat(context.access, me)) throw new AppError(403, "You can't post here");
-      const { clientId, body, replyTo, attachmentIds } = sendChatMessageSchema.parse(req.body);
+      const { clientId, body, replyTo, threadRoot, attachmentIds } = sendChatMessageSchema.parse(req.body);
 
       // A retry of a send that already went through returns the stored message instead of sending it twice.
       if (clientId) {
@@ -125,6 +138,14 @@ export function registerMessageRoutes(app: Application) {
 
       if (replyTo && !(await Message.exists({ conversationId: chat._id, seq: replyTo }))) {
         throw new AppError(400, "The message you're replying to doesn't exist");
+      }
+
+      // A thread reply needs a real message to hang off: not deleted, and not itself a reply.
+      if (threadRoot) {
+        const root = await Message.findOne({ conversationId: chat._id, seq: threadRoot }).exec();
+        if (!root || root.kind !== "text" || root.deletedAt || typeof root.threadRoot === "number") {
+          throw new AppError(400, "You can't start a thread on that message");
+        }
       }
 
       // Attachments are XenDrive files the sender owns. Attaching one adds no storage: it is the same file.
@@ -145,10 +166,13 @@ export function registerMessageRoutes(app: Application) {
         from: me,
         body,
         replyTo,
+        threadRoot,
         attachments,
         clientId,
         mentions: resolveMentions(context, me, body),
       });
+      // The first reply opens the thread: the sender and the author of the message follow it, and the message shows the count.
+      if (threadRoot) await recordThreadReply(context, threadRoot, message, me);
       await publishMessage(context, message, user.username ?? "Someone");
       // Previews of any links arrive a moment later, as an update; nobody waits for them.
       void refreshEmbeds(context, message._id);
@@ -320,6 +344,7 @@ export function registerMessageRoutes(app: Application) {
       message.set("reactions", []);
       await message.save();
       await refreshLastPreview(chat._id, message.seq, "This message was deleted");
+      if (typeof message.threadRoot === "number") await recordThreadReplyDeleted(context, message.threadRoot);
       await announceUpdate(context, message);
       res.json({ status: true, message: "", data: { message: await serializeMessage(message) } });
     },

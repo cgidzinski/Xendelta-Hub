@@ -44,6 +44,7 @@ interface MessageListProps {
     onPin: (m: LocalMessage, on: boolean) => void;
     onJumpTo: (seq: number) => void;
     onCopyLink: (m: LocalMessage) => void;
+    onOpenThread: (m: LocalMessage) => void;
     onRetry: (m: LocalMessage) => void;
     onDiscard: (m: LocalMessage) => void;
     onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;

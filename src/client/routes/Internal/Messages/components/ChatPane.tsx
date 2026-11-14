@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Box, Button, IconButton, Typography } from "@mui/material";
+import { Box, Button, Dialog, IconButton, Typography, useMediaQuery } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
@@ -24,6 +25,8 @@ import EmptyState from "../../../../components/ui/EmptyState";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import PinsButton from "../../../../components/chat/PinsButton";
 import ChatSearchButton from "../../../../components/chat/ChatSearchButton";
+import ThreadPanel from "../../../../components/chat/ThreadPanel";
+import ThreadsButton from "../../../../components/chat/ThreadsButton";
 import AttachButton from "./AttachButton";
 import AttachmentTray from "./AttachmentTray";
 import Composer from "./Composer";
@@ -38,7 +41,7 @@ interface ChatPaneProps {
   /** What the composer says "Message ..." about. */
   title: string;
   /** The top bar. It gets who is typing, which a chat shows under its name. */
-  header: (context: { typingNames: string[]; pins: ReactNode; search: ReactNode }) => ReactNode;
+  header: (context: { typingNames: string[]; pins: ReactNode; search: ReactNode; threads: ReactNode }) => ReactNode;
   /** A community channel draws a row per message instead of bubbles. */
   layout?: "bubbles" | "flat";
   /** Whether the viewer may delete anyone's message. By default only a chat's owner may. */
@@ -92,6 +95,9 @@ export default function ChatPane({
   const [replyTo, setReplyTo] = useState<LocalMessage | undefined>();
   const [editing, setEditing] = useState<LocalMessage | undefined>();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The thread open beside the chat (the number of the message it hangs off).
+  const [openThread, setOpenThread] = useState<number | null>(null);
+  const phone = useMediaQuery(useTheme().breakpoints.down("md"));
   const files = useChatAttachments(conversationId);
 
   // Jumping: a link, a reply's quote or "first unread" asks for a message that may not be loaded. If it is, scroll to it;
@@ -117,6 +123,7 @@ export default function ChatPane({
     setEditing(undefined);
     setWindowSeq(null);
     setFocus(null);
+    setOpenThread(null);
   }, [conversationId]);
 
   const jumpTo = useCallback(
@@ -191,6 +198,15 @@ export default function ChatPane({
     [send, replyTo, files],
   );
 
+  const copyLink = async (m: LocalMessage) => {
+    try {
+      await navigator.clipboard.writeText(messageLink(window.location.origin, location.pathname, m.seq));
+      enqueueSnackbar("Message link copied", { variant: "success" });
+    } catch {
+      enqueueSnackbar("Couldn't copy the link", { variant: "error" });
+    }
+  };
+
   const actions = {
     onReply: (m: LocalMessage) => {
       setEditing(undefined);
@@ -224,14 +240,8 @@ export default function ChatPane({
         { onError: (e) => fail(e, on ? "Couldn't pin the message" : "Couldn't unpin the message") },
       ),
     onJumpTo: jumpTo,
-    onCopyLink: async (m: LocalMessage) => {
-      try {
-        await navigator.clipboard.writeText(messageLink(window.location.origin, location.pathname, m.seq));
-        enqueueSnackbar("Message link copied", { variant: "success" });
-      } catch {
-        enqueueSnackbar("Couldn't copy the link", { variant: "error" });
-      }
-    },
+    onCopyLink: copyLink,
+    onOpenThread: (m: LocalMessage) => setOpenThread(m.seq),
     onRemoveEmbeds: (m: LocalMessage) =>
       removeEmbeds.mutate({ conversationId, seq: m.seq }, { onError: (e) => fail(e, "Couldn't remove the preview") }),
     onRetry: (m: LocalMessage) =>
@@ -255,128 +265,156 @@ export default function ChatPane({
     },
   };
 
-  return (
-    <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", height: "100%" }}>
-      {header({
-        typingNames,
-        pins: <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} />,
-        search: (
-          <ChatSearchButton
-            conversationId={conversationId}
-            communityId={communityId}
-            scopeNoun={communityId ? "channel" : "chat"}
-            people={conversation.people}
-            lookup={lookup}
-          />
-        ),
-      })}
+  const threadPanel =
+    openThread === null ? null : (
+      <ThreadPanel
+        conversationId={conversationId}
+        rootSeq={openThread}
+        conversation={conversation}
+        layout={layout}
+        customEmoji={customEmoji}
+        canPost={canPost}
+        canPingAll={canPingAll}
+        canModerate={canModerate}
+        senderMeta={senderMeta}
+        onCopyLink={copyLink}
+        onClose={() => setOpenThread(null)}
+      />
+    );
 
-      {unread && !barDismissed && !windowReady && divider && divider.state !== "none" && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            px: 2,
-            py: 0.5,
-            flexShrink: 0,
-            bgcolor: "primary.main",
-            color: "primary.contrastText",
-          }}
-        >
-          <Typography variant="body2" sx={{ flex: 1 }}>
-            {unread.count} new {unread.count === 1 ? "message" : "messages"}
-          </Typography>
-          <Button
-            size="small"
-            color="inherit"
-            onClick={() => {
-              jumpTo(unread.from);
-              setBarDismissed(true);
+  return (
+    <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", height: "100%" }}>
+      <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", height: "100%" }}>
+        {header({
+          typingNames,
+          pins: <PinsButton conversationId={conversationId} lookup={lookup} canPin={canPin} />,
+          threads: <ThreadsButton conversationId={conversationId} lookup={lookup} onOpen={setOpenThread} />,
+          search: (
+            <ChatSearchButton
+              conversationId={conversationId}
+              communityId={communityId}
+              scopeNoun={communityId ? "channel" : "chat"}
+              people={conversation.people}
+              lookup={lookup}
+            />
+          ),
+        })}
+
+        {unread && !barDismissed && !windowReady && divider && divider.state !== "none" && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              px: 2,
+              py: 0.5,
+              flexShrink: 0,
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
             }}
           >
-            Jump to first unread
-          </Button>
-          <IconButton size="small" color="inherit" aria-label="Dismiss" onClick={() => setBarDismissed(true)}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      )}
+            <Typography variant="body2" sx={{ flex: 1 }}>
+              {unread.count} new {unread.count === 1 ? "message" : "messages"}
+            </Typography>
+            <Button
+              size="small"
+              color="inherit"
+              onClick={() => {
+                jumpTo(unread.from);
+                setBarDismissed(true);
+              }}
+            >
+              Jump to first unread
+            </Button>
+            <IconButton size="small" color="inherit" aria-label="Dismiss" onClick={() => setBarDismissed(true)}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        )}
 
-      {messagesQuery.isLoading ? (
-        <Box sx={{ flex: 1 }} aria-busy />
-      ) : messages.length === 0 ? (
-        <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <EmptyState title="No messages yet" description={emptyDescription} sx={{ py: 2 }} />
-        </Box>
-      ) : (
-        <MessageList
-          conversation={conversation}
-          messages={messages}
-          lookup={lookup}
-          meId={user.id}
-          hasMore={!windowReady && !!messagesQuery.hasNextPage}
-          loadingMore={messagesQuery.isFetchingNextPage}
-          focus={focus}
-          unreadFromSeq={divider?.state === "at" ? divider.seq : undefined}
-          windowMode={windowSeq !== null}
-          onJumpToPresent={jumpToPresent}
-          onLoadMore={() => messagesQuery.fetchNextPage()}
-          typingNames={typingNames}
-          customEmoji={customEmoji}
-          canPin={canPin}
-          layout={layout}
-          canModerate={canModerate}
-          senderMeta={senderMeta}
-          actions={actions}
+        {messagesQuery.isLoading ? (
+          <Box sx={{ flex: 1 }} aria-busy />
+        ) : messages.length === 0 ? (
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <EmptyState title="No messages yet" description={emptyDescription} sx={{ py: 2 }} />
+          </Box>
+        ) : (
+          <MessageList
+            conversation={conversation}
+            messages={messages}
+            lookup={lookup}
+            meId={user.id}
+            hasMore={!windowReady && !!messagesQuery.hasNextPage}
+            loadingMore={messagesQuery.isFetchingNextPage}
+            focus={focus}
+            unreadFromSeq={divider?.state === "at" ? divider.seq : undefined}
+            windowMode={windowSeq !== null}
+            onJumpToPresent={jumpToPresent}
+            onLoadMore={() => messagesQuery.fetchNextPage()}
+            typingNames={typingNames}
+            customEmoji={customEmoji}
+            canPin={canPin}
+            layout={layout}
+            canModerate={canModerate}
+            senderMeta={senderMeta}
+            actions={actions}
+          />
+        )}
+
+        {canPost ? (
+          <Composer
+            conversationId={conversationId}
+            title={title}
+            lookup={lookup}
+            customEmoji={customEmoji}
+            mentionable={conversation.people}
+            canPingAll={canPingAll}
+            meId={user.id}
+            replyTo={replyTo}
+            editing={editing}
+            onCancelContext={() => {
+              setReplyTo(undefined);
+              setEditing(undefined);
+            }}
+            hasAttachments={files.attachments.length > 0}
+            busy={files.busy}
+            attach={<AttachButton onFiles={files.addFiles} onChooseFromDrive={() => setPickerOpen(true)} />}
+            tray={<AttachmentTray items={files.items} onRemove={files.remove} />}
+            onSend={sendText}
+            onSaveEdit={async (body) => {
+              const target = editing;
+              setEditing(undefined);
+              if (!target || body === target.body) return;
+              try {
+                await edit.mutateAsync({ conversationId, seq: target.seq, body });
+              } catch (e) {
+                fail(e, "Couldn't save the edit");
+              }
+            }}
+          />
+        ) : (
+          <Box sx={{ flexShrink: 0, px: 2.5, py: 2, borderTop: 1, borderColor: "divider" }}>
+            <Typography variant="body2" color="text.secondary">
+              You can read this channel but not post in it.
+            </Typography>
+          </Box>
+        )}
+
+        <DriveFilePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={files.addDriveFiles}
+          excludeIds={files.items.map((i) => i.fileId ?? "")}
         />
+      </Box>
+      {threadPanel && !phone && (
+        <Box sx={{ width: 380, flexShrink: 0, borderLeft: 1, borderColor: "divider", minHeight: 0 }}>{threadPanel}</Box>
       )}
-
-      {canPost ? (
-        <Composer
-          conversationId={conversationId}
-          title={title}
-          lookup={lookup}
-          customEmoji={customEmoji}
-          mentionable={conversation.people}
-          canPingAll={canPingAll}
-          meId={user.id}
-          replyTo={replyTo}
-          editing={editing}
-          onCancelContext={() => {
-            setReplyTo(undefined);
-            setEditing(undefined);
-          }}
-          hasAttachments={files.attachments.length > 0}
-          busy={files.busy}
-          attach={<AttachButton onFiles={files.addFiles} onChooseFromDrive={() => setPickerOpen(true)} />}
-          tray={<AttachmentTray items={files.items} onRemove={files.remove} />}
-          onSend={sendText}
-          onSaveEdit={async (body) => {
-            const target = editing;
-            setEditing(undefined);
-            if (!target || body === target.body) return;
-            try {
-              await edit.mutateAsync({ conversationId, seq: target.seq, body });
-            } catch (e) {
-              fail(e, "Couldn't save the edit");
-            }
-          }}
-        />
-      ) : (
-        <Box sx={{ flexShrink: 0, px: 2.5, py: 2, borderTop: 1, borderColor: "divider" }}>
-          <Typography variant="body2" color="text.secondary">
-            You can read this channel but not post in it.
-          </Typography>
-        </Box>
+      {threadPanel && phone && (
+        <Dialog fullScreen open onClose={() => setOpenThread(null)}>
+          {threadPanel}
+        </Dialog>
       )}
-
-      <DriveFilePicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onPick={files.addDriveFiles}
-        excludeIds={files.items.map((i) => i.fileId ?? "")}
-      />
     </Box>
   );
 }

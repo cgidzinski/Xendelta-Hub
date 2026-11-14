@@ -6,6 +6,7 @@ import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LinkIcon from "@mui/icons-material/Link";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -23,7 +24,7 @@ import { quickReactions, readRecentEmoji, rememberEmoji } from "../../../../comp
 import type { LocalMessage } from "../../../../utils/chatCache";
 import { alpha, type Theme } from "@mui/material/styles";
 import { roleTextColor } from "../../Communities/communityUi";
-import { clock, nameFor, reactedBy, type PeopleLookup } from "../chatUi";
+import { clock, listTime, nameFor, reactedBy, type PeopleLookup } from "../chatUi";
 import { isEmojiOnly } from "../../../../components/emoji/emojiText";
 
 function AttachmentCard({
@@ -98,6 +99,8 @@ export interface MessageBubbleProps {
   /** Scroll to a message (a reply's original). */
   onJumpTo: (seq: number) => void;
   onCopyLink: (m: LocalMessage) => void;
+  /** Open the thread under this message (start it if it has none). Absent inside a thread, where there is no nesting. */
+  onOpenThread?: (m: LocalMessage) => void;
   onRetry: (m: LocalMessage) => void;
   onDiscard: (m: LocalMessage) => void;
   onOpenAttachment: (m: LocalMessage, a: ChatAttachment) => void;
@@ -150,6 +153,25 @@ export default function MessageBubble(props: MessageBubbleProps) {
           />
         ))}
       </>
+    ) : null;
+
+  // How many replies the thread under this message has: a button that opens it.
+  const threadChip =
+    !deleted && m.thread && props.onOpenThread ? (
+      <Button
+        size="small"
+        startIcon={<ForumOutlinedIcon fontSize="small" />}
+        onClick={() => props.onOpenThread!(m)}
+        aria-label={`Open thread, ${m.thread.count} ${m.thread.count === 1 ? "reply" : "replies"}`}
+        sx={{ textTransform: "none", mt: 0.5, px: 1, py: 0, minHeight: 26 }}
+      >
+        {m.thread.count} {m.thread.count === 1 ? "reply" : "replies"}
+        {m.thread.lastAt && (
+          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            Last reply {listTime(m.thread.lastAt)}
+          </Typography>
+        )}
+      </Button>
     ) : null;
 
   // Who the message names, as the server accepted it: only they get a chip, and the sender isn't one of them.
@@ -209,6 +231,16 @@ export default function MessageBubble(props: MessageBubbleProps) {
         >
           <ReplyIcon fontSize="small" sx={{ mr: 1.5 }} /> Reply
         </MenuItem>
+        {props.onOpenThread && stored && m.kind === "text" && !deleted && (
+          <MenuItem
+            onClick={() => {
+              props.onOpenThread!(m);
+              close();
+            }}
+          >
+            <ForumOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> {m.thread ? "Open thread" : "Reply in thread"}
+          </MenuItem>
+        )}
         {props.canPin && (
           <MenuItem
             onClick={() => {
@@ -411,6 +443,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
           )}
 
           {previews}
+          {threadChip}
 
           {m.reactions.length > 0 && (
             <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
@@ -597,6 +630,7 @@ export default function MessageBubble(props: MessageBubbleProps) {
         </Box>
 
         {previews}
+        {threadChip}
 
         {m.reactions.length > 0 && (
           <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 0.5 }}>
