@@ -219,6 +219,7 @@ require("./routes/users.ts")(app);
 require("./routes/people.ts")(app);
 require("./routes/apiKeys.ts")(app);
 require("./routes/shop.ts")(app);
+require("./routes/billing.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/push.ts")(app);
 require("./routes/chat")(app);

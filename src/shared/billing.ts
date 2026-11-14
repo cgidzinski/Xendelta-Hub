@@ -302,3 +302,52 @@ export interface CommunityFund {
   /** Whether donating is offered yet: only once something is billed to communities. */
   donationsOpen: boolean;
 }
+
+/** A cost center as the Billing view lists it, even before it has any usage. */
+export interface BillingCenterInfo {
+  id: CostCenterId;
+  label: string;
+  description: string;
+  displayUnit: string;
+  /** Gems per display unit, margin included (0 while free). */
+  rate: number;
+  free: boolean;
+}
+
+/** A closed month on the Billing view. */
+export interface PastStatement {
+  month: string;
+  lines: StatementLine[];
+  usageGems: number;
+  freeTierUsed: number;
+  amountDue: number;
+  paid: number;
+  unpaid: number;
+  status: "pending" | "free" | "paid" | "unpaid" | "shadow";
+}
+
+/** Everything the Billing view shows for one account: a person's own bill, or a community's. */
+export interface BillingOverview {
+  account: { type: "user" | "community"; id: string };
+  month: string;
+  /** False in shadow mode: bills are shown but nothing is charged. */
+  enforced: boolean;
+  /** True while every center is free. */
+  everythingFree: boolean;
+  centers: BillingCenterInfo[];
+  /** This month so far. */
+  current: Statement;
+  /** This month's usage if it carries on at the same pace (exact gems). */
+  projectedGems: number;
+  /** What the projection would owe beyond the free tier (whole gems). */
+  projectedDue: number;
+  /** The person's gems, or the community's fund. */
+  balance: number;
+  /** Owed from earlier months. */
+  unpaid: number;
+  /** Months the balance covers at the projected rate; null when nothing is due (it covers any number). */
+  monthsCovered: number | null;
+  statements: PastStatement[];
+  /** Communities only: whether the Donate button is offered yet. */
+  donationsOpen?: boolean;
+}
