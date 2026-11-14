@@ -43,6 +43,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
+      "Make a community for a group, with its own channels, roles and people, and invite hub users to join.",
+      "Make a channel private or read-only, and give people roles with the permissions you choose.",
       "Find the people you share groups, books and notebooks with, and message them.",
       "Get notifications on your phone or computer, and by email if you want them.",
       "Send a link, some text or a photo from your phone's Share button, then save it as a note, a short link, a file or the start of an expense.",
@@ -54,6 +56,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       {
         text: "Press Edit next to Pinned apps on Home to pin the apps you use. They show up at the top with a count of what is waiting.",
         link: "/internal",
+      },
+      {
+        text: "Try Communities to chat with a group in separate channels. Use the invite button to ask people to join.",
+        link: "/internal/communities",
       },
       {
         text: "Open Messages to chat with a person or a group, and send photos in the conversation.",

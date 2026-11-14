@@ -8,7 +8,10 @@ export const API_KEY_PREFIX = "xd_";
 /** Per user. */
 export const API_KEY_MAX_PER_USER = 20;
 
-/** App key (the same keys as the client's APPS_REGISTRY) -> the URL path prefixes that belong to it. */
+/**
+ * App key (the same keys as the client's APPS_REGISTRY) -> the URL path prefixes that belong to it. Chat and
+ * communities (/api/chat, /api/communities, /api/community-invites) are not listed on purpose: a key can't reach them.
+ */
 export const API_KEY_APPS: Record<string, readonly string[]> = {
   recipaint: ["/api/recipaint", "/api/paints", "/api/paint-catalogue"],
   xendrive: ["/api/xendrive"],
