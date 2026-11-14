@@ -9,7 +9,9 @@ import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutl
 import DownloadIcon from "@mui/icons-material/Download";
 import type { ChatAttachment } from "@shared/chat";
 import { formatFileSize } from "../../../../utils/fileUtils";
-import { QUICK_REACTIONS } from "../../../../constants/chat";
+import AddReactionOutlinedIcon from "@mui/icons-material/AddReactionOutlined";
+import EmojiPopover from "../../../../components/emoji/EmojiPopover";
+import { quickReactions, readRecentEmoji, rememberEmoji } from "../../../../components/emoji/emojiPrefs";
 import type { LocalMessage } from "../../../../utils/chatCache";
 import type { Theme } from "@mui/material/styles";
 import { roleTextColor } from "../../Communities/communityUi";
@@ -101,64 +103,85 @@ export default function MessageBubble(props: MessageBubbleProps) {
   const stored = !m.status;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = () => setAnchor(null);
+  // The full picker opens where the menu was, so the menu closes first and remembers its place.
+  const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null);
+  // What you used lately comes first, so the row adapts to you. Read when the menu opens, not on every render.
+  const quick = anchor ? quickReactions(readRecentEmoji()) : [];
+  const react = (emoji: string) => {
+    rememberEmoji(emoji);
+    props.onReact(m, emoji);
+  };
 
   const menu = (
-    <Menu anchorEl={anchor} open={!!anchor} onClose={close}>
-      <Box sx={{ display: "flex", gap: 0.5, px: 1.5, py: 0.5 }}>
-        {QUICK_REACTIONS.map((emoji) => (
+    <>
+      <EmojiPopover anchorEl={pickerAnchor} onClose={() => setPickerAnchor(null)} onPick={react} placement="below" />
+      <Menu anchorEl={anchor} open={!!anchor} onClose={close}>
+        <Box sx={{ display: "flex", gap: 0.5, px: 1.5, py: 0.5 }}>
+          {quick.map((emoji) => (
+            <IconButton
+              key={emoji}
+              size="small"
+              aria-label={`React with ${emoji}`}
+              onClick={() => {
+                react(emoji);
+                close();
+              }}
+            >
+              {emoji}
+            </IconButton>
+          ))}
           <IconButton
-            key={emoji}
             size="small"
-            aria-label={`React with ${emoji}`}
+            aria-label="More reactions"
             onClick={() => {
-              props.onReact(m, emoji);
+              setPickerAnchor(anchor);
               close();
             }}
           >
-            {emoji}
+            <AddReactionOutlinedIcon fontSize="small" />
           </IconButton>
-        ))}
-      </Box>
-      <MenuItem
-        onClick={() => {
-          props.onReply(m);
-          close();
-        }}
-      >
-        <ReplyIcon fontSize="small" sx={{ mr: 1.5 }} /> Reply
-      </MenuItem>
-      {m.body && (
+        </Box>
         <MenuItem
           onClick={() => {
-            void navigator.clipboard?.writeText(m.body);
+            props.onReply(m);
             close();
           }}
         >
-          <ContentCopyIcon fontSize="small" sx={{ mr: 1.5 }} /> Copy text
+          <ReplyIcon fontSize="small" sx={{ mr: 1.5 }} /> Reply
         </MenuItem>
-      )}
-      {mine && m.body && (
-        <MenuItem
-          onClick={() => {
-            props.onEdit(m);
-            close();
-          }}
-        >
-          <EditOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> Edit
-        </MenuItem>
-      )}
-      {canDelete && (
-        <MenuItem
-          sx={{ color: "error.main" }}
-          onClick={() => {
-            props.onDelete(m);
-            close();
-          }}
-        >
-          <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.5 }} /> Delete
-        </MenuItem>
-      )}
-    </Menu>
+        {m.body && (
+          <MenuItem
+            onClick={() => {
+              void navigator.clipboard?.writeText(m.body);
+              close();
+            }}
+          >
+            <ContentCopyIcon fontSize="small" sx={{ mr: 1.5 }} /> Copy text
+          </MenuItem>
+        )}
+        {mine && m.body && (
+          <MenuItem
+            onClick={() => {
+              props.onEdit(m);
+              close();
+            }}
+          >
+            <EditOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> Edit
+          </MenuItem>
+        )}
+        {canDelete && (
+          <MenuItem
+            sx={{ color: "error.main" }}
+            onClick={() => {
+              props.onDelete(m);
+              close();
+            }}
+          >
+            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.5 }} /> Delete
+          </MenuItem>
+        )}
+      </Menu>
+    </>
   );
 
   if (layout === "flat") {

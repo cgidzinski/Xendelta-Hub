@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Box, IconButton, InputBase, Typography, useMediaQuery } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
+import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined";
+import EmojiPopover from "../../../../components/emoji/EmojiPopover";
 import CloseIcon from "@mui/icons-material/Close";
 import { CHAT_BODY_MAX } from "@shared/chat";
 import type { LocalMessage } from "../../../../utils/chatCache";
@@ -45,6 +47,7 @@ export default function Composer({
 }: ComposerProps) {
   const [text, setText] = useState("");
   const input = useRef<HTMLTextAreaElement>(null);
+  const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   const coarse = useMediaQuery("(pointer: coarse)");
   const { onInput, stop } = useTypingSender(conversationId);
 
@@ -53,6 +56,19 @@ export default function Composer({
     input.current?.focus();
   }, [editing, replyTo]);
   useEffect(() => setText(""), [conversationId]);
+
+  // Put the emoji where the cursor is (replacing any selection), and leave the cursor after it.
+  const insertEmoji = (emoji: string) => {
+    const el = input.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? start;
+    setText((text.slice(0, start) + emoji + text.slice(end)).slice(0, CHAT_BODY_MAX));
+    onInput();
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  };
 
   const canSend = (text.trim().length > 0 || (!editing && hasAttachments)) && !busy;
 
@@ -106,6 +122,9 @@ export default function Composer({
         {tray}
         <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
           {!editing && attach}
+          <IconButton aria-label="Add emoji" onClick={(e) => setEmojiAnchor(e.currentTarget)}>
+            <EmojiEmotionsOutlinedIcon />
+          </IconButton>
           <InputBase
             multiline
             maxRows={6}
@@ -143,6 +162,7 @@ export default function Composer({
           </IconButton>
         </Box>
       </Box>
+      <EmojiPopover anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)} onPick={insertEmoji} />
     </Box>
   );
 }
