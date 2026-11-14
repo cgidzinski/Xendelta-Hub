@@ -43,7 +43,6 @@ export interface Draft {
   title: string;
   description: string;
   category_id: string | null;
-  tags: string[];
   notes: string;
   servings: string;
   prep_minutes: string;
@@ -96,7 +95,6 @@ export function draftFrom(item: KitchenItem | null | undefined, categoryId: stri
       title: "",
       description: "",
       category_id: categoryId,
-      tags: [],
       notes: "",
       servings: "",
       prep_minutes: "",
@@ -124,7 +122,6 @@ export function draftFrom(item: KitchenItem | null | undefined, categoryId: stri
     title: item.title,
     description: item.description,
     category_id: item.category_id ?? null,
-    tags: item.tags,
     notes: item.notes,
     servings: numStr(item.servings),
     prep_minutes: numStr(item.prep_minutes),
@@ -165,7 +162,6 @@ export function inputFrom(d: Draft): KitchenItemInput {
     title: d.title.trim() || "Untitled",
     description: d.description,
     category_id: d.category_id,
-    tags: d.tags,
     notes: d.notes,
     servings: strNum(d.servings),
     prep_minutes: strNum(d.prep_minutes),
@@ -206,7 +202,6 @@ export function draftFromImport(recipe: ImportedKitchenRecipe, categoryId: strin
     ...base,
     title: recipe.title,
     description: recipe.description,
-    tags: recipe.tags,
     servings: numStr(recipe.servings),
     prep_minutes: numStr(recipe.prep_minutes),
     cook_minutes: numStr(recipe.cook_minutes),
@@ -225,12 +220,11 @@ export function moveIn<T>(list: T[], i: number, d: number): T[] {
 }
 
 // Optional fields, hidden behind "+ …" chips until used.
-export type Extra = "description" | "tags" | "times" | "brand" | "storage" | "notes";
+export type Extra = "description" | "times" | "brand" | "storage" | "notes";
 
 export function filledExtras(d: Draft): Set<Extra> {
   const s = new Set<Extra>();
   if (d.description.trim()) s.add("description");
-  if (d.tags.length) s.add("tags");
   if (d.servings || d.prep_minutes || d.cook_minutes) s.add("times");
   if (d.brand.trim()) s.add("brand");
   if (d.storage_note.trim()) s.add("storage");

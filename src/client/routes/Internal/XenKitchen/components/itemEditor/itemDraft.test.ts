@@ -16,7 +16,6 @@ const recipe: ImportedKitchenRecipe = {
     { text: "Mix.", timer_minutes: null },
     { text: "Fry.", timer_minutes: null },
   ],
-  tags: ["breakfast", "quick"],
   source_url: "https://food.example.com/pancakes",
   image_url: "https://img.example.com/p.jpg",
 };
@@ -31,7 +30,6 @@ describe("draftFromImport", () => {
       servings: "4",
       prep_minutes: "10",
       cook_minutes: "",
-      tags: ["breakfast", "quick"],
       source_url: "https://food.example.com/pancakes",
     });
     expect(d.steps.map((s) => s.text)).toEqual(["Mix.", "Fry."]);

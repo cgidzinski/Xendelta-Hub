@@ -35,14 +35,13 @@ const RECIPE_SCHEMA = {
     cook_minutes: { type: "string" },
     ingredient_lines: { type: "array", items: { type: "string" } },
     steps: { type: "array", items: { type: "string" } },
-    tags: { type: "array", items: { type: "string" } },
   },
-  required: ["title", "description", "servings", "prep_minutes", "cook_minutes", "ingredient_lines", "steps", "tags"],
+  required: ["title", "description", "servings", "prep_minutes", "cook_minutes", "ingredient_lines", "steps"],
 };
 
 const STRUCTURE_PROMPT =
   "This picture is a recipe. Copy it into JSON: title, description, servings, prep_minutes, cook_minutes, " +
-  "ingredient_lines, steps, tags. Look for a title, a short description, how many it serves, prep and cook times (in " +
+  "ingredient_lines, steps. Look for a title, a short description, how many it serves, prep and cook times (in " +
   "whole minutes), the ingredient list and the method, and put anything the picture gives into the matching field. " +
   "Use only what the picture says: an empty string, or an empty list, when something is missing. Write one ingredient " +
   "per line as it appears (amount, unit, then the ingredient) and one instruction per step. Do not invent " +

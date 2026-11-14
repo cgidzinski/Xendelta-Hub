@@ -11,13 +11,7 @@ import {
   type HasMembers,
   type MemberChange,
 } from "./membership";
-import {
-  KitchenFilters,
-  KitchenLayout,
-  normalizeIngredientName,
-  normalizeTag,
-  totalMinutes,
-} from "@shared/xenkitchen/kitchen";
+import { KitchenFilters, KitchenLayout, normalizeIngredientName, totalMinutes } from "@shared/xenkitchen/kitchen";
 
 /** 128 random bits, URL safe: 22 characters. Unguessable, so a link is the only way in. */
 export function generateShareToken(): string {
@@ -90,9 +84,6 @@ export function itemFieldsFromBody(body: any): Record<string, unknown> {
     out.source_url = isSafeUrl(body.source_url.trim()) ? body.source_url.trim() : "";
 
   if ("category_id" in body) out.category_id = body.category_id || null;
-  if (Array.isArray(body.tags)) {
-    out.tags = [...new Set<string>(body.tags.map(normalizeTag).filter(Boolean))].slice(0, 20);
-  }
   for (const k of ["servings", "prep_minutes", "cook_minutes"]) {
     if (k in body) out[k] = cleanNum(body[k]);
   }
@@ -137,14 +128,7 @@ export function itemFieldsFromBody(body: any): Record<string, unknown> {
 // ---------- listing ----------
 
 function searchableText(item: any): string {
-  return [
-    item.title,
-    item.description,
-    item.brand,
-    item.notes,
-    ...(item.tags || []),
-    ...(item.ingredients || []).map((i: any) => i.name),
-  ]
+  return [item.title, item.description, item.brand, item.notes, ...(item.ingredients || []).map((i: any) => i.name)]
     .join(" \n ")
     .toLowerCase();
 }
@@ -161,7 +145,6 @@ export function applyKitchenFilters(
   uid = "",
 ): any[] {
   const words = f.q.toLowerCase().split(/\s+/).filter(Boolean);
-  const wantTags = f.tags.map(normalizeTag);
   const wantIngredients = f.ingredients.map(normalizeIngredientName);
 
   const out = items.filter((item) => {
@@ -169,7 +152,6 @@ export function applyKitchenFilters(
     if (f.layout && layoutFor(item, categories) !== f.layout) return false;
     if (f.category === "none" ? cat && categories.has(cat) : f.category && cat !== f.category) return false;
     if (f.favorite && !(item.favorited_by || []).includes(uid)) return false;
-    if (wantTags.length && !wantTags.every((t) => (item.tags || []).includes(t))) return false;
     if (wantIngredients.length) {
       const keys = (item.ingredients || []).map((i: any) => i.name_key || normalizeIngredientName(i.name));
       if (!wantIngredients.every((w) => keys.some((k: string) => k.includes(w)))) return false;
@@ -243,14 +225,6 @@ export function suggestIngredients(items: any[], query: string, limit = 15): Ing
     .map(({ name, unit, count }) => ({ name, unit, count }));
 }
 
-export function collectTags(items: any[]): Array<{ tag: string; count: number }> {
-  const counts = new Map<string, number>();
-  for (const item of items) for (const t of item.tags || []) counts.set(t, (counts.get(t) ?? 0) + 1);
-  return [...counts.entries()]
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
-}
-
 // ---------- serializing ----------
 
 const pick = (sub: any[] | undefined) =>
@@ -281,7 +255,6 @@ export function serializeItem(raw: any, categories: Map<string, CategoryLike>, o
       ? { _id: String(cat._id), name: cat.name, color: cat.color, icon: cat.icon, layout: cat.layout }
       : null,
     layout: cat?.layout ?? "recipe",
-    tags: item.tags || [],
     notes: item.notes || "",
     images: (item.images || []).map((i: any) => ({ _id: String(i._id), url: i.url })),
     servings: item.servings ?? null,

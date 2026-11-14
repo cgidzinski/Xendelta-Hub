@@ -295,22 +295,22 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenKitchen to plan the week's meals and get a shopping list.", link: "/internal/xenkitchen" },
     features: [
       "Keep recipe books, and share them with others as editors or viewers.",
-      "Write recipes with photos, tags, times, servings, ingredient sections and steps with timers.",
+      "Write recipes with photos, times, servings, ingredient sections and steps with timers.",
       "Import a recipe from a web address.",
-      "Import a recipe from a photo of it, like a recipe card or a page of a cookbook.",
+      "Import a recipe from photos of it, like a recipe card or the pages of a cookbook.",
       "Scale the servings and switch between metric and US units.",
       "Cook one step at a time in big text, with timers and the screen kept awake.",
       "Plan meals week by week.",
       "Get a shopping list for the planned meals with the ingredients added up, and send it to XenNote to tick off in the shop.",
-      "Organize recipes with categories and tags, and mark favourites.",
-      "Search and filter recipes by favourite, tag or ingredient.",
+      "Organize recipes with categories, and mark favourites.",
+      "Search and filter recipes by favourite or ingredient.",
       "Share a recipe or a whole book with a link anyone can read.",
       "Copy or move a recipe between books.",
     ],
     tips: [
       { text: "Paste a web address into Import and the recipe is filled in for you.", link: "/internal/xenkitchen" },
       {
-        text: "Photograph a recipe card or a cookbook page in Import and the recipe is read off it for you to check.",
+        text: "Photograph a recipe card or a few cookbook pages in Import and the recipe is read off them for you to check.",
         link: "/internal/xenkitchen",
       },
       {

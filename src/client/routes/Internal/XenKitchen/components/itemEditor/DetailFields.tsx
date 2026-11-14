@@ -4,13 +4,11 @@ import { type KitchenLayout } from "@shared/xenkitchen/kitchen";
 import { type KitchenBook, type KitchenCategory } from "../../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView } from "../kitchenIcons";
 import { Draft, Extra } from "./itemDraft";
-import { TagField } from "./editorFields";
 
 type SetDraft = (p: Partial<Draft>) => void;
 
 const EXTRA_LABELS: Record<Extra, string> = {
   description: "Description",
-  tags: "Tags",
   times: "Servings & time",
   brand: "Brand",
   storage: "Storage",
@@ -18,8 +16,8 @@ const EXTRA_LABELS: Record<Extra, string> = {
 };
 // Serves / time (recipes) and brand (box instructions) are always shown; these are the optional extras.
 export const EXTRAS_FOR: Record<KitchenLayout, Extra[]> = {
-  recipe: ["description", "tags", "notes"],
-  instructions: ["storage", "description", "tags", "notes"],
+  recipe: ["description", "notes"],
+  instructions: ["storage", "description", "notes"],
 };
 
 /** The category picker (grouped by layout) and, for a new item with more than one book to pick from, the book. */
@@ -218,8 +216,6 @@ export function ExtraFields({
                     slotProps={{ htmlInput: { maxLength: 2000 } }}
                   />
                 );
-              case "tags":
-                return <TagField key={e} value={draft.tags} onChange={(tags) => set({ tags })} />;
               case "storage":
                 return (
                   <TextField

@@ -227,9 +227,6 @@ export default function XenKitchen() {
     filters.maxMinutes &&
       chip("time", `≤ ${filters.maxMinutes} min`, () => setFilters({ ...filters, maxMinutes: null })),
     filters.method && chip("method", COOK_METHOD_LABELS[filters.method], () => setFilters({ ...filters, method: "" })),
-    ...filters.tags.map((t) =>
-      chip(`t-${t}`, `#${t}`, () => setFilters({ ...filters, tags: filters.tags.filter((x) => x !== t) })),
-    ),
     ...filters.ingredients.map((i) =>
       chip(`i-${i}`, `with ${i}`, () =>
         setFilters({ ...filters, ingredients: filters.ingredients.filter((x) => x !== i) }),
@@ -348,7 +345,7 @@ export default function XenKitchen() {
         <Stack direction="row" spacing={1}>
           <TextField
             fullWidth
-            placeholder={activeCategory ? `Search ${activeCategory.name}` : "Search titles, ingredients, tags…"}
+            placeholder={activeCategory ? `Search ${activeCategory.name}` : "Search titles and ingredients…"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             slotProps={{
@@ -431,7 +428,6 @@ export default function XenKitchen() {
                 favorite: false,
                 maxMinutes: null,
                 method: "",
-                tags: [],
                 ingredients: [],
               })
             }
@@ -490,7 +486,6 @@ export default function XenKitchen() {
                     favorite: false,
                     maxMinutes: null,
                     method: "",
-                    tags: [],
                     ingredients: [],
                   })
                 }

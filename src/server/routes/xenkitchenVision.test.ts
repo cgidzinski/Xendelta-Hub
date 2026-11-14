@@ -41,6 +41,7 @@ const STRUCTURED = {
   cook_minutes: "15",
   ingredient_lines: ["2 cups flour", "1 tsp salt", "2 eggs"],
   steps: ["Mix it all.", "Fry in butter."],
+  // Extra fields the model sends are dropped.
   tags: ["breakfast"],
 };
 
@@ -107,7 +108,7 @@ describe("reading a recipe from a photo", () => {
       { text: "Mix it all.", timer_minutes: null },
       { text: "Fry in butter.", timer_minutes: null },
     ]);
-    expect(recipe.tags).toEqual(["breakfast"]);
+    expect(recipe).not.toHaveProperty("tags");
 
     // One call, to the vision model, carrying the schema and a downscaled WebP data URI.
     expect(calls).toHaveLength(1);

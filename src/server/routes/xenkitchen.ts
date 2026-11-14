@@ -46,7 +46,6 @@ import {
   canView,
   CategoryLike,
   changeRole,
-  collectTags,
   generateShareToken,
   itemFieldsFromBody,
   pickTargetCategory,
@@ -745,17 +744,6 @@ module.exports = function (app: any) {
         .exec();
       const q = typeof req.query.q === "string" ? req.query.q.slice(0, 60) : "";
       res.json({ status: true, message: "OK", data: { suggestions: suggestIngredients(items, q) } });
-    }),
-  );
-
-  app.get(
-    "/api/xenkitchen/tags",
-    authenticateToken,
-    handle(async (req, res) => {
-      const items = await XenKitchenItem.find({ book_id: { $in: await myBookIds(callerId(req)) } }, "tags")
-        .lean()
-        .exec();
-      res.json({ status: true, message: "OK", data: { tags: collectTags(items) } });
     }),
   );
 

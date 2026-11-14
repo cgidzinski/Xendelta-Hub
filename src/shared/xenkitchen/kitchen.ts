@@ -83,11 +83,6 @@ export function normalizeIngredientName(name: string): string {
   return (name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-/** Normalise a tag the same way everywhere: trimmed, single-spaced, lowercase. */
-export function normalizeTag(tag: string): string {
-  return (tag || "").trim().replace(/\s+/g, " ").toLowerCase().slice(0, 30);
-}
-
 // ---------- quantities ----------
 
 const UNICODE_FRACTIONS: Record<string, number> = {
@@ -391,7 +386,6 @@ export interface KitchenFilters {
   layout: KitchenLayout | "";
   /** Category id, "none" for uncategorised, "" for all. */
   category: string;
-  tags: string[];
   ingredients: string[];
   favorite: boolean;
   method: CookMethod | "";
@@ -403,7 +397,6 @@ export const EMPTY_FILTERS: KitchenFilters = {
   q: "",
   layout: "",
   category: "",
-  tags: [],
   ingredients: [],
   favorite: false,
   method: "",
@@ -425,7 +418,6 @@ export function filtersFromParams(p: ParamsLike, defaultSort: KitchenSort = "upd
     q: (p.get("q") || "").slice(0, 100),
     layout: type === "recipes" ? "recipe" : type === "instructions" ? "instructions" : "",
     category: p.get("category") || "",
-    tags: p.getAll("tag").filter(Boolean).slice(0, 10),
     ingredients: p.getAll("ingredient").filter(Boolean).slice(0, 10),
     favorite: p.get("favorite") === "1",
     method: (COOK_METHODS as string[]).includes(method) ? (method as CookMethod) : "",
@@ -440,7 +432,6 @@ export function filtersToParams(f: KitchenFilters, defaultSort: KitchenSort = "u
   if (f.layout) p.set("type", f.layout === "recipe" ? "recipes" : "instructions");
   if (f.q) p.set("q", f.q);
   if (f.category) p.set("category", f.category);
-  f.tags.forEach((t) => p.append("tag", t));
   f.ingredients.forEach((i) => p.append("ingredient", i));
   if (f.favorite) p.set("favorite", "1");
   if (f.method) p.set("method", f.method);
@@ -451,12 +442,5 @@ export function filtersToParams(f: KitchenFilters, defaultSort: KitchenSort = "u
 
 /** Number of active filters (search and sort excluded), for the Filters button badge. */
 export function activeFilterCount(f: KitchenFilters): number {
-  return (
-    (f.layout ? 1 : 0) +
-    f.tags.length +
-    f.ingredients.length +
-    (f.favorite ? 1 : 0) +
-    (f.method ? 1 : 0) +
-    (f.maxMinutes ? 1 : 0)
-  );
+  return (f.layout ? 1 : 0) + f.ingredients.length + (f.favorite ? 1 : 0) + (f.method ? 1 : 0) + (f.maxMinutes ? 1 : 0);
 }
