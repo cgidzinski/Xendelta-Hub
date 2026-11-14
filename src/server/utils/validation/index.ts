@@ -16,5 +16,6 @@ export * from "./xennote";
 export * from "./apiKeys";
 export * from "./chat";
 export * from "./communities";
+export * from "./emoji";
 export * from "./feed";
 export * from "./feedback";

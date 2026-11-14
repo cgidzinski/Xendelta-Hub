@@ -27,6 +27,7 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/user/link-github": "no body: authenticated trigger for an OAuth redirect flow",
   "POST /api/user/link-discord": "no body: authenticated trigger for an OAuth redirect flow",
   "POST /api/user/avatar": "multipart upload handled by multer, not JSON",
+  "POST /api/emoji": "multipart upload: the text fields are validated after multer reads them (uploadEmojiSchema)",
   "POST /api/recipaint/upload-asset": "multipart upload handled by multer, not JSON",
   "POST /api/admin/blog/upload-asset": "multipart upload handled by multer, not JSON",
   "POST /api/recipaint/:id/clone": "no body: clones the recipe named by the path",

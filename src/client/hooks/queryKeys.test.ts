@@ -8,6 +8,7 @@ import { xennoteKeys } from "./xennote/keys";
 import { chatKeys } from "./chat/keys";
 import { peopleKeys } from "./people/keys";
 import { communityKeys } from "./communities/keys";
+import { emojiKeys } from "./emoji/keys";
 
 describe("query keys", () => {
   it("XenSplit keys are the arrays the screens always used", () => {
@@ -101,6 +102,11 @@ describe("query keys", () => {
     expect(communityKeys.channels("c1").slice(0, 2)).toEqual([...communityKeys.allChannels()]);
   });
 
+  it("emoji keys nest under one root", () => {
+    expect(emojiKeys.list()).toEqual(["emoji", "list"]);
+    expect(emojiKeys.list().slice(0, 1)).toEqual([...emojiKeys.all]);
+  });
+
   it("no screen spells these keys out by hand again", () => {
     const root = join(__dirname, "..");
     const bad: string[] = [];
@@ -111,7 +117,9 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xendrive|xennote|chat|people|communities)"[,\]]/.test(readFileSync(full, "utf8"))
+          /\["(xensplit|xenbudget|xendrive|xennote|chat|people|communities|emoji)"[,\]]/.test(
+            readFileSync(full, "utf8"),
+          )
         )
           bad.push(relative(root, full));
       }

@@ -9,6 +9,7 @@ import EmptyState from "../../../../components/ui/EmptyState";
 import { RADIUS } from "../../../../theme";
 import { communityPath, initialsOf, settingsTabs } from "../communityUi";
 import ChannelsTab from "./ChannelsTab";
+import EmojiTab from "./EmojiTab";
 import MembersTab from "./MembersTab";
 import OverviewTab from "./OverviewTab";
 import RolesTab from "./RolesTab";
@@ -80,6 +81,7 @@ export default function CommunitySettings() {
       {current === "overview" && <OverviewTab community={community} />}
       {current === "channels" && <ChannelsTab community={community} channels={channels} />}
       {current === "roles" && <RolesTab community={community} />}
+      {current === "emoji" && <EmojiTab community={community} />}
       {current === "members" && <MembersTab community={community} />}
     </PageContainer>
   );

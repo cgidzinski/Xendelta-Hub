@@ -12,6 +12,7 @@ import { ChannelState } from "../models/channelState";
 import { unreadChannelCount } from "../communities/channels";
 import { audienceOf, resolveChatAccess, type ChatContext } from "./access";
 import { canPostChat } from "./policy";
+import { deleteEmojiOf } from "../emoji/cleanup";
 import {
   CHAT_PREVIEW_MAX,
   chatTitle,
@@ -318,6 +319,7 @@ registerDriveSource("chat", {
 
 /** A conversation ends when its last member leaves (or an admin clears everything). Attached files stay in XenDrive. */
 export async function deleteChat(conversationId: unknown): Promise<void> {
+  await deleteEmojiOf({ conversationId: String(conversationId) });
   await Message.deleteMany({ conversationId }).exec();
   await Conversation.deleteOne({ _id: conversationId }).exec();
 }

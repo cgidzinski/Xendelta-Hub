@@ -85,12 +85,20 @@ export function settingsTabs(community: Pick<Community, "permissions">) {
     { key: "overview", label: "Overview" },
     ...(has("manageChannels") ? [{ key: "channels", label: "Channels" }] : []),
     ...(has("manageRoles") ? [{ key: "roles", label: "Roles" }] : []),
+    ...(has("manageEmoji") ? [{ key: "emoji", label: "Emoji" }] : []),
     { key: "members", label: "Members" },
   ];
 }
 
 /** Whether the viewer has anything to do in the settings besides leaving. */
 export const canOpenSettings = (community: Pick<Community, "permissions">) =>
-  (["manageCommunity", "manageChannels", "manageRoles", "kickMembers", "invite"] as CommunityPermission[]).some((p) =>
-    community.permissions.includes(p),
-  );
+  (
+    [
+      "manageCommunity",
+      "manageChannels",
+      "manageRoles",
+      "manageEmoji",
+      "kickMembers",
+      "invite",
+    ] as CommunityPermission[]
+  ).some((p) => community.permissions.includes(p));

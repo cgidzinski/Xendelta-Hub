@@ -19,6 +19,8 @@ export interface RealtimeEvents {
   // Communities: the community changed (renamed, members, roles). `removed` means you are out of it or it was deleted.
   "community:updated": { communityId: string; removed?: boolean };
 
+  /** A community's or group chat's custom emoji changed. `scopeId` is the community or conversation. */
+  "emoji:changed": { scopeId: string };
   /** You were invited to a community, or an invite to you was taken back. Your list of invites changed. */
   "community:invite": { communityId: string };
   /** A channel in the community was added, changed, reordered or deleted. */

@@ -3,6 +3,7 @@ import { CommunityInvite } from "../models/communityInvite";
 import { AppError } from "../utils/http";
 import { loadPeople } from "../chat/service";
 import { realtime } from "../realtime";
+import { deleteEmojiOf } from "../emoji/cleanup";
 import { deleteChannelsOf, unreadChannelsByCommunity } from "./channels";
 import { communityPermissions } from "./policy";
 import type { ChatPerson } from "@shared/chat";
@@ -78,6 +79,7 @@ export function announceCommunity(community: CommunityDocument, removed: string[
 /** Delete a community with its channels and their messages. */
 export async function deleteCommunity(community: CommunityDocument): Promise<void> {
   await deleteChannelsOf(String(community._id));
+  await deleteEmojiOf({ communityId: String(community._id) });
   await CommunityInvite.deleteMany({ communityId: String(community._id) }).exec();
   await Community.deleteOne({ _id: community._id }).exec();
 }
