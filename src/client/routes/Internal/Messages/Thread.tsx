@@ -4,11 +4,9 @@ import { useTheme } from "@mui/material/styles";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
-import CallOutlinedIcon from "@mui/icons-material/CallOutlined";
-import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
 import { chatTitle } from "@shared/chat";
 import { useAuth } from "../../../contexts/AuthContext";
-import { CHAT_CALLS_ENABLED } from "../../../constants/chat";
+import { CallButtons } from "../../../components/calls/CallButtons";
 import { useConversation } from "../../../hooks/chat/useChat";
 import EmptyState from "../../../components/ui/EmptyState";
 import ChatAvatar from "./components/ChatAvatar";
@@ -131,20 +129,7 @@ export default function Thread({ conversationId, onBack }: ThreadProps) {
             </Typography>
           )}
         </Box>
-        {CHAT_CALLS_ENABLED && (
-          <>
-            <Tooltip title="Voice call">
-              <IconButton aria-label="Voice call">
-                <CallOutlinedIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Video call">
-              <IconButton aria-label="Video call">
-                <VideocamOutlinedIcon />
-              </IconButton>
-            </Tooltip>
-          </>
-        )}
+        <CallButtons conversationId={conversation._id} />
         {search}
         {threads}
         {pins}

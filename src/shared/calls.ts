@@ -44,6 +44,8 @@ export interface IceServer {
 /** What the join route answers: your Cloudflare session, the ICE servers to use, and the call so far. */
 export interface JoinedCall {
   sessionId: string;
+  /** Names and pictures of the people in the call. */
+  people: import("./chat").ChatPerson[];
   iceServers: IceServer[];
   call: CallState;
 }

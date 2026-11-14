@@ -27,6 +27,7 @@ import PinsButton from "../../../../components/chat/PinsButton";
 import ChatSearchButton from "../../../../components/chat/ChatSearchButton";
 import ForwardDialog from "../../../../components/chat/ForwardDialog";
 import CreatePollDialog from "../../../../components/chat/CreatePollDialog";
+import JoinCallStrip from "../../../../components/calls/JoinCallStrip";
 import ThreadPanel from "../../../../components/chat/ThreadPanel";
 import ThreadsButton from "../../../../components/chat/ThreadsButton";
 import AttachButton from "./AttachButton";
@@ -327,6 +328,8 @@ export default function ChatPane({
             />
           ),
         })}
+
+        <JoinCallStrip conversationId={conversationId} voiceChannel={!!communityId} />
 
         {unread && !barDismissed && !windowReady && divider && divider.state !== "none" && (
           <Box

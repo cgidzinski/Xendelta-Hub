@@ -33,6 +33,8 @@ import { xennoteRoutes } from "./routes/Internal/XenNote/routes";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SocketProvider } from "./contexts/SocketContext";
+import { CallProvider } from "./contexts/CallContext";
+import CallOverlay from "./components/calls/CallOverlay";
 
 // Routes - External
 const Landing = lazyPage(() => import("./routes/External/Landing/Landing"));
@@ -285,7 +287,10 @@ ReactDOM.createRoot(rootElement).render(
               <NavBarProvider>
                 <AppSnackbarProvider>
                   <ConfirmProvider>
-                    <RouterProvider router={router} />
+                    <CallProvider>
+                      <RouterProvider router={router} />
+                      <CallOverlay />
+                    </CallProvider>
                     <PWA />
                   </ConfirmProvider>
                 </AppSnackbarProvider>

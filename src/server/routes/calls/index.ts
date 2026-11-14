@@ -1,6 +1,6 @@
 import type { Application, Request, Response } from "express";
 import { authenticateToken } from "../../middleware/auth";
-import { loadChatContext } from "../../chat/service";
+import { loadChatContext, loadPeople } from "../../chat/service";
 import { canPostChat } from "../../chat/policy";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import {
@@ -68,7 +68,9 @@ module.exports = function (app: Application) {
     validateParams(callParamSchema),
     async (req: Request, res: Response) => {
       const context = await loadChatContext(req.params.conversationId as string, callerId(req));
-      ok(res, { call: callRegistry.state(String(context.chat._id)) });
+      const call = callRegistry.state(String(context.chat._id));
+      const people = await loadPeople((call?.participants ?? []).map((p) => p.userId));
+      ok(res, { call, people: [...people.values()] });
     },
   );
 
@@ -108,10 +110,12 @@ module.exports = function (app: Application) {
         });
       }
       announceCall(context);
+      const call = callRegistry.state(conversationId)!;
       const body: JoinedCall = {
         sessionId,
+        people: [...(await loadPeople(call.participants.map((p) => p.userId))).values()],
         iceServers: await iceServers(),
-        call: callRegistry.state(conversationId)!,
+        call,
       };
       ok(res, body);
     },

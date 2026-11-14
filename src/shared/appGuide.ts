@@ -44,6 +44,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
+      "Start a voice or video call with anyone in a chat or group, and share your screen during it.",
+      "Drop into a community channel's voice room, no ringing needed, and keep talking while you browse the app.",
       "Forward a message to other chats, with the original sender named.",
       "Create a poll with up to ten options, let people vote live, and close it when you are done.",
       "Record a voice message and send it, then play it with a waveform, a speed button and a slider to jump around.",
@@ -75,6 +77,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       {
         text: "Try Communities to chat with a group in separate channels. Use the invite button to ask people to join.",
         link: "/internal/communities",
+      },
+      {
+        text: "Try the phone or camera button at the top of a chat to call someone. Minimise the call to keep using the app.",
+        link: "/internal/messages",
       },
       {
         text: "Try Forward in a message's menu to share it with other chats at once.",
