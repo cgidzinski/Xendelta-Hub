@@ -1,12 +1,11 @@
 import { useRef, useState } from "react";
-import { Box, IconButton, LinearProgress, Link, Menu, MenuItem, Typography } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
+import { Box, IconButton, Menu, MenuItem, Typography } from "@mui/material";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import PollOutlinedIcon from "@mui/icons-material/PollOutlined";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
-import { formatFileSize } from "../../../../utils/fileUtils";
+import BillingSummary from "../../../../components/billing/BillingSummary";
 
 interface AttachButtonProps {
   onFiles: (files: File[]) => void;
@@ -21,7 +20,6 @@ export default function AttachButton({ onFiles, onChooseFromDrive, onPoll }: Att
   const input = useRef<HTMLInputElement>(null);
   const { profile } = useUserProfile();
   const usage = profile?.xendrive;
-  const percent = usage && usage.spaceAllowed > 0 ? Math.min(100, (usage.spaceUsed / usage.spaceAllowed) * 100) : 0;
 
   return (
     <>
@@ -97,25 +95,7 @@ export default function AttachButton({ onFiles, onChooseFromDrive, onPoll }: Att
         )}
         {usage && (
           <Box sx={{ px: 2, pt: 1, pb: 1, borderTop: 1, borderColor: "divider", mt: 0.5, minWidth: 260 }}>
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="caption" color="text.secondary">
-                Your storage
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {formatFileSize(usage.spaceUsed)} of {formatFileSize(usage.spaceAllowed)}
-              </Typography>
-            </Box>
-            <LinearProgress
-              variant="determinate"
-              value={percent}
-              color={percent > 90 ? "error" : "primary"}
-              sx={{ mt: 0.75, height: 6, borderRadius: 3 }}
-            />
-            {percent > 75 && (
-              <Link component={RouterLink} to="/internal/shop" variant="caption" underline="hover">
-                Get more in the Shop
-              </Link>
-            )}
+            <BillingSummary variant="line" stored={usage} limit={usage} />
           </Box>
         )}
       </Menu>

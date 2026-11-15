@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Button, Fab, IconButton, InputAdornment, LinearProgress, TextField, Typography } from "@mui/material";
+import { Box, Button, Fab, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CreateNewFolderOutlinedIcon from "@mui/icons-material/CreateNewFolderOutlined";
@@ -18,6 +18,7 @@ import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
 import { downloadFile, fileShareUrl, useXendriveActions, useXendriveBrowse } from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
+import BillingSummary from "../../../components/billing/BillingSummary";
 import type { XenDriveFile, XenDriveFolder } from "../../../types/XenDriveFile";
 import {
   applyFilters,
@@ -229,7 +230,6 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
 
   // ---- layout
   const usage = profile?.xendrive;
-  const percent = usage && usage.spaceAllowed > 0 ? Math.min(100, (usage.spaceUsed / usage.spaceAllowed) * 100) : 0;
   const searching = !!q;
   const crumbs = data?.breadcrumb ?? [];
   const parentId = crumbs.length > 1 ? crumbs[crumbs.length - 2]._id : null;
@@ -304,20 +304,10 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
         )}
       </Box>
 
-      {/* storage, on a phone (the sidebar shows it on a computer) */}
+      {/* this month's spend, on a phone (the sidebar shows it on a computer) */}
       {usage && (
         <Box sx={{ display: { md: "none" }, mb: 1.5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <LinearProgress
-              variant="determinate"
-              value={percent}
-              color={percent > 90 ? "error" : percent > 75 ? "warning" : "primary"}
-              sx={{ flex: 1, height: 5, borderRadius: 3 }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {formatFileSize(usage.spaceUsed)} of {formatFileSize(usage.spaceAllowed)}
-            </Typography>
-          </Box>
+          <BillingSummary variant="line" stored={usage} limit={usage} />
         </Box>
       )}
 

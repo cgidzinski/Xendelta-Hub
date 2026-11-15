@@ -131,6 +131,16 @@ export default function UploadTray() {
                   Get more space in the Shop
                 </Typography>
               )}
+              {item.status === "failed" && /free allowance/i.test(item.error ?? "") && (
+                <Typography
+                  variant="caption"
+                  component={RouterLink}
+                  to="/internal/billing"
+                  sx={{ color: "primary.main" }}
+                >
+                  See your billing
+                </Typography>
+              )}
               {item.status === "uploading" && (
                 <LinearProgress
                   variant="determinate"
