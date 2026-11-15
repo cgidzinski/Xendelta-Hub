@@ -281,7 +281,7 @@ describe("putting the pages of a recipe together", () => {
 });
 
 describe("scans on the bill", () => {
-  it("count as one scan on this month's bill, and are refused once billing is enforced and the allowance is used up", async () => {
+  it("count as one scan on this month's bill, and are refused once the allowance is used up", async () => {
     const me = await createUser();
     fakeCloudflare(() => ({ result: { response: STRUCTURED } }));
     const { usageFor } = await import("../billing/usage.js");
@@ -298,13 +298,8 @@ describe("scans on the bill", () => {
     expect(await scans()).toBe(1);
 
     await recordUsage(userAccount(me.user._id), "recipe_scans", 100_000); // far past the free allowance
-    process.env.BILLING_ENFORCED = "true";
-    try {
-      const refused = await scan();
-      expect(refused.status).toBe(402);
-      expect(await scans()).toBe(100_001); // a refused scan costs nothing
-    } finally {
-      process.env.BILLING_ENFORCED = "false";
-    }
+    const refused = await scan();
+    expect(refused.status).toBe(402);
+    expect(await scans()).toBe(100_001); // a refused scan costs nothing
   });
 });

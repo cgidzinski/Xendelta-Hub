@@ -16,7 +16,6 @@ import {
 } from "@shared/billing";
 import { BillingStatement } from "../models/billingStatement";
 import { balanceOf } from "./ledger";
-import { billingEnforced } from "./usage";
 import { currentStatement, unpaidTotal, type BillableAccount } from "./settlement";
 
 // What the Billing view shows for one account (a person's own bill, or a community's): this month so far by cost center,
@@ -68,7 +67,6 @@ export async function billingOverview(account: BillableAccount, now: Date = new 
   return {
     account: { type: account.type, id: account.id },
     month,
-    enforced: billingEnforced(),
     everythingFree: everythingFree(),
     centers: centerInfo(),
     current,

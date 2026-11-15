@@ -26,7 +26,6 @@ afterAll(async () => {
   await t?.stop();
 }, 60_000);
 afterEach(async () => {
-  process.env.BILLING_ENFORCED = "false";
   await Promise.all([MeterRun.deleteMany({}), FileRecord.deleteMany({})]);
 });
 
@@ -85,14 +84,11 @@ describe("the storage meter", () => {
 });
 
 describe("assertCanStore", () => {
-  it("does nothing in shadow mode, and refuses a payer who has used the free allowance when enforced", async () => {
+  it("refuses a payer who has used the free allowance, and lets anyone else store", async () => {
     const u = new mongoose.Types.ObjectId();
-    await recordUsage(userAccount(u), "storage", 1_000 * GB * 30); // ~ 18,750 gems this month, far past 500 free
-    await expect(assertCanStore(String(u))).resolves.toBeUndefined(); // shadow mode
-
-    process.env.BILLING_ENFORCED = "true";
+    await expect(assertCanStore(String(u))).resolves.toBeUndefined();
+    await recordUsage(userAccount(u), "storage", 1_000 * GB * 30); // ~ 18,750 gems this month, far past the allowance
     await expect(assertCanStore(String(u))).rejects.toMatchObject({ status: 402 });
-    // Someone with no usage may still store.
     await expect(assertCanStore(String(new mongoose.Types.ObjectId()))).resolves.toBeUndefined();
   });
 });

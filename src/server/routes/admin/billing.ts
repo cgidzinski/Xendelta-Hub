@@ -14,7 +14,6 @@ import {
 import { UsageRecord } from "../../models/usageRecord";
 import { BillingStatement } from "../../models/billingStatement";
 import { ProviderCost } from "../../models/providerCost";
-import { billingEnforced } from "../../billing/usage";
 import {
   BILLING_MARGIN,
   COST_CENTERS,
@@ -28,7 +27,7 @@ import { BASE_GEMS_PER_DOLLAR } from "@shared/monetization";
 import type { AdminBillingProviderRow, AdminBillingReport } from "@shared/admin";
 
 // The billing report (#360): for a month, what each cost center measured and billed, what it cost us, and what the
-// providers actually charged, so the rates and margin can be checked against reality (most useful in shadow mode).
+// providers actually charged, so the rates and margin can be checked against reality.
 
 const admin = [authenticateToken, requireAdmin];
 
@@ -119,7 +118,6 @@ async function billingReport(month: string): Promise<AdminBillingReport> {
   return {
     month,
     months,
-    enforced: billingEnforced(),
     everythingFree: everythingFree(),
     billingMargin: BILLING_MARGIN,
     gemsPerDollar: BASE_GEMS_PER_DOLLAR,

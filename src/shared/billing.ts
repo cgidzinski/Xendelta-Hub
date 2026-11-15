@@ -1,7 +1,7 @@
 // Gem billing (docs/billing.md): every cost center, what it costs, and how a month's usage becomes a bill.
 //
 // A center starts free (rate 0). Each one gets its rules and rate in its own discussion (#370 Storage, #371 Calls,
-// #372 Recipe scanning, #373 House costs) and is then switched on here (storage is on, in shadow mode). Usage is stored as whole units (bytes,
+// #372 Recipe scanning, #373 House costs) and is then switched on here (storage, calls and recipe scans are on). Usage is stored as whole units (bytes,
 // byte-days, scans); gems are worked out from them, so nothing drifts from adding up tiny fractions.
 //
 // Not cost centers, ever: text chat, the database and server CPU. The hub is self-hosted, so they cost nothing per user.
@@ -322,8 +322,6 @@ export interface PastStatement {
 export interface BillingOverview {
   account: { type: "user" | "community"; id: string };
   month: string;
-  /** False in shadow mode: bills are shown but nothing is charged. */
-  enforced: boolean;
   /** True while every center is free. */
   everythingFree: boolean;
   centers: BillingCenterInfo[];

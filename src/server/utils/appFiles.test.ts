@@ -51,19 +51,14 @@ describe("storeAppFiles", () => {
     });
   });
 
-  it("refuses with 402 and stores nothing when billing is enforced and the free allowance is used up", async () => {
+  it("refuses with 402 and stores nothing once the free allowance is used up", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
-    await recordUsage(userAccount(uid), "storage", 1_000 * 1_000_000_000 * 30); // far past the 500 free gems
-    await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("a.png")])).resolves.toHaveLength(1); // shadow
-    process.env.BILLING_ENFORCED = "true";
-    try {
-      await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("b.png")])).rejects.toMatchObject({
-        status: 402,
-      });
-    } finally {
-      process.env.BILLING_ENFORCED = "false";
-    }
+    await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("a.png")])).resolves.toHaveLength(1);
+    await recordUsage(userAccount(uid), "storage", 1_000 * 1_000_000_000 * 30); // far past the free allowance
+    await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("b.png")])).rejects.toMatchObject({
+      status: 402,
+    });
     expect(stored.size).toBe(1);
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(1);
   });

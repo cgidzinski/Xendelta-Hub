@@ -295,18 +295,7 @@ export default function BillingView({ overview, balanceCard, paidFrom, community
               : "Nothing is charged. When something starts to cost gems, you'll see its price here first, and you'll always get a free allowance each month."}
           </Typography>
         </Alert>
-      ) : (
-        !overview.enforced && (
-          <Alert severity="warning" variant="outlined">
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              Not charged yet
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              We're checking these prices against our real costs. The bill is shown, but nothing is taken.
-            </Typography>
-          </Alert>
-        )
-      )}
+      ) : null}
 
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" } }}>
         <SummaryCard label="This month so far">

@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { FileRecord } from "../models/fileRecord";
 import { MeterRun } from "../models/meterRun";
-import { billingEnforced, recordUsage } from "./usage";
+import { recordUsage } from "./usage";
 import { communityAccount, userAccount } from "./ledger";
 import { assertCanSpend, type BillableAccount } from "./settlement";
 import { payerFor, type Payer } from "../utils/fileRecords";
@@ -90,17 +90,15 @@ const billable = (payer: Payer): BillableAccount | null =>
 
 /**
  * Call before storing a file (XenDrive, an app's photo, a chat attachment, an emoji, a Recipaint image): refuses with a 402
- * when whoever pays has used their free allowance and can't cover more. Does nothing in shadow mode.
+ * when whoever pays has used their free allowance and can't cover more.
  */
 export async function assertCanStore(userId: string, source?: { app: string; ref: string } | null): Promise<void> {
-  if (!billingEnforced()) return;
   const account = billable(await payerFor(userId, source));
   if (account) await assertCanSpend(account);
 }
 
 /** The same check for a payer already known (an emoji's community). */
 export async function assertPayerCanStore(payer: Payer): Promise<void> {
-  if (!billingEnforced()) return;
   const account = billable(payer);
   if (account) await assertCanSpend(account);
 }

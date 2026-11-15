@@ -32,7 +32,7 @@ const billingStatementSchema = new Schema(
     paid: { type: Number, default: 0 },
     unpaid: { type: Number, default: 0 },
     // pending: written, payment not settled yet (a crash here is finished on the next run)
-    // free: nothing due; paid; unpaid: the balance couldn't cover it; shadow: due, but billing isn't enforced yet
+    // free: nothing due; paid; unpaid: the balance couldn't cover it; shadow: from the months before billing was switched on (nothing was taken)
     status: { type: String, enum: ["pending", "free", "paid", "unpaid", "shadow"], default: "pending" },
     transactionId: { type: Schema.Types.ObjectId },
     notifiedAt: { type: Date },

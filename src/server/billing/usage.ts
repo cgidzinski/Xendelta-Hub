@@ -7,12 +7,6 @@ import type { GemAccount } from "./ledger";
 // of each cost center this month. A cost center calls `recordUsage` where it observes the usage on the server;
 // nothing is ever taken from what a client reports. docs/billing.md has how to wire a new one.
 
-/**
- * Billing is enforced unless BILLING_ENFORCED=false: months are charged and uploads are blocked past the free allowance.
- * `false` is shadow mode (usage is measured and bills are shown, nothing is charged or blocked), kept for testing rates.
- */
-export const billingEnforced = () => process.env.BILLING_ENFORCED !== "false";
-
 const storedAccount = (account: GemAccount) =>
   account.type === "house"
     ? { "account.type": "house", "account.id": null }

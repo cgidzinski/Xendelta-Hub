@@ -156,10 +156,7 @@ export default function Billing() {
       ) : (
         <Stack spacing={2.5}>
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            <StatusChip
-              label={data.enforced ? "Charging" : "Shadow mode: nothing is charged"}
-              tone={data.enforced ? "info" : "warning"}
-            />
+            <StatusChip label="Charging" tone="info" />
             {data.everythingFree && <StatusChip label="Every cost center is free" tone="success" />}
             <StatusChip label={`Margin ${data.billingMargin}×`} />
             <StatusChip label={`${data.gemsPerDollar} gems = ${usd(100)}`} />
