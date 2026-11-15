@@ -63,7 +63,7 @@ starts free** (`status: "free"`, `costRate: 0`); its discussion issue decides th
 
 - **Billed rate** = `costRate × BILLING_MARGIN`. House centers are never billed; they are recorded so the admin report
   shows what they cost.
-- **Free tier:** `PERSON_FREE_TIER_GEMS` / `COMMUNITY_FREE_TIER_GEMS` a month, taken off the whole bill. No roll-over.
+- **Free tier:** `PERSON_FREE_TIER_GEMS` / `COMMUNITY_FREE_TIER_GEMS` (500 gems, worth $0.50 at 1,000 gems to the dollar) a month, taken off the whole bill. No roll-over.
 - **Rounding:** usage is stored in whole units and gems are worked out from them as fractions. A bill's lines show
   one decimal, rounded up (`formatGems`: "0.4 gems", "less than 0.1 gems"). The amount due is the month's total
   beyond the free tier, rounded up to a whole gem **once** (`ceilGems`), so the lines still add up to it.

@@ -24,8 +24,9 @@ thinking is not lost. Only the "built" section exists in code today.
   packs are items in the `Gems` category with `grantsGems` and `addToInventory: false`, so buying one adds the gems
   and puts nothing in the inventory. Money-priced items go through the payment provider; gem-priced ones are paid from
   the balance.
-- **Buying gems.** `src/shared/monetization.ts` lists the packs (1,000 / 2,200 / 6,000 / 13,000 gems for $5 / $10 /
-  $25 / $50, so 200 gems to the dollar plus a bonus on the bigger packs). Checkout goes through a payment
+- **Buying gems.** `src/shared/monetization.ts` lists the packs (5,000 / 11,000 / 30,000 / 65,000 gems for $5 / $10 /
+  $25 / $50, so 1,000 gems to the dollar plus a bonus on the bigger packs). Gems were 200 to the dollar until #376,
+  which multiplied every balance, pack and price by 5 (migration `1795200000000-gems-x5`). Checkout goes through a payment
   provider interface (`src/server/payments/`). Only a **dummy provider** exists: it takes no money and would credit
   the gems at once, so **buying gems is switched off everywhere** (`getPaymentProvider()` returns null; the Shop shows
   "Buying gems is not available yet"). Every purchase is recorded in `GemPurchase` (the audit trail of gems bought).
@@ -60,7 +61,7 @@ between leaves a pending purchase whose retry finds the same transfer (`docs/bil
 | | Free | Plus | Pro |
 |---|---|---|---|
 | Price by card | none | $5 a month | $10 a month |
-| 30-day pass in gems | none | 1,000 gems | 2,000 gems |
+| 30-day pass in gems | none | 5,000 gems | 10,000 gems |
 | XenDrive storage (total) | 1 GB | 50 GB | 250 GB |
 | Largest single file | 2 GB | 2 GB | 5 GB |
 | Password-protected folder links | no | yes | yes |

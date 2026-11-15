@@ -128,9 +128,9 @@ export const COST_CENTER_IDS = COST_CENTERS.map((c) => c.id) as CostCenterId[];
 export const BILLING_MARGIN = 1.25;
 
 /** Gems a person can use each month without paying. Taken off the whole bill; it doesn't roll over. */
-export const PERSON_FREE_TIER_GEMS = 300;
+export const PERSON_FREE_TIER_GEMS = 500;
 /** Gems a community can use each month without paying. */
-export const COMMUNITY_FREE_TIER_GEMS = 300;
+export const COMMUNITY_FREE_TIER_GEMS = 500;
 
 /** Share of the free tier at which the account is warned. */
 export const FREE_TIER_WARNING_SHARE = 0.8;

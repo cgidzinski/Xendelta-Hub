@@ -20,13 +20,13 @@ export const SHOP_ITEMS: ShopItem[] = [
   {
     id: "2",
     itemKey: "1gb-xendrive-voucher",
-    price: 1000,
+    price: 5000,
     category: "Storage",
   },
   {
     id: "3",
     itemKey: "golden-badge",
-    price: 5000,
+    price: 25000,
     category: "Perks",
   },
 ];

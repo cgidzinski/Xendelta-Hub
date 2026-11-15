@@ -50,7 +50,7 @@ describe("admin billing report", () => {
     const saved = await setCost("2026-09", "cloud_storage", 250);
     expect(saved.status).toBe(200);
     const row = saved.body.data.report.providers.find((p: any) => p.provider === "cloud_storage");
-    expect(row).toMatchObject({ actualCents: 250, actualGems: 500 });
+    expect(row).toMatchObject({ actualCents: 250, actualGems: 2500 });
     const audits = await mongoose.model("AdminAudit").find({ action: "provider_cost_set" }).lean<any[]>();
     expect(audits).toHaveLength(1);
 

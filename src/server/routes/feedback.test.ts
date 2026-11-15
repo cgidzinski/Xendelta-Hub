@@ -196,7 +196,7 @@ describe("resolving a report, with gems or a message", () => {
     for (const body of [
       { gems: -5, message: "x" },
       { gems: 1.5, message: "x" },
-      { gems: 10_001, message: "x" },
+      { gems: 50_001, message: "x" },
       { gems: 50, message: "  " },
       { gems: 50, message: "x".repeat(501) },
     ]) {

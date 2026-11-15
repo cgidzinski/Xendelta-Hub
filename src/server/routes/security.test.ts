@@ -102,8 +102,8 @@ describe("user directory", () => {
 
 describe("gem shop", () => {
   it("cannot be overspent by simultaneous purchases", async () => {
-    // Item "3" costs 5000. With exactly 5000 gems only one of ten parallel requests may win.
-    const { user, token } = await createUser({ gems: 5000 });
+    // Item "3" costs 25,000. With exactly 25,000 gems only one of ten parallel requests may win.
+    const { user, token } = await createUser({ gems: 25000 });
 
     const results = await Promise.all(
       Array.from({ length: 10 }, () =>

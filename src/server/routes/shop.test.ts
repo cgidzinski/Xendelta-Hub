@@ -156,7 +156,7 @@ describe("redeeming", () => {
   const use = (token: string, itemId: string) =>
     request(t.app).post(`/api/user/inventory/${itemId}/use`).set(auth(token));
 
-  it("a held gem voucher pays out 1000 gems, once, even when redeemed several times at once", async () => {
+  it("a held gem voucher pays out 5,000 gems, once, even when redeemed several times at once", async () => {
     const { user, token } = await createUser();
     const itemId = await give(user._id, "1000-gem-voucher");
 
@@ -165,7 +165,7 @@ describe("redeeming", () => {
     expect(results.filter((r) => r.status === 400)).toHaveLength(3);
 
     const fresh = await reload(user._id);
-    expect(fresh.gems).toBe(1000);
+    expect(fresh.gems).toBe(5000);
     expect(fresh.inventory[0].used).toBe(true);
   });
 
@@ -184,11 +184,11 @@ describe("redeeming", () => {
 
 describe("buying from the shop", () => {
   it("takes the gems and puts the item in the inventory", async () => {
-    const { user, token } = await createUser({ gems: 1500 });
+    const { user, token } = await createUser({ gems: 7500 });
     const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
     expect(res.body).toMatchObject({ status: true });
     const fresh = await reload(user._id);
-    expect(fresh.gems).toBe(500);
+    expect(fresh.gems).toBe(2500);
     expect(fresh.inventory.map((i: any) => i.itemKey)).toEqual(["1gb-xendrive-voucher"]);
   });
 
@@ -199,14 +199,14 @@ describe("buying from the shop", () => {
     await transfer({
       from: HOUSE,
       to: userAccount(user._id),
-      amount: 2000,
+      amount: 10000,
       kind: "admin_adjustment",
       idempotencyKey: `t:${user._id}`,
     });
     await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
     const tx = await mongoose.model("GemTransaction").find({ "from.id": user._id, kind: "shop_purchase" }).lean();
     expect(tx).toHaveLength(1);
-    expect((await reload(user._id)).gems).toBe(1000);
+    expect((await reload(user._id)).gems).toBe(5000);
     const { mismatches } = await ledgerMismatches(10_000);
     expect(mismatches.find((m) => m.id === String(user._id))).toBeUndefined();
   });

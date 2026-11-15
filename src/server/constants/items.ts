@@ -23,8 +23,8 @@ export const ITEMS: Record<string, Item> = {
   // Retired when points became gems (#180); kept so vouchers people already hold still redeem.
   "1000-gem-voucher": {
     key: "1000-gem-voucher",
-    name: "1000 Gem Voucher",
-    description: "Redeem this voucher to get 1000 gems added to your account",
+    name: "Gem Voucher",
+    description: "Redeem this voucher to get 5,000 gems added to your account",
     image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDjzenTPwlSFWa0lUXHTtHLoX18nv8D4fyTA&s",
     redeemable: true,
     legacy: true,
@@ -32,7 +32,8 @@ export const ITEMS: Record<string, Item> = {
       await transfer({
         from: HOUSE,
         to: userAccount(userId),
-        amount: 1000,
+        // 1,000 gems when gems were 200 to the dollar; 5,000 since they became 1,000 to the dollar (#376).
+        amount: 5000,
         kind: "voucher_redeem",
         idempotencyKey: `voucher:${inventoryItemId}`,
         meta: { itemKey: "1000-gem-voucher" },
