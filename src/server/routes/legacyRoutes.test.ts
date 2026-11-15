@@ -9,6 +9,8 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 let t: TestApp;
 beforeAll(async () => {
   t = await startTestApp([() => import("./notifications.js"), () => import("./push.js"), () => import("./paints.js")]);
+  // The duplicate-paint 409s rely on the unique index; mongoose builds it in the background, so wait for it.
+  await mongoose.model("Paint").init();
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
