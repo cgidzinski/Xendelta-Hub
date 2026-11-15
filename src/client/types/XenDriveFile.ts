@@ -13,8 +13,8 @@ export interface XenDriveFile {
   /** Public downloads of this file (through its own link or a shared folder's). */
   downloads?: number;
   lastDownloadedAt?: string | null;
-  /** A picture link for image files, when the list was asked for thumbnails. */
-  previewUrl?: string | null;
+  /** A cacheable link to the small WebP beside the original, once the background job has made it. */
+  thumbUrl?: string | null;
   /** Set when an app stored the file for the person (a photo on an expense, a chat attachment). */
   source?: { app: string; label: string } | null;
   /** False when the file doesn't use the person's storage. Absent or true for ordinary files. */
@@ -74,6 +74,8 @@ export interface FileDetailResult {
   neighbors: FileNeighbors;
   /** A short-lived link to show the file in the page, for images, PDFs, video and audio. */
   previewUrl: string | null;
+  /** For videos with a poster: the cacheable link the player shows before it plays. */
+  posterUrl: string | null;
 }
 
 /** What a visitor learns about a folder link before opening it. */
@@ -95,7 +97,7 @@ export interface PublicFolderView {
     mimeType: string;
     size: number;
     createdAt: string;
-    previewUrl: string | null;
+    thumbUrl: string | null;
   }>;
 }
 

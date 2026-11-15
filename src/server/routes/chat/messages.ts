@@ -3,6 +3,7 @@ import { Message, type MessageDocument } from "../../models/message";
 import { Conversation } from "../../models/conversation";
 import { XenDriveFile } from "../../models/xendriveFile";
 import { generateSignedUrl } from "../../utils/storageUtils";
+import { thumbnailUrlFor } from "../../utils/xendriveThumbs";
 import { authenticateToken } from "../../middleware/auth";
 import { audienceOf, type ChatContext } from "../../chat/access";
 import { refreshEmbeds } from "../../chat/embeds";
@@ -204,7 +205,8 @@ export function registerMessageRoutes(app: Application) {
       const file = await XenDriveFile.findById(fileId).exec();
       if (!file) throw new AppError(404, "This file was removed from XenDrive");
       const url = await generateSignedUrl(file.storage_path, 15, { downloadName: file.name });
-      res.json({ status: true, message: "", data: { url } });
+      const thumbUrl = file.thumb?.path ? await thumbnailUrlFor(file.storage_path) : null;
+      res.json({ status: true, message: "", data: { url, thumbUrl } });
     },
   );
 

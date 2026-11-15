@@ -18,7 +18,11 @@ vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xenkitchen.js"), () => import("./xendrive.js")]);
+  t = await startTestApp([
+    () => import("./xenkitchen.js"),
+    () => import("./xendrive.js"),
+    () => import("./storage.js"),
+  ]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -74,7 +78,7 @@ describe("XenKitchen photos in XenDrive", () => {
     expect(files.every((f) => f.source?.ref === itemId && f.counted === false)).toBe(true);
     expect(await usageFor(uid)).toEqual(before);
 
-    const apps = (await request(t.app).get("/api/xendrive/app-files").set(auth(me.token))).body.data;
+    const apps = (await request(t.app).get("/api/storage/app-files").set(auth(me.token))).body.data;
     expect(apps.apps[0]).toMatchObject({ app: "xenkitchen", label: "XenKitchen" });
     expect(apps.apps[0].groups[0].label).toBe("Pancakes");
   });
@@ -116,7 +120,7 @@ describe("XenKitchen photos in XenDrive", () => {
     expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(2);
 
     const file = await XenDriveFile.findOne({ owner_id: uid });
-    expect((await request(t.app).delete(`/api/xendrive/files/${file!._id}`).set(auth(me.token))).status).toBe(400);
+    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(me.token))).status).toBe(400);
     expect((await item()).images).toHaveLength(2);
 
     expect((await request(t.app).delete(`/api/xenkitchen/items/${itemId}`).set(auth(me.token))).status).toBe(200);

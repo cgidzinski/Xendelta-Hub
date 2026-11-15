@@ -16,7 +16,7 @@ vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xensplit.js"), () => import("./xendrive.js")]);
+  t = await startTestApp([() => import("./xensplit.js"), () => import("./xendrive.js"), () => import("./storage.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -78,14 +78,14 @@ describe("XenSplit photos in XenDrive", () => {
     expect(await usageFor(uid)).toEqual(before);
     expect(await urls()).toHaveLength(2);
 
-    // listed under From apps with the group's name, marked as not counted
-    const res = (await request(t.app).get("/api/xendrive/app-files").set(auth(owner.token))).body.data;
+    // listed in the storage viewer with the group's name, marked as not counted
+    const res = (await request(t.app).get("/api/storage/app-files").set(auth(owner.token))).body.data;
     expect(res.apps[0].label).toBe("XenSplit");
     expect(res.apps[0].groups[0].label).toBe("Weekend trip");
     expect(res.apps[0].groups[0].files.every((f: any) => f.counted === false)).toBe(true);
   });
 
-  it("keeps the files out of My Drive unless asked for, by app or as outside the quota", async () => {
+  it("keeps the files out of My Drive, search and recent", async () => {
     const { owner, photos } = await setup();
     await photos(1);
     const browse = async (query: string) =>
@@ -94,10 +94,7 @@ describe("XenSplit photos in XenDrive", () => {
       );
     expect(await browse("")).toEqual([]);
     expect(await browse("?search=r0")).toEqual([]);
-    expect(await browse("?source=all")).toEqual(["r0.png"]);
-    expect(await browse("?source=xensplit")).toEqual(["r0.png"]);
-    expect(await browse("?source=uncounted")).toEqual(["r0.png"]);
-    expect(await browse("?source=chat")).toEqual([]);
+    expect(await browse("?view=recent")).toEqual([]);
   });
 
   it("deleting a photo removes its file and bytes", async () => {
@@ -112,11 +109,11 @@ describe("XenSplit photos in XenDrive", () => {
     expect(stored.size).toBe(1);
   });
 
-  it("XenDrive will not delete a photo that belongs to an expense", async () => {
+  it("the storage viewer will not delete a photo that belongs to an expense", async () => {
     const { owner, uid, photos, urls } = await setup();
     await photos(2);
     const file = await XenDriveFile.findOne({ owner_id: uid });
-    const del = await request(t.app).delete(`/api/xendrive/files/${file!._id}`).set(auth(owner.token));
+    const del = await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token));
     expect(del.status).toBe(400);
     expect(await urls()).toHaveLength(2);
   });

@@ -5,7 +5,6 @@ import {
   validate,
   validateParams,
   validateQuery,
-  xenDriveAppFilesQuerySchema,
   xenDriveBrowseQuerySchema,
   xenDriveChunkSchema,
   xenDriveDownloadQuerySchema,
@@ -26,7 +25,7 @@ import {
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
-import { assertDriveSource, driveListFilter, driveOnly, driveSourceApp } from "../utils/driveSources";
+import { assertDriveSource, driveOnly, driveSourceApp } from "../utils/driveSources";
 import {
   initiateChunkedUpload,
   uploadChunk,
@@ -48,6 +47,8 @@ import {
 import { randomToken } from "../utils/tokens";
 import { checkSharePassword, hashSharePassword, isUnset } from "../utils/sharePasswords";
 import { generateSignedUrl } from "../utils/storageUtils";
+import { isTextPreviewable, readTextPreview } from "../utils/fileText";
+import { previewUrlFor, thumbnailUrlFor } from "../utils/xendriveThumbs";
 import { privateStore } from "../storage";
 import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
@@ -55,7 +56,7 @@ import { XenDriveFolder } from "../models/xendriveFolder";
 /** RFC 5987 header value so any file name (spaces, accents, quotes) downloads under its own name. */
 const attachment = (name: string) => `attachment; filename*=UTF-8''${encodeURIComponent(name)}`;
 
-const serializeFile = (file: XenDriveFileDocument | any) => ({
+const serializeFile = (file: XenDriveFileDocument | any, thumbUrl: string | null = null) => ({
   _id: file._id.toString(),
   name: file.name,
   folder_id: file.folder_id ? file.folder_id.toString() : null,
@@ -74,6 +75,8 @@ const serializeFile = (file: XenDriveFileDocument | any) => ({
     ? { app: file.source.app as string, label: driveSourceApp(file.source.app)?.label ?? file.source.app }
     : null,
   counted: file.counted !== false,
+  // A cacheable link to the small WebP beside the original, once it is made (the grid and list show it).
+  thumbUrl,
 });
 
 const serializeFolder = (folder: any, itemCount = 0) => ({
@@ -92,19 +95,18 @@ const serializeFolder = (folder: any, itemCount = 0) => ({
   created_at: folder.created_at.toISOString(),
 });
 
-const isImage = (mime: string) => mime.startsWith("image/");
 /** What a person can look at in the browser without downloading. */
 const PREVIEWABLE = /^(image\/|application\/pdf$|video\/|audio\/)/;
-const MAX_THUMBS = 60;
 const PREVIEW_MINUTES = 60;
 
-/** Short-lived picture links for image files (the grid shows them). Capped so a huge folder signs a bounded number. */
-async function previewUrls(
-  files: Array<{ _id: unknown; mimeType: string; storage_path: string }>,
+/** Cacheable thumbnail links for files that have one (utils/xendriveThumbs.ts). */
+async function thumbnailUrls(
+  files: Array<{ _id: unknown; thumb?: { path?: string | null } | null; storage_path: string }>,
 ): Promise<Map<string, string>> {
-  const images = files.filter((f) => isImage(f.mimeType)).slice(0, MAX_THUMBS);
   const pairs = await Promise.all(
-    images.map(async (f) => [String(f._id), await generateSignedUrl(f.storage_path, PREVIEW_MINUTES)] as const),
+    files
+      .filter((f) => f.thumb?.path)
+      .map(async (f) => [String(f._id), await thumbnailUrlFor(f.storage_path)] as const),
   );
   return new Map(pairs);
 }
@@ -128,17 +130,11 @@ async function itemCounts(ownerId: string, folderIds: unknown[]): Promise<Map<st
   return counts;
 }
 
-/** One of the caller's files, or a 404 (a stranger's file looks the same as a missing one). */
+/** One of the caller's own XenDrive files, or a 404 (a stranger's file, or one an app stored, looks the same as missing). */
 async function ownFile(fileId: string, userId: string) {
-  const file = await XenDriveFile.findOne({ _id: fileId, owner_id: userId }).exec();
+  const file = await XenDriveFile.findOne({ _id: fileId, owner_id: userId, ...driveOnly }).exec();
   if (!file) throw new AppError(404, "File not found");
   return file;
-}
-
-/** A file an app stored on the person's behalf (a chat attachment) stays private: no renaming or public link from here. */
-function assertNotAppFile(file: { source?: { app?: string | null } | null }) {
-  if (file.source?.app)
-    throw new AppError(400, "This file belongs to another app, so it can't be shared or renamed here");
 }
 
 async function ownFolder(folderId: string, userId: string) {
@@ -284,10 +280,6 @@ module.exports = function (app: express.Application) {
       const folderId = (req.query.folder as string | undefined) || null;
       const search = ((req.query.search as string | undefined) || "").trim();
       const view = req.query.view as "shared" | "recent" | undefined;
-      const thumbs = req.query.thumbs === "true";
-      // Files an app stored for the person only show when they ask for them (a source).
-      const source = req.query.source as string | undefined;
-      const listFilter = driveListFilter(source);
 
       // One response shape for every way of looking at the drive
       const send = async (folderDocs: any[], fileDocs: any[], extra: Record<string, unknown>) => {
@@ -296,13 +288,13 @@ module.exports = function (app: express.Application) {
             userId,
             folderDocs.map((f) => f._id),
           ),
-          thumbs ? previewUrls(fileDocs) : Promise.resolve(new Map<string, string>()),
+          thumbnailUrls(fileDocs),
         ]);
         return res.json({
           status: true,
           data: {
             folders: folderDocs.map((f) => serializeFolder(f, counts.get(String(f._id)))),
-            files: fileDocs.map((f) => ({ ...serializeFile(f), previewUrl: urls.get(String(f._id)) ?? null })),
+            files: fileDocs.map((f) => serializeFile(f, urls.get(String(f._id)) ?? null)),
             ...extra,
           },
         });
@@ -311,7 +303,7 @@ module.exports = function (app: express.Application) {
       if (search) {
         const files = await XenDriveFile.find({
           owner_id: userId,
-          ...listFilter,
+          ...driveOnly,
           name: { $regex: escapeRegex(search), $options: "i" },
         })
           .sort({ createdAt: -1 })
@@ -332,7 +324,7 @@ module.exports = function (app: express.Application) {
       }
 
       if (view === "recent") {
-        const files = await XenDriveFile.find({ owner_id: userId, ...listFilter })
+        const files = await XenDriveFile.find({ owner_id: userId, ...driveOnly })
           .sort({ createdAt: -1 })
           .limit(50)
           .exec();
@@ -340,13 +332,9 @@ module.exports = function (app: express.Application) {
       }
 
       const folder = folderId ? await ownFolder(folderId, userId) : null;
-      // Folders hold only the person's own files, so they step aside when looking at one app's or uncounted files.
-      const showFolders = !source || source === "all";
       const [folders, files, breadcrumb] = await Promise.all([
-        showFolders
-          ? XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec()
-          : Promise.resolve([]),
-        XenDriveFile.find({ owner_id: userId, ...listFilter, folder_id: folderId })
+        XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec(),
+        XenDriveFile.find({ owner_id: userId, ...driveOnly, folder_id: folderId })
           .sort({ createdAt: -1 })
           .exec(),
         folderId ? breadcrumbOf(folderId, userId) : Promise.resolve([]),
@@ -364,7 +352,7 @@ module.exports = function (app: express.Application) {
   // (the home screen card and the sidebar)
   app.get("/api/xendrive/recent", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = callerId(req);
-    const [files, usage, sharedFiles, sharedFolders, [apps]] = await Promise.all([
+    const [files, usage, sharedFiles, sharedFolders] = await Promise.all([
       XenDriveFile.find({ owner_id: userId, ...driveOnly })
         .sort({ createdAt: -1 })
         .limit(3)
@@ -372,65 +360,16 @@ module.exports = function (app: express.Application) {
       usageFor(userId),
       XenDriveFile.countDocuments({ owner_id: userId, ...driveOnly, shareEnabled: true }),
       XenDriveFolder.countDocuments({ owner_id: userId, "share.enabled": true }),
-      // What apps have stored for the person (XenDrive > From apps): it still counts toward their quota.
-      XenDriveFile.aggregate<{ count: number; size: number }>([
-        { $match: { owner_id: new Types.ObjectId(userId), "source.app": { $exists: true } } },
-        { $group: { _id: null, count: { $sum: 1 }, size: { $sum: { $ifNull: ["$size", 0] } } } },
-      ]),
     ]);
     return res.json({
       status: true,
       data: {
-        files: files.map(serializeFile),
+        files: files.map((f) => serializeFile(f)),
         ...usage,
         sharedCount: sharedFiles + sharedFolders,
-        appFiles: { count: apps?.count ?? 0, size: apps?.size ?? 0 },
       },
     });
   });
-
-  // What apps have stored in the person's drive (chat attachments, ...), grouped by app and then by where it came from
-  // ("Weekend trip"), so they can see it and free the space.
-  app.get(
-    "/api/xendrive/app-files",
-    authenticateToken,
-    validateQuery(xenDriveAppFilesQuerySchema),
-    async function (req: express.Request, res: express.Response) {
-      const userId = callerId(req);
-      const only = req.query.app as string | undefined;
-      const files = await XenDriveFile.find({ owner_id: userId, "source.app": only ?? { $exists: true } })
-        .sort({ createdAt: -1 })
-        .limit(2000)
-        .exec();
-
-      const byApp = new Map<string, Map<string, XenDriveFileDocument[]>>();
-      for (const f of files) {
-        const appKey = f.source!.app!;
-        const ref = f.source!.ref ?? "";
-        const refs = byApp.get(appKey) ?? new Map<string, XenDriveFileDocument[]>();
-        refs.set(ref, [...(refs.get(ref) ?? []), f]);
-        byApp.set(appKey, refs);
-      }
-
-      const sum = (list: XenDriveFileDocument[]) => list.reduce((n, f) => n + (f.size ?? 0), 0);
-      const apps = await Promise.all(
-        [...byApp.entries()].map(async ([appKey, refs]) => {
-          const definition = driveSourceApp(appKey);
-          const names = definition ? await definition.describe(userId, [...refs.keys()]) : new Map<string, string>();
-          const groups = [...refs.entries()].map(([ref, list]) => ({
-            ref,
-            label: names.get(ref) ?? "Unavailable",
-            count: list.length,
-            size: sum(list),
-            files: list.map(serializeFile),
-          }));
-          const all = [...refs.values()].flat();
-          return { app: appKey, label: definition?.label ?? appKey, count: all.length, size: sum(all), groups };
-        }),
-      );
-      return res.json({ status: true, data: { apps, count: files.length, size: sum(files) } });
-    },
-  );
 
   // ---------------------------------------------------------------------------------------------
   // Folders
@@ -556,22 +495,29 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const userId = callerId(req);
       const file = await ownFile(req.params.fileId as string, userId);
-      const [breadcrumb, siblings, previewUrl] = await Promise.all([
+      const isImage = file.mimeType.startsWith("image/");
+      const isVideo = file.mimeType.startsWith("video/");
+      const [breadcrumb, siblings, previewUrl, posterUrl] = await Promise.all([
         file.folder_id ? breadcrumbOf(file.folder_id.toString(), userId) : Promise.resolve([]),
         // the same order the folder lists them in, for previous / next
-        // previous / next stay within the same kind: the drive's own files, or the same app's
         XenDriveFile.find(
           {
             owner_id: userId,
             folder_id: file.folder_id,
-            ...(file.source?.app ? { "source.app": file.source.app } : driveOnly),
+            ...driveOnly,
           },
           "name",
         )
           .sort({ createdAt: -1 })
           .limit(500)
           .lean(),
-        PREVIEWABLE.test(file.mimeType) ? generateSignedUrl(file.storage_path, PREVIEW_MINUTES) : Promise.resolve(null),
+        // Images show the ~1600 px rendition (the original opens on demand); PDFs, video and audio stream the original.
+        isImage
+          ? previewUrlFor(file.storage_path)
+          : PREVIEWABLE.test(file.mimeType)
+            ? generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
+            : Promise.resolve(null),
+        isVideo && file.thumb?.path ? thumbnailUrlFor(file.storage_path) : Promise.resolve(null),
       ]);
       const at = siblings.findIndex((x) => String(x._id) === file.id);
       const pick = (x?: { _id: unknown; name: string }) => (x ? { _id: String(x._id), name: x.name } : null);
@@ -581,6 +527,7 @@ module.exports = function (app: express.Application) {
           file: serializeFile(file),
           breadcrumb,
           previewUrl,
+          posterUrl,
           neighbors: {
             index: at + 1,
             total: siblings.length,
@@ -608,6 +555,18 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  // The first ~256 KB of a text-like file, for the in-page preview (no R2 CORS setup needed).
+  app.get(
+    "/api/xendrive/files/:fileId/text",
+    authenticateToken,
+    validateParams(xenDriveFileIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await ownFile(req.params.fileId as string, callerId(req));
+      if (!isTextPreviewable(file.mimeType)) throw new AppError(404, "No text preview for this kind of file");
+      return res.json({ status: true, data: await readTextPreview(file.storage_path) });
+    },
+  );
+
   // Rename, set or clear the password, set or clear the expiry
   app.put(
     "/api/xendrive/files/:fileId/settings",
@@ -616,7 +575,6 @@ module.exports = function (app: express.Application) {
     validate(xenDriveSettingsSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
-      assertNotAppFile(file);
       const { password, expiry, name, shareEnabled } = req.body;
 
       if (name !== undefined) file.name = name;
@@ -650,7 +608,6 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
-      assertNotAppFile(file);
       file.shareToken = randomToken(16);
       await file.save();
       return res.json({ status: true, message: "New link made", data: { file: serializeFile(file) } });
@@ -663,18 +620,8 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
-      // A file that doesn't use their storage belongs to the app that stored it: deleting it here would break that app.
-      if (file.counted === false)
-        throw new AppError(
-          400,
-          "This file belongs to another app and doesn't use your storage, so it can't be deleted here",
-        );
-      // The pre-delete hook removes the stored bytes too
+      // The pre-delete hook removes the stored bytes too.
       await XenDriveFile.findByIdAndDelete(file.id);
-      // An app that stored the file lets go of it (a photo on an expense), so it doesn't show a broken image.
-      if (file.source?.app) {
-        await driveSourceApp(file.source.app)?.onRemoved?.(file.source.ref ?? "", [file.id]);
-      }
       return res.json({ status: true, message: "File deleted successfully" });
     },
   );
@@ -766,7 +713,7 @@ module.exports = function (app: express.Application) {
         breadcrumbOf(requested, root.owner_id.toString(), root.id),
       ]);
 
-      const urls = await previewUrls(files);
+      const urls = await thumbnailUrls(files);
       return res.json({
         status: true,
         data: {
@@ -780,7 +727,7 @@ module.exports = function (app: express.Application) {
             mimeType: f.mimeType,
             size: f.size,
             createdAt: f.createdAt.toISOString(),
-            previewUrl: urls.get(f.id) ?? null,
+            thumbUrl: urls.get(f.id) ?? null,
           })),
         },
       });

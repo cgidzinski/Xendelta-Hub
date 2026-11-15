@@ -332,10 +332,10 @@ export default function XenDriveFolderPublic() {
                     justifyContent: "center",
                   }}
                 >
-                  {fileKindOf(file.mimeType) === "image" && file.previewUrl ? (
+                  {(fileKindOf(file.mimeType) === "image" || fileKindOf(file.mimeType) === "video") && file.thumbUrl ? (
                     <Box
                       component="img"
-                      src={file.previewUrl}
+                      src={file.thumbUrl}
                       alt=""
                       loading="lazy"
                       sx={{ width: "100%", height: "100%", objectFit: "cover" }}

@@ -35,7 +35,7 @@ export interface RoutineHistoryEntry {
   steps_done?: string[];
   steps_total?: number;
   /** Photos taken when it was marked done: a short-lived link each, in the order they were added. */
-  images?: Array<{ file_id: string; url: string }>;
+  images?: Array<{ file_id: string; url: string; thumbUrl?: string | null }>;
 }
 
 /** One step of a routine's checklist. `done` is the tick for the occurrence that is due now. */

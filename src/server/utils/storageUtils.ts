@@ -30,11 +30,12 @@ export async function deleteFromStorage(filePath: string, isPrivate: boolean = f
 /**
  * A short-lived download link for a private file.
  * @param expiryMinutes - minutes until the link stops working (default: 15)
+ * @param options.signingDate - fixes when the signature was made (for cacheable links); defaults to now
  */
 export async function generateSignedUrl(
   filePath: string,
   expiryMinutes: number = 15,
-  options: { downloadName?: string } = {},
+  options: { downloadName?: string; signingDate?: Date } = {},
 ): Promise<string> {
   return privateStore.signedUrl(filePath, expiryMinutes, options);
 }

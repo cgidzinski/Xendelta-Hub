@@ -17,7 +17,7 @@ vi.mock("../../utils/storageUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("../xendrive.js"), () => import("./index.js")]);
+  t = await startTestApp([() => import("../xendrive.js"), () => import("../storage.js"), () => import("./index.js")]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -68,36 +68,27 @@ describe("chat uploads", () => {
     // Stored in chat's own folder, under the conversation (docs/storage.md), not the sender's XenDrive folder.
     expect(stored.storage_path).toMatch(new RegExp(`^chat/${chatId}/`));
 
-    // Hidden from My Drive, search and recent unless asked for...
+    // Hidden from My Drive, search and recent.
     const browse = (query: string) => request(t.app).get(`/api/xendrive/browse${query}`).set(as(a.token));
     expect((await browse("")).body.data.files).toHaveLength(0);
     expect((await browse("?search=plan")).body.data.files).toHaveLength(0);
     expect((await browse("?view=recent")).body.data.files).toHaveLength(0);
-    // ...which they do with a source: everything, or just chat's files. It counts, so it isn't in "uncounted".
-    const all = await browse("?source=all");
-    expect(all.body.data.files).toHaveLength(1);
-    expect(all.body.data.files[0]).toMatchObject({ _id: fileId, counted: true, source: { app: "chat" } });
-    expect((await browse("?source=chat")).body.data.files).toHaveLength(1);
-    expect((await browse("?source=chat&search=plan")).body.data.files).toHaveLength(1);
-    expect((await browse("?source=xensplit")).body.data.files).toHaveLength(0);
-    expect((await browse("?source=uncounted")).body.data.files).toHaveLength(0);
 
-    // It counts toward their storage; the overview says how much apps hold.
+    // It counts toward their storage.
     const overview = (await request(t.app).get("/api/xendrive/recent").set(as(a.token))).body.data;
     expect(overview.files).toHaveLength(0);
     expect(overview.fileCount).toBe(1);
     expect(overview.spaceUsed).toBe(6);
-    expect(overview.appFiles).toEqual({ count: 1, size: 6 });
 
-    // And it is listed under From apps, grouped by chat, named for the reader.
-    const apps = (await request(t.app).get("/api/xendrive/app-files").set(as(a.token))).body.data;
+    // And it is listed in the storage viewer, grouped by chat, named for the reader.
+    const apps = (await request(t.app).get("/api/storage/app-files").set(as(a.token))).body.data;
     expect(apps.count).toBe(1);
     expect(apps.apps[0]).toMatchObject({ app: "chat", label: "Chat", count: 1, size: 6 });
     expect(apps.apps[0].groups[0]).toMatchObject({ ref: chatId, count: 1 });
     expect(apps.apps[0].groups[0].files[0]._id).toBe(fileId);
 
     // Only the uploader sees it.
-    expect((await request(t.app).get("/api/xendrive/app-files").set(as(b.token))).body.data.count).toBe(0);
+    expect((await request(t.app).get("/api/storage/app-files").set(as(b.token))).body.data.count).toBe(0);
   });
 
   it("refuses an upload that doesn't fit the sender's storage", async () => {
@@ -131,19 +122,19 @@ describe("chat uploads", () => {
     expect(withFolder.status).toBe(400);
   });
 
-  it("keeps a tagged file private: no renaming or public link from XenDrive, but it can be deleted", async () => {
+  it("keeps a tagged file out of XenDrive, and deletes it from the storage viewer", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
 
-    const share = await request(t.app)
-      .put(`/api/xendrive/files/${fileId}/settings`)
-      .set(as(a.token))
-      .send({ shareEnabled: true });
-    expect(share.status).toBe(400);
-    expect((await request(t.app).post(`/api/xendrive/files/${fileId}/share/rotate`).set(as(a.token))).status).toBe(400);
+    // XenDrive's own file routes don't serve app files any more.
+    expect(
+      (await request(t.app).put(`/api/xendrive/files/${fileId}/settings`).set(as(a.token)).send({ shareEnabled: true }))
+        .status,
+    ).toBe(404);
+    expect((await request(t.app).get(`/api/xendrive/files/${fileId}`).set(as(a.token))).status).toBe(404);
 
-    const del = await request(t.app).delete(`/api/xendrive/files/${fileId}`).set(as(a.token));
+    const del = await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(a.token));
     expect(del.status).toBe(200);
     expect(await mongoose.model("XenDriveFile").countDocuments({ _id: fileId })).toBe(0);
     expect(deleted.length).toBeGreaterThan(0); // the bytes went too
@@ -177,12 +168,12 @@ describe("downloading an attachment", () => {
     expect(wrong.status).toBe(404);
   });
 
-  it("says so when the file was deleted from XenDrive", async () => {
+  it("says so when the file was deleted from the storage viewer", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
     const msg = (await send(a, chatId, [fileId])).body.data.message;
-    await request(t.app).delete(`/api/xendrive/files/${fileId}`).set(as(a.token));
+    await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(a.token));
 
     const gone = await request(t.app)
       .get(`/api/chat/conversations/${chatId}/messages/${msg.seq}/attachments/${fileId}`)

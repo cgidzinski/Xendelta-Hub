@@ -106,7 +106,7 @@ export class S3Store implements ObjectStore {
     );
   }
 
-  async signedUrl(key: string, minutes: number, options: { downloadName?: string } = {}) {
+  async signedUrl(key: string, minutes: number, options: { downloadName?: string; signingDate?: Date } = {}) {
     return getSignedUrl(
       this.client,
       new GetObjectCommand({
@@ -119,7 +119,7 @@ export class S3Store implements ObjectStore {
             }
           : {}),
       }),
-      { expiresIn: Math.round(minutes * 60) },
+      { expiresIn: Math.round(minutes * 60), ...(options.signingDate ? { signingDate: options.signingDate } : {}) },
     );
   }
 

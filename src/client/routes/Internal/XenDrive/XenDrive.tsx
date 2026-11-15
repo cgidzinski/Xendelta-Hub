@@ -1,17 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  Box,
-  Button,
-  Fab,
-  IconButton,
-  InputAdornment,
-  LinearProgress,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Fab, IconButton, InputAdornment, LinearProgress, TextField, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CreateNewFolderOutlinedIcon from "@mui/icons-material/CreateNewFolderOutlined";
@@ -27,13 +16,7 @@ import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
-import {
-  downloadFile,
-  fileShareUrl,
-  useXendriveActions,
-  useXendriveBrowse,
-  useXendriveRecent,
-} from "../../../hooks/xendrive/useXendrive";
+import { downloadFile, fileShareUrl, useXendriveActions, useXendriveBrowse } from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import type { XenDriveFile, XenDriveFolder } from "../../../types/XenDriveFile";
 import {
@@ -61,10 +44,6 @@ const isViewMode = (v: unknown): v is DriveViewMode => v === "list" || v === "gr
 
 const VIEW_TITLE = { shared: "Shared links", recent: "Recent" } as const;
 
-/** The hidden source filter: what the list shows besides the files the person uploaded to XenDrive themselves. */
-const SOURCE_DRIVE = "drive";
-const SOURCE_OTHERS = "others";
-
 export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const navigate = useNavigate();
   const { folderId } = useParams<{ folderId?: string }>();
@@ -79,8 +58,6 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const q = useDeferredValue(search).trim();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [linkFilter, setLinkFilter] = useState<LinkFilter>("all");
-  // Files apps stored for the person (photos, chat attachments) are left out of the drive unless they ask for them here.
-  const [source, setSource] = useState<string>(SOURCE_DRIVE);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [menu, setMenu] = useState<{ target: ActionTarget; anchor: HTMLElement } | null>(null);
@@ -91,15 +68,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const [sharingFileId, setSharingFileId] = useState<string | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<XenDriveFolder | null>(null);
 
-  const { data: recent } = useXendriveRecent();
-  // Only people who have app files ever see the control
-  const hasAppFiles = !!recent?.appFiles?.count;
-  const sourceActive = source !== SOURCE_DRIVE;
-  const { data, isLoading, isError, error, refetch } = useXendriveBrowse(folderId ?? null, q || undefined, {
-    view,
-    thumbs: mode === "grid",
-    source: sourceActive ? source : undefined,
-  });
+  const { data, isLoading, isError, error, refetch } = useXendriveBrowse(folderId ?? null, q || undefined, { view });
 
   useTitle(view ? `XenDrive - ${VIEW_TITLE[view]}` : data?.folder ? `XenDrive - ${data.folder.name}` : "XenDrive");
 
@@ -385,31 +354,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
           onChange={setLinkFilter}
           sx={{ flex: { xs: "1 1 0", md: "0 0 150px" } }}
         />
-        {!view && (hasAppFiles || sourceActive) && (
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            color="primary"
-            value={source}
-            onChange={(_, v) => v && setSource(v)}
-            aria-label="Which files to show"
-            sx={{ flex: { xs: "1 1 100%", md: "0 0 auto" } }}
-          >
-            <ToggleButton value={SOURCE_DRIVE} sx={{ flex: 1, px: 2 }}>
-              XenDrive
-            </ToggleButton>
-            <ToggleButton value={SOURCE_OTHERS} sx={{ flex: 1, px: 2 }}>
-              Others
-            </ToggleButton>
-          </ToggleButtonGroup>
-        )}
       </Box>
-      {sourceActive && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2, mt: -1 }}>
-          Photos and attachments that apps stored for you. Those marked “Doesn't count toward storage” belong to their
-          app, so they can't be renamed or deleted here.
-        </Typography>
-      )}
 
       {selected.size > 0 && (
         <SelectionBar
@@ -432,7 +377,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
         <EmptyState
           icon={<FolderOpenIcon />}
           title={
-            filtered || searching || sourceActive
+            filtered || searching
               ? "Nothing matches"
               : view === "shared"
                 ? "Nothing shared yet"
@@ -443,7 +388,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
                     : "No files yet"
           }
           description={
-            filtered || searching || sourceActive
+            filtered || searching
               ? "Try a different search, or clear the filters."
               : view === "shared"
                 ? "Files and folders with a public link show up here."

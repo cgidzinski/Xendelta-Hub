@@ -4,7 +4,6 @@ import { DriveBrowseLayout, DriveShell } from "./components/DriveShell";
 
 const XenDrive = lazyPage(() => import("./XenDrive"));
 const FileDetail = lazyPage(() => import("./FileDetail"));
-const AppFiles = lazyPage(() => import("./AppFiles"));
 
 // XenDrive: routes mounted under /internal by main.tsx. The shell keeps uploads running while you move around.
 export const xendriveRoutes = (
@@ -14,7 +13,6 @@ export const xendriveRoutes = (
       <Route path="folder/:folderId" element={<XenDrive />} />
       <Route path="shared" element={<XenDrive view="shared" />} />
       <Route path="recent" element={<XenDrive view="recent" />} />
-      <Route path="apps" element={<AppFiles />} />
     </Route>
     <Route path="file/:fileId" element={<FileDetail />} />
   </Route>

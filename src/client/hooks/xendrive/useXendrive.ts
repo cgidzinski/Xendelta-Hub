@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UPLOAD_TIMEOUT_MS, api } from "../../config/api";
 import { liveQuery } from "../liveQuery";
 import type {
-  AppFilesResult,
   BrowseResult,
   BrowseView,
   FileDetailResult,
@@ -94,26 +93,17 @@ export async function uploadOne(params: {
 
 interface BrowseOptions {
   view?: BrowseView;
-  /** Ask for picture links (the grid view shows them). */
-  thumbs?: boolean;
-  /**
-   * Files apps stored for the person are left out unless asked for: "all", "uncounted" (outside their storage), or one
-   * app's key. Leave it out for the drive's own files only.
-   */
-  source?: string;
 }
 
 /** One folder's contents, the shared or recent view, or search results across the whole drive. */
 export const useXendriveBrowse = (folderId?: string | null, search?: string, options: BrowseOptions = {}) =>
   useQuery({
-    queryKey: xendriveKeys.browse(folderId, search, options.view, options.thumbs, options.source),
+    queryKey: xendriveKeys.browse(folderId, search, options.view),
     queryFn: () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       else if (options.view === "shared" || options.view === "recent") params.set("view", options.view);
       else if (folderId) params.set("folder", folderId);
-      if (options.thumbs) params.set("thumbs", "true");
-      if (options.source && options.view !== "shared") params.set("source", options.source);
       return api.get<BrowseResult>(`/api/xendrive/browse?${params.toString()}`);
     },
     retry: 1,
@@ -131,6 +121,16 @@ export const useXendriveFile = (fileId: string | undefined) =>
     ...liveQuery,
   });
 
+/** The first ~256 KB of a text-like file, shown in the page instead of its icon. */
+export const useXendriveFileText = (fileId: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: [...xendriveKeys.file(fileId), "text"],
+    queryFn: () => api.get<{ text: string; truncated: boolean }>(`/api/xendrive/files/${fileId}/text`),
+    enabled: !!fileId && enabled,
+    retry: false,
+    ...liveQuery,
+  });
+
 /** The newest files, the totals, and how many things have a public link (the home card and the sidebar). */
 export const useXendriveRecent = () =>
   useQuery({
@@ -141,18 +141,7 @@ export const useXendriveRecent = () =>
         fileCount: number;
         spaceUsed: number;
         sharedCount: number;
-        /** What apps have stored in the drive; counted in `spaceUsed` but not shown in My Drive. */
-        appFiles: { count: number; size: number };
       }>("/api/xendrive/recent"),
-    ...liveQuery,
-  });
-
-/** Everything apps have stored on the person's behalf, grouped by app and by where it came from. */
-export const useXendriveAppFiles = (enabled = true) =>
-  useQuery({
-    queryKey: xendriveKeys.appFiles(),
-    queryFn: () => api.get<AppFilesResult>("/api/xendrive/app-files"),
-    enabled,
     ...liveQuery,
   });
 
@@ -277,6 +266,12 @@ export async function downloadFile(fileId: string): Promise<void> {
   document.body.appendChild(link);
   link.click();
   link.remove();
+}
+
+/** Open the original file at full size in a new tab (the page shows a smaller rendition for images). */
+export async function openOriginalFile(fileId: string): Promise<void> {
+  const { url } = await api.get<{ url: string }>(`/api/xendrive/files/${fileId}/url`);
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 /** Where a shared link points, for copying. */

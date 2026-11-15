@@ -1061,7 +1061,7 @@ export default function GroupDetail() {
                               {urlEntry ? (
                                 <Box
                                   component="img"
-                                  src={urlEntry.signedUrl}
+                                  src={urlEntry.thumbUrl ?? urlEntry.signedUrl}
                                   sx={{ width: 80, height: 80, objectFit: "cover", display: "block" }}
                                 />
                               ) : (

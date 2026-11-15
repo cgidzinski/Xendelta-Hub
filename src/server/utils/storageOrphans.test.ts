@@ -71,4 +71,15 @@ describe("findOrphans", () => {
     expect(memoryStores().publicStore.objects.has("avatar/old.jpg")).toBe(false);
     expect(memoryStores().publicStore.objects.has("recipaint-assets/thumbs/mini.webp")).toBe(true);
   });
+
+  it("keeps a XenDrive file's thumbnail and flags a thumbnail whose file is gone", async () => {
+    const db = mongoose.connection;
+    await db.collection("xendrivefiles").insertMany([{ storage_path: "xendrive/u1/photo.jpg" }]);
+    put("privateStore", "xendrive/u1/photo.jpg");
+    put("privateStore", "thumbs/xendrive/u1/photo.jpg.webp");
+    put("privateStore", "thumbs/xendrive/u1/missing.jpg.webp");
+
+    const report = await orphans.findOrphans();
+    expect(report.private.orphans.map((o) => o.key)).toEqual(["thumbs/xendrive/u1/missing.jpg.webp"]);
+  });
 });

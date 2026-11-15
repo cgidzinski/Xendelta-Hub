@@ -157,7 +157,7 @@ export function useXenBudgetItemMutations(bookId: string) {
 
 /** Signed display URLs for an item's images, fetched on demand (short-lived GCS URLs). */
 export function useXenBudgetItemImageUrls(bookId: string, itemId: string | undefined, imageCount: number) {
-  return useQuery<{ _id: string; signedUrl: string }[]>({
+  return useQuery<{ _id: string; signedUrl: string; thumbUrl: string | null }[]>({
     queryKey: xenbudgetKeys.itemImageUrls(bookId, itemId),
     queryFn: async () => {
       const res = await apiClient.get(`/api/xenbudget/books/${bookId}/items/${itemId}/image-urls`);

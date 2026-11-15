@@ -34,6 +34,18 @@ const xendriveFileSchema = new Schema({
   // Does this file count toward the owner's storage quota? Files uploaded straight to XenDrive do. Files an app stored
   // for the person are tagged but, for now, exempt (docs/storage.md). Rows that predate the flag have none and count.
   counted: { type: Boolean, default: true },
+  // A small WebP beside the original (utils/xendriveThumbs.ts). `path` is its object key; width/height say how to lay
+  // the grid out. `thumbStatus` tracks the background job: pending until made, ready once stored, none when the file
+  // kind doesn't get one, failed when generation failed (the file then shows its icon).
+  thumb: {
+    type: new Schema({ path: String, width: Number, height: Number }, { _id: false }),
+    default: null,
+  },
+  thumbStatus: {
+    type: String,
+    enum: ["pending", "ready", "none", "failed"],
+    default: "none",
+  },
 });
 
 xendriveFileSchema.index({ owner_id: 1, folder_id: 1 });
@@ -67,11 +79,14 @@ xendriveFileSchema.method("isExpired", function (this: XenDriveFileDocument) {
   return new Date() > this.expiry;
 });
 
-// Deleting a file through a query (findByIdAndDelete, deleteOne) also deletes its bytes.
+// Deleting a file through a query (findByIdAndDelete, deleteOne) also deletes its bytes and its thumbnail.
 xendriveFileSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   const doc = await this.model.findOne(this.getQuery());
   if (doc?.storage_path) {
-    await deleteFromStorage(doc.storage_path, true).catch(() => {
+    await Promise.allSettled([
+      deleteFromStorage(doc.storage_path, true),
+      doc.thumb?.path ? deleteFromStorage(doc.thumb.path, true) : Promise.resolve(),
+    ]).catch(() => {
       // Ignore errors if the object is already gone
     });
   }

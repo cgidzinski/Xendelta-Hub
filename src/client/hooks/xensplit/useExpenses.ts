@@ -5,7 +5,7 @@ import { apiClient } from "../../config/api";
 import type { CreateExpenseInput, UpdateExpenseInput } from "./types";
 
 export function useExpenseImageUrls(groupId: string, expenseId: string | undefined, imageCount: number) {
-  return useQuery<{ _id: string; signedUrl: string }[]>({
+  return useQuery<{ _id: string; signedUrl: string; thumbUrl: string | null }[]>({
     queryKey: xensplitKeys.expenseImageUrls(groupId, expenseId),
     queryFn: async () => {
       const res = await apiClient.get(`/api/xensplit/groups/${groupId}/expenses/${expenseId}/image-urls`);

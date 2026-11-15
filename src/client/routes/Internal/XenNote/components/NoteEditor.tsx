@@ -700,7 +700,7 @@ export default function NoteEditor({
                     <Box key={img._id} sx={{ position: "relative" }}>
                       <Box
                         component="img"
-                        src={img.url}
+                        src={img.thumbUrl ?? img.url}
                         alt=""
                         sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
                       />

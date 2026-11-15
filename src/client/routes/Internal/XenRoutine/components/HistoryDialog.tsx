@@ -62,7 +62,7 @@ export default function HistoryDialog({ open, routine, onClose }: Props) {
                       <Box
                         key={img.file_id}
                         component="img"
-                        src={img.url}
+                        src={img.thumbUrl ?? img.url}
                         alt={`Photo ${n + 1} from ${format(new Date(h.at), "PP")}`}
                         loading="lazy"
                         onClick={() => setViewing(img.url)}

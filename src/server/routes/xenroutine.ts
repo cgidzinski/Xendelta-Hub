@@ -7,7 +7,7 @@ import { authenticateToken } from "../middleware/auth";
 import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { uploadXenRoutineImages } from "../config/multer";
 import { MAX_XENROUTINE_IMAGES } from "../constants";
-import { removeAppFiles, signedUrlsFor, storeAppFiles } from "../utils/appFiles";
+import { removeAppFiles, signedUrlsFor, storeAppFiles, thumbnailUrlsFor } from "../utils/appFiles";
 import { XENROUTINE_SOURCE, removeHistoryPhotos } from "../utils/xenRoutineFiles";
 import {
   validate,
@@ -95,7 +95,10 @@ async function serialize(routines: any[], uid: string) {
   const fileIds = routines.flatMap((r) =>
     (r.toObject ? r.toObject() : r).history.flatMap((h: any) => (h.images ?? []).map((i: any) => String(i.file_id))),
   );
-  const photoUrls = fileIds.length > 0 ? await signedUrlsFor(fileIds, PHOTO_URL_MINUTES) : new Map<string, string>();
+  const [photoUrls, thumbUrls] = await Promise.all([
+    fileIds.length > 0 ? signedUrlsFor(fileIds, PHOTO_URL_MINUTES) : Promise.resolve(new Map<string, string>()),
+    fileIds.length > 0 ? thumbnailUrlsFor(fileIds) : Promise.resolve(new Map<string, string>()),
+  ]);
 
   return routines.map((r) => {
     const obj = r.toObject ? r.toObject() : r;
@@ -130,7 +133,11 @@ async function serialize(routines: any[], uid: string) {
         ...(h.images
           ? {
               images: h.images
-                .map((i: any) => ({ file_id: String(i.file_id), url: photoUrls.get(String(i.file_id)) }))
+                .map((i: any) => ({
+                  file_id: String(i.file_id),
+                  url: photoUrls.get(String(i.file_id)),
+                  thumbUrl: thumbUrls.get(String(i.file_id)) ?? null,
+                }))
                 .filter((i: { url?: string }) => !!i.url),
             }
           : {}),

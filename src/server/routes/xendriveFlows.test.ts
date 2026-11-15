@@ -333,17 +333,20 @@ describe("views of the drive", () => {
     expect(view.files.map((f: any) => f.name)).toEqual(["newer.txt", "old.txt"]);
   });
 
-  it("gives picture links for images when asked, and not otherwise", async () => {
+  it("gives a thumbnail link for images that have one, and nothing for the rest", async () => {
     const me = await createUser();
-    await addFile(me, "photo.png", null, { mimeType: "image/png" });
     await addFile(me, "notes.txt", null);
+    await addFile(me, "pending.png", null, { mimeType: "image/png" }); // made, no thumbnail yet
+    await addFile(me, "photo.png", null, {
+      mimeType: "image/png",
+      thumb: { path: "thumbs/xendrive/photo.webp", width: 320, height: 200 },
+      thumbStatus: "ready",
+    });
 
-    const plain = (await api(me).get("/browse")).body.data.files;
-    expect(plain.every((f: any) => f.previewUrl === null)).toBe(true);
-
-    const withThumbs = (await api(me).get("/browse?thumbs=true")).body.data.files;
-    const byName = Object.fromEntries(withThumbs.map((f: any) => [f.name, f.previewUrl]));
+    const files = (await api(me).get("/browse")).body.data.files;
+    const byName = Object.fromEntries(files.map((f: any) => [f.name, f.thumbUrl]));
     expect(byName["photo.png"]).toMatch(/^https:\/\/example\.test\/signed\//);
+    expect(byName["pending.png"]).toBeNull();
     expect(byName["notes.txt"]).toBeNull();
   });
 });
@@ -373,6 +376,25 @@ describe("a file's page", () => {
     expect((await api(me).get(`/files/${zip.id}`)).body.data.previewUrl).toBeNull();
   });
 
+  it("shows the first 256 KB of a text file, and says so when it is cut off", async () => {
+    const me = await createUser();
+    const small = await addFile(me, "small.txt", null, { mimeType: "text/plain" });
+    const smallPreview = (await api(me).get(`/files/${small.id}/text`)).body.data;
+    expect(smallPreview.text).toBe("xxxxxxxxxx"); // addFile stores ten "x" bytes
+    expect(smallPreview.truncated).toBe(false);
+
+    const { privateStore } = await import("../storage/index.js");
+    const bigPath = `xendrive/${me.user._id}/big-stored`;
+    await privateStore.put(bigPath, Buffer.alloc(256 * 1024 + 10, 97), { contentType: "text/plain" });
+    const big = await addFile(me, "big.txt", null, { mimeType: "text/plain", storage_path: bigPath });
+    const bigPreview = (await api(me).get(`/files/${big.id}/text`)).body.data;
+    expect(bigPreview.truncated).toBe(true);
+    expect(bigPreview.text.length).toBe(256 * 1024);
+
+    const zip = await addFile(me, "z.zip", null, { mimeType: "application/zip" });
+    expect((await api(me).get(`/files/${zip.id}/text`)).status).toBe(404);
+  });
+
   it("a download link forces a download under the real file name", async () => {
     const me = await createUser();
     const file = await addFile(me, "my report.pdf", null);
@@ -382,15 +404,19 @@ describe("a file's page", () => {
     expect(saving).toContain("download=my%20report.pdf");
   });
 
-  it("a shared folder's listing gives picture links for images", async () => {
+  it("a shared folder's listing gives thumbnail links for images that have one", async () => {
     const me = await createUser();
     const shared = await folder(me, "Gallery");
-    await addFile(me, "a.png", shared._id, { mimeType: "image/png" });
+    await addFile(me, "a.png", shared._id, {
+      mimeType: "image/png",
+      thumb: { path: "thumbs/xendrive/a.webp", width: 320, height: 200 },
+      thumbStatus: "ready",
+    });
     await addFile(me, "b.txt", shared._id);
     const token = (await api(me).post(`/folders/${shared._id}/share`)).body.data.folder.shareToken;
     const files = (await request(t.app).get(`/api/xendrive/public/folder/${token}`)).body.data.files;
-    const byName = Object.fromEntries(files.map((f: any) => [f.name, f.previewUrl]));
-    expect(byName["a.png"]).toBeTruthy();
+    const byName = Object.fromEntries(files.map((f: any) => [f.name, f.thumbUrl]));
+    expect(byName["a.png"]).toMatch(/^https:\/\/example\.test\/signed\//);
     expect(byName["b.txt"]).toBeNull();
   });
 });

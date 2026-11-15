@@ -4,6 +4,7 @@ import type { ChatAttachment } from "@shared/chat";
 import { api } from "../../config/api";
 import { uploadOne, type UploadSignal } from "../xendrive/useXendrive";
 import { xendriveKeys } from "../xendrive/keys";
+import { storageKeys } from "../storage/keys";
 import { userProfileKeys } from "../user/useUserProfile";
 import type { XenDriveFile } from "../../types/XenDriveFile";
 
@@ -43,7 +44,7 @@ export function useChatAttachments(conversationId: string) {
 
   const refreshUsage = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: xendriveKeys.recent() });
-    queryClient.invalidateQueries({ queryKey: xendriveKeys.appFiles() });
+    queryClient.invalidateQueries({ queryKey: storageKeys.appFiles() });
     queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
   }, [queryClient]);
 
@@ -114,7 +115,7 @@ export function useChatAttachments(conversationId: string) {
       if (!item) return;
       if (item.status === "uploading" && item.signal) item.signal.cancelled = true;
       if (item.status === "ready" && item.fileId && !item.fromDrive) {
-        api.delete(`/api/xendrive/files/${item.fileId}`).then(refreshUsage, () => undefined);
+        api.delete(`/api/storage/files/${item.fileId}`).then(refreshUsage, () => undefined);
       }
     },
     [refreshUsage],
@@ -129,7 +130,7 @@ export function useChatAttachments(conversationId: string) {
       for (const i of live.current) {
         if (i.status === "uploading" && i.signal) i.signal.cancelled = true;
         if (i.status === "ready" && i.fileId && !i.fromDrive)
-          api.delete(`/api/xendrive/files/${i.fileId}`).then(refreshUsage, () => undefined);
+          api.delete(`/api/storage/files/${i.fileId}`).then(refreshUsage, () => undefined);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

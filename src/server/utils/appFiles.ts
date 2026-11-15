@@ -12,6 +12,7 @@ import { AppError } from "./http";
 import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
 import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storageUtils";
 import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
+import { thumbKey, thumbStatusFor, thumbnailUrlFor } from "./xendriveThumbs";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -61,6 +62,7 @@ export async function storeAppFiles(
           mimeType: f.mimeType,
           size: f.buffer.length,
           counted,
+          thumbStatus: thumbStatusFor(f.mimeType),
           source: { app: source.app, ref: source.ref },
         }),
       ),
@@ -92,7 +94,7 @@ export async function copyAppFiles(
     origins.map(async (origin) => {
       try {
         if ("fileId" in origin) {
-          const doc = await XenDriveFile.findById(origin.fileId, "storage_path name mimeType size").lean();
+          const doc = await XenDriveFile.findById(origin.fileId, "storage_path name mimeType size thumb").lean();
           if (!doc) return null;
           return {
             store: privateStore as ObjectStore,
@@ -100,6 +102,7 @@ export async function copyAppFiles(
             name: doc.name,
             mimeType: doc.mimeType,
             size: doc.size ?? 0,
+            thumb: doc.thumb ?? null,
           };
         }
         const info = await publicStore.head(origin.publicPath);
@@ -110,6 +113,7 @@ export async function copyAppFiles(
           name: origin.publicPath.split("/").pop() || "photo",
           mimeType: info.contentType || "application/octet-stream",
           size: info.size,
+          thumb: null,
         };
       } catch (error) {
         console.error(">>> App file copy skipped:", origin, error);
@@ -137,6 +141,21 @@ export async function copyAppFiles(
       console.error(">>> App file copy failed:", from.name, error);
       continue;
     }
+    // A copy owns its thumbnail too: copy the original's when there is one, else the background job makes it.
+    let thumb: { path: string; width: number; height: number } | null = null;
+    let thumbStatus: "pending" | "ready" | "none" = thumbStatusFor(from.mimeType);
+    if (from.thumb?.path) {
+      const copyThumbPath = thumbKey(path);
+      try {
+        await privateStore.copyFrom(from.store, from.thumb.path, copyThumbPath);
+        thumb = { path: copyThumbPath, width: from.thumb.width ?? 0, height: from.thumb.height ?? 0 };
+        thumbStatus = "ready";
+      } catch (error) {
+        console.error(">>> App thumbnail copy failed:", from.name, error);
+        thumbStatus = "pending";
+      }
+    }
+
     try {
       copies.push(
         (await XenDriveFile.create({
@@ -147,24 +166,30 @@ export async function copyAppFiles(
           mimeType: from.mimeType,
           size: from.size,
           counted,
+          thumb,
+          thumbStatus,
           source: { app: source.app, ref: source.ref },
         })) as unknown as XenDriveFileDocument,
       );
     } catch (error) {
       await deleteBytes([path]);
+      if (thumb?.path) await deleteFromStorage(thumb.path, true).catch(() => undefined);
       throw error;
     }
   }
   return copies;
 }
 
-/** Delete these files and their stored bytes. Ids that no longer exist are ignored. */
+/** Delete these files and their stored bytes (thumbnails included). Ids that no longer exist are ignored. */
 export async function removeAppFiles(fileIds: Array<string | { toString(): string }>): Promise<void> {
   const ids = fileIds.map(String);
   if (ids.length === 0) return;
-  const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path").lean();
+  const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path thumb").lean();
   await XenDriveFile.deleteMany({ _id: { $in: ids } });
-  await deleteBytes(files.map((f) => f.storage_path));
+  await deleteBytes([
+    ...files.map((f) => f.storage_path),
+    ...files.map((f) => f.thumb?.path).filter((p): p is string => !!p),
+  ]);
 }
 
 /** Short-lived links for these files, by id. Files that no longer exist are left out. */
@@ -177,6 +202,15 @@ export async function signedUrlsFor(
   const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path").lean();
   const urls = await Promise.all(files.map((f) => generateSignedUrl(f.storage_path, minutes)));
   return new Map(files.map((f, i) => [String(f._id), urls[i]]));
+}
+
+/** Cacheable thumbnail links for these files, by id. Files without a thumbnail yet are left out. */
+export async function thumbnailUrlsFor(fileIds: Array<string | { toString(): string }>): Promise<Map<string, string>> {
+  const ids = fileIds.map(String);
+  if (ids.length === 0) return new Map();
+  const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path thumb").lean();
+  const urls = await Promise.all(files.map((f) => (f.thumb?.path ? thumbnailUrlFor(f.storage_path) : null)));
+  return new Map(files.map((f, i) => [String(f._id), urls[i]]).filter(([, u]) => u != null) as Array<[string, string]>);
 }
 
 const deleteBytes = (paths: string[]) =>

@@ -7,7 +7,7 @@ import { XenKitchenBook, XenKitchenItem } from "../models/xenKitchen";
 import { canEdit } from "./membership";
 import { registerDriveSource } from "./driveSources";
 import { deleteFromStorage } from "./storageUtils";
-import { removeAppFiles, signedUrlsFor } from "./appFiles";
+import { removeAppFiles, signedUrlsFor, thumbnailUrlsFor } from "./appFiles";
 
 export const XENKITCHEN_SOURCE = "xenkitchen";
 
@@ -71,11 +71,15 @@ type WithImages = { images?: Array<{ _id?: unknown; file_id?: unknown; url?: str
 export async function withPhotoUrls<T extends WithImages>(items: T[]): Promise<T[]> {
   const fileIds = items.flatMap((i) => (i.images ?? []).filter((img) => img.file_id).map((img) => String(img.file_id)));
   if (fileIds.length === 0) return items;
-  const urls = await signedUrlsFor(fileIds, PHOTO_URL_MINUTES);
+  const [urls, thumbs] = await Promise.all([signedUrlsFor(fileIds, PHOTO_URL_MINUTES), thumbnailUrlsFor(fileIds)]);
   return items.map((item) => ({
     ...item,
     images: (item.images ?? [])
-      .map((img) => (img.file_id ? { ...img, url: urls.get(String(img.file_id)) } : img))
+      .map((img) =>
+        img.file_id
+          ? { ...img, url: urls.get(String(img.file_id)), thumbUrl: thumbs.get(String(img.file_id)) ?? null }
+          : img,
+      )
       .filter((img) => !!img.url),
   }));
 }

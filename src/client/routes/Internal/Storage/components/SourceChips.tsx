@@ -4,7 +4,7 @@ import type { XenDriveFile } from "../../../../types/XenDriveFile";
 
 /**
  * Where a file an app stored for the person came from, and whether it uses their storage. Nothing for an ordinary file.
- * `showSource` is off under XenDrive > From apps, where the list is already grouped by app.
+ * `showSource` is off in the storage viewer's lists, where the list is already grouped by app.
  */
 export default function SourceChips({ file, showSource = true }: { file: XenDriveFile; showSource?: boolean }) {
   if (!file.source) return null;
