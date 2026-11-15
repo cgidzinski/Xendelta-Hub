@@ -6,14 +6,9 @@ import {
   AVATAR_QUALITY,
   AVATAR_COMPRESSION_LEVEL,
 } from "../constants";
-import { uploadToStorage, deleteFromStorage } from "./storageUtils";
+import { uploadToStorage } from "./storageUtils";
 
-import {
-  RECIPAINT_ASSET_FOLDER,
-  RECIPAINT_THUMB_MAX_EDGE,
-  thumbGcsPathFor,
-  filenameFromAssetUrl,
-} from "@shared/recipaint/assetUrls";
+import { RECIPAINT_ASSET_FOLDER, RECIPAINT_THUMB_MAX_EDGE, thumbGcsPathFor } from "@shared/recipaint/assetUrls";
 
 // Recipaint filenames are unique per upload (timestamp + random), so the objects are
 // immutable and can be cached hard - the default no-store would refetch every photo.
@@ -215,21 +210,6 @@ export async function uploadRecipaintAsset(
     mimeType: contentType,
     size: file.buffer.length,
   };
-}
-
-/**
- * Remove an asset and the thumbnail derived from it. Neither is allowed to fail the caller:
- * a missing object is the normal case when a recipe is deleted twice, or was uploaded
- * before thumbnails existed.
- */
-export async function deleteRecipaintAssetByUrl(assetUrl: string): Promise<void> {
-  const filename = filenameFromAssetUrl(assetUrl);
-  if (!filename) return;
-
-  await Promise.all([
-    deleteFromStorage(`${RECIPAINT_ASSET_FOLDER}/${filename}`, false).catch(() => {}),
-    deleteFromStorage(thumbGcsPathFor(filename), false).catch(() => {}),
-  ]);
 }
 
 /**

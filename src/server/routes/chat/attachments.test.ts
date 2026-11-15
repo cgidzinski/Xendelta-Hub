@@ -65,6 +65,8 @@ describe("chat uploads", () => {
     expect(stored.source).toEqual({ app: "chat", ref: chatId });
     expect(stored.folder_id).toBeNull();
     expect(stored.counted).toBe(true);
+    // Stored in chat's own folder, under the conversation (docs/storage.md), not the sender's XenDrive folder.
+    expect(stored.storage_path).toMatch(new RegExp(`^chat/${chatId}/`));
 
     // Hidden from My Drive, search and recent unless asked for...
     const browse = (query: string) => request(t.app).get(`/api/xendrive/browse${query}`).set(as(a.token));

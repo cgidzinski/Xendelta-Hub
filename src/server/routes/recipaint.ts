@@ -1,17 +1,22 @@
 import express = require("express");
 import {
-  recipeAssetQuerySchema,
   recipeCreateSchema,
   recipeIdParamSchema,
   recipeProgressSchema,
   recipeUpdateSchema,
   validate,
   validateParams,
-  validateQuery,
 } from "../utils/validation";
 import { authenticateToken } from "../middleware/auth";
 import { uploadRecipaintAsset as multerUploadRecipaintAsset } from "../config/multer";
-import { uploadRecipaintAsset, generateUniqueFilename, deleteRecipaintAssetByUrl } from "../utils/mediaUtils";
+import { uploadRecipaintAsset, generateUniqueFilename } from "../utils/mediaUtils";
+import {
+  copyRecipaintImages,
+  droppedImages,
+  recipeImageUrls,
+  releaseRecipaintImages,
+  withCopiedImages,
+} from "../utils/recipaintAssets";
 import { sanitizeCompletedSteps } from "@shared/recipaint/progress";
 import { isSameId } from "../utils/objectId";
 import { Recipe } from "../models/recipe";
@@ -249,6 +254,10 @@ module.exports = function (app: express.Application) {
         }
       }
 
+      const before = {
+        showcase: [...(recipe.showcase ?? [])],
+        steps: recipe.steps.map((s) => ({ images: [...(s.images ?? [])] })),
+      };
       if (showcase !== undefined) recipe.showcase = showcase;
       if (title !== undefined) recipe.title = title;
       if (description !== undefined) recipe.description = description;
@@ -256,6 +265,8 @@ module.exports = function (app: express.Application) {
       if (isPublic !== undefined) recipe.isPublic = isPublic;
 
       await recipe.save();
+      // Images the edit took out (removed, replaced, or on a deleted step) go too, unless another recipe uses them.
+      await releaseRecipaintImages(droppedImages(before, recipe), recipe._id);
 
       const updated = await Recipe.findById(recipe._id)
         .populate("author", PUBLIC_USER_FIELDS)
@@ -277,26 +288,6 @@ module.exports = function (app: express.Application) {
   // so with the routes the other way round this path was swallowed as a recipe id of
   // "asset", which then failed to cast to an ObjectId and 500ed. Asset deletion never ran.
   // Delete recipaint asset endpoint
-  app.delete(
-    "/api/recipaint/asset",
-    authenticateToken,
-    validateQuery(recipeAssetQuerySchema),
-    async function (req: express.Request, res: express.Response) {
-      const assetUrl = req.query.assetUrl as string;
-
-      if (!assetUrl) {
-        throw new AppError(400, "Asset URL is required");
-      }
-
-      await deleteRecipaintAssetByUrl(assetUrl);
-
-      return res.json({
-        status: true,
-        message: "Asset deleted successfully",
-      });
-    },
-  );
-
   // --- Paint-along progress -------------------------------------------------------------
   // Progress is per user per recipe, so you can put a mini down for a week and pick it up.
 
@@ -393,17 +384,9 @@ module.exports = function (app: express.Application) {
         throw new AppError(403, "Access denied");
       }
 
-      // Delete the recipe's images - showcase and every step's - along with their thumbnails.
-      const assetUrls: string[] = [
-        ...(recipe.showcase || []),
-        ...(recipe.steps || []).flatMap((step: any) =>
-          step && typeof step === "object" && Array.isArray(step.images) ? step.images : [],
-        ),
-      ].filter((url: unknown): url is string => typeof url === "string" && url.startsWith("http"));
-
-      await Promise.all(assetUrls.map((url) => deleteRecipaintAssetByUrl(url)));
-
       await Recipe.findByIdAndDelete(recipeId).exec();
+      // Its images (showcase and every step's, with thumbnails) go with it, unless another recipe uses them.
+      await releaseRecipaintImages(recipeImageUrls(recipe), recipe._id);
       // Nobody's progress can refer to this recipe any more.
       await RecipeProgress.deleteMany({ recipe: new ObjectId(recipeId) }).exec();
 
@@ -472,12 +455,20 @@ module.exports = function (app: express.Application) {
           ? originalRecipe.author._id
           : originalRecipe.author;
 
-      // Create cloned recipe
+      // Create cloned recipe, with its own copies of the images so deleting either recipe never breaks the other.
+      const copies = await copyRecipaintImages(recipeImageUrls(originalRecipe));
+      const images = withCopiedImages(
+        {
+          showcase: originalRecipe.showcase || [],
+          steps: (originalRecipe.steps || []).map((s: any) => (s?.toObject ? s.toObject() : s)),
+        },
+        copies,
+      );
       const clonedRecipe = new Recipe({
-        showcase: originalRecipe.showcase || [],
+        showcase: images.showcase,
         title: `Copy of ${originalRecipe.title}`,
         description: originalRecipe.description || "",
-        steps: originalRecipe.steps || [],
+        steps: images.steps,
         isPublic: originalRecipe.isPublic || false,
         author: authorId,
         owner: userId,

@@ -10,7 +10,15 @@
 require("dotenv").config({ quiet: true });
 
 import mongoose from "mongoose";
-import { ledgerMismatches } from "../src/server/utils/dbStats";
+import fs from "fs";
+import path from "path";
+import { ledgerMismatches, schemaDrift } from "../src/server/utils/dbStats";
+
+// Every model, so the report can tell which collections and fields the code no longer knows about.
+const MODELS = path.join(__dirname, "..", "src", "server", "models");
+for (const file of fs.readdirSync(MODELS)) {
+  if (file.endsWith(".ts") && !file.endsWith(".test.ts")) require(path.join(MODELS, file));
+}
 
 const LIMIT = 16 * 1024 * 1024;
 const mb = (n: number) => (n / 1024 / 1024).toFixed(2) + " MB";
@@ -83,19 +91,26 @@ async function main() {
     console.log("");
   }
 
-  // ---- Conversations: messages embedded in the conversation ----
+  // ---- Chat: conversations, with messages in their own collection ----
   if (await has("conversations")) {
-    console.log("Conversations (messages are embedded in the conversation document)");
-    const rows = await db
+    console.log("Chat (messages are their own collection, one document each)");
+    const sizes = await db
       .collection("conversations")
-      .aggregate([{ $project: { size: { $bsonSize: "$$ROOT" }, messages: { $size: { $ifNull: ["$messages", []] } } } }])
+      .aggregate([{ $project: { size: { $bsonSize: "$$ROOT" } } }])
       .toArray();
     summarise(
       "conversations",
-      rows.map((r) => r.size),
-      rows.map((r) => r.messages),
-      "messages/conversation",
+      sizes.map((r) => r.size),
     );
+    if (await has("messages")) {
+      const perChat = await db
+        .collection("messages")
+        .aggregate<{ n: number }>([{ $group: { _id: "$conversationId", n: { $sum: 1 } } }])
+        .toArray();
+      const total = perChat.reduce((sum, c) => sum + c.n, 0);
+      const busiest = perChat.reduce((max, c) => Math.max(max, c.n), 0);
+      console.log(`  messages: ${total} in ${perChat.length} conversation(s), busiest has ${busiest}`);
+    }
     console.log("");
   }
 
@@ -155,6 +170,17 @@ async function main() {
       `    ${m.type} ${m.id}: balance ${m.balance}, ledger says ${m.ledger} (${m.balance - m.ledger > 0 ? "+" : ""}${m.balance - m.ledger})`,
     );
   }
+
+  // ---- What the database holds that the code no longer describes (report only) ----
+  console.log("\nUnused data (nothing in the code reads it)");
+  const drift = await schemaDrift();
+  if (!drift.unmodelled.length && !drift.unknownFields.length && !drift.legacy.length) console.log("  none");
+  for (const c of drift.unmodelled)
+    console.log(`  collection with no model: ${c.collection} (${c.documents} documents)`);
+  for (const f of drift.unknownFields) {
+    console.log(`  field no schema defines: ${f.collection}.${f.field} (${f.documents} documents)`);
+  }
+  for (const l of drift.legacy) console.log(`  ${l.label}: ${l.documents}`);
 
   // ---- Whole database ----
   const stats = await db.stats();

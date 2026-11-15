@@ -301,7 +301,7 @@ describe("photos", () => {
     const up = await send(2);
     expect(up.status, JSON.stringify(up.body)).toBe(200);
     expect(up.body.data.note.images).toHaveLength(2);
-    expect(up.body.data.note.images[0].url).toMatch(/^https:\/\/signed\.example\/xendrive\//);
+    expect(up.body.data.note.images[0].url).toMatch(/^https:\/\/signed\.example\/xennote\//); // the app's own folder
     expect(stored.size).toBe(2);
 
     expect((await send(9)).status).toBe(400); // 2 + 9 would pass the limit of 10

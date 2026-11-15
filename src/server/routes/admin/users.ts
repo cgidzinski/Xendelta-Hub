@@ -26,6 +26,7 @@ import { unequipIfNotOwned } from "../../utils/cosmetics";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { recordAudit } from "../../utils/adminAudit";
 import { HOUSE, balanceOf, transfer, userAccount } from "../../billing/ledger";
+import { deleteStoredAvatar, removeAccountFiles } from "../../utils/accountFiles";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import type { AdminUserDetail, AdminUserRow, UserFilter, UserSort } from "@shared/admin";
 
@@ -200,8 +201,10 @@ export function registerAdminUserRoutes(app: express.Application) {
     validateParams(adminUserIdParamSchema),
     async (req, res) => {
       const user = await loadUser(req.params.userId as string);
+      const previous = user.avatar;
       user.avatar = "/avatars/default-avatar.png";
       await user.save();
+      await deleteStoredAvatar(previous);
       await recordAudit(req, {
         action: "avatar_reset",
         target: { type: "user", id: String(user._id), label: user.username ?? "" },
@@ -223,9 +226,10 @@ export function registerAdminUserRoutes(app: express.Application) {
       if (adminDeleteUserSchema.parse(req.body).confirm !== user.username) {
         throw new AppError(400, "Type the person's username to confirm");
       }
-      const files = (await usageFor(String(user._id))).fileCount;
       await User.deleteOne({ _id: user._id }).exec();
       await XenLink.deleteMany({ owner_id: String(user._id) }).exec();
+      // Their stored files go too: XenDrive (app photos and chat attachments included), profile picture, Recipaint.
+      const files = await removeAccountFiles(String(user._id), user.avatar);
       await recordAudit(req, {
         action: "user_delete",
         target: { type: "user", id: String(user._id), label: user.username ?? "" },

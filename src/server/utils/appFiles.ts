@@ -11,7 +11,7 @@ import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile"
 import { AppError } from "./http";
 import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
 import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storageUtils";
-import { checkQuota, generateXendriveFilename } from "./xendriveUtils";
+import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -41,7 +41,7 @@ export async function storeAppFiles(
     if (!quota.canUpload) throw new AppError(413, quota.message ?? "Not enough storage");
   }
 
-  const paths = files.map((f) => `xendrive/${userId}/${generateXendriveFilename(f.name)}`);
+  const paths = files.map((f) => storageKeyFor(userId, source, generateXendriveFilename(f.name)));
   const uploads = await Promise.allSettled(files.map((f, i) => uploadToStorage(f.buffer, paths[i], f.mimeType, true)));
   const uploaded = paths.filter((_, i) => uploads[i].status === "fulfilled");
   const failed = uploads.find((u): u is PromiseRejectedResult => u.status === "rejected");
@@ -130,7 +130,7 @@ export async function copyAppFiles(
 
   const copies: XenDriveFileDocument[] = [];
   for (const from of sources) {
-    const path = `xendrive/${userId}/${generateXendriveFilename(from.name)}`;
+    const path = storageKeyFor(userId, source, generateXendriveFilename(from.name));
     try {
       await privateStore.copyFrom(from.store, from.key, path);
     } catch (error) {

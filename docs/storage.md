@@ -15,6 +15,49 @@ never the SDK directly. Chunked XenDrive uploads are R2 multipart uploads, one p
 but the last to be at least 5 MB). `STORAGE_DRIVER=memory` keeps both buckets in memory: the tests use it, and so can
 local development without R2 keys. Downloads from R2 cost nothing, so only storage is a cost (`docs/billing.md`).
 
+## Folders
+
+The buckets are laid out so they can be audited by folder: one folder per app, then one per space, never deeper.
+
+| Bucket | Folder | What |
+|---|---|---|
+| private | `xendrive/<userId>/` | files uploaded straight to XenDrive |
+| private | `chat/<conversationId>/` | attachments and voice messages (DMs, groups, community channels) |
+| private | `xensplit/<groupId>/` | expense photos |
+| private | `xenbudget/<bookId>/` | item photos |
+| private | `xenroutine/<routineId>/` | "done" photos |
+| private | `xennote/<noteId>/` | note photos (per note: a note can move between notebooks) |
+| private | `xenkitchen/<itemId>/` | recipe photos (per recipe: a recipe can move between books) |
+| private | `db-backups/` | database backups |
+| public | `avatar/`, `emoji/<scope>/`, `blog-assets/`, `recipaint-assets/` (+ `thumbs/`), `xensplit-group-images/` | public images |
+
+`storageKeyFor` (`utils/xendriveUtils.ts`) decides a private file's path: `<source.app>/<source.ref>/<name>` for a file an
+app stores, `xendrive/<userId>/<name>` otherwise. The migration `1795400000000-storage-folders` moved older files
+(`xendrive/<userId>/` app files, `xensplit-images/`, `xenbudget-images/`) into these folders.
+
+## Cleaning up
+
+Whatever deletes a record deletes its file in the same request: an app's photos through `removeAppFiles`, Recipaint
+images through `releaseRecipaintImages` (only once no recipe uses them; a clone gets its own copies), an account's files
+through `removeAccountFiles` when an admin deletes it. Two things are deliberately kept for a while: chat attachments stay
+in the sender's XenDrive (From apps) after the message goes, and a deleted XenSplit expense keeps its photos for 30 days
+so restoring it brings them back (the `xensplit-deleted-photos` job removes them after).
+
+Anything left over (an upload whose recipe was never saved, a crash mid-delete) is found by:
+
+```bash
+npm run storage:orphans              # dry run: lists unused files per folder, changes nothing
+npm run storage:orphans -- --delete  # deletes them
+```
+
+Run it with the database the buckets belong to (production's database with production's buckets). Pointed at another
+database, nearly every file looks unused, so `--delete` refuses when a bucket would lose more than a quarter of its files;
+`--force` overrides that once the dry run has been checked.
+
+A private file is used when a XenDrive record points at it (or it's a backup); a public one when any document holds its
+link (anywhere, blog text included), a custom emoji's `storagePath` is its key, or it's the thumbnail of a used Recipaint
+image. Files under a day old are never touched. XenDrive records whose file is missing are listed, not changed.
+
 
 Every file a person uploads is a `XenDriveFile` owned by them, in the private bucket. Files uploaded straight to XenDrive
 **count toward the person's storage**, and so do chat attachments. Files the other apps store for them (photos) are tagged

@@ -21,12 +21,6 @@ const registrationIndex = (method: string, path: string): number => {
 };
 
 describe("recipaint route registration order", () => {
-  it("registers DELETE /api/recipaint/asset before DELETE /api/recipaint/:id", () => {
-    expect(registrationIndex("delete", "/api/recipaint/asset")).toBeLessThan(
-      registrationIndex("delete", "/api/recipaint/:id"),
-    );
-  });
-
   it("registers GET /api/recipaint/public before GET /api/recipaint/:id", () => {
     expect(registrationIndex("get", "/api/recipaint/public")).toBeLessThan(
       registrationIndex("get", "/api/recipaint/:id"),

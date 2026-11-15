@@ -195,7 +195,7 @@ describe("adding the page's photo to an item", () => {
     const res = await addFrom(me, id, "https://img.example.com/pancakes.png");
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.data.item.images).toHaveLength(1);
-    expect(res.body.data.item.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xendrive\//);
+    expect(res.body.data.item.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xenkitchen\//); // the app's own folder
     expect(priv.size).toBe(1);
     const files = await XenDriveFile.find({ "source.app": "xenkitchen", "source.ref": id });
     expect(files).toHaveLength(1);

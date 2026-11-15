@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { Box, TextField, Button, Typography, Card, CardContent, FormControlLabel, Switch } from "@mui/material";
 import { Delete as DeleteIcon, Save as SaveIcon } from "@mui/icons-material";
 import { Recipe } from "../../../../types/Recipe";
 import { RecipeStep } from "../../../../types/RecipeStep";
-import { useRecipaintAssets } from "../../../../hooks/recipaint/useRecipaint";
 import { cleanPaints } from "@shared/recipaint/paints";
 import ImageUploader from "./ImageUploader";
 import StepEditor from "./StepEditor";
@@ -85,12 +84,8 @@ export default function RecipeForm({
   const [showcase, setShowcase] = useState<string[]>(recipe.showcase || []);
   const [steps, dispatchSteps] = useReducer(stepsReducer, recipe.steps || []);
   const [isPublic, setIsPublic] = useState(recipe.isPublic || false);
-  const { deleteAsset } = useRecipaintAssets();
-
-  // Images the user removed in this editing session. They are only destroyed once the
-  // save lands: deleting on click meant abandoning the edit left the saved recipe
-  // pointing at an object that no longer exists, i.e. a permanently broken image.
-  const pendingDeletions = useRef<string[]>([]);
+  // Removed images are deleted by the server when the save lands (it compares the recipe before and after), so
+  // abandoning an edit never breaks the saved recipe.
 
   useEffect(() => {
     setTitle(recipe.title);
@@ -98,7 +93,6 @@ export default function RecipeForm({
     setShowcase(recipe.showcase || []);
     dispatchSteps({ type: "reset", steps: recipe.steps || [] });
     setIsPublic(recipe.isPublic || false);
-    pendingDeletions.current = [];
   }, [recipe]);
 
   const isDirty = useMemo(() => {
@@ -116,12 +110,7 @@ export default function RecipeForm({
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const handleAssetRemoved = (url: string) => {
-    pendingDeletions.current.push(url);
-  };
-
   const handleShowcaseDelete = (url: string) => {
-    handleAssetRemoved(url);
     setShowcase((prev) => prev.filter((u) => u !== url));
   };
 
@@ -131,12 +120,8 @@ export default function RecipeForm({
     try {
       await onSave({ title, description, showcase, steps: cleanedSteps, isPublic });
     } catch {
-      // onSave surfaces its own error. Keep the pending deletions so a later successful
-      // save still cleans up, and leave the removed images in place until then.
-      return;
+      // onSave surfaces its own error.
     }
-    pendingDeletions.current.forEach((url) => deleteAsset(url));
-    pendingDeletions.current = [];
   };
 
   return (
@@ -216,7 +201,6 @@ export default function RecipeForm({
                 canMoveUp={index > 0}
                 canMoveDown={index < steps.length - 1}
                 dispatch={dispatchSteps}
-                onAssetRemoved={handleAssetRemoved}
               />
             ))}
             {steps.length === 0 && (

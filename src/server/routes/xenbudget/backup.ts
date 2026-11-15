@@ -10,6 +10,7 @@ import { withDerivedUncategorised } from "../../utils/xenBudgetRules";
 import { serializeBookFor } from "../../utils/xenBudgetSerializer";
 import { broadcastBook, callerId, ensureSystemLabels, loadBookForCreator, loadBookForMember, mongoose } from "./shared";
 import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
+import { removeItemPhotos } from "../../utils/xenBudgetFiles";
 
 // Subdocument _ids from another book would collide on restore, so they're dropped and
 // mongoose assigns fresh ones.
@@ -350,8 +351,11 @@ export function registerBackupRoutes(app: any) {
         await applyConfig(book, req.body, idMap);
       }
       if (scope === "everything") {
+        // The replaced items' photos go with them (backups don't carry photos).
+        const replaced = await XenBudgetItem.find({ book_id: book._id }, "images").lean();
         const result = await XenBudgetItem.deleteMany({ book_id: book._id });
         removed = result.deletedCount || 0;
+        await removeItemPhotos(replaced.flatMap((i: any) => i.images ?? []));
         inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "replace");
       } else if (scope === "items") {
         inserted = await insertRestoredItems(book, req.body.items, idMap, userId, "merge");

@@ -128,7 +128,8 @@ spellings.
   `<app>:<thing>_update`.
 - Notifications go through `notify()`. **Files a person uploads in your app are XenDrive files**: register a source with
   `registerDriveSource` (see `utils/xenNoteFiles.ts`) and store them with `storeAppFiles` from `utils/appFiles.ts`, not
-  `uploadToStorage`, so they are owned by the uploader, listed under XenDrive > From apps and deleted properly (`docs/storage.md`).
+  `uploadToStorage`, so they are owned by the uploader, listed under XenDrive > From apps, stored in the app's own folder
+  (`<app>/<ref>/`) and deleted properly: delete a record's photos with `removeAppFiles` in the same request (`docs/storage.md`).
   Only small, resized or admin-only images (avatars, a group image) use `utils/mediaUtils.ts`. A long upload needs the
   client's progress bar (below).
 

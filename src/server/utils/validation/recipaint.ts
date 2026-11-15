@@ -20,4 +20,3 @@ export const recipeIdParamSchema = z.object({ id: objectIdSchema });
 export const recipeProgressSchema = z.object({
   completedSteps: z.array(z.union([z.string(), z.number()])).max(5000),
 });
-export const recipeAssetQuerySchema = z.object({ assetUrl: z.string().min(1).max(2048) });

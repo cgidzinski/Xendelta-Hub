@@ -25,6 +25,24 @@ export function generateXendriveFilename(originalName: string): string {
   return `${sanitizedBase}-${timestamp}-${random}.${ext}`;
 }
 
+/** A source's app and ref become folder names, so only plain names are allowed (an app key, an ObjectId). */
+const SAFE_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Where a stored file lives in the private bucket (docs/storage.md), so the bucket can be audited by folder:
+ *   xendrive/<userId>/<name>   uploaded straight to XenDrive
+ *   <app>/<ref>/<name>         stored by an app for one of its spaces (chat/<conversationId>, xensplit/<groupId>, ...)
+ */
+export function storageKeyFor(
+  userId: string,
+  source: { app: string; ref: string } | null | undefined,
+  storedName: string,
+) {
+  if (!source) return `xendrive/${userId}/${storedName}`;
+  if (!SAFE_SEGMENT.test(source.app) || !SAFE_SEGMENT.test(source.ref)) throw new Error("Invalid upload source");
+  return `${source.app}/${source.ref}/${storedName}`;
+}
+
 function detectContentType(filename: string): string {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
   if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
@@ -65,7 +83,8 @@ export async function initiateChunkedUpload(
   await assertOwnFolder(userId, folderId);
   const uploadId = `xendrive-${Date.now()}-${randomToken(9)}`;
   const storedName = generateXendriveFilename(name);
-  const storageUploadId = await privateStore.startMultipart(`xendrive/${userId}/${storedName}`, {
+  const storageKey = storageKeyFor(userId, source, storedName);
+  const storageUploadId = await privateStore.startMultipart(storageKey, {
     contentType: detectContentType(storedName),
     cacheControl: "no-cache, no-store, must-revalidate",
   });
@@ -74,6 +93,7 @@ export async function initiateChunkedUpload(
     upload_id: uploadId,
     user_id: userId,
     filename: storedName,
+    storage_key: storageKey,
     name,
     folder_id: folderId,
     ...(source ? { source_app: source.app, source_ref: source.ref } : {}),
@@ -82,6 +102,10 @@ export async function initiateChunkedUpload(
   });
   return uploadId;
 }
+
+/** Where a session's file is going. Sessions started before folders were per app have no key: XenDrive's folder. */
+const sessionKey = (session: { storage_key?: string | null; user_id: string; filename: string }) =>
+  session.storage_key || `xendrive/${session.user_id}/${session.filename}`;
 
 /** The caller's own session, or null. Another person's session is indistinguishable from a missing one. */
 async function ownSession(uploadId: string, userId: string) {
@@ -105,12 +129,7 @@ export async function uploadChunk(
   }
 
   const partNumber = chunkIndex + 1;
-  const etag = await privateStore.uploadPart(
-    `xendrive/${session.user_id}/${session.filename}`,
-    session.storage_upload_id,
-    partNumber,
-    chunkData,
-  );
+  const etag = await privateStore.uploadPart(sessionKey(session), session.storage_upload_id, partNumber, chunkData);
 
   // A resent chunk replaces its earlier part, so only the newest ETag is kept and its bytes are counted once.
   const previous = session.parts.find((p) => p.partNumber === partNumber);
@@ -147,7 +166,7 @@ export async function finalizeChunkedUpload(
     );
   }
 
-  const storagePath = `xendrive/${session.user_id}/${session.filename}`;
+  const storagePath = sessionKey(session);
   await privateStore.completeMultipart(
     storagePath,
     session.storage_upload_id,
@@ -191,7 +210,7 @@ export async function cleanupFailedUpload(uploadId: string, userId?: string): Pr
     userId ? { upload_id: uploadId, user_id: userId } : { upload_id: uploadId },
   );
   if (session) {
-    const key = `xendrive/${session.user_id}/${session.filename}`;
+    const key = sessionKey(session);
     // Abandon the multipart upload (its parts are stored, and billed, until then) and any object it already made.
     await privateStore.abortMultipart(key, session.storage_upload_id).catch(() => undefined);
     await privateStore.delete(key).catch(() => undefined);

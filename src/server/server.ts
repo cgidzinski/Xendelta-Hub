@@ -115,6 +115,14 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: () => reconcilePendingGems(),
     });
+    // Photos of XenSplit expenses deleted over a month ago (utils/xensplitFiles.ts).
+    const { purgeDeletedExpensePhotos } = require("./utils/xensplitFiles");
+    scheduler.register({
+      name: "xensplit-deleted-photos",
+      everyMs: 24 * 60 * 60 * 1000,
+      runOnStart: true,
+      handler: () => purgeDeletedExpensePhotos(),
+    });
     // Close finished billing months and warn accounts near their free tier (billing/settlement.ts).
     const { runBillingJobs } = require("./billing/settlement");
     scheduler.register({

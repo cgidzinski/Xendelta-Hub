@@ -64,7 +64,8 @@ describe("XenKitchen photos in XenDrive", () => {
 
     const images = res.body.data.item.images;
     expect(images).toHaveLength(2);
-    expect(images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xendrive\//);
+    // In XenKitchen's own folder, under the recipe.
+    expect(images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xenkitchen\//);
     expect(priv.size).toBe(2);
     expect(pub.size).toBe(0);
 

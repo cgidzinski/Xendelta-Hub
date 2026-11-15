@@ -103,3 +103,86 @@ export async function ledgerMismatches(limit = 50): Promise<{ checked: number; m
   }
   return { checked, mismatches };
 }
+
+export interface SchemaDrift {
+  /** Collections no model uses (left from a removed app), with their document counts. */
+  unmodelled: Array<{ collection: string; documents: number }>;
+  /** Top-level fields stored on documents that the model's schema doesn't define, with how many documents have each. */
+  unknownFields: Array<{ collection: string; field: string; documents: number }>;
+  /** Leftovers from older features that the current code no longer writes. */
+  legacy: Array<{ label: string; documents: number }>;
+}
+
+/** Collections every Mongo deployment has that no model is expected to own. */
+const SYSTEM_COLLECTIONS = new Set(["migrations"]);
+
+/**
+ * What the database holds that the code no longer describes. Needs every model registered first (the db:stats script
+ * loads them). Read-only.
+ */
+export async function schemaDrift(): Promise<SchemaDrift> {
+  const db = mongoose.connection.db;
+  if (!db) return { unmodelled: [], unknownFields: [], legacy: [] };
+  const models = new Map(
+    mongoose.modelNames().map((n) => [mongoose.model(n).collection.collectionName, mongoose.model(n)]),
+  );
+  const drift: SchemaDrift = { unmodelled: [], unknownFields: [], legacy: [] };
+
+  for (const { name } of await db.listCollections({}, { nameOnly: true }).toArray()) {
+    if (name.startsWith("system.") || SYSTEM_COLLECTIONS.has(name)) continue;
+    const model = models.get(name);
+    if (!model) {
+      drift.unmodelled.push({ collection: name, documents: await db.collection(name).estimatedDocumentCount() });
+      continue;
+    }
+    const known = new Set(["_id", "__v", ...Object.keys(model.schema.paths).map((p) => p.split(".")[0])]);
+    const counts = await db
+      .collection(name)
+      .aggregate<{ _id: string; n: number }>([
+        { $project: { keys: { $map: { input: { $objectToArray: "$$ROOT" }, as: "kv", in: "$$kv.k" } } } },
+        { $unwind: "$keys" },
+        { $match: { keys: { $nin: [...known] } } },
+        { $group: { _id: "$keys", n: { $sum: 1 } } },
+      ])
+      .toArray();
+    for (const c of counts) drift.unknownFields.push({ collection: name, field: c._id, documents: c.n });
+  }
+
+  const legacyChecks: Array<{ label: string; collection: string; filter: object }> = [
+    {
+      label: "XenSplit photos never moved to XenDrive",
+      collection: "xensplits",
+      filter: { "expenses.images": { $elemMatch: { gcs_path: { $exists: true }, file_id: { $exists: false } } } },
+    },
+    {
+      label: "XenBudget photos never moved to XenDrive",
+      collection: "xenbudgetitems",
+      filter: { images: { $elemMatch: { gcs_path: { $exists: true }, file_id: { $exists: false } } } },
+    },
+    {
+      label: "XenNote photos never moved to XenDrive",
+      collection: "xennotes",
+      filter: { images: { $elemMatch: { gcs_path: { $exists: true }, file_id: { $exists: false } } } },
+    },
+    {
+      label: "XenKitchen photos never moved to XenDrive",
+      collection: "xenkitchenitems",
+      filter: { images: { $elemMatch: { gcs_path: { $exists: true }, file_id: { $exists: false } } } },
+    },
+    {
+      label: "People with extra XenDrive space from the old quota",
+      collection: "users",
+      filter: { "xendrive.spaceAllowed": { $gt: 0 } },
+    },
+    {
+      label: "Files with a plain-text link password",
+      collection: "xendrivefiles",
+      filter: { password: { $exists: true, $nin: [null, ""] } },
+    },
+  ];
+  for (const check of legacyChecks) {
+    const documents = await db.collection(check.collection).countDocuments(check.filter);
+    if (documents > 0) drift.legacy.push({ label: check.label, documents });
+  }
+  return drift;
+}

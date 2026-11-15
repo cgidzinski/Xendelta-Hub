@@ -60,6 +60,27 @@ async function setup() {
 }
 
 describe("XenBudget photos in XenDrive", () => {
+  it("undoing an import or restoring everything deletes the photos of the items it removes", async () => {
+    const { owner, uid, b, itemId, photos } = await setup();
+    await photos(1);
+    const { XenBudgetItem } = await import("../models/xenBudget.js");
+    const batch = new (await import("mongoose")).default.Types.ObjectId();
+    await XenBudgetItem.updateOne({ _id: itemId }, { $set: { import_batch_id: batch } });
+    expect((await request(t.app).delete(`${b}/imports/${batch}`).set(auth(owner.token))).status).toBe(200);
+    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(stored.size).toBe(0);
+
+    const second = await setup();
+    await second.photos(1);
+    const restore = await request(t.app)
+      .post(`${second.b}/import`)
+      .set(auth(second.owner.token))
+      .send({ format_version: 1, scope: "everything", book: { name: "Home" }, items: [] });
+    expect(restore.status, JSON.stringify(restore.body)).toBe(200);
+    expect(await XenDriveFile.countDocuments({ owner_id: second.uid })).toBe(0);
+    expect(stored.size).toBe(0);
+  });
+
   it("stores each photo as a tagged file owned by the uploader that doesn't count toward storage", async () => {
     const { owner, uid, bookId, photos, urls } = await setup();
     const before = await usageFor(uid);

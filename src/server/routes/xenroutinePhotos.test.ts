@@ -67,7 +67,7 @@ describe("marking a routine done with a note and photos", () => {
     const entry = res.body.data.routine.history[0];
     expect(entry).toMatchObject({ action: "done", note: "Changed the cartridge" });
     expect(entry.images).toHaveLength(2);
-    expect(entry.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xendrive\//);
+    expect(entry.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xenroutine\//); // the app's own folder
     expect(priv.size).toBe(2);
 
     // private XenDrive files owned by the person, tagged to the routine, not counted toward storage
