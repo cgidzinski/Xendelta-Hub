@@ -45,6 +45,7 @@ export interface KitchenCategory {
 export interface KitchenImage {
   _id: string;
   url: string;
+  thumbUrl?: string | null;
 }
 
 export interface KitchenIngredient {

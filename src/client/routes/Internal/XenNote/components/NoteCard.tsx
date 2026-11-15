@@ -39,14 +39,14 @@ const MAX_LINES = 8;
 const MAX_ITEMS = 6;
 
 /** Up to three photos as a mosaic: one wide, two side by side, or a big one beside two small ones. */
-function PhotoMosaic({ images }: { images: Array<{ url: string }> }) {
+function PhotoMosaic({ images }: { images: Array<{ url: string; thumbUrl?: string | null }> }) {
   const shown = images.slice(0, 3);
   const extra = images.length - shown.length;
-  const tile = (url: string, sx: object = {}) => (
+  const tile = (img: { url: string; thumbUrl?: string | null }, sx: object = {}) => (
     <Box
-      key={url}
+      key={img.url}
       component="img"
-      src={url}
+      src={img.thumbUrl ?? img.url}
       alt=""
       loading="lazy"
       sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block", ...sx }}
@@ -66,7 +66,7 @@ function PhotoMosaic({ images }: { images: Array<{ url: string }> }) {
     >
       {shown.map((img, i) => (
         <Box key={img.url + i} sx={{ gridRow: shown.length === 3 && i === 0 ? "1 / 3" : undefined, minHeight: 0 }}>
-          {tile(img.url)}
+          {tile(img)}
         </Box>
       ))}
       {extra > 0 && (

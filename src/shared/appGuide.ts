@@ -165,13 +165,13 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     features: [
       "Upload files by choosing them or dragging them in. Big files upload in pieces, with progress shown.",
       "Organize files in folders.",
-      "Preview images, PDFs, video and audio without downloading them.",
+      "Preview images, PDFs, video and audio, and read text, Markdown and CSV files, without downloading them.",
+      "See thumbnails of your photos and videos in the list and grid.",
       "Share a file with a link, with an optional password and expiry date.",
       "Share a whole folder with a link that anyone can browse without an account.",
       "See how many times a shared file or folder was downloaded.",
       "Search your drive and filter by type or link status.",
       "Switch between list and grid view, and act on several items at once.",
-      "See the files other apps saved for you, and how much storage you have used.",
       "Rename, move, download and delete files and folders.",
     ],
     tips: [

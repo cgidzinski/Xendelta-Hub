@@ -3,6 +3,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -11,20 +12,23 @@ import PageHeader from "../../../components/ui/PageHeader";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
-import { downloadFile, useXendriveActions, useXendriveAppFiles } from "../../../hooks/xendrive/useXendrive";
+import { downloadStorageFile, useStorageActions, useStorageAppFiles } from "../../../hooks/storage/useStorage";
 import { formatFileSize } from "../../../utils/fileUtils";
 import type { XenDriveFile } from "../../../types/XenDriveFile";
-import FileTypeIcon from "./components/FileTypeIcon";
+import FileTypeIcon from "../XenDrive/components/FileTypeIcon";
 import SourceChips from "./components/SourceChips";
 
+const storageFilePath = (fileId: string) => `/internal/storage/file/${fileId}`;
+
 /**
- * Files that apps stored in the drive for you (chat attachments, ...). They count toward your storage but are kept out of
- * My Drive so they don't crowd it; this is where you see them and free the space.
+ * Files that apps stored for you (chat attachments, photos on an expense or a note). They count toward your storage but
+ * are kept out of My Drive; this is where you see them and free the space.
  */
-export default function AppFiles() {
-  useTitle("XenDrive - From apps");
-  const { data, isLoading, isError, error, refetch } = useXendriveAppFiles();
-  const { deleteFile } = useXendriveActions();
+export default function Storage() {
+  useTitle("Storage");
+  const navigate = useNavigate();
+  const { data, isLoading, isError, error, refetch } = useStorageAppFiles();
+  const { deleteFile } = useStorageActions();
   const confirm = useConfirm();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -48,13 +52,13 @@ export default function AppFiles() {
   };
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 960, mx: "auto" }}>
       <PageHeader
-        title="From apps"
+        title="Storage"
         subtitle={
           data && data.count > 0
             ? `${data.count} ${data.count === 1 ? "file" : "files"} · ${formatFileSize(data.size)}. These count toward your storage.`
-            : "Files that apps store here for you"
+            : "Files that apps store for you"
         }
       />
 
@@ -94,7 +98,18 @@ export default function AppFiles() {
                 </Box>
                 <Divider />
                 {group.files.map((file) => (
-                  <Box key={file._id} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
+                  <Box
+                    key={file._id}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      py: 1,
+                      cursor: "pointer",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                    onClick={() => navigate(storageFilePath(file._id))}
+                  >
                     <FileTypeIcon mimeType={file.mimeType} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography noWrap>{file.name}</Typography>
@@ -104,7 +119,13 @@ export default function AppFiles() {
                       <SourceChips file={file} showSource={false} />
                     </Box>
                     <Tooltip title="Download">
-                      <IconButton aria-label={`Download ${file.name}`} onClick={() => downloadFile(file._id)}>
+                      <IconButton
+                        aria-label={`Download ${file.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadStorageFile(file._id);
+                        }}
+                      >
                         <FileDownloadOutlinedIcon />
                       </IconButton>
                     </Tooltip>
@@ -112,7 +133,10 @@ export default function AppFiles() {
                       <Tooltip title="Delete">
                         <IconButton
                           aria-label={`Delete ${file.name}`}
-                          onClick={() => removeFiles([file], `“${file.name}”`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFiles([file], `“${file.name}”`);
+                          }}
                         >
                           <DeleteOutlineIcon />
                         </IconButton>

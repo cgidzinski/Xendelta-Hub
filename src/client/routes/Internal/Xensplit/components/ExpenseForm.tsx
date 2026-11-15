@@ -72,7 +72,7 @@ interface ExpenseFormProps {
   images: File[];
   onImagesChange: (files: File[]) => void;
   existingImages?: XenSplitExpenseImage[];
-  existingImageUrls?: { _id: string; signedUrl: string }[];
+  existingImageUrls?: { _id: string; signedUrl: string; thumbUrl: string | null }[];
   onDeleteExistingImage?: (imageId: string) => void;
   isDeletingImage?: boolean;
   isEditing?: boolean;
@@ -814,7 +814,7 @@ export default function ExpenseForm({
                       {urlEntry ? (
                         <Box
                           component="img"
-                          src={urlEntry.signedUrl}
+                          src={urlEntry.thumbUrl ?? urlEntry.signedUrl}
                           sx={{
                             width: 80,
                             height: 80,

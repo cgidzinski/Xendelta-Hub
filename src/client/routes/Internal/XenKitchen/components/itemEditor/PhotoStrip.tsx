@@ -39,8 +39,8 @@ export function PhotoStrip({
   const cameraInput = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const all = [
-    ...photos.map((p) => ({ key: p._id, url: p.url, existing: true })),
-    ...newFiles.map((f) => ({ key: f.key, url: f.url, existing: false })),
+    ...photos.map((p) => ({ key: p._id, url: p.url, thumbUrl: p.thumbUrl, existing: true })),
+    ...newFiles.map((f) => ({ key: f.key, url: f.url, thumbUrl: null, existing: false })),
   ];
 
   const tile = wrap
@@ -72,7 +72,7 @@ export function PhotoStrip({
           <Box key={p.key} sx={{ ...tile, position: "relative" }}>
             <Box
               component="img"
-              src={p.url}
+              src={p.thumbUrl ?? p.url}
               alt=""
               sx={{ ...tile, height: "100%", objectFit: "cover", display: "block" }}
             />

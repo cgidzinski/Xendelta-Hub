@@ -10,7 +10,6 @@ import { useFolderDrop } from "../lib/useFileDrop";
 import type { ActionTarget } from "./ItemActions";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
-import SourceChips from "./SourceChips";
 
 /** What the list and the grid both need from the page: opening, the menu, selecting, and drops. */
 export interface DriveListHandlers {
@@ -162,7 +161,17 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
         slotProps={{ input: { "aria-label": `Select ${file.name}` } }}
       />
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-        <FileTypeIcon mimeType={file.mimeType} />
+        {(fileKindOf(file.mimeType) === "image" || fileKindOf(file.mimeType) === "video") && file.thumbUrl ? (
+          <Box
+            component="img"
+            src={file.thumbUrl}
+            alt=""
+            loading="lazy"
+            sx={{ width: 36, height: 36, borderRadius: 1.5, objectFit: "cover", flex: "none" }}
+          />
+        ) : (
+          <FileTypeIcon mimeType={file.mimeType} />
+        )}
         <Box sx={{ minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 500 }}>
             {file.name}
@@ -178,11 +187,6 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
               <LinkChips file={file} />
             </Box>
           )}
-          {file.source && (
-            <Box sx={{ mt: 0.5 }}>
-              <SourceChips file={file} />
-            </Box>
-          )}
         </Box>
       </Box>
       <Typography className="c-mod" variant="body2" color="text.secondary">
@@ -192,7 +196,7 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
         {formatFileSize(file.size)}
       </Typography>
       <Box className="c-link">
-        {file.source ? null : file.shared || file.hasPassword || file.expiry ? <LinkChips file={file} /> : <NoLink />}
+        {file.shared || file.hasPassword || file.expiry ? <LinkChips file={file} /> : <NoLink />}
       </Box>
       <IconButton
         aria-label={`Actions for ${file.name}`}

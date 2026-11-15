@@ -28,6 +28,7 @@ The buckets are laid out so they can be audited by folder: one folder per app, t
 | private | `xenroutine/<routineId>/` | "done" photos |
 | private | `xennote/<noteId>/` | note photos (per note: a note can move between notebooks) |
 | private | `xenkitchen/<itemId>/` | recipe photos (per recipe: a recipe can move between books) |
+| private | `thumbs/<path>.webp` | the ~320 px WebP beside any private file that gets one (`utils/xendriveThumbs.ts`) |
 | private | `db-backups/` | database backups |
 | public | `avatar/`, `emoji/<scope>/`, `blog-assets/`, `recipaint-assets/` (+ `thumbs/`), `xensplit-group-images/` | public images |
 
@@ -40,7 +41,7 @@ app stores, `xendrive/<userId>/<name>` otherwise. The migration `1795400000000-s
 Whatever deletes a record deletes its file in the same request: an app's photos through `removeAppFiles`, Recipaint
 images through `releaseRecipaintImages` (only once no recipe uses them; a clone gets its own copies), an account's files
 through `removeAccountFiles` when an admin deletes it. Two things are deliberately kept for a while: chat attachments stay
-in the sender's XenDrive (From apps) after the message goes, and a deleted XenSplit expense keeps its photos for 30 days
+in the sender's storage viewer after the message goes, and a deleted XenSplit expense keeps its photos for 30 days
 so restoring it brings them back (the `xensplit-deleted-photos` job removes them after).
 
 Anything left over (an upload whose recipe was never saved, a crash mid-delete) is found by:
@@ -54,9 +55,10 @@ Run it with the database the buckets belong to (production's database with produ
 database, nearly every file looks unused, so `--delete` refuses when a bucket would lose more than a quarter of its files;
 `--force` overrides that once the dry run has been checked.
 
-A private file is used when a XenDrive record points at it (or it's a backup); a public one when any document holds its
-link (anywhere, blog text included), a custom emoji's `storagePath` is its key, or it's the thumbnail of a used Recipaint
-image. Files under a day old are never touched. XenDrive records whose file is missing are listed, not changed.
+A private file is used when a XenDrive record points at it, when it's that file's thumbnail (`thumbs/<storage_path>.webp`),
+or when it's a backup; a public one when any document holds its link (anywhere, blog text included), a custom emoji's
+`storagePath` is its key, or it's the thumbnail of a used Recipaint image. Files under a day old are never touched.
+XenDrive records whose file is missing are listed, not changed.
 
 
 Every file a person uploads is a `XenDriveFile` owned by them, in the private bucket. Files uploaded straight to XenDrive
@@ -101,11 +103,11 @@ folder. The pieces:
   `assertDriveSource` and refused together with a folder. The quota check runs only if the source says its files count. The upload session
   carries the tag to the finished file. On the client, `uploadOne({ file, source })`.
 - **The drive's own lists.** `driveOnly` is merged into My Drive and folder contents, search, recent, shared, and the overview,
-  so tagged files stay out of them. A tagged file can't be renamed or given a public link from XenDrive (`assertNotAppFile`);
-  it can be deleted, which deletes the stored bytes.
-- **XenDrive > From apps** (`GET /api/xendrive/app-files`) lists them grouped by app and then by `ref`, with sizes, download,
-  delete and "Delete all" per group, so people can free the space. The sidebar entry appears once there is anything to show
-  (`appFiles` in `GET /api/xendrive/recent`). Index `{ owner_id, "source.app", createdAt }`.
+  so tagged files stay out of them. XenDrive's own file routes (`/api/xendrive/files/:id` and friends) return 404 for a tagged
+  file: they are viewed, downloaded and deleted from the storage viewer instead.
+- **The storage viewer** (`GET /api/storage/app-files`, with `/api/xendrive/app-files` kept as an alias for one release) lists
+  them grouped by app and then by `ref`, with sizes, download, delete and "Delete all" per group, so people can free the space.
+  The Billing page links to it ("See where your storage is used"). Index `{ owner_id, "source.app", createdAt }`.
 - **Counting.** The finished file's `counted` flag comes from the source's `counts(ref)`. `usageFor` and `checkQuota` add up
   only files that count.
 - **Choosing an existing XenDrive file** in an app attaches it by id: no copy, no extra storage, no tag.
@@ -125,20 +127,18 @@ XenSplit, XenBudget, XenNote and XenKitchen store photos as tagged files through
 - `removeAppFiles(ids)`: deletes the files and their bytes. `signedUrlsFor(ids, minutes)`: short-lived links.
 - Each app's source is registered next to its code (`utils/xensplitFiles.ts`, `xenBudgetFiles.ts`, `xenNoteFiles.ts`,
   `xenKitchenFiles.ts`). It says who may store files for a `ref`, names each `ref` for the person, whether the files count,
-  and what to do when the person deletes a file from XenDrive (`onRemoved`: pull it off the expense, item or note).
+  and what to do when the person deletes a file from the storage viewer (`onRemoved`: pull it off the expense, item or note).
 - An image on an expense, item or note is `{ file_id, uploaded_by }`. `gcs_path` (and XenKitchen's `url`) are the old
   shape; the migration `1794700000000-app-photos-to-xendrive` links existing photos and removes them.
 - A photo belongs to **whoever uploaded it**, not to the group, book or notebook. Leaving a shared space keeps the person's
-  photos in their XenDrive (listed under From apps as "A group you're no longer in") until they delete them, and deleting one
+  photos in the storage viewer (listed as "A group you're no longer in") until they delete them, and deleting one
   removes it from the space. Deleting the expense's group, the item, the note or the book deletes the photos too.
-- The ref is the thing the photo is on, so "Delete all" in From apps means something: the group for XenSplit and the book for
-  XenBudget; the note for XenNote and the item for XenKitchen, because those can move between notebooks and books.
+- The ref is the thing the photo is on, so "Delete all" in the storage viewer means something: the group for XenSplit and the
+  book for XenBudget; the note for XenNote and the item for XenKitchen, because those can move between notebooks and books.
 
 **Visibility.** Tagged files are hidden from My Drive, folders, search and recent, so a person sees only what they uploaded to
-XenDrive. They are listed under From apps, and a hidden "More filters" control on My Drive reveals them in the drive's lists:
-`GET /api/xendrive/browse?source=` takes `all` (everything), `uncounted` (files outside the quota) or one app's key
-(`driveListFilter` in `utils/driveSources.ts`). The control only appears once the person has any app files. Revealed files are
-marked "From <app>" and, for the photo apps, "Doesn't count toward storage".
+XenDrive. They are listed in the storage viewer (`/internal/storage`), marked "From <app>" and, for the photo apps,
+"Doesn't count toward storage".
 
 **The migration** tags every existing photo for its owner (the group, book or note owner; XenKitchen's item creator): nobody
 recorded who uploaded a photo. Records are `counted: false`, so nobody's usage changes. XenSplit, XenBudget and XenNote photos

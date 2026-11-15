@@ -24,6 +24,7 @@ import AdminRoute from "./components/routeguards/AdminRoute";
 import { lazyPage } from "./utils/lazyPage";
 import { recipaintRoutes } from "./routes/Internal/Recipaint/routes";
 import { xendriveRoutes } from "./routes/Internal/XenDrive/routes";
+import { storageRoutes } from "./routes/Internal/Storage/routes";
 import { xenlinkRoutes } from "./routes/Internal/XenLink/routes";
 import { xensplitRoutes } from "./routes/Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./routes/Internal/XenRoutine/routes";
@@ -212,6 +213,7 @@ const router = createBrowserRouter(
         <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
         {recipaintRoutes}
         {xendriveRoutes}
+        {storageRoutes}
         {/* XenDrive was called XenBox: keep old bookmarks working */}
         <Route path="xenbox/*" element={<Navigate to="/internal/xendrive" replace />} />
         {xenlinkRoutes}

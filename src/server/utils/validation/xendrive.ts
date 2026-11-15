@@ -41,20 +41,6 @@ export const xenDriveBrowseQuerySchema = z.object({
   search: z.string().max(200).optional(),
   // A flat view across the whole drive: everything with a public link, or the latest files.
   view: z.enum(["shared", "recent"]).optional(),
-  // Also return a picture link for each image (the grid view shows them).
-  thumbs: z.enum(["true"]).optional(),
-  // Files apps stored for the person are hidden unless asked for: "all", "uncounted", or one app's key.
-  source: z
-    .string()
-    .regex(/^[a-z][a-z0-9-]{0,29}$/)
-    .optional(),
-});
-// XenDrive > From apps: every app's files, or one app's.
-export const xenDriveAppFilesQuerySchema = z.object({
-  app: z
-    .string()
-    .regex(/^[a-z][a-z0-9-]{0,29}$/)
-    .optional(),
 });
 export const xenDriveFileUrlQuerySchema = z.object({ download: z.enum(["1"]).optional() });
 // A public folder link: optionally a sub-folder of the shared one.

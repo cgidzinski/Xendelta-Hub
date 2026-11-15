@@ -260,7 +260,7 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                           {urlEntry ? (
                             <Box
                               component="img"
-                              src={urlEntry.signedUrl}
+                              src={urlEntry.thumbUrl ?? urlEntry.signedUrl}
                               sx={{ width: 80, height: 80, objectFit: "cover", borderRadius: 1, display: "block" }}
                             />
                           ) : (

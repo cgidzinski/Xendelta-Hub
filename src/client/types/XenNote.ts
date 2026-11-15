@@ -6,6 +6,7 @@ export type NoteRole = "owner" | "editor" | "viewer";
 export interface XenNoteImage {
   _id: string;
   url: string; // short-lived signed URL
+  thumbUrl?: string | null; // a cacheable ~320 px WebP, when it is ready
 }
 
 export interface XenNoteItem extends ChecklistItem {

@@ -107,6 +107,14 @@ mongoConnection.on("connected", async () => {
       handler: runDueTasks,
     });
     scheduler.register({ name: "xendrive-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+    // Make XenDrive thumbnails for files waiting on one (utils/xendriveThumbs.ts).
+    const { processPendingThumbnails } = require("./utils/xendriveThumbs");
+    scheduler.register({
+      name: "xendrive-thumbnails",
+      everyMs: 60 * 1000,
+      runOnStart: true,
+      handler: () => processPendingThumbnails(),
+    });
     // Finish gem transfers a crash or restart interrupted (billing/ledger.ts).
     const { reconcilePendingGems } = require("./billing/ledger");
     scheduler.register({
@@ -242,6 +250,7 @@ require("./routes/recipaint.ts")(app);
 require("./routes/paints.ts")(app);
 require("./routes/paintCatalogue.ts")(app);
 require("./routes/xendrive.ts")(app);
+require("./routes/storage.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/feedback.ts")(app);
 require("./routes/xensplit")(app);

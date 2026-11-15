@@ -15,7 +15,7 @@ import { resolveCategories, computeImportHash, roundMoney } from "../../utils/xe
 import { MAX_XENBUDGET_IMAGES_PER_ITEM } from "../../constants";
 import { uploadXenBudgetImages } from "../../config/multer";
 import { generateSignedUrl } from "../../utils/storageUtils";
-import { storeAppFiles, removeAppFiles, signedUrlsFor } from "../../utils/appFiles";
+import { storeAppFiles, removeAppFiles, signedUrlsFor, thumbnailUrlsFor } from "../../utils/appFiles";
 import { XENBUDGET_SOURCE, removeItemPhotos } from "../../utils/xenBudgetFiles";
 import { applyRules, normalizeFlagNames, withDerivedUncategorised } from "../../utils/xenBudgetRules";
 import { merchantMatchPattern } from "../../utils/xenBudgetRecurring";
@@ -547,10 +547,8 @@ export function registerItemRoutes(app: any) {
         return res.json({ status: true, data: [] });
       }
 
-      const fileUrls = await signedUrlsFor(
-        item.images.filter((img: any) => img.file_id).map((img: any) => img.file_id),
-        15,
-      );
+      const fileIds = item.images.filter((img: any) => img.file_id).map((img: any) => img.file_id);
+      const [fileUrls, thumbUrls] = await Promise.all([signedUrlsFor(fileIds, 15), thumbnailUrlsFor(fileIds)]);
       const signedUrls = (
         await Promise.all(
           item.images.map(async (img: any) => ({
@@ -561,9 +559,10 @@ export function registerItemRoutes(app: any) {
               : img.gcs_path
                 ? await generateSignedUrl(img.gcs_path, 15)
                 : undefined,
+            thumbUrl: img.file_id ? (thumbUrls.get(String(img.file_id)) ?? null) : null,
           })),
         )
-      ).filter((u): u is { _id: string; signedUrl: string } => !!u.signedUrl);
+      ).filter((u): u is { _id: string; signedUrl: string; thumbUrl: string | null } => !!u.signedUrl);
 
       res.json({ status: true, data: signedUrls });
     },

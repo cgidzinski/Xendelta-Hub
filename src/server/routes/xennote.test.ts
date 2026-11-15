@@ -20,7 +20,11 @@ vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xennote/index.js"), () => import("./xendrive.js")]);
+  t = await startTestApp([
+    () => import("./xennote/index.js"),
+    () => import("./xendrive.js"),
+    () => import("./storage.js"),
+  ]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -336,15 +340,15 @@ describe("photos", () => {
 
     const apps = (
       await request(t.app)
-        .get("/api/xendrive/app-files")
+        .get("/api/storage/app-files")
         .set({ Authorization: `Bearer ${me.token}` })
     ).body.data;
     expect(apps.apps[0]).toMatchObject({ app: "xennote", label: "XenNote" });
     expect(apps.apps[0].groups[0].label).toBe("Garden");
 
-    // the file doesn't count toward storage, so XenDrive won't delete it: the note owns it
+    // the file doesn't count toward storage, so the storage viewer won't delete it: the note owns it
     const del = await request(t.app)
-      .delete(`/api/xendrive/files/${files[0]._id}`)
+      .delete(`/api/storage/files/${files[0]._id}`)
       .set({ Authorization: `Bearer ${me.token}` });
     expect(del.status).toBe(400);
     const read = await api(me).get(`/notes/${n._id}`);

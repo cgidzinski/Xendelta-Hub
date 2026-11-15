@@ -9,7 +9,7 @@ import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadXenSplitImages } from "../config/multer";
 import { generateSignedUrl } from "../utils/storageUtils";
-import { storeAppFiles, signedUrlsFor } from "../utils/appFiles";
+import { storeAppFiles, signedUrlsFor, thumbnailUrlsFor } from "../utils/appFiles";
 import { XENSPLIT_SOURCE, removeExpensePhotos, removeGroupPhotos } from "../utils/xensplitFiles";
 import { uploadXenSplitGroupImageFile } from "../utils/mediaUtils";
 import { MAX_XENSPLIT_IMAGES_PER_EXPENSE } from "../constants";
@@ -1067,10 +1067,8 @@ module.exports = function (app: any) {
         return res.json({ status: true, data: [] });
       }
 
-      const fileUrls = await signedUrlsFor(
-        expense.images.filter((img: any) => img.file_id).map((img: any) => img.file_id),
-        15,
-      );
+      const fileIds = expense.images.filter((img: any) => img.file_id).map((img: any) => img.file_id);
+      const [fileUrls, thumbUrls] = await Promise.all([signedUrlsFor(fileIds, 15), thumbnailUrlsFor(fileIds)]);
       const signedUrls = (
         await Promise.all(
           expense.images.map(async (img: any) => ({
@@ -1081,9 +1079,10 @@ module.exports = function (app: any) {
               : img.gcs_path
                 ? await generateSignedUrl(img.gcs_path, 15)
                 : undefined,
+            thumbUrl: img.file_id ? (thumbUrls.get(String(img.file_id)) ?? null) : null,
           })),
         )
-      ).filter((u): u is { _id: string; signedUrl: string } => !!u.signedUrl);
+      ).filter((u): u is { _id: string; signedUrl: string; thumbUrl: string | null } => !!u.signedUrl);
 
       res.json({ status: true, data: signedUrls });
     },

@@ -173,7 +173,7 @@ function Gallery({ item, accent }: { item: KitchenItem; accent: string }) {
       >
         <Box
           component="img"
-          src={images[0].url}
+          src={images[0].thumbUrl ?? images[0].url}
           alt={item.title}
           onClick={() => setOpen(0)}
           sx={{
@@ -191,7 +191,7 @@ function Gallery({ item, accent }: { item: KitchenItem; accent: string }) {
               <Box key={img._id} sx={{ position: "relative", flex: "0 0 40%" }}>
                 <Box
                   component="img"
-                  src={img.url}
+                  src={img.thumbUrl ?? img.url}
                   alt=""
                   onClick={() => setOpen(i + 1)}
                   sx={{

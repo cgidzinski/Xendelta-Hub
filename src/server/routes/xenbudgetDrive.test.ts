@@ -16,7 +16,11 @@ vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xenbudget/index.js"), () => import("./xendrive.js")]);
+  t = await startTestApp([
+    () => import("./xenbudget/index.js"),
+    () => import("./xendrive.js"),
+    () => import("./storage.js"),
+  ]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -93,12 +97,12 @@ describe("XenBudget photos in XenDrive", () => {
     expect(await usageFor(uid)).toEqual(before);
     expect(await urls()).toHaveLength(2);
 
-    const apps = (await request(t.app).get("/api/xendrive/app-files").set(auth(owner.token))).body.data;
+    const apps = (await request(t.app).get("/api/storage/app-files").set(auth(owner.token))).body.data;
     expect(apps.apps[0]).toMatchObject({ app: "xenbudget", label: "XenBudget" });
     expect(apps.apps[0].groups[0].label).toBe("Home");
   });
 
-  it("a photo that does not count toward storage can only be removed from the item, not from XenDrive", async () => {
+  it("a photo that does not count toward storage can only be removed from the item, not from the storage viewer", async () => {
     const { owner, uid, b, itemId, photos, urls } = await setup();
     await photos(3);
     const [first] = await urls();
@@ -107,7 +111,7 @@ describe("XenBudget photos in XenDrive", () => {
     expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(2);
 
     const file = await XenDriveFile.findOne({ owner_id: uid });
-    expect((await request(t.app).delete(`/api/xendrive/files/${file!._id}`).set(auth(owner.token))).status).toBe(400);
+    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token))).status).toBe(400);
     expect(await urls()).toHaveLength(2);
   });
 

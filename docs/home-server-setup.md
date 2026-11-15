@@ -272,7 +272,17 @@ curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 apt install -y nodejs npm git
 npm install -g pm2
 ```
-Confirm: `node -v && npm -v`
+XenDrive also makes video and PDF posters with ffmpeg and poppler (XenDrive thumbnails, `docs/storage.md`); install them
+on the CT that runs the server:
+```bash
+apt install -y ffmpeg poppler-utils
+```
+On Windows, install them and put them on `PATH` instead (no `apt` there), for example:
+```powershell
+winget install Gyan.FFmpeg oschwartz10612.Poppler
+# or, with Chocolatey:  choco install ffmpeg poppler
+```
+Without them the server still runs: those kinds just show an icon instead of a poster. Confirm: `node -v && npm -v`
 
 **Enable PM2 auto-startup on boot — one-time per CT, do this before adding the first app:**
 ```bash

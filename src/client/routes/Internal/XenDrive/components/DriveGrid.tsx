@@ -10,7 +10,6 @@ import { fileKindOf } from "../lib/fileKind";
 import { useFolderDrop } from "../lib/useFileDrop";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
-import SourceChips from "./SourceChips";
 import type { DriveListHandlers } from "./DriveTable";
 
 interface DriveGridProps {
@@ -118,10 +117,10 @@ function FileCard({
           justifyContent: "center",
         }}
       >
-        {kind === "image" && file.previewUrl ? (
+        {(kind === "image" || kind === "video") && file.thumbUrl ? (
           <Box
             component="img"
-            src={file.previewUrl}
+            src={file.thumbUrl}
             alt=""
             loading="lazy"
             sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
@@ -197,11 +196,6 @@ function FileCard({
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
             {formatFileSize(file.size)} · {formatModified(file.createdAt)}
           </Typography>
-          {file.source && (
-            <Box sx={{ mt: 0.5 }}>
-              <SourceChips file={file} />
-            </Box>
-          )}
         </Box>
         <IconButton
           size="small"

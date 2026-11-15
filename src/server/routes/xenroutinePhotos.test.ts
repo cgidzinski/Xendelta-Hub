@@ -17,7 +17,11 @@ vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
 
 let t: TestApp;
 beforeAll(async () => {
-  t = await startTestApp([() => import("./xenroutine.js"), () => import("./xendrive.js")]);
+  t = await startTestApp([
+    () => import("./xenroutine.js"),
+    () => import("./xendrive.js"),
+    () => import("./storage.js"),
+  ]);
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -172,12 +176,12 @@ describe("marking a routine done with a note and photos", () => {
 });
 
 describe("what happens to the photos later", () => {
-  it("XenDrive will not delete a photo that belongs to the history", async () => {
+  it("the storage viewer will not delete a photo that belongs to the history", async () => {
     const me = await createUser();
     const r = await make(me);
     await doneWith(me, r._id, { photos: 2 });
     const [first] = await XenDriveFile.find({ owner_id: me.user._id, "source.app": "xenroutine" }).sort({ _id: 1 });
-    const del = await request(t.app).delete(`/api/xendrive/files/${first.id}`).set(as(me));
+    const del = await request(t.app).delete(`/api/storage/files/${first.id}`).set(as(me));
     expect(del.status, JSON.stringify(del.body)).toBe(400);
     expect((await mine(me, r._id)).history[0].images).toHaveLength(2);
   });
@@ -211,11 +215,11 @@ describe("what happens to the photos later", () => {
     expect(await XenDriveFile.countDocuments({ "source.ref": r._id })).toBe(0);
   }, 60_000);
 
-  it("is listed under XenDrive > From apps with the routine's name", async () => {
+  it("is listed in the storage viewer with the routine's name", async () => {
     const me = await createUser();
     const r = await make(me);
     await doneWith(me, r._id, { photos: 1 });
-    const apps = await request(t.app).get("/api/xendrive/app-files").set(as(me));
+    const apps = await request(t.app).get("/api/storage/app-files").set(as(me));
     expect(apps.status, JSON.stringify(apps.body)).toBe(200);
     const app = apps.body.data.apps.find((a: any) => a.app === "xenroutine");
     expect(app).toMatchObject({ label: "XenRoutine", count: 1 });

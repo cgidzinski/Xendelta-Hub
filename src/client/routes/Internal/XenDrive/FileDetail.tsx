@@ -13,12 +13,17 @@ import ListSkeleton from "../../../components/ui/ListSkeleton";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
-import { downloadFile, useXendriveActions, useXendriveFile } from "../../../hooks/xendrive/useXendrive";
+import {
+  downloadFile,
+  openOriginalFile,
+  useXendriveActions,
+  useXendriveFile,
+  useXendriveFileText,
+} from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import DriveBreadcrumbs from "./components/DriveBreadcrumbs";
 import FileSharePanel from "./components/FileSharePanel";
-import SourceChips from "./components/SourceChips";
-import FileTypeIcon from "./components/FileTypeIcon";
+import FilePreview from "./components/FilePreview";
 import FolderDialog from "./components/FolderDialog";
 import { KIND_LABEL, fileKindOf } from "./lib/fileKind";
 import { XENDRIVE_ROOT, filePath, folderPath } from "./paths";
@@ -38,6 +43,8 @@ export default function FileDetail() {
   const breadcrumb = data?.breadcrumb ?? [];
   const backTo = file?.folder_id ? folderPath(file.folder_id) : XENDRIVE_ROOT;
   const kind = file ? fileKindOf(file.mimeType) : "file";
+  const isText = kind === "text";
+  const { data: textData } = useXendriveFileText(fileId, isText);
 
   useTitle(file ? `XenDrive - ${file.name}` : "XenDrive - File");
 
@@ -97,33 +104,13 @@ export default function FileDetail() {
 
   const previewUrl = data?.previewUrl;
 
-  const stage = () => {
-    if (previewUrl && kind === "image")
-      return (
-        <Box
-          component="img"
-          src={previewUrl}
-          alt={file.name}
-          sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
-        />
-      );
-    if (previewUrl && kind === "pdf")
-      return (
-        <Box component="iframe" src={previewUrl} title={file.name} sx={{ width: "100%", height: "100%", border: 0 }} />
-      );
-    if (previewUrl && kind === "video")
-      return <Box component="video" src={previewUrl} controls sx={{ maxWidth: "100%", maxHeight: "100%" }} />;
-    if (previewUrl && kind === "audio")
-      return <Box component="audio" src={previewUrl} controls sx={{ width: "80%" }} />;
-    return (
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", p: 3 }}>
-        <FileTypeIcon mimeType={file.mimeType} size={96} />
-        <Typography sx={{ mt: 2, fontWeight: 500 }}>No preview for this kind of file</Typography>
-        <Button sx={{ mt: 1.5 }} variant="contained" startIcon={<FileDownloadOutlinedIcon />} onClick={download}>
-          Download
-        </Button>
-      </Box>
-    );
+  const openOriginal = async () => {
+    if (!file) return;
+    try {
+      await openOriginalFile(file._id);
+    } catch (e) {
+      enqueueSnackbar((e as Error).message || "Couldn't open the original", { variant: "error" });
+    }
   };
 
   const details = [
@@ -193,7 +180,15 @@ export default function FileDetail() {
               overflow: "hidden",
             }}
           >
-            {stage()}
+            <FilePreview
+              name={file.name}
+              mimeType={file.mimeType}
+              previewUrl={previewUrl}
+              posterUrl={data?.posterUrl}
+              textResult={isText ? textData : null}
+              onDownload={download}
+              onOpenOriginal={kind === "image" ? openOriginal : undefined}
+            />
           </Box>
           {neighbors && neighbors.total > 1 && (
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1.5, mt: 1.5 }}>
@@ -220,8 +215,7 @@ export default function FileDetail() {
 
         <Box component="aside" sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <Box sx={{ border: 1, borderColor: "divider", borderRadius: 3, p: 2, bgcolor: "background.paper" }}>
-            {/* A file an app stored stays private: no public link from here. */}
-            {file.source ? <SourceChips file={file} /> : <FileSharePanel file={file} />}
+            <FileSharePanel file={file} />
           </Box>
           <Box sx={{ border: 1, borderColor: "divider", borderRadius: 3, p: 2, bgcolor: "background.paper" }}>
             <SectionLabel>Details</SectionLabel>
@@ -235,11 +229,9 @@ export default function FileDetail() {
                 </Typography>
               </Box>
             ))}
-            {!file.source && (
-              <Button sx={{ mt: 1 }} onClick={() => setRenaming(true)}>
-                Rename
-              </Button>
-            )}
+            <Button sx={{ mt: 1 }} onClick={() => setRenaming(true)}>
+              Rename
+            </Button>
           </Box>
         </Box>
       </Box>

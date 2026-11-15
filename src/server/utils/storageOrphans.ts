@@ -6,7 +6,8 @@ import { privateStore, publicKeyFromUrl, publicStore, type ObjectInfo, type Obje
 // Finds stored objects nothing in the database points at (npm run storage:orphans; docs/storage.md), and database
 // records whose object is missing. Read-only unless `removeOrphans` is called.
 //
-//   private bucket: an object is used when a XenDrive file's storage_path is its key, or it's a database backup.
+//   private bucket: an object is used when a XenDrive file's storage_path is its key, when it's that file's thumbnail
+//                   (thumbs/<storage_path>.webp), or when it's a database backup.
 //   public bucket:  an object is used when any document anywhere holds its public link (an avatar, a recipe image, a
 //                   link inside a blog post's text...), a custom emoji's storagePath is its key, or it's the thumbnail of
 //                   a Recipaint image that is used.
@@ -68,6 +69,9 @@ export async function findOrphans(now: Date = new Date()): Promise<OrphanReport>
     .find({}, { projection: { storage_path: 1 } })
     .toArray();
   const privatePaths = new Set(files.map((f) => String(f.storage_path)));
+  // A XenDrive file keeps its thumbnail and preview rendition (utils/xendriveThumbs.ts).
+  const thumbKeys = new Set([...privatePaths].map((p) => `thumbs/${p}.webp`));
+  const previewKeys = new Set([...privatePaths].map((p) => `previews/${p}.webp`));
 
   const [privateObjects, publicObjects, publicKeys] = await Promise.all([
     privateStore.list(""),
@@ -81,7 +85,12 @@ export async function findOrphans(now: Date = new Date()): Promise<OrphanReport>
     private: {
       total: privateObjects.length,
       orphans: privateObjects.filter(
-        (o) => !privatePaths.has(o.key) && !BACKUP_NAME_PATTERN.test(o.key) && !isFresh(o, t),
+        (o) =>
+          !privatePaths.has(o.key) &&
+          !thumbKeys.has(o.key) &&
+          !previewKeys.has(o.key) &&
+          !BACKUP_NAME_PATTERN.test(o.key) &&
+          !isFresh(o, t),
       ),
     },
     public: {

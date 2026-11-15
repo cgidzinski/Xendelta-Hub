@@ -14,6 +14,7 @@ import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import { driveSourceApp } from "./driveSources";
+import { thumbStatusFor } from "./xendriveThumbs";
 
 /** A unique, storage-safe object name for an uploaded file. Never shown to people. */
 export function generateXendriveFilename(originalName: string): string {
@@ -190,6 +191,7 @@ export async function finalizeChunkedUpload(
     mimeType: contentType,
     size: fileSize,
     counted,
+    thumbStatus: thumbStatusFor(contentType),
     ...(session.source_app ? { source: { app: session.source_app, ref: session.source_ref } } : {}),
   }).save();
 

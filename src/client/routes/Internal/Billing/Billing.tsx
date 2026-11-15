@@ -50,6 +50,17 @@ export default function Billing() {
           }
         />
       )}
+      {data && (
+        <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
+          <SectionLabel>Storage</SectionLabel>
+          <Typography variant="body2" color="text.secondary">
+            See which apps use your space, and free it up.
+          </Typography>
+          <Button variant="outlined" size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/internal/storage")}>
+            See where your storage is used
+          </Button>
+        </Box>
+      )}
     </PageContainer>
   );
 }

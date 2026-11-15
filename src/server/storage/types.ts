@@ -34,8 +34,11 @@ export interface ObjectStore {
   list(prefix: string): Promise<ObjectInfo[]>;
   /** Copy an object from this bucket or another one into this bucket. */
   copyFrom(source: ObjectStore, sourceKey: string, key: string): Promise<void>;
-  /** A link anyone holding it can download the object with, until it expires. */
-  signedUrl(key: string, minutes: number, options?: { downloadName?: string }): Promise<string>;
+  /**
+   * A link anyone holding it can download the object with, until it expires. `signingDate` fixes when the signature was
+   * made (so a cacheable link is identical for its whole window); it defaults to now.
+   */
+  signedUrl(key: string, minutes: number, options?: { downloadName?: string; signingDate?: Date }): Promise<string>;
 
   // Uploads sent in chunks (XenDrive). Every part but the last must be at least 5 MB.
   startMultipart(key: string, options: PutOptions): Promise<string>;

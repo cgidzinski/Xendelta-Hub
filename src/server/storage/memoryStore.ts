@@ -89,9 +89,10 @@ export class MemoryStore implements ObjectStore {
     this.objects.set(key, { ...o, lastModified: new Date() });
   }
 
-  async signedUrl(key: string, minutes: number, options: { downloadName?: string } = {}) {
+  async signedUrl(key: string, minutes: number, options: { downloadName?: string; signingDate?: Date } = {}) {
     const name = options.downloadName ? `&download=${encodeURIComponent(options.downloadName)}` : "";
-    return `https://storage.test/${this.name}/${key}?expires=${minutes}${name}`;
+    const window = options.signingDate ? `&at=${options.signingDate.getTime()}` : "";
+    return `https://storage.test/${this.name}/${key}?expires=${minutes}${name}${window}`;
   }
 
   async startMultipart(key: string, options: PutOptions) {

@@ -18,8 +18,11 @@ export async function deleteStoredAvatar(avatarUrl: string | null | undefined): 
 
 /** Remove everything this person stored. Returns how many XenDrive files went. */
 export async function removeAccountFiles(userId: string, avatarUrl?: string | null): Promise<number> {
-  const files = await XenDriveFile.find({ owner_id: userId }, "storage_path source").lean();
-  for (const file of files) await privateStore.delete(file.storage_path).catch(() => undefined);
+  const files = await XenDriveFile.find({ owner_id: userId }, "storage_path source thumb").lean();
+  for (const file of files) {
+    await privateStore.delete(file.storage_path).catch(() => undefined);
+    if (file.thumb?.path) await privateStore.delete(file.thumb.path).catch(() => undefined);
+  }
   await XenDriveFile.deleteMany({ owner_id: userId });
   await XenDriveFolder.deleteMany({ owner_id: userId });
 
