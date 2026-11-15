@@ -3,7 +3,7 @@ import { AppError } from "./http";
 // Files that an app stores on a person's behalf (chat attachments, photos on an expense or a note) carry
 // `source: { app, ref }`. They are real XenDrive files: owned by the uploader and deleted like any file. They are listed
 // under the storage viewer (/internal/storage, GET /api/storage/app-files) and are kept out of XenDrive's own lists
-// (`driveOnly`). Whether they count against the person's quota is the app's call (`counts`): chat attachments do, the
+// (an app's file has no XenDrive item). Whether they count against the person's quota is the app's call (`counts`): chat attachments do, the
 // photo apps' files don't yet. docs/storage.md has the whole picture.
 //
 // An app registers itself once with `registerDriveSource`; XenDrive never learns what a chat (or a note) is.
@@ -52,6 +52,3 @@ export async function assertDriveSource(userId: string, source: DriveSource): Pr
   if (!definition) throw new AppError(400, "Unknown upload source");
   if (!(await definition.verify(userId, source.ref))) throw new AppError(404, "Not found");
 }
-
-/** The filter that keeps app-stored files out of the drive's own lists. Merge it into every drive listing query. */
-export const driveOnly = { "source.app": { $exists: false } } as const;

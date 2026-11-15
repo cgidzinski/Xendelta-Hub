@@ -13,7 +13,7 @@ import { XenLink } from "../models/xenlink";
 // A new sub-app adds a line here (docs/adding-a-sub-app.md).
 const CHECKS: Record<string, (userId: string) => Promise<unknown>> = {
   recipaint: (id) => Recipe.exists({ author: id }),
-  xendrive: (id) => XenDriveFile.exists({ owner_id: id, "source.app": { $exists: false } }),
+  xendrive: (id) => XenDriveFile.exists({ owner_id: id }),
   xenlink: (id) => XenLink.exists({ owner_id: id }),
   xensplit: (id) => XenSplit.exists({ "roster.user_id": id }),
   xenbudget: (id) => XenBudgetBook.exists({ "roster.user_id": id }),

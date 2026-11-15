@@ -34,9 +34,9 @@ describe("XenDrive upload sessions", () => {
     expect(done.size).toBe(6);
     // The parts were joined in order into one stored object.
     const { memoryStores } = await import("../storage/index.js");
-    const { XenDriveFile } = await import("../models/xendriveFile.js");
-    const file = await XenDriveFile.findById(done._id).lean();
-    expect(memoryStores().privateStore.objects.get(file!.storage_path)?.body.toString()).toBe("abcdef");
+    const { FileRecord } = await import("../models/fileRecord.js");
+    const file = await FileRecord.findById(done._id).lean();
+    expect(memoryStores().privateStore.objects.get(file!.key)?.body.toString()).toBe("abcdef");
     expect(await utils.getUploadSessionStatus(id, uid(me))).toBeNull(); // finished sessions are removed
   });
 

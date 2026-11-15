@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import { FileRecord } from "../models/fileRecord";
-import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
+import { XenDriveFile, withRecord, type XenDriveFileDocument } from "../models/xendriveFile";
 
 /**
  * A stored private file as the app makes it: a FileRecord, plus a XenDrive item (same id) unless an app stored it
@@ -32,15 +32,14 @@ export async function createDriveFile(attrs: {
     counted: counted !== false,
   });
   if (source) return record as unknown as XenDriveFileDocument;
-  return (await XenDriveFile.create({
+  const item = (await XenDriveFile.create({
     _id,
     file: _id,
     owner_id,
     folder_id,
     name,
-    storage_path,
-    mimeType,
-    size,
     ...extra,
   })) as unknown as XenDriveFileDocument;
+  // The stored file's details are read from its record; tests that read them straight off the item get them here.
+  return (await withRecord(item)) as XenDriveFileDocument;
 }
