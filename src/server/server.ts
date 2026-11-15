@@ -139,6 +139,14 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: runBillingJobs,
     });
+    // The daily storage sample: every payer's stored bytes become byte-days of usage (billing/storageMeter.ts).
+    const { runStorageMeter } = require("./billing/storageMeter");
+    scheduler.register({
+      name: "storage-meter",
+      everyMs: 60 * 60 * 1000,
+      runOnStart: true,
+      handler: () => runStorageMeter(),
+    });
     scheduler.register({
       name: "xenroutine-reminders",
       everyMs: 60 * 60 * 1000,

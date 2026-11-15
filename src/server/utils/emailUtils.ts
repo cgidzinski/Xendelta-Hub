@@ -7,7 +7,9 @@ export interface PasswordResetEmailData {
   resetUrl: string;
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Created on first use, so importing this module (through billing) never needs the key.
+let client: Resend | undefined;
+const resend = () => (client ??= new Resend(process.env.RESEND_API_KEY));
 
 /**
  * Send a password reset email
@@ -39,7 +41,7 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
   };
 
   try {
-    const { error } = await resend.emails.send(emailConfig);
+    const { error } = await resend().emails.send(emailConfig);
 
     if (error) {
       return { success: false, error };
@@ -94,7 +96,7 @@ export async function sendNotificationEmail(data: NotificationEmailData): Promis
   };
 
   try {
-    const { error } = await resend.emails.send(emailConfig);
+    const { error } = await resend().emails.send(emailConfig);
 
     if (error) {
       return { success: false, error };

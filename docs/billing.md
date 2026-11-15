@@ -48,13 +48,13 @@ To move gems, call `transfer({ from, to, amount, kind, idempotencyKey })` with `
 
 ## Cost centers (`src/shared/billing.ts`)
 
-`COST_CENTERS` lists everything that costs money, each with its unit, rate, who pays and its status. **Every center
-starts free** (`status: "free"`, `costRate: 0`); its discussion issue decides the rate and switches it to `metered`.
+`COST_CENTERS` lists everything that costs money, each with its unit, rate, who pays and its status. A center starts free (`status: "free"`, `costRate: 0`); its discussion issue decides the rate and switches it to `metered`.
+**Storage is metered** (15 gems per GB-month at cost, 18.75 billed) and, while `BILLING_ENFORCED` is off, only shown and never charged.
+Downloads and uploads are free on R2, so there is no downloads center.
 
 | Center | Unit stored | Billed in | Paid by | Discussion |
 |---|---|---|---|---|
 | `storage` | byte-days | GB-month | the person or community | #370 |
-| `downloads` | bytes | GB | the person or community | #370 |
 | `calls` | bytes (SFU and TURN are one cost) | GB | the person or community | #371 |
 | `recipe_scans` | scans | scan | the person | #372 |
 | `public_assets` | byte-days | GB-month | house | #373 |
@@ -85,6 +85,18 @@ nothing is charged and nothing is blocked.
 3. Call `canSpend(account)` before starting something that costs money (an upload, a call, a scan).
 4. Set its `costRate` and `status: "metered"` in `COST_CENTERS`, and add an `appGuide.ts` line if people should know.
 
+### The storage meter (`src/server/billing/storageMeter.ts`)
+
+The hourly `storage-meter` job adds each payer's stored bytes to their `storage` usage once a day, as byte-days, so a month's
+usage is the sum of its daily sizes. Sizes come from the file records (`docs/storage.md`): a payer's files, never their
+thumbnails or previews; house files are left to #373. A day is claimed with a unique `MeterRun` row, so it is metered once even
+if the job runs twice; a day the server missed is caught up (up to 31 days) from what existed by its end. A crash between the
+claim and the finish loses that one day, which can only under-bill.
+
+`assertCanStore(userId, source)` and `assertPayerCanStore(payer)` run before anything is stored (XenDrive uploads, app photos,
+chat attachments, community emoji, Recipaint images). They do nothing in shadow mode; once enforced, a payer past the free
+allowance with no gems to cover it gets a 402. Nothing is ever deleted.
+
 ## Community funds (`src/server/billing/fund.ts`)
 
 A community's bills are paid from its fund. Any member can donate, including ahead of time; the fund carries over.
@@ -112,7 +124,7 @@ A community's bills are paid from its fund. Any member can donate, including ahe
 - `canSpend(account)` is the one check a cost center makes before starting something that costs money: always yes in
   shadow mode; otherwise yes while this month is inside the free tier with nothing unpaid, or while the balance is above
   this month's cost beyond the free tier (rounded up) plus anything unpaid. `assertCanSpend` throws a 402 with
-  `billing: true` and a message that says what to do. **No cost center calls it yet**; each discussion wires it.
+  `billing: true` and a message that says what to do. Storage calls it before a file is stored (`assertCanStore`); the other centers wire it in their own issues.
 
 ## Admin billing report (`src/server/routes/admin/billing.ts`)
 

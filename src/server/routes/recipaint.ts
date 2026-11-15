@@ -1,3 +1,4 @@
+import { assertPayerCanStore } from "../billing/storageMeter";
 import express = require("express");
 import {
   recipeCreateSchema,
@@ -406,6 +407,8 @@ module.exports = function (app: express.Application) {
       if (!req.file) {
         throw new AppError(400, "No asset file provided");
       }
+
+      await assertPayerCanStore({ type: "user", id: callerId(req) });
 
       // Generate unique filename
       const filename = generateUniqueFilename(req.file.originalname);

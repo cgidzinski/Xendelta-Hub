@@ -70,6 +70,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Send feedback to the people who run it, and earn gems when a bug you report is fixed or an idea you suggest is built.",
       "See what you've used each month and what it costs on your Billing page, with a free allowance every month.",
       "See your community's monthly bill in its settings, along with its fund and who chipped in.",
+      "Chip in gems to your community's fund so it can cover the files it stores.",
     ],
     tips: [
       {

@@ -42,12 +42,12 @@ const donate = (u: U, communityId: string, body: object) =>
 const fund = (u: U, communityId: string) => request(t.app).get(`/api/communities/${communityId}/fund`).set(as(u.token));
 
 describe("community fund", () => {
-  it("starts empty, with donations not offered while nothing bills communities", async () => {
+  it("starts empty, with donations offered because storage bills communities", async () => {
     const owner = await createUser();
     const c = await make(owner);
     const res = await fund(owner, c);
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ communityId: c, fund: 0, history: [], donationsOpen: false });
+    expect(res.body.data).toMatchObject({ communityId: c, fund: 0, history: [], donationsOpen: true });
   });
 
   it("moves a member's gems into the fund once, even when the request is retried", async () => {

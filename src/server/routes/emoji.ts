@@ -1,3 +1,4 @@
+import { assertPayerCanStore } from "../billing/storageMeter";
 import type { Application, NextFunction, Request, Response } from "express";
 import multer from "multer";
 import sharp from "sharp";
@@ -114,6 +115,9 @@ module.exports = function (app: Application) {
       if (!req.file) throw new AppError(400, "Choose a picture");
       const scope = await scopeOf(me, scopeType, scopeId);
       if (!scope.canAdd) throw new AppError(403, "You can't add emoji here");
+      await assertPayerCanStore(
+        scopeType === "community" ? { type: "community", id: scope.id } : { type: "user", id: me },
+      );
       if ((await CustomEmojiModel.countDocuments(scope.key).exec()) >= CUSTOM_EMOJI_MAX_PER_SCOPE) {
         throw new AppError(400, `There can be at most ${CUSTOM_EMOJI_MAX_PER_SCOPE} emoji here`);
       }
