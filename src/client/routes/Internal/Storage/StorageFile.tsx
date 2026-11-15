@@ -106,21 +106,17 @@ export default function StorageFile() {
         <IconButton aria-label="Download" onClick={download} sx={{ display: { sm: "none" } }}>
           <FileDownloadOutlinedIcon />
         </IconButton>
-        {file.counted !== false && (
-          <>
-            <Button
-              color="error"
-              startIcon={<DeleteOutlineIcon />}
-              onClick={remove}
-              sx={{ display: { xs: "none", sm: "inline-flex" } }}
-            >
-              Delete
-            </Button>
-            <IconButton aria-label="Delete" color="error" onClick={remove} sx={{ display: { sm: "none" } }}>
-              <DeleteOutlineIcon />
-            </IconButton>
-          </>
-        )}
+        <Button
+          color="error"
+          startIcon={<DeleteOutlineIcon />}
+          onClick={remove}
+          sx={{ display: { xs: "none", sm: "inline-flex" } }}
+        >
+          Delete
+        </Button>
+        <IconButton aria-label="Delete" color="error" onClick={remove} sx={{ display: { sm: "none" } }}>
+          <DeleteOutlineIcon />
+        </IconButton>
       </Box>
 
       <Box

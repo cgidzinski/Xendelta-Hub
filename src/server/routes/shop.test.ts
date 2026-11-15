@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { GEM_PACKS, FREE_STORAGE_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
+import { GEM_PACKS } from "@shared/monetization";
 import { SHOP_ITEMS } from "../constants/shopItems";
 import { ITEMS } from "../constants/items";
 
@@ -56,10 +56,9 @@ describe("catalogue", () => {
     }
   });
 
-  it("lists the storage voucher under Storage, which the Shop shows as its own section", () => {
-    const voucher = SHOP_ITEMS.find((s) => s.itemKey === STORAGE_VOUCHER_KEY);
-    expect(voucher?.category).toBe("Storage");
-    expect(ITEMS[STORAGE_VOUCHER_KEY].key).toBe(STORAGE_VOUCHER_KEY);
+  it("no longer sells storage: files are billed in gems by month", () => {
+    expect(SHOP_ITEMS.some((s) => s.category === "Storage")).toBe(false);
+    expect(ITEMS["1gb-xendrive-voucher"]).toBeUndefined();
   });
 
   it("has sane gem packs", () => {
@@ -73,17 +72,11 @@ describe("catalogue", () => {
 });
 
 describe("new accounts", () => {
-  it("start with no gems and the free 1 GB of XenDrive", async () => {
+  it("start with no gems and nothing stored", async () => {
     const { token } = await createUser();
     const res = await request(t.app).get("/api/user/profile").set(auth(token));
     expect(res.body.data.user.gems).toBe(0);
-    expect(res.body.data.user.xendrive.spaceAllowed).toBe(FREE_STORAGE_BYTES);
-  });
-
-  it("add granted space on top of the free tier", async () => {
-    const { token } = await createUser({ xendrive: { spaceAllowed: 5_000 } });
-    const res = await request(t.app).get("/api/user/profile").set(auth(token));
-    expect(res.body.data.user.xendrive.spaceAllowed).toBe(FREE_STORAGE_BYTES + 5_000);
+    expect(res.body.data.user.xendrive).toEqual({ fileCount: 0, spaceUsed: 0 });
   });
 });
 
@@ -169,13 +162,6 @@ describe("redeeming", () => {
     expect(fresh.inventory[0].used).toBe(true);
   });
 
-  it("the XenDrive voucher adds a gigabyte", async () => {
-    const { user, token } = await createUser();
-    const itemId = await give(user._id, "1gb-xendrive-voucher");
-    expect((await use(token, itemId)).status).toBe(200);
-    expect((await reload(user._id)).xendrive.spaceAllowed).toBe(1024 * 1024 * 1024);
-  });
-
   it("answers 404 for an item that is not in the inventory", async () => {
     const { token } = await createUser();
     expect((await use(token, new mongoose.Types.ObjectId().toString())).status).toBe(404);
@@ -184,12 +170,12 @@ describe("redeeming", () => {
 
 describe("buying from the shop", () => {
   it("takes the gems and puts the item in the inventory", async () => {
-    const { user, token } = await createUser({ gems: 7500 });
-    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
+    const { user, token } = await createUser({ gems: 30000 });
+    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "3" });
     expect(res.body).toMatchObject({ status: true });
     const fresh = await reload(user._id);
-    expect(fresh.gems).toBe(2500);
-    expect(fresh.inventory.map((i: any) => i.itemKey)).toEqual(["1gb-xendrive-voucher"]);
+    expect(fresh.gems).toBe(5000);
+    expect(fresh.inventory.map((i: any) => i.itemKey)).toEqual(["golden-badge"]);
   });
 
   it("records every gem movement in the ledger, so the balance matches its history", async () => {
@@ -199,11 +185,11 @@ describe("buying from the shop", () => {
     await transfer({
       from: HOUSE,
       to: userAccount(user._id),
-      amount: 10000,
+      amount: 30000,
       kind: "admin_adjustment",
       idempotencyKey: `t:${user._id}`,
     });
-    await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
+    await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "3" });
     const tx = await mongoose.model("GemTransaction").find({ "from.id": user._id, kind: "shop_purchase" }).lean();
     expect(tx).toHaveLength(1);
     expect((await reload(user._id)).gems).toBe(5000);
@@ -213,7 +199,7 @@ describe("buying from the shop", () => {
 
   it("refuses a purchase the balance can't cover, without granting the item", async () => {
     const { user, token } = await createUser({ gems: 10 });
-    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "2" });
+    const res = await request(t.app).post("/api/shop/buy").set(auth(token)).send({ itemId: "3" });
     expect(res.body).toMatchObject({ status: false, message: "Not enough gems" });
     const fresh = await reload(user._id);
     expect(fresh.gems).toBe(10);
@@ -229,21 +215,25 @@ describe("buying from the shop", () => {
 });
 
 describe("admin gifts", () => {
-  it("only add the item; the effect happens when the person redeems it", async () => {
+  it("add the item to the inventory", async () => {
     const admin = await createUser({ roles: ["admin"] });
-    const { user, token } = await createUser();
+    const { user } = await createUser();
+    const res = await request(t.app)
+      .post(`/api/admin/users/${user._id}/give-item`)
+      .set(auth(admin.token))
+      .send({ itemKey: "golden-badge" });
+    expect(res.status).toBe(200);
+    expect((await reload(user._id)).inventory.map((i: any) => i.itemKey)).toEqual(["golden-badge"]);
+  });
+
+  it("cannot hand out the retired storage voucher", async () => {
+    const admin = await createUser({ roles: ["admin"] });
+    const { user } = await createUser();
     const res = await request(t.app)
       .post(`/api/admin/users/${user._id}/give-item`)
       .set(auth(admin.token))
       .send({ itemKey: "1gb-xendrive-voucher" });
-    expect(res.status).toBe(200);
-
-    const gifted = await reload(user._id);
-    expect(gifted.xendrive.spaceAllowed).toBe(0);
-    expect(gifted.inventory).toHaveLength(1);
-
-    await request(t.app).post(`/api/user/inventory/${gifted.inventory[0]._id}/use`).set(auth(token));
-    expect((await reload(user._id)).xendrive.spaceAllowed).toBe(1024 * 1024 * 1024);
+    expect(res.status).toBe(404);
   });
 
   it("cannot hand out a retired item", async () => {

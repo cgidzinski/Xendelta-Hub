@@ -85,7 +85,7 @@ describe("XenBudget photos in XenDrive", () => {
     expect(stored.size).toBe(0);
   });
 
-  it("stores each photo as a tagged file owned by the uploader that doesn't count toward storage", async () => {
+  it("stores each photo as a file owned and paid for by the uploader", async () => {
     const { owner, uid, bookId, photos, urls } = await setup();
     const before = await usageFor(uid);
     const res = await photos(2);
@@ -93,8 +93,8 @@ describe("XenBudget photos in XenDrive", () => {
 
     const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xenbudget" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.space?.ref === bookId && f.counted === false)).toBe(true);
-    expect(await usageFor(uid)).toEqual(before);
+    expect(files.every((f) => f.space?.ref === bookId)).toBe(true);
+    expect((await usageFor(uid)).fileCount).toBe(before.fileCount + 2);
     expect(await urls()).toHaveLength(2);
 
     const apps = (await request(t.app).get("/api/storage/app-files").set(auth(owner.token))).body.data;
@@ -102,7 +102,7 @@ describe("XenBudget photos in XenDrive", () => {
     expect(apps.apps[0].groups[0].label).toBe("Home");
   });
 
-  it("a photo that does not count toward storage can only be removed from the item, not from the storage viewer", async () => {
+  it("a photo can be removed from the item or from the storage viewer", async () => {
     const { owner, uid, b, itemId, photos, urls } = await setup();
     await photos(3);
     const [first] = await urls();
@@ -111,8 +111,8 @@ describe("XenBudget photos in XenDrive", () => {
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
 
     const file = await FileRecord.findOne({ uploadedBy: uid });
-    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token))).status).toBe(400);
-    expect(await urls()).toHaveLength(2);
+    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token))).status).toBe(200);
+    expect(await urls()).toHaveLength(1);
   });
 
   it("deleting the item or the book deletes its photos", async () => {

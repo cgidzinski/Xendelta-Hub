@@ -66,7 +66,7 @@ export default function Inventory() {
 
       <Grid container spacing={3} alignItems="flex-start">
         <Grid size={{ xs: 12, md: 4 }}>
-          <AccountCard profile={profile} inventory={inventory} />
+          <AccountCard profile={profile} />
         </Grid>
 
         <Grid size={{ xs: 12, md: 8 }}>

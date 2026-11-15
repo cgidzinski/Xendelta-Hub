@@ -81,14 +81,7 @@ export default function Overview() {
               note={`+${data.people.new7} in the last 7 days`}
               noteTone="success"
             />
-            <StatCard
-              label="Storage used"
-              value={formatFileSize(data.storage.used)}
-              note={
-                data.storage.nearQuota > 0 ? `${data.storage.nearQuota} near their limit` : "No one near their limit"
-              }
-              noteTone={data.storage.nearQuota > 0 ? "warning" : undefined}
-            />
+            <StatCard label="Storage used" value={formatFileSize(data.storage.used)} note="across everyone" />
             <StatCard
               label="Gems bought (30 days)"
               value={data.money.gems30.toLocaleString()}

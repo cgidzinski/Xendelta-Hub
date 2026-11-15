@@ -54,7 +54,7 @@ export default function DriveRail() {
 
       {usage && (
         <Box sx={{ p: 1.75, border: 1, borderColor: "divider", borderRadius: 2.5 }}>
-          <BillingSummary stored={usage} limit={usage} />
+          <BillingSummary stored={usage} />
         </Box>
       )}
     </Box>

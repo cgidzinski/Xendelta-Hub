@@ -72,7 +72,7 @@ export interface Paged<T> {
 
 // ---------- people ----------
 
-export type UserFilter = "all" | "admins" | "near_quota" | "buyers" | "new";
+export type UserFilter = "all" | "admins" | "buyers" | "new";
 export type UserSort = "newest" | "name" | "storage";
 
 export interface AdminUserRow {
@@ -83,13 +83,11 @@ export interface AdminUserRow {
   avatar: string;
   joinedAt: string;
   gems: number;
-  storage: { used: number; allowed: number; files: number };
+  storage: { used: number; files: number };
 }
 
 export interface AdminUserDetail extends AdminUserRow {
   inventory: Array<{ itemKey: string; name: string; used: boolean; purchasedAt: string }>;
-  /** Extra bytes granted on top of the free tier. */
-  extraSpace: number;
   /** Bytes in this person's drive that apps stored for them (chat attachments). */
   appBytes: number;
   providers: string[];
@@ -120,7 +118,7 @@ export interface StorageByApp {
 
 export interface AdminOverview {
   people: { total: number; new7: number; new30: number; signupsByDay: Array<{ day: string; count: number }> };
-  storage: { used: number; nearQuota: number; byApp: StorageByApp[] };
+  storage: { used: number; byApp: StorageByApp[] };
   money: { gems30: number; cents30: number; purchases30: number; pending: number };
   tasks: { enabled: number; failing: number };
   attention: AttentionItem[];
@@ -129,15 +127,12 @@ export interface AdminOverview {
 
 export interface AdminStorageReport {
   used: number;
-  extraGranted: number;
-  nearQuota: number;
   byApp: StorageByApp[];
   top: Array<{
     _id: string;
     username: string;
     avatar: string;
     used: number;
-    allowed: number;
     files: number;
     appBytes: number;
   }>;

@@ -4,8 +4,6 @@ import { driveSourceApp } from "./driveSources";
 import type { StorageByApp } from "@shared/admin";
 
 export const DAY_MS = 86_400_000;
-/** A person is "near their limit" from here. */
-export const NEAR_QUOTA = 0.9;
 
 /** An ObjectId that sorts at or after the moment `date` (accounts are dated by their _id). */
 export const objectIdFrom = (date: Date) => Types.ObjectId.createFromTime(Math.floor(date.getTime() / 1000));

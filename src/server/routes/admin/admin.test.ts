@@ -48,7 +48,7 @@ describe("access", () => {
   });
 
   it("has no route that edits or deletes an audit entry", async () => {
-    await send("put", `/users/${id(adminUser)}`, { xendriveQuota: 1024 });
+    await send("put", `/users/${id(adminUser)}`, { roles: ["admin", "auditor"] });
     const [row] = await audit();
     for (const method of ["put", "patch", "delete"] as const) {
       const res = await request(t.app)[method](`/api/admin/audit/${row._id}`).set(as(adminUser.token));
@@ -62,7 +62,7 @@ describe("users", () => {
     const [a, b, c] = [
       await createUser({ username: "zed_list", email: "zed_list@x.test" }),
       await createUser({ username: "amy_list", email: "amy_list@x.test", roles: ["admin"] }),
-      await createUser({ username: "bob_list", email: "bob_list@x.test", xendrive: { spaceAllowed: 0 } }),
+      await createUser({ username: "bob_list", email: "bob_list@x.test" }),
     ];
     const list = (q: string) => get(`/users?${q}`);
 
@@ -77,7 +77,7 @@ describe("users", () => {
     const admins = await list("q=_list&filter=admins");
     expect(admins.body.data.items.map((u: any) => u.username)).toEqual(["amy_list"]);
 
-    // near their limit: bob stored 0.95 GB of the 1 GB free tier
+    // storage shows what each person stores, with no limit
     const { createDriveFile } = await import("../../testing/files.js");
     await createDriveFile({
       owner_id: c.user._id,
@@ -86,9 +86,9 @@ describe("users", () => {
       mimeType: "application/octet-stream",
       size: 1024 ** 3 * 0.95,
     });
-    const near = await list("q=_list&filter=near_quota");
-    expect(near.body.data.items.map((u: any) => u.username)).toEqual(["bob_list"]);
-    expect(near.body.data.items[0].storage).toMatchObject({ files: 1, allowed: 1024 ** 3 });
+    const stored = await list("q=_list&sort=storage");
+    expect(stored.body.data.items[0]).toMatchObject({ username: "bob_list", storage: { files: 1 } });
+    expect(stored.body.data.items[0].storage).not.toHaveProperty("allowed");
 
     // gem buyers
     await mongoose.model("GemPurchase").create({
@@ -110,7 +110,7 @@ describe("users", () => {
   });
 
   it("shows one person with their storage, items and purchases", async () => {
-    const u = await createUser({ username: "detail_user", gems: 250, xendrive: { spaceAllowed: 2 * 1024 ** 3 } });
+    const u = await createUser({ username: "detail_user", gems: 250 });
     const { createDriveFile } = await import("../../testing/files.js");
     await createDriveFile({
       owner_id: u.user._id,
@@ -135,32 +135,29 @@ describe("users", () => {
     expect(res.body.data.user).toMatchObject({
       username: "detail_user",
       gems: 250,
-      extraSpace: 2 * 1024 ** 3,
       appBytes: 1000,
       purchases: { count: 1, gems: 2200 },
     });
-    expect(res.body.data.user.storage.allowed).toBe(3 * 1024 ** 3);
+    expect(res.body.data.user.storage).toEqual({ used: 1000, files: 1 });
     expect((await get(`/users/${new mongoose.Types.ObjectId()}`)).status).toBe(404);
   });
 
-  it("audits role and storage changes with before and after, and won't let you drop your own admin role", async () => {
+  it("audits role changes with before and after, and won't let you drop your own admin role", async () => {
     const u = await createUser({ username: "roles_user" });
     await send("put", `/users/${id(u)}`, { roles: ["user", "admin"] });
-    await send("put", `/users/${id(u)}`, { xendriveQuota: 5 * 1024 ** 3 });
     const rows = await audit({ "target.id": id(u) });
-    expect(rows.map((r) => r.action)).toEqual(["role_change", "storage_change"]);
+    expect(rows.map((r) => r.action)).toEqual(["role_change"]);
     expect(rows[0]).toMatchObject({
       category: "Roles",
       admin_name: "boss",
       meta: { before: [], after: ["user", "admin"] },
     });
-    expect(rows[1].detail).toContain("5.00 GB");
 
     const self = await send("put", `/users/${id(adminUser)}`, { roles: ["user"] });
     expect(self.status).toBe(400);
     // an unchanged save writes nothing
     await send("put", `/users/${id(u)}`, { roles: ["user", "admin"] });
-    expect(await audit({ "target.id": id(u) })).toHaveLength(2);
+    expect(await audit({ "target.id": id(u) })).toHaveLength(1);
   });
 
   it("deletes a person only when their username is typed, and logs it", async () => {

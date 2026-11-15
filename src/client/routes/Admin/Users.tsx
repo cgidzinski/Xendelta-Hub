@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Avatar, Box, InputAdornment, LinearProgress, MenuItem, TextField, Typography } from "@mui/material";
+import { Avatar, Box, InputAdornment, MenuItem, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import type { AdminUserRow, UserFilter, UserSort } from "@shared/admin";
 import PageHeader from "../../components/ui/PageHeader";
@@ -12,12 +12,11 @@ import { formatFileSize } from "../../utils/fileUtils";
 import DataTable, { Pager, type Column } from "./components/DataTable";
 import FilterChips from "./components/FilterChips";
 import StatusChip from "./components/StatusChip";
-import { shortDate, share } from "./adminFormat";
+import { shortDate } from "./adminFormat";
 
 const FILTERS: Array<{ value: UserFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "admins", label: "Admins" },
-  { value: "near_quota", label: "Near storage limit" },
   { value: "buyers", label: "Has bought gems" },
   { value: "new", label: "Joined this week" },
 ];
@@ -94,22 +93,11 @@ export default function Users() {
       key: "storage",
       header: "Storage",
       width: 220,
-      render: (u) => {
-        const used = share(u.storage.used, u.storage.allowed);
-        return (
-          <Box sx={{ minWidth: 120 }}>
-            <LinearProgress
-              variant="determinate"
-              value={Math.min(100, used * 100)}
-              color={used >= 0.9 ? "warning" : "primary"}
-              sx={{ height: 6, borderRadius: 3 }}
-            />
-            <Typography variant="caption" color={used >= 0.9 ? "warning.main" : "text.secondary"}>
-              {formatFileSize(u.storage.used)} of {formatFileSize(u.storage.allowed)}
-            </Typography>
-          </Box>
-        );
-      },
+      render: (u) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatFileSize(u.storage.used)}
+        </Typography>
+      ),
     },
     { key: "gems", header: "Gems", width: 100, render: (u) => u.gems.toLocaleString() },
     {

@@ -17,8 +17,6 @@ export interface XenDriveFile {
   thumbUrl?: string | null;
   /** Set when an app stored the file for the person (a photo on an expense, a chat attachment). */
   source?: { app: string; label: string } | null;
-  /** False when the file doesn't use the person's storage. Absent or true for ordinary files. */
-  counted?: boolean;
 }
 
 export interface XenDriveFolder {

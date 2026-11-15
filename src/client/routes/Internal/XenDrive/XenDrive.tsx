@@ -167,8 +167,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const toggleAll = () => setSelected((prev) => (prev.size === everyId.length ? new Set() : new Set(everyId)));
 
   const bulkDelete = async () => {
-    // Files that don't use your storage belong to the app that stored them: they stay.
-    const deletable = selectedFiles.filter((f) => f.counted !== false);
+    const deletable = selectedFiles;
     const chosenFolders = folders.filter((f) => selected.has(f._id));
     const parts = [
       deletable.length ? `${deletable.length} ${deletable.length === 1 ? "file" : "files"}` : "",
@@ -176,10 +175,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
         ? `${chosenFolders.length} ${chosenFolders.length === 1 ? "folder" : "folders"} and everything inside`
         : "",
     ].filter(Boolean);
-    if (!deletable.length && !chosenFolders.length) {
-      enqueueSnackbar("Those files belong to another app, so they can't be deleted here", { variant: "info" });
-      return;
-    }
+    if (!deletable.length && !chosenFolders.length) return;
     const ok = await confirm({
       title: `Delete ${deletable.length + chosenFolders.length} ${deletable.length + chosenFolders.length === 1 ? "item" : "items"}?`,
       message: `${parts.join(" and ")} will be deleted for good.`,
@@ -307,7 +303,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
       {/* this month's spend, on a phone (the sidebar shows it on a computer) */}
       {usage && (
         <Box sx={{ display: { md: "none" }, mb: 1.5 }}>
-          <BillingSummary variant="line" stored={usage} limit={usage} />
+          <BillingSummary variant="line" stored={usage} />
         </Box>
       )}
 

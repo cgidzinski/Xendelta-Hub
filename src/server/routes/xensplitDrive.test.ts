@@ -67,22 +67,21 @@ async function setup() {
 }
 
 describe("XenSplit photos in XenDrive", () => {
-  it("stores each photo as a tagged file owned by the uploader that doesn't count toward storage", async () => {
+  it("stores each photo as a file owned and paid for by the uploader", async () => {
     const { owner, uid, groupId, photos, urls } = await setup();
     const before = await usageFor(uid);
     expect((await photos(2)).status).toBe(200);
 
     const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xensplit" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.space?.ref === groupId && f.counted === false)).toBe(true);
-    expect(await usageFor(uid)).toEqual(before);
+    expect(files.every((f) => f.space?.ref === groupId)).toBe(true);
+    expect((await usageFor(uid)).fileCount).toBe(before.fileCount + 2);
     expect(await urls()).toHaveLength(2);
 
-    // listed in the storage viewer with the group's name, marked as not counted
+    // listed in the storage viewer with the group's name
     const res = (await request(t.app).get("/api/storage/app-files").set(auth(owner.token))).body.data;
     expect(res.apps[0].label).toBe("XenSplit");
     expect(res.apps[0].groups[0].label).toBe("Weekend trip");
-    expect(res.apps[0].groups[0].files.every((f: any) => f.counted === false)).toBe(true);
   });
 
   it("keeps the files out of My Drive, search and recent", async () => {
@@ -109,13 +108,13 @@ describe("XenSplit photos in XenDrive", () => {
     expect(stored.size).toBe(1);
   });
 
-  it("the storage viewer will not delete a photo that belongs to an expense", async () => {
+  it("deleting a photo in the storage viewer takes it off the expense", async () => {
     const { owner, uid, photos, urls } = await setup();
     await photos(2);
     const file = await FileRecord.findOne({ uploadedBy: uid });
     const del = await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token));
-    expect(del.status).toBe(400);
-    expect(await urls()).toHaveLength(2);
+    expect(del.status).toBe(200);
+    expect(await urls()).toHaveLength(1);
   });
 
   it("deleting the group deletes its photos", async () => {

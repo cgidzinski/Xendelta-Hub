@@ -27,16 +27,12 @@ import { SocketManager } from "../../infrastructure/SocketManager";
 import { recordAudit } from "../../utils/adminAudit";
 import { HOUSE, balanceOf, transfer, userAccount } from "../../billing/ledger";
 import { deleteStoredAvatar, removeAccountFiles } from "../../utils/accountFiles";
-import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import type { AdminUserDetail, AdminUserRow, UserFilter, UserSort } from "@shared/admin";
 
 const admin = [authenticateToken, requireAdmin];
-const NEAR_QUOTA = 0.9;
 const DAY = 86_400_000;
 
 const joinedAt = (id: unknown) => (id as Types.ObjectId).getTimestamp().toISOString();
-const allowedBytes = (user: any) => FREE_STORAGE_BYTES + (user.xendrive?.spaceAllowed || 0);
-const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 
 async function loadUser(userId: string) {
   const user = await User.findById(userId).exec();
@@ -72,14 +68,13 @@ export function registerAdminUserRoutes(app: express.Application) {
         avatar: u.avatar || "/avatars/default-avatar.png",
         joinedAt: joinedAt(u._id),
         gems: u.gems ?? 0,
-        storage: { used: used.spaceUsed, allowed: allowedBytes(u), files: used.fileCount },
+        storage: { used: used.spaceUsed, files: used.fileCount },
       };
     });
 
     const matches: Record<UserFilter, (r: AdminUserRow) => boolean> = {
       all: () => true,
       admins: (r) => r.roles.includes("admin"),
-      near_quota: (r) => r.storage.used / r.storage.allowed >= NEAR_QUOTA,
       buyers: (r) => buyers.has(r._id),
       new: (r) => new Date(r.joinedAt).getTime() >= weekAgo,
     };
@@ -96,7 +91,7 @@ export function registerAdminUserRoutes(app: express.Application) {
     const sorters: Record<UserSort, (a: AdminUserRow, b: AdminUserRow) => number> = {
       newest: (a, b) => b.joinedAt.localeCompare(a.joinedAt),
       name: (a, b) => a.username.localeCompare(b.username),
-      storage: (a, b) => b.storage.used / b.storage.allowed - a.storage.used / a.storage.allowed,
+      storage: (a, b) => b.storage.used - a.storage.used,
     };
     rows.sort(sorters[sort]);
 
@@ -131,14 +126,13 @@ export function registerAdminUserRoutes(app: express.Application) {
       avatar: user.avatar || "/avatars/default-avatar.png",
       joinedAt: joinedAt(user._id),
       gems: user.gems ?? 0,
-      storage: { used: usage.spaceUsed, allowed: allowedBytes(user), files: usage.fileCount },
+      storage: { used: usage.spaceUsed, files: usage.fileCount },
       inventory: (user.inventory ?? []).map((i) => ({
         itemKey: i.itemKey,
         name: i.name ?? i.itemKey,
         used: !!i.used,
         purchasedAt: (i.purchasedAt ?? new Date(0)).toISOString(),
       })),
-      extraSpace: user.xendrive?.spaceAllowed ?? 0,
       appBytes: appBytes[0]?.size ?? 0,
       providers: (user.authProviders ?? []).filter((p) => p.isActive).map((p) => p.provider),
       purchases: { count: purchases[0]?.count ?? 0, gems: purchases[0]?.gems ?? 0 },
@@ -147,14 +141,14 @@ export function registerAdminUserRoutes(app: express.Application) {
     res.json({ status: true, message: "", data: { user: detail } });
   });
 
-  // Roles and extra storage. Each change is written to the audit log with before and after.
+  // Roles. Each change is written to the audit log with before and after.
   app.put(
     "/api/admin/users/:userId",
     ...admin,
     validateParams(adminUserIdParamSchema),
     validate(adminUpdateUserSchema),
     async (req, res) => {
-      const { roles, xendriveQuota } = adminUpdateUserSchema.parse(req.body);
+      const { roles } = adminUpdateUserSchema.parse(req.body);
       const user = await loadUser(req.params.userId as string);
       const target = { type: "user" as const, id: String(user._id), label: user.username ?? "" };
 
@@ -177,19 +171,6 @@ export function registerAdminUserRoutes(app: express.Application) {
         }
       }
 
-      if (xendriveQuota !== undefined) {
-        const before = user.xendrive?.spaceAllowed ?? 0;
-        user.xendrive = { spaceAllowed: xendriveQuota };
-        await user.save();
-        if (before !== xendriveQuota) {
-          await recordAudit(req, {
-            action: "storage_change",
-            target,
-            detail: `Extra space ${gb(before)} to ${gb(xendriveQuota)} (allowance ${gb(FREE_STORAGE_BYTES + xendriveQuota)})`,
-            meta: { before, after: xendriveQuota },
-          });
-        }
-      }
       await user.save();
       res.json({ status: true, message: "User updated successfully", data: {} });
     },

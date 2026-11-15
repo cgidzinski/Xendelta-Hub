@@ -14,7 +14,6 @@ export const XENSPLIT_SOURCE = "xensplit";
 registerDriveSource(XENSPLIT_SOURCE, {
   label: "XenSplit",
   // Exempt from the quota for now, like every app's files. Intended rule: a group's photos stay exempt.
-  counts: async () => false,
   verify: async (userId, ref) =>
     Types.ObjectId.isValid(ref) && !!(await XenSplit.exists({ _id: ref, members: userId })),
   describe: async (userId, refs) => {

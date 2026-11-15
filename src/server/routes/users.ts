@@ -1,5 +1,5 @@
 import express = require("express");
-import { totalSpaceAllowed, usageFor } from "../utils/xendriveUtils";
+import { usageFor } from "../utils/xendriveUtils";
 import { AppError, callerId, loadCaller } from "../utils/http";
 import { User } from "../models/user";
 import { Notification } from "../models/notification";
@@ -81,7 +81,6 @@ module.exports = function (app: express.Application) {
           xendrive: {
             fileCount: fileCount,
             spaceUsed: spaceUsed,
-            spaceAllowed: totalSpaceAllowed(user.xendrive?.spaceAllowed),
           },
         },
       },

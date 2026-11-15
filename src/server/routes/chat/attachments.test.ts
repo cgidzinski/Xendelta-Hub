@@ -65,7 +65,6 @@ describe("chat uploads", () => {
     const stored = await mongoose.model("FileRecord").findById(fileId).lean<any>();
     expect(stored.space).toEqual({ app: "chat", ref: chatId });
     expect(stored.payer).toEqual({ type: "user", id: String(a.user._id) });
-    expect(stored.counted).toBe(true);
     expect(await mongoose.model("XenDriveFile").countDocuments({ _id: fileId })).toBe(0);
     // Stored in chat's own folder, under the conversation (docs/storage.md), not the sender's XenDrive folder.
     expect(stored.key).toMatch(new RegExp(`^chat/${chatId}/`));
@@ -93,14 +92,26 @@ describe("chat uploads", () => {
     expect((await request(t.app).get("/api/storage/app-files").set(as(b.token))).body.data.count).toBe(0);
   });
 
-  it("refuses an upload that doesn't fit the sender's storage", async () => {
+  it("refuses an upload from someone who has used their free allowance, once billing is enforced", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
-    const tooBig = await request(t.app)
-      .post("/api/xendrive/initiate")
-      .set(as(a.token))
-      .send({ filename: "huge.zip", totalChunks: 1, fileSize: 2 * 1024 ** 3, source: { app: "chat", ref: chatId } });
-    expect(tooBig.status).toBe(403);
+    const { recordUsage } = await import("../../billing/usage.js");
+    const { userAccount } = await import("../../billing/ledger.js");
+    await recordUsage(userAccount(a.user._id), "storage", 1_000 * 1_000_000_000 * 30);
+    const start = () =>
+      request(t.app)
+        .post("/api/xendrive/initiate")
+        .set(as(a.token))
+        .send({ filename: "x.zip", totalChunks: 1, fileSize: 6, source: { app: "chat", ref: chatId } });
+    expect((await start()).status).toBe(200); // shadow mode
+    process.env.BILLING_ENFORCED = "true";
+    try {
+      const refused = await start();
+      expect(refused.status).toBe(402);
+      expect(refused.body).toMatchObject({ billing: true });
+    } finally {
+      process.env.BILLING_ENFORCED = "false";
+    }
   });
 
   it("only lets a member of the chat upload for it, and never into a folder", async () => {

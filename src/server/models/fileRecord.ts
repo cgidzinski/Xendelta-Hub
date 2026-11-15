@@ -35,9 +35,6 @@ const fileRecordSchema = new Schema({
   thumbWidth: { type: Number },
   thumbHeight: { type: Number },
   thumbStatus: { type: String, enum: ["pending", "ready", "none", "failed"], default: "none" },
-  // Does it count toward the owner's storage quota? Chat attachments and direct uploads do; the photo apps' files are
-  // exempt for now. Goes away with the quota (#362), when every file is billed to its payer.
-  counted: { type: Boolean, default: true },
 });
 
 fileRecordSchema.index({ bucket: 1, key: 1 }, { unique: true });

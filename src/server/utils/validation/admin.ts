@@ -7,8 +7,6 @@ export const adminUserItemParamSchema = z.object({ userId: objectIdSchema, itemK
 
 export const adminUpdateUserSchema = z.object({
   roles: z.array(z.string().min(1).max(32)).max(20).optional(),
-  // Bytes. Absent leaves the quota alone; 0 is a legitimate "no storage".
-  xendriveQuota: z.number().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
 });
 
 export const adminGrantItemSchema = z.object({ itemKey: z.string().min(1).max(100) });
@@ -25,7 +23,7 @@ const pageSize = z.coerce.number().int().min(1).max(100).optional();
 
 export const adminUserListQuerySchema = z.object({
   q: z.string().max(100).optional(),
-  filter: z.enum(["all", "admins", "near_quota", "buyers", "new"]).optional(),
+  filter: z.enum(["all", "admins", "buyers", "new"]).optional(),
   sort: z.enum(["newest", "name", "storage"]).optional(),
   page,
   pageSize,
@@ -60,7 +58,7 @@ export const adminPurchasesQuerySchema = z.object({
   pageSize,
 });
 
-export const adminStorageQuerySchema = z.object({ by: z.enum(["size", "percent"]).optional() });
+export const adminStorageQuerySchema = z.object({});
 
 const channel = z.enum(["inapp", "socket", "push", "email"]);
 export const adminNotifySchema = z.object({

@@ -21,6 +21,8 @@ export function setTestEnv(): void {
   process.env.PUBLIC_URL = "http://localhost:3000";
   // Both buckets live in memory (storage/memoryStore.ts); tests look inside with memoryStores().
   process.env.STORAGE_DRIVER = "memory";
+  // Tests start in shadow mode; the ones about enforcement turn it on.
+  process.env.BILLING_ENFORCED = "false";
 }
 
 /**

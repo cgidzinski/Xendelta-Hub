@@ -319,7 +319,7 @@ describe("photos", () => {
     expect(stored.size).toBe(0);
   });
 
-  it("stores photos as tagged XenDrive files that don't count toward storage, and XenDrive won't delete them", async () => {
+  it("stores photos as files the uploader pays for, and the storage viewer can delete them", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
     const n = await note(me, { type: "image", title: "Garden", notebook_id: undefined });
@@ -333,8 +333,8 @@ describe("photos", () => {
 
     const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xennote" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.space?.ref === n._id && f.counted === false && f.mimeType === "image/webp")).toBe(true);
-    expect(await usageFor(uid)).toEqual(before);
+    expect(files.every((f) => f.space?.ref === n._id && f.mimeType === "image/webp")).toBe(true);
+    expect((await usageFor(uid)).fileCount).toBeGreaterThan(before.fileCount);
 
     const apps = (
       await request(t.app)
@@ -344,13 +344,13 @@ describe("photos", () => {
     expect(apps.apps[0]).toMatchObject({ app: "xennote", label: "XenNote" });
     expect(apps.apps[0].groups[0].label).toBe("Garden");
 
-    // the file doesn't count toward storage, so the storage viewer won't delete it: the note owns it
+    // deleting it in the storage viewer takes it off the note
     const del = await request(t.app)
       .delete(`/api/storage/files/${files[0]._id}`)
       .set({ Authorization: `Bearer ${me.token}` });
-    expect(del.status).toBe(400);
+    expect(del.status).toBe(200);
     const read = await api(me).get(`/notes/${n._id}`);
-    expect(read.body.data.note.images).toHaveLength(2);
+    expect(read.body.data.note.images).toHaveLength(1);
   });
 
   it("a viewer cannot add photos", async () => {

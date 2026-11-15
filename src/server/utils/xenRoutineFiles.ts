@@ -13,7 +13,6 @@ export const XENROUTINE_SOURCE = "xenroutine";
 registerDriveSource(XENROUTINE_SOURCE, {
   label: "XenRoutine",
   // Exempt from the quota for now, like every app's files. Intended rule: a shared routine stays exempt.
-  counts: async () => false,
   // May this person add photos to the routine? Anyone on it: owner or a member it's shared with.
   verify: async (userId, ref) => {
     if (!Types.ObjectId.isValid(ref)) return false;

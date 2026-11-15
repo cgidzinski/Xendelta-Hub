@@ -3,7 +3,6 @@ import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { ITEMS } from "../constants/items";
-import { STORAGE_VOUCHER_KEY } from "@shared/monetization";
 import { cosmeticsOf, PUBLIC_USER_FIELDS } from "../utils/publicUser";
 
 // Wearing a cosmetic: equip and unequip, what happens when the item goes away, and that the choice reaches the
@@ -65,7 +64,8 @@ describe("wearing the Golden Badge", () => {
     const owner = await createUser();
     const stranger = await createUser();
     const badge = await give(owner.user._id, "golden-badge");
-    const voucher = await give(owner.user._id, STORAGE_VOUCHER_KEY);
+    // A gem voucher is redeemable, not worn.
+    const voucher = await give(owner.user._id, "1000-gem-voucher");
 
     expect((await equip(owner.token, voucher)).status).toBe(400);
     expect((await equip(stranger.token, badge)).status).toBe(404);

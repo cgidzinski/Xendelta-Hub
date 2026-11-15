@@ -21,12 +21,6 @@ export interface DriveSourceApp {
   /** A readable name per ref for this person ("Weekend trip"). Refs it cannot name are left out. */
   describe: (userId: string, refs: string[]) => Promise<Map<string, string>>;
   /**
-   * Do files stored for this `ref` count toward the owner's quota? Chat says yes. The photo apps say no for now, so
-   * only files uploaded straight to XenDrive and chat attachments count. The intended rule for the photo apps once it is switched on: files in a shared space stay exempt,
-   * files in a space only the owner uses count (docs/storage.md).
-   */
-  counts: (ref: string) => Promise<boolean>;
-  /**
    * Who pays to store files for this `ref`. Omitted: the uploader. Chat names the community for a community channel's files
    * (docs/billing.md), so they are on its bill and not on the sender's.
    */

@@ -31,7 +31,6 @@ export interface UserProfile {
   xendrive: {
     fileCount: number;
     spaceUsed: number;
-    spaceAllowed: number;
   };
 }
 

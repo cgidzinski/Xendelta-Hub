@@ -18,12 +18,6 @@ const GEM_PACK_SHOP_ITEMS: ShopItem[] = GEM_PACKS.map((pack) => ({
 export const SHOP_ITEMS: ShopItem[] = [
   ...GEM_PACK_SHOP_ITEMS,
   {
-    id: "2",
-    itemKey: "1gb-xendrive-voucher",
-    price: 5000,
-    category: "Storage",
-  },
-  {
     id: "3",
     itemKey: "golden-badge",
     price: 25000,

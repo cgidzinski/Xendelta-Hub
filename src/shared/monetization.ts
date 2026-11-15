@@ -23,9 +23,6 @@ export const GEM_PACKS: readonly GemPack[] = [
   { id: "gems-65000", gems: 65_000, priceCents: 5_000, currency: "USD", badge: "Best value" },
 ];
 
-/** XenDrive space every account has before buying anything. */
-export const FREE_STORAGE_BYTES = 1024 * 1024 * 1024; // 1 GB
-
 /** The base rate before any pack bonus: what the smallest pack pays per dollar. */
 export const BASE_GEMS_PER_DOLLAR = 1000;
 
@@ -34,7 +31,3 @@ export function gemBonusPercent(gems: number, priceCents: number): number {
   const base = (priceCents / 100) * BASE_GEMS_PER_DOLLAR;
   return Math.max(0, Math.round((gems / base - 1) * 100));
 }
-
-/** The XenDrive voucher: its inventory/shop key and the space it adds when redeemed. */
-export const STORAGE_VOUCHER_KEY = "1gb-xendrive-voucher";
-export const STORAGE_VOUCHER_BYTES = 1024 * 1024 * 1024; // 1 GB

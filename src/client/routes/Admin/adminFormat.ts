@@ -27,6 +27,3 @@ export const dateTime = (iso: string) =>
 
 export const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-/** How full a quota is, 0 to 1 and beyond. */
-export const share = (used: number, allowed: number) => (allowed > 0 ? used / allowed : 0);
