@@ -116,7 +116,7 @@ export default function FileDetail() {
     if (previewUrl && kind === "audio")
       return <Box component="audio" src={previewUrl} controls sx={{ width: "80%" }} />;
     return (
-      <Box sx={{ textAlign: "center", p: 3 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", p: 3 }}>
         <FileTypeIcon mimeType={file.mimeType} size={96} />
         <Typography sx={{ mt: 2, fontWeight: 500 }}>No preview for this kind of file</Typography>
         <Button sx={{ mt: 1.5 }} variant="contained" startIcon={<FileDownloadOutlinedIcon />} onClick={download}>
