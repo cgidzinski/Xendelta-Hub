@@ -17,7 +17,7 @@ afterAll(async () => {
 const as = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 describe("billing overview", () => {
-  it("shows your month so far, nothing charged in shadow mode", async () => {
+  it("shows your month so far and what it costs", async () => {
     const { recordUsage } = await import("../billing/usage.js");
     const { userAccount } = await import("../billing/ledger.js");
     const me = await createUser({ gems: 42 });
@@ -28,7 +28,6 @@ describe("billing overview", () => {
     const o = res.body.data;
     expect(o).toMatchObject({
       account: { type: "user", id: String(me.user._id) },
-      enforced: false,
       everythingFree: false,
       balance: 42,
       unpaid: 0,

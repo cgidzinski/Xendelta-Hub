@@ -196,7 +196,6 @@ export interface AdminBillingProviderRow {
 export interface AdminBillingReport {
   month: string;
   months: string[];
-  enforced: boolean;
   everythingFree: boolean;
   billingMargin: number;
   gemsPerDollar: number;

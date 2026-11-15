@@ -19,10 +19,7 @@ afterAll(async () => {
   await t?.stop();
 }, 60_000);
 
-const saved = process.env.BILLING_ENFORCED;
 afterEach(() => {
-  if (saved === undefined) delete process.env.BILLING_ENFORCED;
-  else process.env.BILLING_ENFORCED = saved;
   vi.restoreAllMocks();
 });
 
@@ -58,25 +55,9 @@ describe("settleMonth", () => {
     expect(await gemsOf(user._id)).toBe(10);
   });
 
-  it("takes the free tier off and charges nothing in shadow mode", async () => {
+  it("pays from the balance, rounding the bill up once", async () => {
     const restore = meterDownloads(100);
     try {
-      process.env.BILLING_ENFORCED = "false";
-      const { user } = await createUser({ gems: 1000 });
-      await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F + 100), october); // 100 beyond the free tier
-      await settlement.settleMonth("2026-10");
-      const row = await Statement().findOne({ "account.id": user._id }).lean();
-      expect(row).toMatchObject({ status: "shadow", amountDue: 100, paid: 0 });
-      expect(await gemsOf(user._id)).toBe(1000);
-    } finally {
-      restore();
-    }
-  });
-
-  it("pays from the balance when enforced, rounding the bill up once", async () => {
-    const restore = meterDownloads(100);
-    try {
-      process.env.BILLING_ENFORCED = "true";
       const { user } = await createUser({ gems: 1000 });
       // 0.01 gems beyond the free tier rounds up to 1 gem.
       await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F + 0.01), october);
@@ -94,7 +75,6 @@ describe("settleMonth", () => {
   it("records an unpaid bill when the balance can't cover it, and takes nothing", async () => {
     const restore = meterDownloads(100);
     try {
-      process.env.BILLING_ENFORCED = "true";
       const { user } = await createUser({ gems: 50 });
       await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F + 100), october); // 100 beyond the free tier
       await settlement.settleMonth("2026-10");
@@ -109,7 +89,6 @@ describe("settleMonth", () => {
   it("bills a community's fund", async () => {
     const restore = meterDownloads(100);
     try {
-      process.env.BILLING_ENFORCED = "true";
       const Community = (await import("../models/community.js")).Community;
       const community = await Community.create({ name: "Club", members: [], fund: 1000 });
       await usage.recordUsage(ledger.communityAccount(community._id), "calls", bytesFor(CF + 300), october);
@@ -136,16 +115,9 @@ describe("settleClosedMonths", () => {
 });
 
 describe("canSpend", () => {
-  it("is always yes in shadow mode", async () => {
-    process.env.BILLING_ENFORCED = "false";
-    const { user } = await createUser();
-    expect(await settlement.canSpend(ledger.userAccount(user._id))).toBe(true);
-  });
-
   it("allows usage inside the free tier, then needs a balance that covers the month", async () => {
     const restore = meterDownloads(100);
     try {
-      process.env.BILLING_ENFORCED = "true";
       const { user } = await createUser();
       const account = ledger.userAccount(user._id);
       expect(await settlement.canSpend(account)).toBe(true);
@@ -176,7 +148,6 @@ describe("canSpend", () => {
   });
 
   it("counts an unpaid bill from an earlier month", async () => {
-    process.env.BILLING_ENFORCED = "true";
     const { user } = await createUser({ gems: 20 });
     await Statement().create({
       account: { type: "user", id: user._id },

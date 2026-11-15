@@ -99,7 +99,7 @@ module.exports = function (app: Application) {
         throw new AppError(409, "This call is full");
       }
 
-      // Whoever pays for the call (you, or the community of a voice channel) must be able to, once billing is enforced.
+      // Whoever pays for the call (you, or the community of a voice channel) must be able to.
       const communityId = context.community ? String(context.community._id) : undefined;
       await assertCanCall(me, communityId);
       ensureCallMeter();

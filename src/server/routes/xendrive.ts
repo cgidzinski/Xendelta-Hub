@@ -210,7 +210,7 @@ module.exports = function (app: express.Application) {
         throw new AppError(404, "Folder not found");
       }
 
-      // Whoever pays to store it must be able to (nothing is checked in shadow mode, billing/storageMeter.ts).
+      // Whoever pays to store it must be able to.
       await assertCanStore(userId, source);
 
       const uploadId = await initiateChunkedUpload(userId, filename, totalChunks, folderId ?? null, source);

@@ -5,16 +5,14 @@
 import { CALL_MAX_SESSION_SECONDS, CALL_METER_SECONDS } from "@shared/calls";
 import { communityAccount, userAccount } from "../billing/ledger";
 import { assertCanSpend, canSpend } from "../billing/settlement";
-import { billingEnforced } from "../billing/usage";
 import { meterCall } from "./usage";
 import { resolveChatAccess } from "../chat/access";
 import { realtime } from "../realtime";
 import { callRegistry } from "./registry";
 import { leaveCall } from "./service";
 
-/** Refuses (402) when the person, or the community of a voice channel, can't pay for a call. Nothing in shadow mode. */
+/** Refuses (402) when the person, or the community of a voice channel, can't pay for a call. */
 export async function assertCanCall(userId: string, communityId?: string): Promise<void> {
-  if (!billingEnforced()) return;
   await assertCanSpend(communityId ? communityAccount(communityId) : userAccount(userId));
 }
 
@@ -23,7 +21,6 @@ export async function assertCanCall(userId: string, communityId?: string): Promi
  * them out of the call (the whole voice channel, when it is the community that can't pay).
  */
 export async function enforceCallBilling(conversationId: string): Promise<void> {
-  if (!billingEnforced()) return;
   const call = callRegistry.get(conversationId);
   if (!call) return;
   const payers = call.communityId

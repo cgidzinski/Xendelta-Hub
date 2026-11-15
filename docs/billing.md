@@ -49,8 +49,8 @@ To move gems, call `transfer({ from, to, amount, kind, idempotencyKey })` with `
 ## Cost centers (`src/shared/billing.ts`)
 
 `COST_CENTERS` lists everything that costs money, each with its unit, rate, who pays and its status. A center starts free (`status: "free"`, `costRate: 0`); its discussion issue decides the rate and switches it to `metered`.
-**Storage is metered** (15 gems per GB-month at cost, 18.75 billed) and billing is **enforced**: months are charged and uploads
-are blocked past the free allowance. `BILLING_ENFORCED=false` is the shadow-mode switch (measured and shown, never charged).
+**Storage is metered** (15 gems per GB-month at cost, 18.75 billed) and billing is always on: months are charged and uploads
+are blocked past the free allowance. There is no switch; raise the free allowance in `src/shared/billing.ts` to be gentler.
 Downloads and uploads are free on R2, so there is no downloads center.
 
 | Center | Unit stored | Billed in | Paid by | Discussion |
@@ -76,8 +76,8 @@ Downloads and uploads are free on R2, so there is no downloads center.
 `$inc`). It never throws: a tally that can't be kept must not break the request. `usageFor(account, month)` reads it
 back. Usage is only ever what the server observes, never what a client reports.
 
-**Shadow mode** (`BILLING_ENFORCED=false`): usage is measured and bills are shown, but nothing is charged and nothing is blocked.
-Billing is enforced by default (anything but `false`); the storage quota and vouchers were removed when it was switched on (#362).
+Billing is always enforced (there is no shadow mode). The storage quota and vouchers were removed when it was switched on (#362). Statements
+from the months before that have the status `shadow` and show as "Not charged".
 
 ### Wiring a cost center
 
@@ -125,7 +125,7 @@ if the job runs twice; a day the server missed is caught up (up to 31 days) from
 claim and the finish loses that one day, which can only under-bill.
 
 `assertCanStore(userId, source)` and `assertPayerCanStore(payer)` run before anything is stored (XenDrive uploads, app photos,
-chat attachments, community emoji, Recipaint images). They do nothing in shadow mode; once enforced, a payer past the free
+chat attachments, community emoji, Recipaint images). A payer past the free
 allowance with no gems to cover it gets a 402. Nothing is ever deleted.
 
 ## Community funds (`src/server/billing/fund.ts`)
@@ -147,15 +147,14 @@ A community's bills are paid from its fund. Any member can donate, including ahe
   with its lines, the rates and margin used, the free tier and the amount due.
 - The statement is written `pending`, then settled:
   - `free`: nothing due.
-  - `shadow`: something is due but `BILLING_ENFORCED=false`, so nothing is taken.
+  - `shadow`: a month from before billing was switched on; something was due but nothing was taken.
   - `paid`: a ledger `bill` to the house, keyed `bill:<type>:<id>:<month>`, so a rerun can't pay twice.
   - `unpaid`: the balance couldn't cover it. Nothing is taken and the whole amount stays owed.
 - People (or every member of a community) are notified when a statement has something due, and once a month when
   usage reaches 80% of the free tier (`BillingNotice` keeps it to once).
-- `canSpend(account)` is the one check a cost center makes before starting something that costs money: always yes in
-  shadow mode; otherwise yes while this month is inside the free tier with nothing unpaid, or while the balance is above
+- `canSpend(account)` is the one check a cost center makes before starting something that costs money: yes while this month is inside the free tier with nothing unpaid, or while the balance is above
   this month's cost beyond the free tier (rounded up) plus anything unpaid. `assertCanSpend` throws a 402 with
-  `billing: true` and a message that says what to do. Storage calls it before a file is stored (`assertCanStore`); the other centers wire it in their own issues.
+  `billing: true` and a message that says what to do. Storage (`assertCanStore`), calls and recipe scans call it before they start.
 
 ## Admin billing report (`src/server/routes/admin/billing.ts`)
 

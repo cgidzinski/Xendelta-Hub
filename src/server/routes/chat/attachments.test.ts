@@ -92,26 +92,21 @@ describe("chat uploads", () => {
     expect((await request(t.app).get("/api/storage/app-files").set(as(b.token))).body.data.count).toBe(0);
   });
 
-  it("refuses an upload from someone who has used their free allowance, once billing is enforced", async () => {
+  it("refuses an upload from someone who has used their free allowance, ", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const { recordUsage } = await import("../../billing/usage.js");
     const { userAccount } = await import("../../billing/ledger.js");
-    await recordUsage(userAccount(a.user._id), "storage", 1_000 * 1_000_000_000 * 30);
     const start = () =>
       request(t.app)
         .post("/api/xendrive/initiate")
         .set(as(a.token))
         .send({ filename: "x.zip", totalChunks: 1, fileSize: 6, source: { app: "chat", ref: chatId } });
-    expect((await start()).status).toBe(200); // shadow mode
-    process.env.BILLING_ENFORCED = "true";
-    try {
-      const refused = await start();
-      expect(refused.status).toBe(402);
-      expect(refused.body).toMatchObject({ billing: true });
-    } finally {
-      process.env.BILLING_ENFORCED = "false";
-    }
+    expect((await start()).status).toBe(200);
+    await recordUsage(userAccount(a.user._id), "storage", 1_000 * 1_000_000_000 * 30);
+    const refused = await start();
+    expect(refused.status).toBe(402);
+    expect(refused.body).toMatchObject({ billing: true });
   });
 
   it("only lets a member of the chat upload for it, and never into a folder", async () => {

@@ -17,7 +17,7 @@ import { Community } from "../models/community";
 import { notify } from "../utils/notificationUtils";
 import { AppError } from "../utils/http";
 import { HOUSE, balanceOf, transfer, type GemAccount } from "./ledger";
-import { billingEnforced, usageFor } from "./usage";
+import { usageFor } from "./usage";
 import { announceFund } from "./fund";
 
 // Month-end settlement (docs/billing.md): each closed month becomes one statement per billing account that used
@@ -48,12 +48,11 @@ export async function unpaidTotal(account: BillableAccount): Promise<number> {
 }
 
 /**
- * May this account start something that costs money (an upload, a call, a scan)? Always yes in shadow mode. Otherwise
+ * May this account start something that costs money (an upload, a call, a scan)?
  * yes while this month's usage is inside the free tier, or while the balance still covers what this month has cost
  * beyond it (rounded up) plus anything left unpaid from earlier months.
  */
 export async function canSpend(account: BillableAccount): Promise<boolean> {
-  if (!billingEnforced()) return true;
   const [statement, unpaid, balance] = await Promise.all([
     currentStatement(account),
     unpaidTotal(account),
@@ -94,7 +93,7 @@ async function recipients(account: BillableAccount): Promise<string[]> {
 const billingLink = (account: BillableAccount) =>
   account.type === "user" ? "/internal/billing" : `/internal/communities/${account.id}/settings/billing`;
 
-/** Pay a written statement (when enforced), then record how it ended. Safe to run again on the same statement. */
+/** Pay a written statement, then record how it ended. Safe to run again on the same statement. */
 async function settleStatement(statement: BillingStatementDocument): Promise<void> {
   const account = { type: statement.account!.type, id: String(statement.account!.id) } as BillableAccount;
   const due = statement.amountDue;
@@ -102,8 +101,6 @@ async function settleStatement(statement: BillingStatementDocument): Promise<voi
 
   if (due === 0) {
     update = { status: "free", paid: 0, unpaid: 0 };
-  } else if (!billingEnforced()) {
-    update = { status: "shadow", paid: 0, unpaid: 0 };
   } else {
     try {
       const tx = await transfer({

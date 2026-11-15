@@ -428,36 +428,31 @@ describe("calls on the bill", () => {
     expect(await usageOf({ type: "user", id: id(a) })).toBe(0);
   });
 
-  it("refuses to join once billing is enforced and the free allowance is used up, warns, then ends the call", async () => {
-    const [a, b] = [await createUser(), await createUser()];
+  it("refuses to join once the free allowance is used up, and warns then ends a call that runs out", async () => {
+    const [a, b, c] = [await createUser(), await createUser(), await createUser()];
     const chat = await dm(a, b);
     const { recordUsage } = await import("../../billing/usage.js");
     const { userAccount } = await import("../../billing/ledger.js");
-    await recordUsage(userAccount(a.user._id), "calls", 1_000 * 1_000_000_000); // 1,000 GB: far past the allowance
-    expect((await join(a, chat)).status).toBe(200); // shadow mode lets it through
-    await leave(a, chat);
+    const used = () => recordUsage(userAccount(a.user._id), "calls", 1_000 * 1_000_000_000); // 1,000 GB: far past it
 
-    process.env.BILLING_ENFORCED = "true";
-    try {
-      const refused = await join(a, chat);
-      expect(refused.status).toBe(402);
-      expect(refused.body).toMatchObject({ billing: true });
+    // a is in a call when their allowance runs out: warned, then taken out on the next check. b is never interrupted.
+    expect((await join(a, chat)).status).toBe(200);
+    expect((await join(b, chat)).status).toBe(200);
+    await used();
+    events = [];
+    const { enforceCallBilling } = await import("../../calls/meter.js");
+    await enforceCallBilling(chat);
+    expect(events.find((e) => e.event === "call:billing")?.payload).toMatchObject({ ending: false });
+    expect(callRegistry.get(chat)?.participants.has(id(a))).toBe(true);
+    await enforceCallBilling(chat);
+    expect(events.some((e) => e.event === "call:billing" && e.payload.ending === true)).toBe(true);
+    expect(callRegistry.get(chat)?.participants.has(id(a))).toBeFalsy();
+    expect(callRegistry.get(chat)?.participants.has(id(b))).toBe(true);
 
-      // b can still join. If a's allowance ran out mid-call they are warned, then taken out on the next check.
-      process.env.BILLING_ENFORCED = "false";
-      await join(a, chat);
-      await join(b, chat);
-      process.env.BILLING_ENFORCED = "true";
-      events = [];
-      const { enforceCallBilling } = await import("../../calls/meter.js");
-      await enforceCallBilling(chat);
-      expect(events.find((e) => e.event === "call:billing")?.payload).toMatchObject({ ending: false });
-      expect(callRegistry.get(chat)?.participants.has(id(a))).toBe(true);
-      await enforceCallBilling(chat);
-      expect(events.some((e) => e.event === "call:billing" && e.payload.ending === true)).toBe(true);
-      expect(callRegistry.get(chat)?.participants.has(id(a))).toBeFalsy();
-    } finally {
-      process.env.BILLING_ENFORCED = "false";
-    }
+    // and they can't join another call until they have gems again.
+    await leave(b, chat);
+    const refused = await join(a, await dm(a, c));
+    expect(refused.status).toBe(402);
+    expect(refused.body).toMatchObject({ billing: true });
   });
 });

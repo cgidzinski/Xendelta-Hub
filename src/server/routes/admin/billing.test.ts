@@ -37,7 +37,7 @@ describe("admin billing report", () => {
     const res = await report("2026-09");
     expect(res.status).toBe(200);
     const r = res.body.data.report;
-    expect(r).toMatchObject({ month: "2026-09", everythingFree: false, enforced: false });
+    expect(r).toMatchObject({ month: "2026-09", everythingFree: false });
     expect(r.months).toContain("2026-09");
     expect(r.centers.find((c: any) => c.center === "calls")).toMatchObject({ units: 3_000_000_000, quantity: 3 });
     expect(r.centers.find((c: any) => c.center === "email")).toMatchObject({ units: 12, payer: "house" });
