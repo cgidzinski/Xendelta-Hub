@@ -79,7 +79,8 @@ export async function folderStats(rootId: string): Promise<{ folders: number; fi
   const ids = await subtreeIds(rootId);
   const [row] = await XenDriveFile.aggregate<{ files: number; size: number }>([
     { $match: { folder_id: { $in: ids.map((id) => new Types.ObjectId(id)) } } },
-    { $group: { _id: null, files: { $sum: 1 }, size: { $sum: { $ifNull: ["$size", 0] } } } },
+    { $lookup: { from: "filerecords", localField: "file", foreignField: "_id", as: "record" } },
+    { $group: { _id: null, files: { $sum: 1 }, size: { $sum: { $ifNull: [{ $first: "$record.size" }, 0] } } } },
   ]);
   return { folders: ids.length - 1, files: row?.files ?? 0, size: row?.size ?? 0 };
 }
@@ -87,10 +88,11 @@ export async function folderStats(rootId: string): Promise<{ folders: number; fi
 /** Delete a folder, everything inside it, and the stored bytes of every file. */
 export async function deleteFolderTree(rootId: string): Promise<void> {
   const ids = await subtreeIds(rootId);
-  const files = await XenDriveFile.find({ folder_id: { $in: ids } }, "storage_path").lean();
-  const records = await FileRecord.find({ _id: { $in: files.map((f) => f._id) } }).lean();
-  await FileRecord.deleteMany({ _id: { $in: files.map((f) => f._id) } });
-  const keys = [...files.map((f) => f.storage_path), ...records.flatMap((r) => [r.thumbKey, r.previewKey])];
+  const files = await XenDriveFile.find({ folder_id: { $in: ids } }, "file").lean();
+  const recordIds = files.map((f) => f.file ?? f._id);
+  const records = await FileRecord.find({ _id: { $in: recordIds } }).lean();
+  await FileRecord.deleteMany({ _id: { $in: recordIds } });
+  const keys = records.flatMap((r) => [r.key, r.thumbKey, r.previewKey]);
   for (const key of keys) {
     if (key) await deleteFromStorage(key, true).catch(() => undefined); // already gone
   }

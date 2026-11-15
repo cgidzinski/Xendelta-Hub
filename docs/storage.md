@@ -61,8 +61,9 @@ also its folder) and the keys of its thumbnail and preview. They are what storag
 - **App files are only records.** A chat attachment or a photo in XenSplit, XenBudget, XenNote, XenKitchen or XenRoutine has
   a `FileRecord` and no XenDrive item (migration `1795700000000-app-files-to-records`); a file uploaded straight to XenDrive
   has both, with one id. The storage viewer, chat attachments, quota usage, the admin storage pages, the thumbnail job
-  and account deletion all read the records. The thumbnail status lives on the record; a XenDrive item gets the finished
-  thumbnail copied onto it. Slimming `XenDriveFile` down to the item (name, folder, link) is a later step.
+  and account deletion all read the records. The thumbnail status and the thumbnail live on the record. A XenDrive item holds only its owner, folder, name, link and the `file` that points at its record
+  (`withRecords` in `models/xendriveFile.ts` reads the file's path, size, type and thumbnail from there); migration
+  `1795900000000-slim-drive-files` removes the old fields.
 
 ## Cleaning up
 

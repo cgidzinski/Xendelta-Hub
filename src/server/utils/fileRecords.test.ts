@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { bucketView } from "../testing/storage";
 import { FileRecord } from "../models/fileRecord";
-import { XenDriveFile } from "../models/xendriveFile";
+import { XenDriveFile, withRecord } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { uploadToStorage, deleteFromStorage } from "./storageUtils";
 import { uploadAvatarFile } from "./mediaUtils";
@@ -123,5 +123,38 @@ describe("file records", () => {
     expect(record).toMatchObject({ payer: { type: "house" }, space: { app: "avatar" } });
     expect(String(record?.uploadedBy)).toBe(uid);
     expect(mongoose.connection.readyState).toBe(1);
+  });
+});
+
+describe("a XenDrive item and its record", () => {
+  it("the item holds no file details of its own; they are read from the record", async () => {
+    const me = await createUser();
+    const uid = String(me.user._id);
+    const id = await initiateChunkedUpload(uid, "notes.txt", 1);
+    await uploadChunk(id, uid, 0, Buffer.from("abc"));
+    const done = await finalizeChunkedUpload(id, uid);
+
+    const raw = await mongoose.connection
+      .collection("xendrivefiles")
+      .findOne({ _id: new mongoose.Types.ObjectId(done._id) });
+    expect(Object.keys(raw!).sort()).toEqual([
+      "__v",
+      "_id",
+      "createdAt",
+      "downloads",
+      "file",
+      "folder_id",
+      "name",
+      "owner_id",
+      "shareEnabled",
+      "shareToken",
+    ]);
+
+    const item = await withRecord(await XenDriveFile.findById(done._id));
+    expect(item).toMatchObject({
+      size: 3,
+      mimeType: expect.any(String),
+      storage_path: expect.stringContaining("xendrive/"),
+    });
   });
 });

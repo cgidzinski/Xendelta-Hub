@@ -209,9 +209,6 @@ export async function finalizeChunkedUpload(
       owner_id: session.user_id,
       folder_id: session.folder_id || null,
       name: session.name,
-      storage_path: storagePath,
-      mimeType: contentType,
-      size: fileSize,
     }).save();
   }
   const saved = { _id: id, name: session.name, folder_id: source ? null : session.folder_id || null };

@@ -4,7 +4,6 @@ import os from "os";
 import path from "path";
 import sharp from "sharp";
 import { privateStore } from "../storage";
-import { XenDriveFile } from "../models/xendriveFile";
 import { FileRecord } from "../models/fileRecord";
 import { generateSignedUrl } from "./storageUtils";
 
@@ -169,8 +168,7 @@ export async function deleteThumbnail(storagePath: string): Promise<void> {
 /**
  * Work through files waiting for a thumbnail, in batches. Resumable by design: a file stays `pending` until its
  * thumbnail is stored, and a crash between generating and saving the record simply regenerates (idempotent). Used by the
- * scheduler and by `npm run storage:thumbs`. The status lives on the file's record; a XenDrive item gets its thumbnail
- * copied onto it so XenDrive's lists keep reading one document.
+ * scheduler and by `npm run storage:thumbs`. The status and the thumbnail live on the file's record.
  */
 export async function processPendingThumbnails(batchSize = 20): Promise<number> {
   const pending = await FileRecord.find({ bucket: "private", thumbStatus: "pending" }).limit(batchSize).lean();
@@ -191,7 +189,6 @@ export async function processPendingThumbnails(batchSize = 20): Promise<number> 
             }
           : { $set: { thumbStatus: "none" } },
       );
-      if (thumb) await XenDriveFile.updateOne({ file: file._id }, { $set: { thumb, thumbStatus: "ready" } });
     } catch (e) {
       // The upload stays healthy; the file just shows its icon.
       console.error(`>>> Thumbnail generation failed for file ${file._id}:`, e);

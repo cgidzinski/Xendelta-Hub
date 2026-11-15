@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import mongoose from "mongoose";
 import { startTestApp, type TestApp } from "../testing/testApp";
 import { memoryStores } from "../storage";
-import { XenDriveFile } from "../models/xendriveFile";
+import { XenDriveFile, withRecords } from "../models/xendriveFile";
 import { FileRecord } from "../models/fileRecord";
 import { createDriveFile } from "../testing/files";
 import {
@@ -74,8 +74,9 @@ describe("xendriveThumbs", () => {
     expect(record.thumbStatus).toBe("ready");
     expect(record.thumbKey).toBe(thumbKey(good.storage_path));
     expect(record.previewKey).toBe(`previews/${good.storage_path}.webp`);
-    // The XenDrive item gets the thumbnail copied onto it.
-    expect((await XenDriveFile.findById(good._id))!.thumb?.path).toBe(thumbKey(good.storage_path));
+    // The XenDrive item reads it from the record.
+    const [item] = await withRecords([(await XenDriveFile.findById(good._id))!]);
+    expect(item.thumb?.path).toBe(thumbKey(good.storage_path));
     expect((await FileRecord.findById(bad._id))!.thumbStatus).toBe("failed");
   });
 

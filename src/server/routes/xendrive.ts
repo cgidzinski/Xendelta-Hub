@@ -26,7 +26,7 @@ import {
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
-import { assertDriveSource, driveOnly, driveSourceApp } from "../utils/driveSources";
+import { assertDriveSource, driveSourceApp } from "../utils/driveSources";
 import {
   initiateChunkedUpload,
   uploadChunk,
@@ -51,13 +51,19 @@ import { generateSignedUrl } from "../utils/storageUtils";
 import { isTextPreviewable, readTextPreview } from "../utils/fileText";
 import { previewUrlFor, thumbnailUrlFor } from "../utils/xendriveThumbs";
 import { privateStore } from "../storage";
-import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
+import {
+  XenDriveFile,
+  withRecord,
+  withRecords,
+  type DriveFileDetails,
+  type XenDriveFileDocument,
+} from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 
 /** RFC 5987 header value so any file name (spaces, accents, quotes) downloads under its own name. */
 const attachment = (name: string) => `attachment; filename*=UTF-8''${encodeURIComponent(name)}`;
 
-const serializeFile = (file: XenDriveFileDocument | any, thumbUrl: string | null = null) => ({
+const serializeFile = (file: (XenDriveFileDocument & DriveFileDetails) | any, thumbUrl: string | null = null) => ({
   _id: file._id.toString(),
   name: file.name,
   folder_id: file.folder_id ? file.folder_id.toString() : null,
@@ -71,11 +77,9 @@ const serializeFile = (file: XenDriveFileDocument | any, thumbUrl: string | null
   expiry: file.expiry ? file.expiry.toISOString() : null,
   downloads: file.downloads ?? 0,
   lastDownloadedAt: file.lastDownloadedAt ? file.lastDownloadedAt.toISOString() : null,
-  // Set when an app stored the file for the person; `counted: false` means it doesn't use their storage.
-  source: file.source?.app
-    ? { app: file.source.app as string, label: driveSourceApp(file.source.app)?.label ?? file.source.app }
-    : null,
-  counted: file.counted !== false,
+  // Kept for the client: a XenDrive file is never one an app stored, and always counts.
+  source: null,
+  counted: true,
   // A cacheable link to the small WebP beside the original, once it is made (the grid and list show it).
   thumbUrl,
 });
@@ -140,7 +144,7 @@ async function itemCounts(ownerId: string, folderIds: unknown[]): Promise<Map<st
 
 /** One of the caller's own XenDrive files, or a 404 (a stranger's file, or one an app stored, looks the same as missing). */
 async function ownFile(fileId: string, userId: string) {
-  const file = await XenDriveFile.findOne({ _id: fileId, owner_id: userId, ...driveOnly }).exec();
+  const file = await withRecord(await XenDriveFile.findOne({ _id: fileId, owner_id: userId }).exec());
   if (!file) throw new AppError(404, "File not found");
   return file;
 }
@@ -293,7 +297,8 @@ module.exports = function (app: express.Application) {
       const view = req.query.view as "shared" | "recent" | undefined;
 
       // One response shape for every way of looking at the drive
-      const send = async (folderDocs: any[], fileDocs: any[], extra: Record<string, unknown>) => {
+      const send = async (folderDocs: any[], found: any[], extra: Record<string, unknown>) => {
+        const fileDocs = await withRecords(found);
         const [counts, urls] = await Promise.all([
           itemCounts(
             userId,
@@ -314,7 +319,6 @@ module.exports = function (app: express.Application) {
       if (search) {
         const files = await XenDriveFile.find({
           owner_id: userId,
-          ...driveOnly,
           name: { $regex: escapeRegex(search), $options: "i" },
         })
           .sort({ createdAt: -1 })
@@ -326,28 +330,20 @@ module.exports = function (app: express.Application) {
       if (view === "shared") {
         const [folders, files] = await Promise.all([
           XenDriveFolder.find({ owner_id: userId, "share.enabled": true }).sort({ name: 1 }).exec(),
-          XenDriveFile.find({ owner_id: userId, ...driveOnly, shareEnabled: true })
-            .sort({ createdAt: -1 })
-            .limit(500)
-            .exec(),
+          XenDriveFile.find({ owner_id: userId, shareEnabled: true }).sort({ createdAt: -1 }).limit(500).exec(),
         ]);
         return send(folders, files, { folder: null, breadcrumb: [], searching: false, view: "shared" });
       }
 
       if (view === "recent") {
-        const files = await XenDriveFile.find({ owner_id: userId, ...driveOnly })
-          .sort({ createdAt: -1 })
-          .limit(50)
-          .exec();
+        const files = await XenDriveFile.find({ owner_id: userId }).sort({ createdAt: -1 }).limit(50).exec();
         return send([], files, { folder: null, breadcrumb: [], searching: false, view: "recent" });
       }
 
       const folder = folderId ? await ownFolder(folderId, userId) : null;
       const [folders, files, breadcrumb] = await Promise.all([
         XenDriveFolder.find({ owner_id: userId, parent_id: folderId }).sort({ name: 1 }).exec(),
-        XenDriveFile.find({ owner_id: userId, ...driveOnly, folder_id: folderId })
-          .sort({ createdAt: -1 })
-          .exec(),
+        XenDriveFile.find({ owner_id: userId, folder_id: folderId }).sort({ createdAt: -1 }).exec(),
         folderId ? breadcrumbOf(folderId, userId) : Promise.resolve([]),
       ]);
       return send(folders, files, {
@@ -364,12 +360,9 @@ module.exports = function (app: express.Application) {
   app.get("/api/xendrive/recent", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = callerId(req);
     const [files, usage, sharedFiles, sharedFolders] = await Promise.all([
-      XenDriveFile.find({ owner_id: userId, ...driveOnly })
-        .sort({ createdAt: -1 })
-        .limit(3)
-        .exec(),
+      XenDriveFile.find({ owner_id: userId }).sort({ createdAt: -1 }).limit(3).exec().then(withRecords),
       usageFor(userId),
-      XenDriveFile.countDocuments({ owner_id: userId, ...driveOnly, shareEnabled: true }),
+      XenDriveFile.countDocuments({ owner_id: userId, shareEnabled: true }),
       XenDriveFolder.countDocuments({ owner_id: userId, "share.enabled": true }),
     ]);
     return res.json({
@@ -515,7 +508,6 @@ module.exports = function (app: express.Application) {
           {
             owner_id: userId,
             folder_id: file.folder_id,
-            ...driveOnly,
           },
           "name",
         )
@@ -648,7 +640,9 @@ module.exports = function (app: express.Application) {
     "/api/xendrive/info/:shareToken",
     validateParams(xenDriveShareTokenParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const file = await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec();
+      const file = await withRecord(
+        await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec(),
+      );
       if (!file) throw new AppError(404, "File not found");
 
       if (file.isExpired()) {
@@ -675,7 +669,9 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const { password } = req.query;
 
-      const file = await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec();
+      const file = await withRecord(
+        await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec(),
+      );
       if (!file) throw new AppError(404, "File not found");
 
       if (file.isExpired()) {
@@ -723,7 +719,8 @@ module.exports = function (app: express.Application) {
           $or: [{ expiry: null }, { expiry: { $exists: false } }, { expiry: { $gt: now } }],
         })
           .sort({ name: 1 })
-          .exec(),
+          .exec()
+          .then(withRecords),
         breadcrumbOf(requested, root.owner_id.toString(), root.id),
       ]);
 
@@ -754,7 +751,9 @@ module.exports = function (app: express.Application) {
     validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
       const root = await openSharedFolder(req.params.token as string, req.query.password);
-      const file = await XenDriveFile.findOne({ _id: req.params.fileId, owner_id: root.owner_id }).exec();
+      const file = await withRecord(
+        await XenDriveFile.findOne({ _id: req.params.fileId, owner_id: root.owner_id }).exec(),
+      );
       if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
         throw new AppError(404, "File not found");
       }
@@ -787,7 +786,7 @@ module.exports = function (app: express.Application) {
  * Send a stored file to the response, under its own name, and count it as a download of the file (and of the folder
  * link it came through, when there is one).
  */
-async function streamFile(res: express.Response, file: XenDriveFileDocument, viaFolderId?: string) {
+async function streamFile(res: express.Response, file: XenDriveFileDocument & DriveFileDetails, viaFolderId?: string) {
   if (!(await privateStore.exists(file.storage_path))) throw new AppError(404, "File not found in storage");
 
   const at = new Date();
