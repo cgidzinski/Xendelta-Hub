@@ -149,8 +149,8 @@ module.exports = function (app: Application) {
         url = (await uploadToStorage(processed, storagePath, req.file.mimetype, false, IMMUTABLE, {
           name: `${name}.${EXTENSION[req.file.mimetype]}`,
           uploadedBy: me,
-          // The uploader pays until community emoji are billed to the community's fund (#356).
-          payer: { type: "user", id: me },
+          // A community's emoji are its cost; a group chat's are paid by whoever added them.
+          payer: scopeType === "community" ? { type: "community", id: scope.id } : { type: "user", id: me },
           space: { app: "emoji", ref: scope.id },
         })) as string;
       } catch (error) {
