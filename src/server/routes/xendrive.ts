@@ -99,16 +99,23 @@ const serializeFolder = (folder: any, itemCount = 0) => ({
 const PREVIEWABLE = /^(image\/|application\/pdf$|video\/|audio\/)/;
 const PREVIEW_MINUTES = 60;
 
-/** Cacheable thumbnail links for files that have one (utils/xendriveThumbs.ts). */
+/**
+ * Cacheable thumbnail links for files that have one, falling back to the original for images whose thumbnail isn't
+ * made yet (so a freshly uploaded photo shows at once, and swaps to the thumbnail once the background job finishes).
+ */
 async function thumbnailUrls(
-  files: Array<{ _id: unknown; thumb?: { path?: string | null } | null; storage_path: string }>,
+  files: Array<{ _id: unknown; thumb?: { path?: string | null } | null; storage_path: string; mimeType: string }>,
 ): Promise<Map<string, string>> {
   const pairs = await Promise.all(
-    files
-      .filter((f) => f.thumb?.path)
-      .map(async (f) => [String(f._id), await thumbnailUrlFor(f.storage_path)] as const),
+    files.map(async (f) => {
+      if (f.thumb?.path) return [String(f._id), await thumbnailUrlFor(f.storage_path)] as const;
+      if (f.mimeType.startsWith("image/")) {
+        return [String(f._id), await generateSignedUrl(f.storage_path, PREVIEW_MINUTES)] as const;
+      }
+      return null;
+    }),
   );
-  return new Map(pairs);
+  return new Map(pairs.filter((p): p is readonly [string, string] => p !== null));
 }
 
 /** How many things (files and folders) sit directly inside each folder. */
@@ -511,9 +518,12 @@ module.exports = function (app: express.Application) {
           .sort({ createdAt: -1 })
           .limit(500)
           .lean(),
-        // Images show the ~1600 px rendition (the original opens on demand); PDFs, video and audio stream the original.
+        // Images show the ~1600 px rendition once it is made, and the original before then (the original always opens on
+        // demand). PDFs, video and audio stream the original.
         isImage
-          ? previewUrlFor(file.storage_path)
+          ? file.thumb?.path
+            ? previewUrlFor(file.storage_path)
+            : generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
           : PREVIEWABLE.test(file.mimeType)
             ? generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
             : Promise.resolve(null),

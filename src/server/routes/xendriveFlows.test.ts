@@ -333,7 +333,7 @@ describe("views of the drive", () => {
     expect(view.files.map((f: any) => f.name)).toEqual(["newer.txt", "old.txt"]);
   });
 
-  it("gives a thumbnail link for images that have one, and nothing for the rest", async () => {
+  it("gives a thumbnail link for images that have one, and falls back to the original for the rest", async () => {
     const me = await createUser();
     await addFile(me, "notes.txt", null);
     await addFile(me, "pending.png", null, { mimeType: "image/png" }); // made, no thumbnail yet
@@ -346,7 +346,7 @@ describe("views of the drive", () => {
     const files = (await api(me).get("/browse")).body.data.files;
     const byName = Object.fromEntries(files.map((f: any) => [f.name, f.thumbUrl]));
     expect(byName["photo.png"]).toMatch(/^https:\/\/example\.test\/signed\//);
-    expect(byName["pending.png"]).toBeNull();
+    expect(byName["pending.png"]).toMatch(/^https:\/\/example\.test\/signed\//); // the original, until the thumbnail is ready
     expect(byName["notes.txt"]).toBeNull();
   });
 });

@@ -92,7 +92,9 @@ module.exports = function (app: express.Application) {
       const isImage = file.mimeType.startsWith("image/");
       const isVideo = file.mimeType.startsWith("video/");
       const previewUrl = isImage
-        ? await previewUrlFor(file.storage_path)
+        ? file.thumb?.path
+          ? await previewUrlFor(file.storage_path)
+          : await generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
         : PREVIEWABLE.test(file.mimeType)
           ? await generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
           : null;
