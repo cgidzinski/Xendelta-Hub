@@ -49,11 +49,10 @@ export const useAdminUser = (userId: string | undefined) =>
     retry: false,
   });
 
-export const useAdminStorage = (by: "size" | "percent") =>
+export const useAdminStorage = () =>
   useQuery({
-    queryKey: adminKeys.storage(by),
-    queryFn: async () =>
-      (await api.get<{ report: AdminStorageReport }>("/api/admin/storage", { params: { by } })).report,
+    queryKey: adminKeys.storage(),
+    queryFn: async () => (await api.get<{ report: AdminStorageReport }>("/api/admin/storage")).report,
   });
 
 export const useAdminMoney = (status: string, page: number) =>
@@ -149,8 +148,8 @@ export const useAdminActions = () => {
   };
 
   const updateUser = useMutation({
-    mutationFn: (v: { userId: string; roles?: string[]; xendriveQuota?: number }) =>
-      api.put(`/api/admin/users/${v.userId}`, { roles: v.roles, xendriveQuota: v.xendriveQuota }),
+    mutationFn: (v: { userId: string; roles?: string[] }) =>
+      api.put(`/api/admin/users/${v.userId}`, { roles: v.roles }),
     onSuccess: (_d, v) => refresh(v.userId),
   });
   const resetAvatar = useMutation({

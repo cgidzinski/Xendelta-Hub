@@ -95,7 +95,7 @@ export default function AttachButton({ onFiles, onChooseFromDrive, onPoll }: Att
         )}
         {usage && (
           <Box sx={{ px: 2, pt: 1, pb: 1, borderTop: 1, borderColor: "divider", mt: 0.5, minWidth: 260 }}>
-            <BillingSummary variant="line" stored={usage} limit={usage} />
+            <BillingSummary variant="line" stored={usage} />
           </Box>
         )}
       </Menu>

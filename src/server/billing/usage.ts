@@ -8,10 +8,10 @@ import type { GemAccount } from "./ledger";
 // nothing is ever taken from what a client reports. docs/billing.md has how to wire a new one.
 
 /**
- * Shadow mode while off (the default): usage is measured and bills are shown, but nothing is charged and nothing is
- * blocked. Turned on with BILLING_ENFORCED=true once the rates have been checked against the real provider bills.
+ * Billing is enforced unless BILLING_ENFORCED=false: months are charged and uploads are blocked past the free allowance.
+ * `false` is shadow mode (usage is measured and bills are shown, nothing is charged or blocked), kept for testing rates.
  */
-export const billingEnforced = () => process.env.BILLING_ENFORCED === "true";
+export const billingEnforced = () => process.env.BILLING_ENFORCED !== "false";
 
 const storedAccount = (account: GemAccount) =>
   account.type === "house"

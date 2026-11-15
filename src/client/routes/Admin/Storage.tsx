@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { Avatar, Box, Link, Typography } from "@mui/material";
 import PageHeader from "../../components/ui/PageHeader";
@@ -8,9 +7,7 @@ import { useTitle } from "../../hooks/useTitle";
 import { useAdminStorage } from "../../hooks/admin/useAdminData";
 import { formatFileSize } from "../../utils/fileUtils";
 import DataTable, { type Column } from "./components/DataTable";
-import FilterChips from "./components/FilterChips";
 import StatCard from "./components/StatCard";
-import { share } from "./adminFormat";
 import type { AdminStorageReport } from "@shared/admin";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.25 } as const;
@@ -19,8 +16,7 @@ type Person = AdminStorageReport["top"][number];
 /** What people have stored, where it is, and who holds the most. */
 export default function Storage() {
   useTitle("Storage");
-  const [by, setBy] = useState<"size" | "percent">("size");
-  const { data, isLoading, isError, error, refetch } = useAdminStorage(by);
+  const { data, isLoading, isError, error, refetch } = useAdminStorage();
 
   const columns: Column<Person>[] = [
     {
@@ -42,17 +38,15 @@ export default function Storage() {
       header: "Used",
       width: "45%",
       render: (p) => {
-        const near = share(p.used, p.allowed) >= 0.9;
-        const mine = Math.min(100, ((p.used - p.appBytes) / p.allowed) * 100);
-        const apps = Math.min(100 - mine, (p.appBytes / p.allowed) * 100);
+        const mine = p.used > 0 ? Math.min(100, ((p.used - p.appBytes) / p.used) * 100) : 0;
         return (
           <Box sx={{ minWidth: 160 }}>
             <Box sx={{ display: "flex", height: 8, borderRadius: 4, bgcolor: "action.hover", overflow: "hidden" }}>
-              <Box sx={{ width: `${mine}%`, bgcolor: near ? "warning.main" : "primary.main" }} />
-              <Box sx={{ width: `${apps}%`, bgcolor: "info.main" }} />
+              <Box sx={{ width: `${mine}%`, bgcolor: "primary.main" }} />
+              <Box sx={{ width: `${100 - mine}%`, bgcolor: "info.main" }} />
             </Box>
-            <Typography variant="caption" color={near ? "warning.main" : "text.secondary"}>
-              {formatFileSize(p.used)} of {formatFileSize(p.allowed)}
+            <Typography variant="caption" color="text.secondary">
+              {formatFileSize(p.used)}
             </Typography>
           </Box>
         );
@@ -66,7 +60,7 @@ export default function Storage() {
       align: "right",
       render: (p) => (
         <Link component={RouterLink} to={`/admin/users/${p._id}`} underline="hover" variant="body2">
-          Add space
+          See person
         </Link>
       ),
     },
@@ -84,23 +78,12 @@ export default function Storage() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" },
+              gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(2, minmax(0, 1fr))" },
               gap: 2,
               mb: 2,
             }}
           >
             <StatCard label="Used" value={formatFileSize(data.used)} note="across everyone" />
-            <StatCard
-              label="Granted on top of free"
-              value={formatFileSize(data.extraGranted)}
-              note="vouchers and admin grants"
-            />
-            <StatCard
-              label="Over 90% of their space"
-              value={data.nearQuota}
-              valueTone={data.nearQuota > 0 ? "warning" : undefined}
-              note="people"
-            />
             <StatCard
               label="From apps"
               value={formatFileSize(data.byApp.filter((a) => a.key !== "drive").reduce((n, a) => n + a.bytes, 0))}
@@ -123,15 +106,6 @@ export default function Storage() {
                 }}
               >
                 <Typography sx={{ fontWeight: 600 }}>Largest drives</Typography>
-                <FilterChips
-                  label="Order"
-                  value={by}
-                  onChange={setBy}
-                  options={[
-                    { value: "size", label: "By size" },
-                    { value: "percent", label: "By % of limit" },
-                  ]}
-                />
               </Box>
               <DataTable columns={columns} rows={data.top} rowKey={(p) => p._id} />
             </Box>

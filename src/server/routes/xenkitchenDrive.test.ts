@@ -60,7 +60,7 @@ async function setup() {
 }
 
 describe("XenKitchen photos in XenDrive", () => {
-  it("stores photos privately as tagged files that don't count toward storage, shown by signed link", async () => {
+  it("stores photos privately as files the uploader pays for, shown by signed link", async () => {
     const { me, uid, itemId, photos } = await setup();
     const before = await usageFor(uid);
     const res = await photos(2);
@@ -75,8 +75,8 @@ describe("XenKitchen photos in XenDrive", () => {
 
     const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xenkitchen" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.space?.ref === itemId && f.counted === false)).toBe(true);
-    expect(await usageFor(uid)).toEqual(before);
+    expect(files.every((f) => f.space?.ref === itemId)).toBe(true);
+    expect((await usageFor(uid)).fileCount).toBeGreaterThan(before.fileCount);
 
     const apps = (await request(t.app).get("/api/storage/app-files").set(auth(me.token))).body.data;
     expect(apps.apps[0]).toMatchObject({ app: "xenkitchen", label: "XenKitchen" });
@@ -110,7 +110,7 @@ describe("XenKitchen photos in XenDrive", () => {
     expect((await item()).images).toHaveLength(2);
   });
 
-  it("a photo can not be deleted in XenDrive, and deleting the item removes the rest", async () => {
+  it("a photo can be deleted in the storage viewer, and deleting the item removes the rest", async () => {
     const { me, uid, itemId, photos, item } = await setup();
     const up = await photos(3);
     const first = up.body.data.item.images[0]._id;
@@ -120,8 +120,8 @@ describe("XenKitchen photos in XenDrive", () => {
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
 
     const file = await FileRecord.findOne({ uploadedBy: uid });
-    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(me.token))).status).toBe(400);
-    expect((await item()).images).toHaveLength(2);
+    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(me.token))).status).toBe(200);
+    expect((await item()).images).toHaveLength(1);
 
     expect((await request(t.app).delete(`/api/xenkitchen/items/${itemId}`).set(auth(me.token))).status).toBe(200);
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);

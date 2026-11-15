@@ -7,8 +7,7 @@ import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { usageForAll } from "../../utils/xendriveUtils";
 import { serializeAudit } from "../../utils/adminAudit";
-import { DAY_MS, NEAR_QUOTA, objectIdFrom, storageByApp, taskLabel } from "../../utils/adminStats";
-import { FREE_STORAGE_BYTES } from "@shared/monetization";
+import { DAY_MS, objectIdFrom, storageByApp, taskLabel } from "../../utils/adminStats";
 import type { AdminOverview, AttentionItem } from "@shared/admin";
 
 const admin = [authenticateToken, requireAdmin];
@@ -23,7 +22,7 @@ export function registerAdminOverviewRoutes(app: express.Application) {
     const since30 = new Date(now.getTime() - 30 * DAY_MS);
     const since7 = new Date(now.getTime() - 7 * DAY_MS);
 
-    const [total, new7, new30, signups, usage, quotas, byApp, bought, pending, oldestPending, tasks, failing, recent] =
+    const [total, new7, new30, signups, usage, byApp, bought, pending, oldestPending, tasks, failing, recent] =
       await Promise.all([
         User.estimatedDocumentCount(),
         User.countDocuments({ _id: { $gte: objectIdFrom(since7) } }),
@@ -33,7 +32,6 @@ export function registerAdminOverviewRoutes(app: express.Application) {
           { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: { $toDate: "$_id" } } }, count: { $sum: 1 } } },
         ]),
         usageForAll(),
-        User.find({}, "xendrive").lean(),
         storageByApp(),
         GemPurchase.aggregate<{ gems: number; cents: number; count: number }>([
           { $match: { status: "completed", completedAt: { $gte: since30 } } },
@@ -54,14 +52,6 @@ export function registerAdminOverviewRoutes(app: express.Application) {
 
     let used = 0;
     for (const u of usage.values()) used += u.spaceUsed;
-    let nearQuota = 0;
-    let worst = 0;
-    for (const u of quotas as any[]) {
-      const share = (usage.get(String(u._id))?.spaceUsed ?? 0) / (FREE_STORAGE_BYTES + (u.xendrive?.spaceAllowed ?? 0));
-      if (share >= NEAR_QUOTA) nearQuota++;
-      worst = Math.max(worst, share);
-    }
-
     const attention: AttentionItem[] = [];
     if (failing.length > 0) {
       attention.push({
@@ -89,20 +79,9 @@ export function registerAdminOverviewRoutes(app: express.Application) {
         action: "Review",
       });
     }
-    if (nearQuota > 0) {
-      attention.push({
-        key: "quota",
-        severity: "warning",
-        title: `${nearQuota} ${nearQuota === 1 ? "person is" : "people are"} over 90% of their storage`,
-        detail: `The largest is at ${Math.min(999, Math.round(worst * 1000) / 10)}% of their space`,
-        href: "/admin/storage",
-        action: "See",
-      });
-    }
-
     const overview: AdminOverview = {
       people: { total, new7, new30, signupsByDay },
-      storage: { used, nearQuota, byApp },
+      storage: { used, byApp },
       money: {
         gems30: bought[0]?.gems ?? 0,
         cents30: bought[0]?.cents ?? 0,

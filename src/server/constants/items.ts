@@ -1,7 +1,6 @@
-import { User } from "../models/user";
 import { Item } from "../types/item";
 import { HOUSE, transfer, userAccount } from "../billing/ledger";
-import { GEM_PACKS, STORAGE_VOUCHER_BYTES, STORAGE_VOUCHER_KEY } from "@shared/monetization";
+import { GEM_PACKS } from "@shared/monetization";
 
 // Gem packs are items too. They never reach an inventory (the Shop adds them with addToInventory: false); the
 // definition is what the Shop shows. The picture is drawn by the client, which knows the gem icon.
@@ -38,16 +37,6 @@ export const ITEMS: Record<string, Item> = {
         idempotencyKey: `voucher:${inventoryItemId}`,
         meta: { itemKey: "1000-gem-voucher" },
       });
-    },
-  },
-  [STORAGE_VOUCHER_KEY]: {
-    key: STORAGE_VOUCHER_KEY,
-    name: "1GB XenDrive Voucher",
-    description: "Redeem this voucher to get 1GB of XenDrive space added to your account",
-    image: "https://cdn-icons-png.flaticon.com/512/4008/4008946.png",
-    redeemable: true,
-    apply: async (userId) => {
-      await User.updateOne({ _id: userId }, { $inc: { "xendrive.spaceAllowed": STORAGE_VOUCHER_BYTES } }).exec();
     },
   },
   "golden-badge": {

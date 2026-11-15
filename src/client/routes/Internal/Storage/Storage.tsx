@@ -33,8 +33,7 @@ export default function Storage() {
   const { enqueueSnackbar } = useSnackbar();
 
   const removeFiles = async (all: XenDriveFile[], what: string) => {
-    // A file that doesn't use your storage belongs to its app; only the others can be deleted here.
-    const files = all.filter((f) => f.counted !== false);
+    const files = all;
     if (!files.length) return;
     const ok = await confirm({
       title: files.length === 1 ? "Delete this file?" : `Delete ${files.length} files?`,
@@ -90,7 +89,6 @@ export default function Storage() {
                   <Button
                     size="small"
                     color="error"
-                    disabled={group.files.every((f) => f.counted === false)}
                     onClick={() => removeFiles(group.files, `All ${group.count} files from “${group.label}”`)}
                   >
                     Delete all
@@ -129,19 +127,17 @@ export default function Storage() {
                         <FileDownloadOutlinedIcon />
                       </IconButton>
                     </Tooltip>
-                    {file.counted !== false && (
-                      <Tooltip title="Delete">
-                        <IconButton
-                          aria-label={`Delete ${file.name}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFiles([file], `“${file.name}”`);
-                          }}
-                        >
-                          <DeleteOutlineIcon />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    <Tooltip title="Delete">
+                      <IconButton
+                        aria-label={`Delete ${file.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFiles([file], `“${file.name}”`);
+                        }}
+                      >
+                        <DeleteOutlineIcon />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 ))}
               </Box>

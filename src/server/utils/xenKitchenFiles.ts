@@ -16,7 +16,6 @@ const PHOTO_URL_MINUTES = 60;
 registerDriveSource(XENKITCHEN_SOURCE, {
   label: "XenKitchen",
   // Exempt from the quota for now, like every app's files. Intended rule: an item in a shared book stays exempt.
-  counts: async () => false,
   // May this person add photos to the item? An editor of its book.
   verify: async (userId, ref) => {
     if (!Types.ObjectId.isValid(ref)) return false;

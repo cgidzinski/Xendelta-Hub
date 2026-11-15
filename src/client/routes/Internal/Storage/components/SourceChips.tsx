@@ -18,7 +18,6 @@ export default function SourceChips({ file, showSource = true }: { file: XenDriv
           label={`From ${file.source.label}`}
         />
       )}
-      {file.counted === false && <Chip size="small" variant="outlined" label="Doesn't count toward storage" />}
     </Stack>
   );
 }

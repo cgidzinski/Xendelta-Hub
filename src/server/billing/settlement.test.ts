@@ -57,7 +57,7 @@ describe("settleMonth", () => {
   it("takes the free tier off and charges nothing in shadow mode", async () => {
     const restore = meterDownloads(100);
     try {
-      delete process.env.BILLING_ENFORCED;
+      process.env.BILLING_ENFORCED = "false";
       const { user } = await createUser({ gems: 1000 });
       await usage.recordUsage(ledger.userAccount(user._id), "calls", 6 * GB, october); // 600 gems
       await settlement.settleMonth("2026-10");
@@ -135,7 +135,7 @@ describe("settleClosedMonths", () => {
 
 describe("canSpend", () => {
   it("is always yes in shadow mode", async () => {
-    delete process.env.BILLING_ENFORCED;
+    process.env.BILLING_ENFORCED = "false";
     const { user } = await createUser();
     expect(await settlement.canSpend(ledger.userAccount(user._id))).toBe(true);
   });

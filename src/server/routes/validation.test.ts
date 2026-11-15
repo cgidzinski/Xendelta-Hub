@@ -116,14 +116,15 @@ describe("request bodies", () => {
     expect(strings.status).toBe(400);
   });
 
-  it("admin user updates take roles as strings and quota as a number (fractions are fine)", async () => {
+  it("admin user updates take roles as an array of strings", async () => {
     const target = await createUser();
     const url = `/api/admin/users/${target.user._id}`;
     const bad = await request(t.app).put(url).set(as(adminToken)).send({ roles: "admin" });
     expect(bad.status).toBe(400);
-    const negative = await request(t.app).put(url).set(as(adminToken)).send({ xendriveQuota: -5 });
-    expect(negative.status).toBe(400);
-    const ok = await request(t.app).put(url).set(as(adminToken)).send({ xendriveQuota: 322122547.2 });
+    const ok = await request(t.app)
+      .put(url)
+      .set(as(adminToken))
+      .send({ roles: ["user"] });
     expect(ok.status).toBe(200);
   });
 });

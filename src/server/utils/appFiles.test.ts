@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { createDriveFile } from "../testing/files";
 import { FileRecord } from "../models/fileRecord";
 import { registerDriveSource } from "./driveSources";
 import { storeAppFiles, removeAppFiles } from "./appFiles";
 import { usageFor } from "./xendriveUtils";
-import { FREE_STORAGE_BYTES } from "@shared/monetization";
+import { recordUsage } from "../billing/usage";
+import { userAccount } from "../billing/ledger";
 
 // What happens when an app's files DO count toward storage: the path every app will take once counting is switched on.
 const stored = new Set<string>();
@@ -17,7 +17,6 @@ vi.mock("./storageUtils.js", async (importOriginal) => ({
 
 registerDriveSource("counted-test", {
   label: "Counted",
-  counts: async () => true,
   verify: async (_userId, ref) => ref !== "forbidden",
   describe: async (_userId, refs) => new Map(refs.map((r) => [r, r])),
 });
@@ -33,13 +32,13 @@ beforeEach(() => stored.clear());
 
 const file = (name: string, size = 100) => ({ buffer: Buffer.alloc(size), name, mimeType: "image/png" });
 
-describe("storeAppFiles for an app whose files count", () => {
-  it("stores tagged files that use the person's storage", async () => {
+describe("storeAppFiles", () => {
+  it("stores files that are the person's to pay for", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
     const made = await storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("a.png"), file("b.png", 50)]);
     expect(made).toHaveLength(2);
-    expect(made.every((f) => f.counted === true && f.space?.ref === "r1")).toBe(true);
+    expect(made.every((f) => f.space?.ref === "r1")).toBe(true);
     expect(await usageFor(uid)).toEqual({ fileCount: 2, spaceUsed: 150 });
     expect(stored.size).toBe(2);
     // One record per file, with the file's own id, paid for by the uploader.
@@ -52,21 +51,21 @@ describe("storeAppFiles for an app whose files count", () => {
     });
   });
 
-  it("refuses with 413 when the files don't fit, and stores nothing", async () => {
+  it("refuses with 402 and stores nothing when billing is enforced and the free allowance is used up", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
-    await createDriveFile({
-      owner_id: uid,
-      name: "full.bin",
-      storage_path: "xendrive/x/full.bin",
-      mimeType: "application/octet-stream",
-      size: FREE_STORAGE_BYTES - 10,
-    });
-    await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("a.png")])).rejects.toMatchObject({
-      status: 413,
-    });
-    expect(stored.size).toBe(0);
-    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(1); // only the one that filled the space
+    await recordUsage(userAccount(uid), "storage", 1_000 * 1_000_000_000 * 30); // far past the 500 free gems
+    await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("a.png")])).resolves.toHaveLength(1); // shadow
+    process.env.BILLING_ENFORCED = "true";
+    try {
+      await expect(storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("b.png")])).rejects.toMatchObject({
+        status: 402,
+      });
+    } finally {
+      process.env.BILLING_ENFORCED = "false";
+    }
+    expect(stored.size).toBe(1);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(1);
   });
 
   it("refuses a source the person may not store for, and an unknown app", async () => {

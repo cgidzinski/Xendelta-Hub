@@ -199,7 +199,6 @@ describe("adding the page's photo to an item", () => {
     expect(priv.size).toBe(1);
     const files = await FileRecord.find({ "space.app": "xenkitchen", "space.ref": id });
     expect(files).toHaveLength(1);
-    expect(files[0].counted).toBe(false);
     expect(files[0].name).toBe("pancakes.webp");
   });
 

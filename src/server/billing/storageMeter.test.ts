@@ -26,7 +26,7 @@ afterAll(async () => {
   await t?.stop();
 }, 60_000);
 afterEach(async () => {
-  delete process.env.BILLING_ENFORCED;
+  process.env.BILLING_ENFORCED = "false";
   await Promise.all([MeterRun.deleteMany({}), FileRecord.deleteMany({})]);
 });
 

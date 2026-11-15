@@ -5,7 +5,6 @@ import { splitProvider } from "./providers/xensplit";
 import { budgetProvider } from "./providers/xenbudget";
 import { chatProvider } from "./providers/chat";
 import { mentionsProvider } from "./providers/mentions";
-import { driveProvider } from "./providers/xendrive";
 
 // "Needs attention": every sub-app that has something waiting adds a provider to this list. They run side by side;
 // one that is slow or fails is left out and the rest still answer.
@@ -15,7 +14,6 @@ export const PROVIDERS: AttentionProvider[] = [
   splitProvider,
   chatProvider,
   mentionsProvider,
-  driveProvider,
 ];
 
 export const PROVIDER_TIMEOUT_MS = 4000;

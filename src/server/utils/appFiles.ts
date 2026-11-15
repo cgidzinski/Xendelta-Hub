@@ -3,16 +3,13 @@
  * private bucket (models/fileRecord.ts): `space: { app, ref }` (utils/driveSources.ts), uploaded by and paid for by the
  * person, listed in the storage viewer and deleted like any file. They are not XenDrive items. Apps call these helpers
  * instead of `uploadToStorage`.
- *
- * Whether a file counts toward the owner's quota is the app's call for that `ref` (`DriveSourceApp.counts`).
  */
 
 import { privateStore, publicStore, type ObjectStore } from "../storage";
 import { FileRecord, type FileRecordDocument } from "../models/fileRecord";
-import { AppError } from "./http";
-import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
+import { assertDriveSource, type DriveSource } from "./driveSources";
 import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storageUtils";
-import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
+import { generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
 import { thumbKey, thumbStatusFor, thumbnailUrlFor } from "./xendriveThumbs";
 import { payerFor } from "./fileRecords";
 import { assertCanStore } from "../billing/storageMeter";
@@ -37,15 +34,6 @@ export async function storeAppFiles(
   await assertDriveSource(userId, source);
   await assertCanStore(userId, source);
 
-  const counted = (await driveSourceApp(source.app)?.counts(source.ref)) ?? true;
-  if (counted) {
-    const quota = await checkQuota(
-      userId,
-      files.reduce((n, f) => n + f.buffer.length, 0),
-    );
-    if (!quota.canUpload) throw new AppError(413, quota.message ?? "Not enough storage");
-  }
-
   const paths = files.map((f) => storageKeyFor(userId, source, generateXendriveFilename(f.name)));
   const uploads = await Promise.allSettled(files.map((f, i) => uploadToStorage(f.buffer, paths[i], f.mimeType, true)));
   const uploaded = paths.filter((_, i) => uploads[i].status === "fulfilled");
@@ -68,7 +56,6 @@ export async function storeAppFiles(
           uploadedBy: userId,
           payer,
           space: { app: source.app, ref: source.ref },
-          counted,
           thumbStatus: thumbStatusFor(f.mimeType),
         }),
       ),
@@ -132,15 +119,6 @@ export async function copyAppFiles(
   );
   const sources = found.filter((f): f is NonNullable<typeof f> => !!f);
 
-  const counted = (await driveSourceApp(source.app)?.counts(source.ref)) ?? true;
-  if (counted) {
-    const quota = await checkQuota(
-      userId,
-      sources.reduce((n, f) => n + f.size, 0),
-    );
-    if (!quota.canUpload) throw new AppError(413, quota.message ?? "Not enough storage");
-  }
-
   const copies: FileRecordDocument[] = [];
   for (const from of sources) {
     const path = storageKeyFor(userId, source, generateXendriveFilename(from.name));
@@ -175,7 +153,6 @@ export async function copyAppFiles(
         uploadedBy: userId,
         payer: await payerFor(userId, source),
         space: { app: source.app, ref: source.ref },
-        counted,
         thumbKey: thumb?.path,
         thumbWidth: thumb?.width,
         thumbHeight: thumb?.height,

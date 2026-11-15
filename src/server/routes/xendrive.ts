@@ -26,14 +26,13 @@ import {
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
 import { authenticateToken } from "../middleware/auth";
-import { assertDriveSource, driveSourceApp } from "../utils/driveSources";
+import { assertDriveSource } from "../utils/driveSources";
 import {
   initiateChunkedUpload,
   uploadChunk,
   finalizeChunkedUpload,
   cleanupFailedUpload,
   getUploadSessionStatus,
-  checkQuota,
   assertOwnFolder,
   usageFor,
 } from "../utils/xendriveUtils";
@@ -79,7 +78,6 @@ const serializeFile = (file: (XenDriveFileDocument & DriveFileDetails) | any, th
   lastDownloadedAt: file.lastDownloadedAt ? file.lastDownloadedAt.toISOString() : null,
   // Kept for the client: a XenDrive file is never one an app stored, and always counts.
   source: null,
-  counted: true,
   // A cacheable link to the small WebP beside the original, once it is made (the grid and list show it).
   thumbUrl,
 });
@@ -201,7 +199,7 @@ module.exports = function (app: express.Application) {
     authenticateToken,
     validate(xenDriveInitiateSchema),
     async function (req: express.Request, res: express.Response) {
-      const { filename, totalChunks, fileSize, folderId, source } = req.body;
+      const { filename, totalChunks, folderId, source } = req.body;
       const userId = callerId(req);
       // An app uploading for the person (a chat attachment): they must be allowed to store files for that source.
       if (source) await assertDriveSource(userId, source);
@@ -214,13 +212,6 @@ module.exports = function (app: express.Application) {
 
       // Whoever pays to store it must be able to (nothing is checked in shadow mode, billing/storageMeter.ts).
       await assertCanStore(userId, source);
-
-      // Only a file that counts toward the person's storage needs room for it (an app's files are exempt for now).
-      const counts = source ? ((await driveSourceApp(source.app)?.counts(source.ref)) ?? true) : true;
-      if (counts) {
-        const quotaCheck = await checkQuota(userId, fileSize);
-        if (!quotaCheck.canUpload) throw new AppError(403, quotaCheck.message || "Quota exceeded");
-      }
 
       const uploadId = await initiateChunkedUpload(userId, filename, totalChunks, folderId ?? null, source);
       return res.json({ status: true, message: "Upload session initiated", data: { uploadId } });

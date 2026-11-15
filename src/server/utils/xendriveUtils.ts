@@ -6,14 +6,10 @@
 
 import { Types } from "mongoose";
 import { privateStore } from "../storage";
-import { formatFileSize } from "./fileUtils";
 import { randomToken } from "./tokens";
 import { XenDriveFile } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
-import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
-import { FREE_STORAGE_BYTES } from "@shared/monetization";
-import { driveSourceApp } from "./driveSources";
 import { thumbStatusFor } from "./xendriveThumbs";
 import { payerFor } from "./fileRecords";
 import { FileRecord } from "../models/fileRecord";
@@ -180,11 +176,6 @@ export async function finalizeChunkedUpload(
   const fileSize = stored.size;
   const contentType = stored.contentType || detectContentType(session.filename);
 
-  // An app's file counts only if that app says so for this ref (utils/driveSources.ts). Direct uploads always count.
-  const counted = session.source_app
-    ? ((await driveSourceApp(session.source_app)?.counts(session.source_ref ?? "")) ?? true)
-    : true;
-
   // An app's file (a chat attachment) is only a record. A file uploaded straight to XenDrive is a XenDrive item that
   // points at its record; both share one id.
   const source = session.source_app ? { app: session.source_app, ref: session.source_ref ?? "" } : null;
@@ -199,7 +190,6 @@ export async function finalizeChunkedUpload(
     uploadedBy: session.user_id,
     payer: await payerFor(String(session.user_id), source),
     space: source ?? { app: "xendrive", ref: String(session.user_id) },
-    counted,
     thumbStatus: thumbStatusFor(contentType),
   });
   if (!source) {
@@ -259,49 +249,23 @@ export async function cleanupOldSessions(): Promise<void> {
   await Promise.all(stale.map((s) => cleanupFailedUpload(s.upload_id)));
 }
 
-/** Only files that count toward storage. Files an app stored for the person may be exempt (`counted: false`). */
-const countedOnly = { bucket: "private", "payer.type": "user", counted: { $ne: false } } as const;
+/** The private files a person pays to store (their payer is them). Their size and count are information; billing is by month. */
+const paidByUser = { bucket: "private", "payer.type": "user" } as const;
 
 /** How much space and how many files a person's storage holds, from the file records they pay for. */
 export async function usageFor(userId: string): Promise<{ fileCount: number; spaceUsed: number }> {
   const [row] = await FileRecord.aggregate<{ _id: null; fileCount: number; spaceUsed: number }>([
-    { $match: { ...countedOnly, "payer.id": userId } },
+    { $match: { ...paidByUser, "payer.id": userId } },
     { $group: { _id: null, fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
   ]);
   return { fileCount: row?.fileCount ?? 0, spaceUsed: row?.spaceUsed ?? 0 };
 }
 
-/** Usage for every owner in one pass (the admin user list). */
+/** Usage for every payer in one pass (the admin user list). */
 export async function usageForAll(): Promise<Map<string, { fileCount: number; spaceUsed: number }>> {
   const rows = await FileRecord.aggregate<{ _id: string; fileCount: number; spaceUsed: number }>([
-    { $match: countedOnly },
+    { $match: paidByUser },
     { $group: { _id: "$payer.id", fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
   ]);
   return new Map(rows.map((r) => [r._id.toString(), { fileCount: r.fileCount, spaceUsed: r.spaceUsed }]));
-}
-
-/** Everything a person may store: the free tier plus whatever they were granted or redeemed. */
-export function totalSpaceAllowed(granted: number | null | undefined): number {
-  return FREE_STORAGE_BYTES + (granted || 0);
-}
-
-/** Check whether a person has room for `fileSize` more bytes. */
-export async function checkQuota(userId: string, fileSize: number): Promise<{ canUpload: boolean; message?: string }> {
-  const user = await User.findById(userId).exec();
-  if (!user) {
-    return { canUpload: false, message: "User not found" };
-  }
-
-  const spaceAllowed = totalSpaceAllowed(user.xendrive?.spaceAllowed);
-  const { spaceUsed } = await usageFor(userId);
-
-  if (spaceUsed + fileSize > spaceAllowed) {
-    const availableSpace = Math.max(0, spaceAllowed - spaceUsed);
-    return {
-      canUpload: false,
-      message: `Quota exceeded. Available space: ${formatFileSize(availableSpace)}, File size: ${formatFileSize(fileSize)}`,
-    };
-  }
-
-  return { canUpload: true };
 }

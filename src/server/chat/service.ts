@@ -409,9 +409,7 @@ async function communityOf(conversationId: string): Promise<string | null> {
 // toward the sender's storage, stay out of My Drive, and show under XenDrive > From apps > Chat (utils/driveSources.ts).
 registerDriveSource("chat", {
   label: "Chat",
-  // A DM or group chat's attachments use the sender's storage, like a file uploaded to XenDrive. A community channel's
-  // files are the community's cost: they are on its bill (`payer`) and don't use the sender's storage.
-  counts: async (ref) => !(await communityOf(ref)),
+  // A DM or group chat's attachments are on the sender's bill; a community channel's files are on the community's.
   payer: async (ref, userId) => {
     const communityId = await communityOf(ref);
     return communityId ? { type: "community", id: communityId } : { type: "user", id: userId };

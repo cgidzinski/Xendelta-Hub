@@ -32,7 +32,6 @@ const serializeStorageFile = (file: FileRecordDocument | any) => ({
   source: file.space?.app
     ? { app: file.space.app as string, label: driveSourceApp(file.space.app)?.label ?? file.space.app }
     : null,
-  counted: file.counted !== false,
 });
 
 /** What apps stored (everything private that isn't a file uploaded straight to XenDrive). */
@@ -141,13 +140,6 @@ module.exports = function (app: express.Application) {
     validateParams(storageFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownAppFile(req.params.fileId as string, callerId(req));
-      // A file that doesn't use the person's storage belongs to the app that stored it: the app owns deleting it.
-      // (A community channel's files are the exception: the uploader may delete their own, though the community pays.)
-      if (file.counted === false && file.payer.type !== "community")
-        throw new AppError(
-          400,
-          "This file belongs to another app and doesn't use your storage, so it can't be deleted here",
-        );
       await removeAppFiles([file.id]);
       // An app that stored the file lets go of it (a photo on an expense), so it doesn't show a broken image.
       await driveSourceApp(file.space.app)?.onRemoved?.(file.space.ref ?? "", [file.id]);

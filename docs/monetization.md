@@ -32,9 +32,8 @@ thinking is not lost. Only the "built" section exists in code today.
   "Buying gems is not available yet"). Every purchase is recorded in `GemPurchase` (the audit trail of gems bought).
   - To turn it back on, return a real provider from `getPaymentProvider()`. `PAYMENTS_PROVIDER` is currently ignored.
 - **Shop and Inventory** were redesigned on the shared UI components, and the Inventory link is back in the menu.
-- **Free XenDrive tier.** Everyone gets 1 GB (`FREE_STORAGE_BYTES`). Before, new users had 0 bytes and relied on the
-  1,000 starting points to buy space. `xendrive.spaceAllowed` is now the extra space on top of the free tier (admin
-  grants and redeemed vouchers).
+- **Free XenDrive tier.** Replaced by gem billing (#362, `docs/billing.md`): there is no storage quota or 1 GB voucher any more,
+  and everyone has a free monthly allowance in gems instead.
 - **Bugs fixed on the way**
   - The point voucher was priced at -1000, so buying it paid the buyer. It is no longer sold.
   - The Shop's category filter used each item's position in the list instead of its category.

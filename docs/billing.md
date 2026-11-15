@@ -49,7 +49,8 @@ To move gems, call `transfer({ from, to, amount, kind, idempotencyKey })` with `
 ## Cost centers (`src/shared/billing.ts`)
 
 `COST_CENTERS` lists everything that costs money, each with its unit, rate, who pays and its status. A center starts free (`status: "free"`, `costRate: 0`); its discussion issue decides the rate and switches it to `metered`.
-**Storage is metered** (15 gems per GB-month at cost, 18.75 billed) and, while `BILLING_ENFORCED` is off, only shown and never charged.
+**Storage is metered** (15 gems per GB-month at cost, 18.75 billed) and billing is **enforced**: months are charged and uploads
+are blocked past the free allowance. `BILLING_ENFORCED=false` is the shadow-mode switch (measured and shown, never charged).
 Downloads and uploads are free on R2, so there is no downloads center.
 
 | Center | Unit stored | Billed in | Paid by | Discussion |
@@ -75,8 +76,8 @@ Downloads and uploads are free on R2, so there is no downloads center.
 `$inc`). It never throws: a tally that can't be kept must not break the request. `usageFor(account, month)` reads it
 back. Usage is only ever what the server observes, never what a client reports.
 
-**Shadow mode:** while `BILLING_ENFORCED` is not `true` (the default), usage is measured and bills are shown, but
-nothing is charged and nothing is blocked.
+**Shadow mode** (`BILLING_ENFORCED=false`): usage is measured and bills are shown, but nothing is charged and nothing is blocked.
+Billing is enforced by default (anything but `false`); the storage quota and vouchers were removed when it was switched on (#362).
 
 ### Wiring a cost center
 
@@ -116,7 +117,7 @@ A community's bills are paid from its fund. Any member can donate, including ahe
   with its lines, the rates and margin used, the free tier and the amount due.
 - The statement is written `pending`, then settled:
   - `free`: nothing due.
-  - `shadow`: something is due but `BILLING_ENFORCED` is off, so nothing is taken.
+  - `shadow`: something is due but `BILLING_ENFORCED=false`, so nothing is taken.
   - `paid`: a ledger `bill` to the house, keyed `bill:<type>:<id>:<month>`, so a rerun can't pay twice.
   - `unpaid`: the balance couldn't cover it. Nothing is taken and the whole amount stays owed.
 - People (or every member of a community) are notified when a statement has something due, and once a month when

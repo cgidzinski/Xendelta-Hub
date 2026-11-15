@@ -77,7 +77,7 @@ describe("marking a routine done with a note and photos", () => {
     // private XenDrive files owned by the person, tagged to the routine, not counted toward storage
     const files = await FileRecord.find({ uploadedBy: me.user._id, "space.app": "xenroutine" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.space?.ref === r._id && f.counted === false && f.mimeType === "image/webp")).toBe(true);
+    expect(files.every((f) => f.space?.ref === r._id && f.mimeType === "image/webp")).toBe(true);
     expect((await mine(me, r._id)).history[0].images).toHaveLength(2);
   });
 
@@ -174,14 +174,14 @@ describe("marking a routine done with a note and photos", () => {
 });
 
 describe("what happens to the photos later", () => {
-  it("the storage viewer will not delete a photo that belongs to the history", async () => {
+  it("the storage viewer can delete a photo, which leaves the history", async () => {
     const me = await createUser();
     const r = await make(me);
     await doneWith(me, r._id, { photos: 2 });
     const [first] = await FileRecord.find({ uploadedBy: me.user._id, "space.app": "xenroutine" }).sort({ _id: 1 });
     const del = await request(t.app).delete(`/api/storage/files/${first.id}`).set(as(me));
-    expect(del.status, JSON.stringify(del.body)).toBe(400);
-    expect((await mine(me, r._id)).history[0].images).toHaveLength(2);
+    expect(del.status, JSON.stringify(del.body)).toBe(200);
+    expect((await mine(me, r._id)).history[0].images).toHaveLength(1);
   });
 
   it("deleting the routine deletes its photos", async () => {

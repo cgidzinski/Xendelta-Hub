@@ -13,7 +13,6 @@ export const XENBUDGET_SOURCE = "xenbudget";
 registerDriveSource(XENBUDGET_SOURCE, {
   label: "XenBudget",
   // Exempt from the quota for now, like every app's files. Intended rule: a shared book's photos stay exempt.
-  counts: async () => false,
   verify: async (userId, ref) =>
     Types.ObjectId.isValid(ref) && !!(await XenBudgetBook.exists({ _id: ref, members: userId })),
   describe: async (userId, refs) => {

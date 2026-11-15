@@ -14,10 +14,9 @@ export async function createDriveFile(attrs: {
   mimeType: string;
   size?: number;
   source?: { app: string; ref: string };
-  counted?: boolean;
   [extra: string]: unknown;
 }): Promise<XenDriveFileDocument> {
-  const { owner_id, folder_id, name, storage_path, mimeType, size, source, counted, ...extra } = attrs;
+  const { owner_id, folder_id, name, storage_path, mimeType, size, source, ...extra } = attrs;
   const _id = new Types.ObjectId();
   const record = await FileRecord.create({
     _id,
@@ -29,7 +28,6 @@ export async function createDriveFile(attrs: {
     uploadedBy: owner_id,
     payer: { type: "user", id: String(owner_id) },
     space: source ?? { app: "xendrive", ref: String(owner_id) },
-    counted: counted !== false,
   });
   if (source) return record as unknown as XenDriveFileDocument;
   const item = (await XenDriveFile.create({

@@ -21,7 +21,6 @@ async function audienceOf(note: { owner_id: string; notebook_id?: unknown }): Pr
 registerDriveSource(XENNOTE_SOURCE, {
   label: "XenNote",
   // Exempt from the quota for now, like every app's files. Intended rule: a note in a shared notebook stays exempt.
-  counts: async () => false,
   // May this person add photos to the note? Its owner (loose note) or an editor of its notebook.
   verify: async (userId, ref) => {
     if (!Types.ObjectId.isValid(ref)) return false;

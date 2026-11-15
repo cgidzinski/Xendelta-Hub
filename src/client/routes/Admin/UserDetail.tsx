@@ -6,7 +6,6 @@ import {
   Button,
   Checkbox,
   FormControlLabel,
-  LinearProgress,
   Link,
   MenuItem,
   Tab,
@@ -16,7 +15,6 @@ import {
 } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { AdminUserDetail, NotifyChannel } from "@shared/admin";
-import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import ListSkeleton from "../../components/ui/ListSkeleton";
 import SectionLabel from "../../components/ui/SectionLabel";
@@ -27,14 +25,10 @@ import { useAdminActions, useAdminAudit, useAdminUser } from "../../hooks/admin/
 import { formatFileSize } from "../../utils/fileUtils";
 import StatusChip from "./components/StatusChip";
 import TypedConfirmDialog from "./components/TypedConfirmDialog";
-import { dateTime, shortDate, share } from "./adminFormat";
+import { dateTime, shortDate } from "./adminFormat";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.25 } as const;
-const GB = 1024 ** 3;
-const ITEM_OPTIONS = [
-  { value: "1gb-xendrive-voucher", label: "1 GB XenDrive Voucher" },
-  { value: "golden-badge", label: "Golden Badge" },
-];
+const ITEM_OPTIONS = [{ value: "golden-badge", label: "Golden Badge" }];
 const CHANNELS: Array<{ value: NotifyChannel; label: string; note: string }> = [
   { value: "inapp", label: "In the app", note: "Shows in their notification list" },
   { value: "socket", label: "Live", note: "A toast if the app is open" },
@@ -100,73 +94,19 @@ function AccountCard({ user }: { user: AdminUserDetail }) {
 }
 
 function StorageCard({ user }: { user: AdminUserDetail }) {
-  const { updateUser } = useAdminActions();
-  const { enqueueSnackbar } = useSnackbar();
-  const [custom, setCustom] = useState("");
-  const used = share(user.storage.used, user.storage.allowed);
-
-  const grow = async (bytes: number) => {
-    try {
-      await updateUser.mutateAsync({ userId: user._id, xendriveQuota: Math.max(0, user.extraSpace + bytes) });
-      enqueueSnackbar(`Space ${bytes >= 0 ? "added" : "removed"}`, { variant: "success" });
-      setCustom("");
-    } catch (e) {
-      enqueueSnackbar(errorText(e, "Couldn't change the space"), { variant: "error" });
-    }
-  };
-
   return (
     <Box sx={card}>
       <Typography sx={{ fontWeight: 600 }}>Storage</Typography>
-      <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1, mb: 0.75 }}>
-        <Typography variant="body2" color="text.secondary">
-          {formatFileSize(user.storage.used)} used
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          of {formatFileSize(user.storage.allowed)} ({formatFileSize(FREE_STORAGE_BYTES)} free tier
-          {user.extraSpace > 0 ? ` + ${formatFileSize(user.extraSpace)}` : ""})
-        </Typography>
-      </Box>
-      <LinearProgress
-        variant="determinate"
-        value={Math.min(100, used * 100)}
-        color={used >= 0.9 ? "warning" : "primary"}
-        sx={{ height: 8, borderRadius: 4 }}
-      />
-      <Typography variant="body2" color="text.disabled" sx={{ mt: 1 }}>
-        {user.storage.files.toLocaleString()} files
-        {user.appBytes > 0 ? ` · ${formatFileSize(user.appBytes)} from chat` : ""}
+      <Typography variant="h6" sx={{ mt: 1, fontWeight: 600 }}>
+        {formatFileSize(user.storage.used)}
       </Typography>
-      <SectionLabel sx={{ mt: 2 }}>Add space</SectionLabel>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
-        {[1, 5, 10].map((n) => (
-          <Button
-            key={n}
-            size="small"
-            variant="outlined"
-            color="inherit"
-            disabled={updateUser.isPending}
-            onClick={() => grow(n * GB)}
-          >
-            +{n} GB
-          </Button>
-        ))}
-        <TextField
-          size="small"
-          value={custom}
-          onChange={(e) => setCustom(e.target.value.replace(/[^0-9.]/g, ""))}
-          placeholder="GB"
-          sx={{ width: 84 }}
-          slotProps={{ htmlInput: { "aria-label": "Custom amount in GB" } }}
-        />
-        <Button
-          size="small"
-          disabled={!custom || updateUser.isPending}
-          onClick={() => grow(Math.round(parseFloat(custom) * GB))}
-        >
-          Add
-        </Button>
-      </Box>
+      <Typography variant="body2" color="text.disabled" sx={{ mt: 0.5 }}>
+        {user.storage.files.toLocaleString()} files
+        {user.appBytes > 0 ? ` · ${formatFileSize(user.appBytes)} from apps` : ""}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        Storage is billed in gems each month. Adjust their gems below to help.
+      </Typography>
     </Box>
   );
 }

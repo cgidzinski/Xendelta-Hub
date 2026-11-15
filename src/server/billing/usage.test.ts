@@ -57,12 +57,12 @@ describe("recordUsage", () => {
     log.mockRestore();
   });
 
-  it("is in shadow mode unless switched on", () => {
+  it("is enforced unless switched off with BILLING_ENFORCED=false", () => {
     const saved = process.env.BILLING_ENFORCED;
     delete process.env.BILLING_ENFORCED;
-    expect(usage.billingEnforced()).toBe(false);
-    process.env.BILLING_ENFORCED = "true";
     expect(usage.billingEnforced()).toBe(true);
+    process.env.BILLING_ENFORCED = "false";
+    expect(usage.billingEnforced()).toBe(false);
     if (saved === undefined) delete process.env.BILLING_ENFORCED;
     else process.env.BILLING_ENFORCED = saved;
   });
