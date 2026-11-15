@@ -37,9 +37,14 @@ describe("findOrphans", () => {
       .insertOne({ markdown: `See ![x](${publicUrlFor("blog-assets/inline.png")}) here` });
     await db.collection("recipes").insertOne({ showcase: [publicUrlFor("recipaint-assets/mini.jpg")] });
     await db.collection("customemojis").insertOne({ storagePath: "emoji/c1/e1.png" });
+    // An expense photo never converted to a XenDrive file still points at its object by path: it is in use.
+    await db
+      .collection("xensplits")
+      .insertOne({ expenses: [{ images: [{ gcs_path: "xensplit-images/g1/e1/legacy.jpg" }] }] });
 
     put("privateStore", "xensplit/g1/used.jpg");
     put("privateStore", "xensplit/g1/stray.jpg");
+    put("privateStore", "xensplit-images/g1/e1/legacy.jpg");
     put("privateStore", "db-backups/xendelta-hub-backup-2026-01-01T00-00-00-000Z.ndjson.gz");
     put("privateStore", "chat/c1/uploading.webm", new Date()); // too new to judge
     put("publicStore", "avatar/a.jpg");
