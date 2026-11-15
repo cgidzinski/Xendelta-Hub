@@ -15,6 +15,7 @@ import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import { driveSourceApp } from "./driveSources";
 import { thumbStatusFor } from "./xendriveThumbs";
+import { recordDriveFile } from "./fileRecords";
 
 /** A unique, storage-safe object name for an uploaded file. Never shown to people. */
 export function generateXendriveFilename(originalName: string): string {
@@ -194,6 +195,9 @@ export async function finalizeChunkedUpload(
     thumbStatus: thumbStatusFor(contentType),
     ...(session.source_app ? { source: { app: session.source_app, ref: session.source_ref } } : {}),
   }).save();
+  // The file's record has the same id. A file uploaded straight to XenDrive also points at it.
+  await recordDriveFile(saved);
+  if (!session.source_app) await XenDriveFile.updateOne({ _id: saved._id }, { $set: { file: saved._id } });
 
   await XenDriveUploadSession.deleteOne({ upload_id: uploadId });
 

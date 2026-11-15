@@ -3,6 +3,7 @@
 // picture, and their Recipaint recipes with the recipes' images.
 
 import { XenDriveFile } from "../models/xendriveFile";
+import { forgetFileRecords } from "./fileRecords";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { Recipe } from "../models/recipe";
 import { RecipeProgress } from "../models/recipeProgress";
@@ -24,6 +25,7 @@ export async function removeAccountFiles(userId: string, avatarUrl?: string | nu
     if (file.thumb?.path) await privateStore.delete(file.thumb.path).catch(() => undefined);
   }
   await XenDriveFile.deleteMany({ owner_id: userId });
+  await forgetFileRecords(files.map((f) => f._id));
   await XenDriveFolder.deleteMany({ owner_id: userId });
 
   // Each app lets go of the photos it showed (an expense's receipt, a note's picture), so nothing shows a broken image.

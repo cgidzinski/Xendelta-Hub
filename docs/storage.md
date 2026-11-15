@@ -36,6 +36,25 @@ The buckets are laid out so they can be audited by folder: one folder per app, t
 app stores, `xendrive/<userId>/<name>` otherwise. The migration `1795400000000-storage-folders` moved older files
 (`xendrive/<userId>/` app files, `xensplit-images/`, `xenbudget-images/`) into these folders.
 
+## File records (#380)
+
+Every object in either bucket has one `FileRecord` (`models/fileRecord.ts`): bucket, key (unique per bucket), size, type,
+name, who uploaded it, **who pays** (`payer`: a person, a community or the house), its **space** (`app` and `ref`, which is
+also its folder) and the keys of its thumbnail and preview. They are what storage billing sums per payer (#370).
+
+- A private file's record **reuses its `XenDriveFile` `_id`**, so the photos and chat attachments that already point at a
+  file point at its record too. Only the XenDrive item points at the record (`XenDriveFile.file`, indexed, set for files
+  uploaded straight to XenDrive); the record never links back.
+- Created and removed next to the bytes by the write path: `storeAppFiles`, `copyAppFiles` and `removeAppFiles`
+  (`utils/appFiles.ts`), `finalizeChunkedUpload` (XenDrive and chat uploads), the thumbnail job, `deleteFromStorage`, and
+  `uploadToStorage` for public files (it takes the record's details). `utils/fileRecords.ts` holds the helpers. A record that
+  can't be saved is logged and never fails the upload.
+- Public files have records too: avatars and XenSplit group pictures and blog images (house), custom emoji and Recipaint
+  images (the uploader, until community emoji are billed to the community's fund).
+- The migration `1795600000000-file-records` makes the records for everything already stored. `npm run db:stats` lists XenDrive
+  files without one.
+- Reads still use `XenDriveFile` for now; moving them to the records and the orphan sweep to "objects with no record" is next.
+
 ## Cleaning up
 
 Whatever deletes a record deletes its file in the same request: an app's photos through `removeAppFiles`, Recipaint

@@ -5,6 +5,7 @@ import path from "path";
 import sharp from "sharp";
 import { privateStore } from "../storage";
 import { XenDriveFile } from "../models/xendriveFile";
+import { setRenditions } from "./fileRecords";
 import { generateSignedUrl } from "./storageUtils";
 
 /**
@@ -179,6 +180,13 @@ export async function processPendingThumbnails(batchSize = 20): Promise<number> 
         { _id: file._id },
         { $set: thumb ? { thumb, thumbStatus: "ready" } : { thumbStatus: "none" } },
       );
+      if (thumb) {
+        const isImage = file.mimeType.toLowerCase().startsWith("image/");
+        await setRenditions(file._id, {
+          thumbKey: thumb.path,
+          previewKey: isImage ? previewKey(file.storage_path) : null,
+        });
+      }
     } catch (e) {
       // The upload stays healthy; the file just shows its icon.
       console.error(`>>> Thumbnail generation failed for XenDrive file ${file._id}:`, e);

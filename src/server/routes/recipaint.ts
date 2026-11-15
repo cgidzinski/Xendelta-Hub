@@ -411,7 +411,7 @@ module.exports = function (app: express.Application) {
       const filename = generateUniqueFilename(req.file.originalname);
 
       // Upload to public GCS bucket (returns public URL)
-      const assetData = await uploadRecipaintAsset(req.file, filename);
+      const assetData = await uploadRecipaintAsset(req.file, filename, callerId(req));
 
       return res.json({
         status: true,
@@ -456,7 +456,7 @@ module.exports = function (app: express.Application) {
           : originalRecipe.author;
 
       // Create cloned recipe, with its own copies of the images so deleting either recipe never breaks the other.
-      const copies = await copyRecipaintImages(recipeImageUrls(originalRecipe));
+      const copies = await copyRecipaintImages(recipeImageUrls(originalRecipe), callerId(req));
       const images = withCopiedImages(
         {
           showcase: originalRecipe.showcase || [],
