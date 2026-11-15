@@ -2,6 +2,7 @@ import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Mod
 import { randomToken } from "../utils/tokens";
 import { deleteFromStorage } from "../utils/storageUtils";
 import { checkSharePassword } from "../utils/sharePasswords";
+import { forgetFileRecords } from "../utils/fileRecords";
 
 // One stored file. `storage_path` is where the bytes live in the private bucket and is stored, not
 // derived, so a file can be renamed or moved between folders without touching storage.
@@ -11,6 +12,9 @@ const xendriveFileSchema = new Schema({
   folder_id: { type: Schema.Types.ObjectId, ref: "XenDriveFolder", default: null },
   name: { type: String, required: true }, // What people see (the original file name)
   storage_path: { type: String, required: true }, // e.g. "xendrive/<user>/<generated name>"
+  // The FileRecord behind a file uploaded straight to XenDrive (models/fileRecord.ts): same id as this file. Only the
+  // XenDrive item points at the record, never the other way. Files an app stored for the person have no item in PR 2.
+  file: { type: Schema.Types.ObjectId, ref: "FileRecord", index: true },
   mimeType: { type: String, required: true },
   size: { type: Number },
   createdAt: { type: Date, default: Date.now },
@@ -82,6 +86,7 @@ xendriveFileSchema.method("isExpired", function (this: XenDriveFileDocument) {
 // Deleting a file through a query (findByIdAndDelete, deleteOne) also deletes its bytes and its thumbnail.
 xendriveFileSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   const doc = await this.model.findOne(this.getQuery());
+  if (doc) await forgetFileRecords([doc._id]);
   if (doc?.storage_path) {
     await Promise.allSettled([
       deleteFromStorage(doc.storage_path, true),

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { registerDriveSource } from "./driveSources";
 import { storeAppFiles, removeAppFiles } from "./appFiles";
 import { usageFor } from "./xendriveUtils";
@@ -41,6 +42,14 @@ describe("storeAppFiles for an app whose files count", () => {
     expect(made.every((f) => f.counted === true && f.source?.ref === "r1" && f.folder_id === null)).toBe(true);
     expect(await usageFor(uid)).toEqual({ fileCount: 2, spaceUsed: 150 });
     expect(stored.size).toBe(2);
+    // One record per file, with the file's own id, paid for by the uploader.
+    const records = await FileRecord.find({ uploadedBy: uid }).lean();
+    expect(records.map((r) => String(r._id)).sort()).toEqual(made.map((f) => String(f._id)).sort());
+    expect(records[0]).toMatchObject({
+      bucket: "private",
+      payer: { type: "user", id: uid },
+      space: { app: "counted-test", ref: "r1" },
+    });
   });
 
   it("refuses with 413 when the files don't fit, and stores nothing", async () => {
@@ -75,6 +84,8 @@ describe("storeAppFiles for an app whose files count", () => {
     const made = await storeAppFiles(uid, { app: "counted-test", ref: "r1" }, [file("a.png"), file("b.png")]);
     await removeAppFiles([made[0]._id, "64b000000000000000000000"]);
     expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(1);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(1);
+    expect(await FileRecord.exists({ _id: made[0]._id })).toBeNull();
     expect(stored.size).toBe(1);
   });
 });

@@ -7,6 +7,8 @@ import { Recipe } from "../models/recipe";
 import { publicKeyFromUrl, publicStore, publicUrlFor } from "../storage";
 import { RECIPAINT_ASSET_FOLDER, thumbGcsPathFor } from "@shared/recipaint/assetUrls";
 import { generateUniqueFilename } from "./mediaUtils";
+import { deleteFromStorage } from "./storageUtils";
+import { saveFileRecord } from "./fileRecords";
 
 type RecipeImages = {
   showcase?: Array<string | null | undefined> | null;
@@ -45,8 +47,8 @@ export async function releaseRecipaintImages(urls: string[], except: unknown): P
       });
       if (stillUsed) continue;
       await Promise.all([
-        publicStore.delete(key),
-        publicStore.delete(thumbGcsPathFor(filenameOf(key))).catch(() => undefined),
+        deleteFromStorage(key),
+        deleteFromStorage(thumbGcsPathFor(filenameOf(key))).catch(() => undefined),
       ]);
     } catch (e) {
       console.error(">>> Recipaint image cleanup failed for", url, e);
@@ -64,7 +66,7 @@ export function droppedImages(before: RecipeImages, after: RecipeImages): string
  * Copies of these images (and their thumbnails) under new names, for a cloned recipe. Returns old URL → new URL; an
  * image that isn't ours or can't be copied keeps its URL (it's then shared, and `releaseRecipaintImages` protects it).
  */
-export async function copyRecipaintImages(urls: string[]): Promise<Map<string, string>> {
+export async function copyRecipaintImages(urls: string[], uploadedBy?: string): Promise<Map<string, string>> {
   const copies = new Map<string, string>();
   for (const url of urls) {
     const key = assetKey(url);
@@ -77,9 +79,22 @@ export async function copyRecipaintImages(urls: string[]): Promise<Map<string, s
       console.error(">>> Recipaint image copy failed for", url, e);
       continue;
     }
-    await publicStore
+    const hasThumb = await publicStore
       .copyFrom(publicStore, thumbGcsPathFor(filenameOf(key)), thumbGcsPathFor(filename))
-      .catch(() => undefined); // an older image may have no thumbnail; the client falls back to the original
+      .then(() => true)
+      .catch(() => false); // an older image may have no thumbnail; the client falls back to the original
+    const info = await publicStore.head(target).catch(() => null);
+    await saveFileRecord({
+      bucket: "public",
+      key: target,
+      size: info?.size ?? 0,
+      mimeType: info?.contentType,
+      name: filename,
+      uploadedBy,
+      payer: uploadedBy ? { type: "user", id: uploadedBy } : { type: "house" },
+      space: { app: RECIPAINT_ASSET_FOLDER },
+      thumbKey: hasThumb ? thumbGcsPathFor(filename) : null,
+    });
     copies.set(url, publicUrlFor(target));
   }
   return copies;

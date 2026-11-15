@@ -138,7 +138,11 @@ export async function uploadBlogAsset(
 
   // Upload to public GCS bucket in blog-assets folder
   const gcsPath = `blog-assets/${finalFilename}`;
-  const publicUrl = (await uploadToStorage(file.buffer, gcsPath, contentType)) as string;
+  const publicUrl = (await uploadToStorage(file.buffer, gcsPath, contentType, false, undefined, {
+    name: finalFilename,
+    payer: { type: "house" },
+    space: { app: "blog-assets" },
+  })) as string;
 
   return {
     url: publicUrl,
@@ -169,6 +173,7 @@ export function generateUniqueFilename(originalName: string): string {
 export async function uploadRecipaintAsset(
   file: Express.Multer.File,
   filename: string,
+  uploadedBy?: string,
 ): Promise<{ url: string; filename: string; mimeType: string; size: number }> {
   if (!file.buffer) {
     throw new Error("File buffer is missing");
@@ -188,7 +193,14 @@ export async function uploadRecipaintAsset(
 
   // The original is kept untouched - it is what the lightbox shows.
   const gcsPath = `${RECIPAINT_ASSET_FOLDER}/${finalFilename}`;
-  const publicUrl = (await uploadToStorage(file.buffer, gcsPath, contentType, false, IMMUTABLE_CACHE)) as string;
+  const thumbKey = thumbGcsPathFor(finalFilename);
+  const publicUrl = (await uploadToStorage(file.buffer, gcsPath, contentType, false, IMMUTABLE_CACHE, {
+    name: finalFilename,
+    uploadedBy,
+    payer: uploadedBy ? { type: "user", id: uploadedBy } : { type: "house" },
+    space: { app: RECIPAINT_ASSET_FOLDER },
+    thumbKey,
+  })) as string;
 
   // Cards and dense galleries render the thumbnail instead of a multi-megabyte photo.
   // A thumbnail failure must not fail the upload: the original is already stored, and the
@@ -246,7 +258,12 @@ export async function uploadAvatarFile(
 
   // Upload to public GCS bucket with user_id as filename
   const gcsPath = `avatar/${userId}.${ext}`;
-  const publicUrl = (await uploadToStorage(processedBuffer, gcsPath, contentType)) as string;
+  const publicUrl = (await uploadToStorage(processedBuffer, gcsPath, contentType, false, undefined, {
+    name: `${userId}.${ext}`,
+    uploadedBy: userId,
+    payer: { type: "house" },
+    space: { app: "avatar" },
+  })) as string;
 
   return {
     url: publicUrl,
@@ -284,7 +301,11 @@ export async function uploadXenSplitGroupImageFile(
     .toBuffer();
 
   const gcsPath = `xensplit-group-images/${groupId}.jpg`;
-  const publicUrl = (await uploadToStorage(processedBuffer, gcsPath, "image/jpeg")) as string;
+  const publicUrl = (await uploadToStorage(processedBuffer, gcsPath, "image/jpeg", false, undefined, {
+    name: `${groupId}.jpg`,
+    payer: { type: "house" },
+    space: { app: "xensplit-group-images", ref: groupId },
+  })) as string;
 
   return { url: publicUrl };
 }

@@ -184,5 +184,15 @@ export async function schemaDrift(): Promise<SchemaDrift> {
     const documents = await db.collection(check.collection).countDocuments(check.filter);
     if (documents > 0) drift.legacy.push({ label: check.label, documents });
   }
+  // Files whose FileRecord is missing (a record is written with every file; the file-records migration backfills them).
+  const [noRecord] = await db
+    .collection("xendrivefiles")
+    .aggregate<{ n: number }>([
+      { $lookup: { from: "filerecords", localField: "_id", foreignField: "_id", as: "record" } },
+      { $match: { record: { $size: 0 } } },
+      { $count: "n" },
+    ])
+    .toArray();
+  if (noRecord?.n) drift.legacy.push({ label: "XenDrive files without a file record", documents: noRecord.n });
   return drift;
 }

@@ -8,11 +8,13 @@
 
 import { privateStore, publicStore, type ObjectStore } from "../storage";
 import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { AppError } from "./http";
 import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
 import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storageUtils";
 import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
 import { thumbKey, thumbStatusFor, thumbnailUrlFor } from "./xendriveThumbs";
+import { forgetFileRecords, recordDriveFile } from "./fileRecords";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -52,7 +54,7 @@ export async function storeAppFiles(
   }
 
   try {
-    return (await Promise.all(
+    const made = (await Promise.all(
       files.map((f, i) =>
         XenDriveFile.create({
           owner_id: userId,
@@ -67,8 +69,11 @@ export async function storeAppFiles(
         }),
       ),
     )) as unknown as XenDriveFileDocument[];
+    await Promise.all(made.map((doc) => recordDriveFile(doc)));
+    return made;
   } catch (error) {
     await XenDriveFile.deleteMany({ storage_path: { $in: paths } });
+    await FileRecord.deleteMany({ bucket: "private", key: { $in: paths } });
     await deleteBytes(paths);
     throw error;
   }
@@ -157,20 +162,20 @@ export async function copyAppFiles(
     }
 
     try {
-      copies.push(
-        (await XenDriveFile.create({
-          owner_id: userId,
-          folder_id: null,
-          name: from.name,
-          storage_path: path,
-          mimeType: from.mimeType,
-          size: from.size,
-          counted,
-          thumb,
-          thumbStatus,
-          source: { app: source.app, ref: source.ref },
-        })) as unknown as XenDriveFileDocument,
-      );
+      const copy = (await XenDriveFile.create({
+        owner_id: userId,
+        folder_id: null,
+        name: from.name,
+        storage_path: path,
+        mimeType: from.mimeType,
+        size: from.size,
+        counted,
+        thumb,
+        thumbStatus,
+        source: { app: source.app, ref: source.ref },
+      })) as unknown as XenDriveFileDocument;
+      await recordDriveFile(copy);
+      copies.push(copy);
     } catch (error) {
       await deleteBytes([path]);
       if (thumb?.path) await deleteFromStorage(thumb.path, true).catch(() => undefined);
@@ -186,6 +191,7 @@ export async function removeAppFiles(fileIds: Array<string | { toString(): strin
   if (ids.length === 0) return;
   const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path thumb").lean();
   await XenDriveFile.deleteMany({ _id: { $in: ids } });
+  await forgetFileRecords(ids);
   await deleteBytes([
     ...files.map((f) => f.storage_path),
     ...files.map((f) => f.thumb?.path).filter((p): p is string => !!p),

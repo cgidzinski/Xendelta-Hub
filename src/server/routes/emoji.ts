@@ -146,7 +146,13 @@ module.exports = function (app: Application) {
       // A storage problem is ours, not theirs: say so plainly and keep the details in the log.
       let url: string;
       try {
-        url = (await uploadToStorage(processed, storagePath, req.file.mimetype, false, IMMUTABLE)) as string;
+        url = (await uploadToStorage(processed, storagePath, req.file.mimetype, false, IMMUTABLE, {
+          name: `${name}.${EXTENSION[req.file.mimetype]}`,
+          uploadedBy: me,
+          // The uploader pays until community emoji are billed to the community's fund (#356).
+          payer: { type: "user", id: me },
+          space: { app: "emoji", ref: scope.id },
+        })) as string;
       } catch (error) {
         console.error("Emoji upload failed:", error);
         throw new AppError(502, "Couldn't save the picture. Try again in a moment.");
