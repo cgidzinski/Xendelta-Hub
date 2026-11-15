@@ -142,7 +142,8 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const file = await ownAppFile(req.params.fileId as string, callerId(req));
       // A file that doesn't use the person's storage belongs to the app that stored it: the app owns deleting it.
-      if (file.counted === false)
+      // (A community channel's files are the exception: the uploader may delete their own, though the community pays.)
+      if (file.counted === false && file.payer.type !== "community")
         throw new AppError(
           400,
           "This file belongs to another app and doesn't use your storage, so it can't be deleted here",

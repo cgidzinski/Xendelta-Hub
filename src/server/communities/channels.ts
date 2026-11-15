@@ -1,5 +1,6 @@
 // Channels: the conversations that belong to a community. This file has no dependency on chat/service.ts (which imports it
 // for the unread badge), so it only talks to the models and the policy.
+import { removeChannelFiles } from "../chat/files";
 import { Types } from "mongoose";
 import { ChannelState } from "../models/channelState";
 import { Conversation, type ConversationDocument } from "../models/conversation";
@@ -124,6 +125,7 @@ export async function createChannel(community: CommunityDocument, input: NewChan
 
 /** Delete a channel with its messages and everyone's read state for it. */
 export async function deleteChannel(channelId: unknown): Promise<void> {
+  await removeChannelFiles([channelId]);
   await Message.deleteMany({ conversationId: channelId }).exec();
   await ChannelState.deleteMany({ conversationId: channelId }).exec();
   await Conversation.deleteOne({ _id: channelId }).exec();
@@ -184,6 +186,7 @@ export async function unreadChannelCount(userId: string): Promise<number> {
 export async function deleteChannelsOf(communityId: string): Promise<void> {
   const ids = (await Conversation.find({ communityId }, "_id").lean().exec()).map((c) => c._id);
   if (ids.length === 0) return;
+  await removeChannelFiles(ids);
   await Message.deleteMany({ conversationId: { $in: ids } }).exec();
   await ChannelState.deleteMany({ conversationId: { $in: ids } }).exec();
   await Conversation.deleteMany({ _id: { $in: ids } }).exec();

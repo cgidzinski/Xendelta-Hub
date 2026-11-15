@@ -197,7 +197,7 @@ export async function finalizeChunkedUpload(
     mimeType: contentType,
     name: session.name,
     uploadedBy: session.user_id,
-    payer: payerFor(String(session.user_id), source),
+    payer: await payerFor(String(session.user_id), source),
     space: source ?? { app: "xendrive", ref: String(session.user_id) },
     counted,
     thumbStatus: thumbStatusFor(contentType),

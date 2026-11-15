@@ -4,6 +4,7 @@
 
 import type { Types } from "mongoose";
 import { FileRecord, type FileRecordAttrs } from "../models/fileRecord";
+import { driveSourceApp } from "./driveSources";
 
 export type Payer = { type: "user" | "community" | "house"; id?: string };
 
@@ -21,11 +22,20 @@ export interface FileRecordInput {
   previewKey?: string | null;
 }
 
-/** Who pays for a private file stored under a source. Today the uploader; community channels and emoji follow in #356. */
-export const payerFor = (userId: string, _source?: { app: string; ref: string } | null): Payer => ({
-  type: "user",
-  id: String(userId),
-});
+/** Who pays to store a private file: the uploader, unless the app names someone else for that space (a community's channel). */
+export async function payerFor(userId: string, source?: { app: string; ref: string } | null): Promise<Payer> {
+  const named = source ? await driveSourceApp(source.app)?.payer?.(source.ref, String(userId)) : null;
+  return named ?? { type: "user", id: String(userId) };
+}
+
+/** How many files and bytes a payer is paying to store, in both buckets (renditions are a house cost and aren't added). */
+export async function storageUsedBy(payer: Payer): Promise<{ files: number; bytes: number }> {
+  const [row] = await FileRecord.aggregate<{ files: number; bytes: number }>([
+    { $match: { "payer.type": payer.type, ...(payer.id ? { "payer.id": payer.id } : {}) } },
+    { $group: { _id: null, files: { $sum: 1 }, bytes: { $sum: { $ifNull: ["$size", 0] } } } },
+  ]);
+  return { files: row?.files ?? 0, bytes: row?.bytes ?? 0 };
+}
 
 /** The record for a file, created or brought up to date (one per bucket and key). */
 export async function saveFileRecord(input: FileRecordInput): Promise<void> {

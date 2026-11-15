@@ -27,6 +27,11 @@ export interface DriveSourceApp {
    */
   counts: (ref: string) => Promise<boolean>;
   /**
+   * Who pays to store files for this `ref`. Omitted: the uploader. Chat names the community for a community channel's files
+   * (docs/billing.md), so they are on its bill and not on the sender's.
+   */
+  payer?: (ref: string, userId: string) => Promise<{ type: "user" | "community" | "house"; id?: string }>;
+  /**
    * The person deleted these files from XenDrive. The app drops its references to them (a photo on an expense), so it
    * doesn't show a broken image. Optional: chat attachments need nothing.
    */

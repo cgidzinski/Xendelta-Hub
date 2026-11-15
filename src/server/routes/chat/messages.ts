@@ -2,6 +2,7 @@ import type { Application, Request, Response } from "express";
 import { Message, type MessageDocument } from "../../models/message";
 import { Conversation } from "../../models/conversation";
 import { FileRecord } from "../../models/fileRecord";
+import { removeUnusedChannelFiles } from "../../chat/files";
 import { generateSignedUrl } from "../../utils/storageUtils";
 import { thumbnailUrlFor } from "../../utils/xendriveThumbs";
 import { authenticateToken } from "../../middleware/auth";
@@ -345,6 +346,7 @@ export function registerMessageRoutes(app: Application) {
         throw new AppError(403, "You can't delete that message");
       }
 
+      const attachedFileIds = message.attachments.map((a) => String(a.fileId));
       message.deletedAt = new Date();
       message.pinnedAt = undefined;
       message.pinnedBy = undefined;
@@ -352,6 +354,8 @@ export function registerMessageRoutes(app: Application) {
       message.set("attachments", []);
       message.set("reactions", []);
       await message.save();
+      // A community channel's file is the community's cost: it goes with its last message (another message may use it).
+      await removeUnusedChannelFiles(attachedFileIds);
       await refreshLastPreview(chat._id, message.seq, "This message was deleted");
       if (typeof message.threadRoot === "number") await recordThreadReplyDeleted(context, message.threadRoot);
       await announceUpdate(context, message);

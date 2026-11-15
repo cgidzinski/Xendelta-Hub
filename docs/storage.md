@@ -49,8 +49,13 @@ also its folder) and the keys of its thumbnail and preview. They are what storag
   (`utils/appFiles.ts`), `finalizeChunkedUpload` (XenDrive and chat uploads), the thumbnail job, `deleteFromStorage`, and
   `uploadToStorage` for public files (it takes the record's details). `utils/fileRecords.ts` holds the helpers. A record that
   can't be saved is logged and never fails the upload.
-- Public files have records too: avatars and XenSplit group pictures and blog images (house), custom emoji and Recipaint
-  images (the uploader, until community emoji are billed to the community's fund).
+- **Who pays** is set when the file is created (`payerFor`, `utils/fileRecords.ts`): the uploader, unless the app names someone
+  else for that space (`DriveSourceApp.payer`). A community channel's attachments and the community's custom emoji are paid
+  by the community (#356): they don't count toward the uploader's quota, the uploader still sees and can delete their own
+  channel files in the storage viewer, and `storageUsedBy` sums a payer's files. A channel file is deleted with its last
+  message, its channel or its community (`chat/files.ts`). A DM's or group's attachments stay the sender's.
+- Public files have records too: avatars and XenSplit group pictures and blog images (house), custom emoji (the community, or the person who added it to a group chat) and Recipaint
+  images (the uploader).
 - The migration `1795600000000-file-records` makes the records for everything already stored. `npm run db:stats` lists XenDrive
   files without one.
 - **App files are only records.** A chat attachment or a photo in XenSplit, XenBudget, XenNote, XenKitchen or XenRoutine has

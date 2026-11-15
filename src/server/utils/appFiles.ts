@@ -54,6 +54,7 @@ export async function storeAppFiles(
   }
 
   try {
+    const payer = await payerFor(userId, source);
     return await Promise.all(
       files.map((f, i) =>
         FileRecord.create({
@@ -63,7 +64,7 @@ export async function storeAppFiles(
           mimeType: f.mimeType,
           name: f.name,
           uploadedBy: userId,
-          payer: payerFor(userId, source),
+          payer,
           space: { app: source.app, ref: source.ref },
           counted,
           thumbStatus: thumbStatusFor(f.mimeType),
@@ -169,7 +170,7 @@ export async function copyAppFiles(
         mimeType: from.mimeType,
         name: from.name,
         uploadedBy: userId,
-        payer: payerFor(userId, source),
+        payer: await payerFor(userId, source),
         space: { app: source.app, ref: source.ref },
         counted,
         thumbKey: thumb?.path,

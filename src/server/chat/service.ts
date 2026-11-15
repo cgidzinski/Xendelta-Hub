@@ -398,12 +398,24 @@ export async function publishMessage(context: ChatContext, message: MessageDocum
 
 // ---------- files ----------
 
+/** The community a conversation is a channel of, or null for a DM or group chat. */
+async function communityOf(conversationId: string): Promise<string | null> {
+  if (!Types.ObjectId.isValid(conversationId)) return null;
+  const chat = await Conversation.findById(conversationId, "communityId").lean().exec();
+  return chat?.communityId ?? null;
+}
+
 // Attachments uploaded in a chat are XenDrive files tagged `source: { app: "chat", ref: <conversation id> }`: they count
 // toward the sender's storage, stay out of My Drive, and show under XenDrive > From apps > Chat (utils/driveSources.ts).
 registerDriveSource("chat", {
   label: "Chat",
-  // Chat attachments use the sender's storage, like a file uploaded to XenDrive.
-  counts: async () => true,
+  // A DM or group chat's attachments use the sender's storage, like a file uploaded to XenDrive. A community channel's
+  // files are the community's cost: they are on its bill (`payer`) and don't use the sender's storage.
+  counts: async (ref) => !(await communityOf(ref)),
+  payer: async (ref, userId) => {
+    const communityId = await communityOf(ref);
+    return communityId ? { type: "community", id: communityId } : { type: "user", id: userId };
+  },
   verify: async (userId, ref) => {
     if (!Types.ObjectId.isValid(ref)) return false;
     const context = await resolveChatAccess(ref, userId);
