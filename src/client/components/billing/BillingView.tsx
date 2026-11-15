@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Alert, Box, Chip, LinearProgress, Stack, Typography } from "@mui/material";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import {
+  COST_CENTERS,
+  billedRate,
   ceilGems,
   formatGems,
   formatWholeGems,
@@ -205,6 +207,67 @@ function Statements({ overview }: { overview: BillingOverview }) {
   );
 }
 
+const ratePer = (id: string) => {
+  const center = COST_CENTERS.find((c) => c.id === id);
+  return center ? billedRate(center) : 0;
+};
+const gems = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} gems`;
+
+/** How billing works, in plain words, with the current prices. For a person, or for a community when `communityName` is set. */
+function HowBillingWorks({ overview, communityName }: { overview: BillingOverview; communityName?: string }) {
+  const paidFrom = communityName ? "the community's fund" : "your gems";
+  const items: Array<[string, string]> = [
+    [
+      "Files",
+      `${gems(ratePer("storage"))} for each GB you keep for a month, counted once a day, so a file you delete stops costing from the next day.${
+        communityName
+          ? " Files shared in the community's channels and its custom emoji are the community's."
+          : " Files in community channels are paid by the community, not by you."
+      }`,
+    ],
+    [
+      "Calls",
+      `${gems(ratePer("calls"))} for each GB of call audio and video.${
+        communityName
+          ? " Voice channels are paid from the fund as they are used."
+          : " In a call between people, the cost is shared evenly between everyone in it."
+      }`,
+    ],
+    ["Recipe scans", `${gems(ratePer("recipe_scans"))} for each recipe you read from a photo.`],
+    [
+      "Free every month",
+      `${formatWholeGems(overview.current.freeTierGems)} of everything above is free each month. It doesn't carry over to the next month.`,
+    ],
+    [
+      "When it's charged",
+      `Beyond the free allowance, the month's total is taken from ${paidFrom} on the 1st of the next month, rounded up to a whole gem once.`,
+    ],
+    [
+      "If there aren't enough gems",
+      `New uploads, calls and scans pause until ${communityName ? "someone donates" : "you add gems"}. Nothing is ever deleted, and ${
+        communityName ? "everyone" : "you"
+      } can still open, download and delete ${communityName ? "their" : "your"} files.`,
+    ],
+  ];
+  return (
+    <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
+      <SectionLabel>How billing works</SectionLabel>
+      <Stack spacing={1.5}>
+        {items.map(([title, text]) => (
+          <Box key={title}>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {title}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {text}
+            </Typography>
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 interface BillingViewProps {
   overview: BillingOverview;
   /** The third summary card: your gems, or the community's fund. */
@@ -260,6 +323,7 @@ export default function BillingView({ overview, balanceCard, paidFrom, community
       <CostRows overview={overview} />
       {children}
       <Statements overview={overview} />
+      <HowBillingWorks overview={overview} communityName={communityName} />
     </Stack>
   );
 }
