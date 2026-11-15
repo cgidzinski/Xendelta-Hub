@@ -56,7 +56,7 @@ Downloads and uploads are free on R2, so there is no downloads center.
 | Center | Unit stored | Billed in | Paid by | Discussion |
 |---|---|---|---|---|
 | `storage` | byte-days | GB-month | the person or community | #370 |
-| `calls` | bytes (SFU and TURN are one cost) | GB | the person or community | #371 |
+| `calls` | bytes (SFU and TURN are one cost) | GB | the people in the call (split evenly), or the community for a voice channel | #371 |
 | `recipe_scans` | scans | scan | the person | #372 |
 | `public_assets` | byte-days | GB-month | house | #373 |
 | `backups` | byte-days | GB-month | house | #373 |
@@ -64,7 +64,7 @@ Downloads and uploads are free on R2, so there is no downloads center.
 
 - **Billed rate** = `costRate × BILLING_MARGIN`. House centers are never billed; they are recorded so the admin report
   shows what they cost.
-- **Free tier:** `PERSON_FREE_TIER_GEMS` / `COMMUNITY_FREE_TIER_GEMS` (500 gems, worth $0.50 at 1,000 gems to the dollar) a month, taken off the whole bill. No roll-over.
+- **Free tier:** `PERSON_FREE_TIER_GEMS` / `COMMUNITY_FREE_TIER_GEMS` (2,000 and 5,000 gems, worth $2 and $5 at 1,000 gems to the dollar) a month, taken off the whole bill. No roll-over.
 - **Rounding:** usage is stored in whole units and gems are worked out from them as fractions. A bill's lines show
   one decimal, rounded up (`formatGems`: "0.4 gems", "less than 0.1 gems"). The amount due is the month's total
   beyond the free tier, rounded up to a whole gem **once** (`ceilGems`), so the lines still add up to it.
@@ -85,6 +85,36 @@ Billing is enforced by default (anything but `false`); the storage quota and vou
 2. Call `recordUsage` where the server observes the usage, with the account that pays.
 3. Call `canSpend(account)` before starting something that costs money (an upload, a call, a scan).
 4. Set its `costRate` and `status: "metered"` in `COST_CENTERS`, and add an `appGuide.ts` line if people should know.
+
+### Calls (`src/server/calls/meter.ts`, #371)
+
+Cloudflare Realtime bills SFU and TURN together: **62.5 gems per GB** delivered (50 at cost, $0.05). While a call runs, every
+30 seconds (and whenever someone joins, leaves or changes what they send) the server adds what it delivered to the bill: each
+person receives what every other participant sends, at the most the client lets them (`CALL_BITRATE_BPS` in `shared/calls.ts`:
+audio 32 kbps, camera 1.5 Mbps, screen share 2.5 Mbps, set as `maxBitrate` when publishing), so the estimate is an upper bound.
+**A call's cost is split evenly between the people in it.** A community's voice channel is paid from the community's fund,
+as it is used. A tab that never said goodbye is taken out of the call after 4 hours, and nobody is billed past that.
+
+Joining needs the payer (you, or the community) to be able to spend. During a call the payers are checked every 30 seconds: the
+first time one can't pay they are warned (`call:billing`), the next check takes them out of the call (the whole voice channel,
+when it is the community). Anyone who can still pay is never interrupted.
+
+### Recipe scans (`routes/xenkitchen.ts`, #372)
+
+A scan is **2.5 gems** (2 at cost, a few photos of one recipe) on the month's bill, counted once the model has run whether or
+not it found a recipe. It is refused first (402) when the free allowance is used up and the gems can't cover it.
+
+### Free allowance
+
+`PERSON_FREE_TIER_GEMS` is 2,000 a month (about 100 GB-months of storage) and `COMMUNITY_FREE_TIER_GEMS` 5,000, generous on purpose
+while the hub is small: most accounts will never reach it. Change them in `src/shared/billing.ts`.
+
+### Public uploads (#373)
+
+Avatars, group pictures and blog images are the house's, and not limited. Custom emoji are paid by where they were added: the
+community's fund for a community, the person who added it for a group chat (a group has no account of its own). Recipaint images
+are paid by the uploader. The house's own costs (email, backups, request fees) are entered by an admin from the invoices
+(`docs/billing.md` > Admin billing report).
 
 ### The storage meter (`src/server/billing/storageMeter.ts`)
 

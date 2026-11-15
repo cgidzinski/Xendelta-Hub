@@ -1,3 +1,6 @@
+import { userAccount } from "../billing/ledger";
+import { recordUsage } from "../billing/usage";
+import { assertCanSpend } from "../billing/settlement";
 import { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import sharp from "sharp";
@@ -1063,7 +1066,12 @@ module.exports = function (app: any) {
     handle(async (req, res) => {
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       if (files.length === 0) throw new AppError(400, "Choose a photo of the recipe");
+      // A scan costs money (billing/usage.ts): refused when the free allowance is used up and the gems can't cover it.
+      const payer = userAccount(callerId(req));
+      await assertCanSpend(payer);
       const recipe = await readRecipeFromImages(files.map((f) => ({ buffer: f.buffer, mimetype: f.mimetype })));
+      // The model ran, so it is one scan on this month's bill whether or not it found a recipe.
+      await recordUsage(payer, "recipe_scans", 1);
       if (!recipe) {
         throw new AppError(
           422,

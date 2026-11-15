@@ -55,9 +55,10 @@ export const COST_CENTERS = [
     unit: "byte",
     displayUnit: "GB",
     unitsPerDisplayUnit: GB,
-    costRate: 0,
+    // Cloudflare Realtime: $0.05 per GB delivered = 50 gems at 1,000 gems to the dollar (SFU and TURN are one cost).
+    costRate: 50,
     payer: "account",
-    status: "free",
+    status: "metered",
     provider: "cloudflare_realtime",
   },
   {
@@ -67,9 +68,10 @@ export const COST_CENTERS = [
     unit: "scan",
     displayUnit: "scan",
     unitsPerDisplayUnit: 1,
-    costRate: 0,
+    // Workers AI vision (llama-4-scout): about two gems a scan at cost, before the margin: a photo or three on one recipe.
+    costRate: 2,
     payer: "account",
-    status: "free",
+    status: "metered",
     provider: "cloudflare_ai",
   },
   {
@@ -118,9 +120,9 @@ export const COST_CENTER_IDS = COST_CENTERS.map((c) => c.id) as CostCenterId[];
 export const BILLING_MARGIN = 1.25;
 
 /** Gems a person can use each month without paying. Taken off the whole bill; it doesn't roll over. */
-export const PERSON_FREE_TIER_GEMS = 500;
+export const PERSON_FREE_TIER_GEMS = 2000;
 /** Gems a community can use each month without paying. */
-export const COMMUNITY_FREE_TIER_GEMS = 500;
+export const COMMUNITY_FREE_TIER_GEMS = 5000;
 
 /** Share of the free tier at which the account is warned. */
 export const FREE_TIER_WARNING_SHARE = 0.8;

@@ -199,6 +199,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
     void sync(call);
   });
 
+  // Billing: a warning that the call will end for lack of gems, then the end of it.
+  useRealtime("call:billing", ({ conversationId, message, ending }) => {
+    if (conversationId !== conversation.current) return;
+    enqueueSnackbar(message, { variant: ending ? "error" : "warning" });
+    if (ending) void leave(true);
+  });
+
   useRealtime("call:ring", (ring) => {
     if (!ring.ringing) {
       setIncoming((i) => (i?.conversationId === ring.conversationId ? null : i));

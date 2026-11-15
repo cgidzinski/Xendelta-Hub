@@ -5,6 +5,7 @@ import { realtime } from "../realtime";
 import { sendPushToUser } from "../utils/pushUtils";
 import { User } from "../models/user";
 import { callRegistry } from "./registry";
+import { meterCall } from "./usage";
 import { CALL_RING_SECONDS } from "@shared/calls";
 
 /** A channel of a community is a voice channel: people drop in and out, nobody is rung, and no line is left behind. */
@@ -65,6 +66,7 @@ export async function ringOthers(context: ChatContext, starterId: string, starte
 /** The call is over: stop any ringing, tell the chat, and (in a DM or group chat) leave a line saying how it went. */
 export async function endCall(context: ChatContext, userId: string, starterName: string, video: boolean) {
   const conversationId = String(context.chat._id);
+  await meterCall(conversationId); // what the call delivered up to now, while this person was still in it
   const left = callRegistry.leave(conversationId, userId);
   // endCall is also the ring timeout: the starter is taken out here.
   const call = left.call ?? callRegistry.get(conversationId);

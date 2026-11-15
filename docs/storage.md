@@ -91,7 +91,7 @@ deleted by the sweep. Files under a day old are never touched. Records whose obj
 
 Every file a person uploads has a `FileRecord` in the private bucket (and, for XenDrive uploads, a XenDrive item). **There is no
 storage quota.** Each file is paid for by its payer in gems, by the month (`docs/billing.md`): 15 gems per GB-month at cost,
-18.75 billed, with 500 free gems a month for every person and community. A payer who has used the allowance and has no gems
+18.75 billed, with a free monthly allowance of gems for every person (2,000) and community (5,000). A payer who has used the allowance and has no gems
 can't store more (`assertCanStore`, a 402) but nothing is ever deleted and their own files stay open. `usageFor`
 (`src/server/utils/xendriveUtils.ts`) only reports how much a person stores; it limits nothing.
 

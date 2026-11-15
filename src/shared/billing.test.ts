@@ -29,13 +29,19 @@ const metered = (over: Partial<CostCenter> = {}): CostCenter => ({
 });
 
 describe("the registry", () => {
-  it("meters only storage so far, at the R2 cost plus the margin", () => {
-    expect(COST_CENTERS.filter((c) => c.status === "metered").map((c) => c.id)).toEqual(["storage"]);
+  it("meters storage, calls and recipe scans, at the provider cost plus the margin", () => {
+    expect(COST_CENTERS.filter((c) => c.status === "metered").map((c) => c.id)).toEqual([
+      "storage",
+      "calls",
+      "recipe_scans",
+    ]);
     expect(everythingFree()).toBe(false);
     expect(communitiesBilled()).toBe(true);
     // 15 gems per GB-month at cost ($0.015), 18.75 billed.
     expect(billedRate(COST_CENTERS.find((c) => c.id === "storage")!)).toBe(18.75);
-    for (const c of COST_CENTERS.filter((c) => c.id !== "storage")) expect(billedRate(c)).toBe(0);
+    expect(billedRate(COST_CENTERS.find((c) => c.id === "calls")!)).toBe(62.5); // $0.05 per GB
+    expect(billedRate(COST_CENTERS.find((c) => c.id === "recipe_scans")!)).toBe(2.5);
+    for (const c of COST_CENTERS.filter((c) => c.payer === "house")) expect(billedRate(c)).toBe(0);
     expect(COST_CENTERS.some((c) => (c.id as string) === "downloads")).toBe(false);
   });
 
@@ -67,10 +73,9 @@ describe("statementOf", () => {
     expect(s).toMatchObject({ lines: [], usageGems: 0, freeTierLeft: 300, amountDue: 0 });
   });
 
-  it("lists a free center's usage at 0 gems", () => {
-    const s = statementOf([{ center: "calls", units: 5_000_000_000 }], 300);
-    expect(s.lines).toHaveLength(1);
-    expect(s.lines[0]).toMatchObject({ center: "calls", gems: 0, rate: 0 });
+  it("leaves house centers off a bill", () => {
+    const s = statementOf([{ center: "email", units: 5_000 }], 300);
+    expect(s.lines).toHaveLength(0); // house centers never appear on a bill
     expect(s.amountDue).toBe(0);
   });
 
