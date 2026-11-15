@@ -29,8 +29,9 @@ const metered = (over: Partial<CostCenter> = {}): CostCenter => ({
 });
 
 describe("the registry", () => {
-  it("meters storage, calls and recipe scans, at the provider cost plus the margin", () => {
-    expect(COST_CENTERS.filter((c) => c.status === "metered").map((c) => c.id)).toEqual([
+  it("meters every center now: the three people pay for, and the three the house pays", () => {
+    expect(COST_CENTERS.every((c) => c.status === "metered")).toBe(true);
+    expect(COST_CENTERS.filter((c) => c.payer === "account").map((c) => c.id)).toEqual([
       "storage",
       "calls",
       "recipe_scans",

@@ -81,9 +81,10 @@ export const COST_CENTERS = [
     unit: "byte_day",
     displayUnit: "GB-month",
     unitsPerDisplayUnit: GB * DAYS_PER_MONTH,
-    costRate: 0,
+    // Cloudflare R2, like any stored file: $0.015 per GB-month. The house pays it; nobody is billed.
+    costRate: 15,
     payer: "house",
-    status: "free",
+    status: "metered",
     provider: "cloud_storage",
   },
   {
@@ -93,9 +94,10 @@ export const COST_CENTERS = [
     unit: "byte_day",
     displayUnit: "GB-month",
     unitsPerDisplayUnit: GB * DAYS_PER_MONTH,
-    costRate: 0,
+    // The same R2 storage cost, for the database backups. The house pays it.
+    costRate: 15,
     payer: "house",
-    status: "free",
+    status: "metered",
     provider: "cloud_storage",
   },
   {
@@ -105,9 +107,10 @@ export const COST_CENTERS = [
     unit: "email",
     displayUnit: "email",
     unitsPerDisplayUnit: 1,
-    costRate: 0,
+    // Resend: about $0.0004 an email beyond its free plan. The house pays it.
+    costRate: 0.4,
     payer: "house",
-    status: "free",
+    status: "metered",
     provider: "resend",
   },
 ] as const satisfies readonly CostCenter[];
