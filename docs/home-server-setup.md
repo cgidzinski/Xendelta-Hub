@@ -390,7 +390,7 @@ Two clones on the same CT, same runner, different folder/port/PM2 process each:
 | Deploys | `.github/workflows/deploy-prod.yml`, manual, hard-restricted to `main` | `.github/workflows/deploy-staging.yml`, manual, deploys whichever branch is picked in the dropdown (or comment `/deploy-staging` on a PR — see `.github/workflows/deploy-staging-comment.yml`) |
 | Hostname | `xendelta.com` (or whatever the prod domain is) | `staging.xendelta.com` |
 
-Each folder has its **own** `.env` — staging points at its own Mongo DB / GCS buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).
+Each folder has its **own** `.env` — staging points at its own Mongo DB / R2 buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).
 
 Both deploy workflows run `npm run db:migrate` (ts-migrate-mongoose) between `npm ci` and the build, so each environment applies pending MongoDB migrations to its own database before restarting. `set -euo pipefail` aborts the deploy if a migration fails. See `migrations/README.md` for authoring migrations; the server also re-runs pending migrations once on boot as a non-fatal safety net.
 
@@ -400,7 +400,7 @@ One-time setup per folder (the deploy workflow only ever `pm2 restart`s — it d
 ```bash
 git clone https://github.com/cgidzinski/Xendelta-Hub ~/XenHub-Staging
 cd ~/XenHub-Staging
-nano .env   # own PORT, MONGODB_URI, GCS buckets, PUBLIC_URL, etc.
+nano .env   # own PORT, MONGODB_URI, R2 buckets, PUBLIC_URL, etc.
 npm ci
 npm run build
 pm2 start npm --name xenhub-staging -- run start

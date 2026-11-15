@@ -15,7 +15,9 @@ const xendriveUploadSessionSchema = new Schema({
   source_ref: { type: String },
   total_chunks: { type: Number, required: true },
   received_chunks: { type: [Number], default: [] },
-  resumable_uri: { type: String, required: true },
+  // The storage's multipart upload (storage/index.ts) and the parts it has accepted so far.
+  storage_upload_id: { type: String, required: true },
+  parts: { type: [{ partNumber: Number, etag: String, _id: false }], default: [] },
   bytes_uploaded: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now },
 });

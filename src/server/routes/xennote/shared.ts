@@ -3,7 +3,7 @@ import type { HydratedDocument } from "mongoose";
 import { AppError, callerId } from "../../utils/http";
 import { XenNote, XenNotebook, type XenNoteAttrs, type XenNotebookAttrs } from "../../models/xenNote";
 import { User } from "../../models/user";
-import { generateSignedUrl } from "../../utils/gcsUtils";
+import { generateSignedUrl } from "../../utils/storageUtils";
 import { signedUrlsFor } from "../../utils/appFiles";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { canEdit, canManage, canView, roleOf, type MemberRole } from "../../utils/membership";

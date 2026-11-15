@@ -15,7 +15,7 @@ import {
 import { ensureUniqueSlug } from "../../utils/slugUtils";
 import { uploadBlogAsset as multerUploadBlogAsset } from "../../config/multer";
 import { uploadBlogAsset, generateUniqueFilename } from "../../utils/mediaUtils";
-import { deleteFromGCS } from "../../utils/gcsUtils";
+import { deleteFromStorage } from "../../utils/storageUtils";
 import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 export function registerAdminBlogRoutes(app: express.Application) {
@@ -152,7 +152,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
       const urlParts = assetUrl.split("/");
       const filename = urlParts[urlParts.length - 1];
       const gcsPath = `blog-assets/${filename}`;
-      await deleteFromGCS(gcsPath).catch(() => {
+      await deleteFromStorage(gcsPath).catch(() => {
         // Ignore errors if file doesn't exist
       });
 
@@ -225,7 +225,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
           const urlParts = assetUrl.split("/");
           const filename = urlParts[urlParts.length - 1];
           const gcsPath = `blog-assets/${filename}`;
-          await deleteFromGCS(gcsPath).catch(() => {
+          await deleteFromStorage(gcsPath).catch(() => {
             // Ignore errors if file doesn't exist
           });
         }
@@ -236,7 +236,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
         const urlParts = post.featuredImage.split("/");
         const filename = urlParts[urlParts.length - 1];
         const gcsPath = `blog-assets/${filename}`;
-        await deleteFromGCS(gcsPath).catch(() => {
+        await deleteFromStorage(gcsPath).catch(() => {
           // Ignore errors if file doesn't exist
         });
       }

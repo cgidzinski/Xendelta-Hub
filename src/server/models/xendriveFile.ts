@@ -1,6 +1,6 @@
 import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
 import { randomToken } from "../utils/tokens";
-import { deleteFromGCS } from "../utils/gcsUtils";
+import { deleteFromStorage } from "../utils/storageUtils";
 import { checkSharePassword } from "../utils/sharePasswords";
 
 // One stored file. `storage_path` is where the bytes live in the private bucket and is stored, not
@@ -71,7 +71,7 @@ xendriveFileSchema.method("isExpired", function (this: XenDriveFileDocument) {
 xendriveFileSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   const doc = await this.model.findOne(this.getQuery());
   if (doc?.storage_path) {
-    await deleteFromGCS(doc.storage_path, true).catch(() => {
+    await deleteFromStorage(doc.storage_path, true).catch(() => {
       // Ignore errors if the object is already gone
     });
   }

@@ -14,7 +14,7 @@ import {
 import { resolveCategories, computeImportHash, roundMoney } from "../../utils/xenBudgetUtils";
 import { MAX_XENBUDGET_IMAGES_PER_ITEM } from "../../constants";
 import { uploadXenBudgetImages } from "../../config/multer";
-import { generateSignedUrl } from "../../utils/gcsUtils";
+import { generateSignedUrl } from "../../utils/storageUtils";
 import { storeAppFiles, removeAppFiles, signedUrlsFor } from "../../utils/appFiles";
 import { XENBUDGET_SOURCE, removeItemPhotos } from "../../utils/xenBudgetFiles";
 import { applyRules, normalizeFlagNames, withDerivedUncategorised } from "../../utils/xenBudgetRules";

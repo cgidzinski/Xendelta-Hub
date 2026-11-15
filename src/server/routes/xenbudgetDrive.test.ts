@@ -4,20 +4,14 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
 import { usageFor } from "../utils/xendriveUtils";
 
-// The model below loads storage config at import time, before the test app sets its environment.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 // Item photos are XenDrive files tagged to the book: owned by the uploader, listed under From apps, exempt from the
 // quota for now, and removed with the photo, the item, the book or the file. Only storage is faked.
 const stored = new Set<string>();
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_b: Buffer, path: string) => void stored.add(path)),
+  uploadToStorage: vi.fn(async (_b: Buffer, path: string) => void stored.add(path)),
   generateSignedUrl: vi.fn(async (path: string) => `https://example.test/signed/${path}`),
-  deleteFromGCS: vi.fn(async (path: string) => void stored.delete(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void stored.delete(path)),
 }));
 
 let t: TestApp;

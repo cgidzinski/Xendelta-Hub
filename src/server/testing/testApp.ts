@@ -19,8 +19,8 @@ export function setTestEnv(): void {
   process.env.JWT_SECRET = "test-secret";
   process.env.RESEND_API_KEY = "re_test_key";
   process.env.PUBLIC_URL = "http://localhost:3000";
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
+  // Both buckets live in memory (storage/memoryStore.ts); tests look inside with memoryStores().
+  process.env.STORAGE_DRIVER = "memory";
 }
 
 /**

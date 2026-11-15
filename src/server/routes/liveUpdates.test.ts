@@ -1,15 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { SocketManager } from "../infrastructure/SocketManager";
 
 // Someone else's change has to reach your open screen. These tests take the place of a browser: they watch what the
 // routes push through the SocketManager, which is the only thing that keeps XenKitchen and XenRoutine in step.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 let t: TestApp;
 beforeAll(async () => {
   t = await startTestApp([

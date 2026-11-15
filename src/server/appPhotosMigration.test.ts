@@ -1,26 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import mongoose from "mongoose";
 import { startTestApp, type TestApp } from "./testing/testApp";
+import { bucketView } from "./testing/storage";
 import * as migration from "../../migrations/1794700000000-app-photos-to-xendrive";
 
-// Two in-memory buckets stand in for storage; the database is real.
-const { priv, pub } = vi.hoisted(() => ({ priv: new Set<string>(), pub: new Set<string>() }));
-vi.mock("./config/gcs", () => {
-  const bucket = (name: string, set: Set<string>) => ({
-    name,
-    file: (path: string) => ({
-      path,
-      set,
-      getMetadata: async () => {
-        if (!set.has(path)) throw new Error("not found");
-        return [{ size: "100", contentType: "image/webp" }];
-      },
-      copy: async (dest: { path: string; set: Set<string> }) => void dest.set.add(dest.path),
-      delete: async () => void set.delete(path),
-    }),
-  });
-  return { privateBucket: bucket("private", priv), publicBucket: bucket("public", pub) };
-});
+// Both buckets are in memory (storage/memoryStore.ts); the database is real.
+const priv = bucketView("private");
+const pub = bucketView("public");
 
 let t: TestApp;
 beforeAll(async () => {
@@ -114,7 +100,7 @@ describe("app photos -> XenDrive files migration", () => {
       owner_id: new mongoose.Types.ObjectId(ann),
       storage_path: "xensplit-images/g/e/a.jpg",
       counted: false,
-      size: 100,
+      size: 42,
       source: { app: "xensplit", ref: String(groupId) },
     });
     const group = await conn.collection("xensplits").findOne({ _id: groupId });
@@ -150,7 +136,7 @@ describe("app photos -> XenDrive files migration", () => {
     expect(back!.expenses[0].images[0]).toMatchObject({ gcs_path: "xensplit-images/g/e/a.jpg" });
     expect(back!.expenses[0].images[0].file_id).toBeUndefined();
     const kitchenBack = await conn.collection("xenkitchenitems").findOne({ _id: kitchenItem });
-    expect(kitchenBack!.images[0].url).toMatch(/^https:\/\/storage\.googleapis\.com\/public\/xenkitchen\//);
+    expect(kitchenBack!.images[0].url).toMatch(/^https:\/\/public\.storage\.test\/xenkitchen\//);
     expect(pub.has(kitchenBack!.images[0].gcs_path)).toBe(true);
   });
 });

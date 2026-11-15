@@ -136,7 +136,7 @@ mongoConnection.on("connected", async () => {
       handler: () => runNoteReminders(),
     });
     // Automatic database backups to the private bucket, only when BACKUP_SCHEDULE_HOURS is set (docs/admin.md).
-    const { scheduleFromEnv, runScheduledBackup } = require("./utils/gcsBackups");
+    const { scheduleFromEnv, runScheduledBackup } = require("./utils/storageBackups");
     const backupSchedule = scheduleFromEnv();
     if (backupSchedule) {
       scheduler.register({

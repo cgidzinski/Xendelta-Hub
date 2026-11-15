@@ -5,11 +5,7 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
 // Reminders on notes: setting one through the routes, and the job that sends them. Real routes, models and database;
 // only storage is faked.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
   generateSignedUrl: vi.fn(async (path: string) => `https://signed.example/${path}`),
 }));

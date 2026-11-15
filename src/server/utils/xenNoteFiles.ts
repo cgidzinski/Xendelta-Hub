@@ -6,7 +6,7 @@ import { XenNote, XenNotebook } from "../models/xenNote";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { canEdit } from "./membership";
 import { registerDriveSource } from "./driveSources";
-import { deleteFromGCS } from "./gcsUtils";
+import { deleteFromStorage } from "./storageUtils";
 import { removeAppFiles } from "./appFiles";
 
 export const XENNOTE_SOURCE = "xennote";
@@ -68,6 +68,6 @@ export async function removeNotePhotos(images: Photo[]): Promise<void> {
   const legacy = images.filter((i) => !i.file_id && i.gcs_path).map((i) => i.gcs_path as string);
   await Promise.all([
     removeAppFiles(fileIds),
-    ...legacy.map((path) => deleteFromGCS(path, true).catch(() => undefined)),
+    ...legacy.map((path) => deleteFromStorage(path, true).catch(() => undefined)),
   ]);
 }

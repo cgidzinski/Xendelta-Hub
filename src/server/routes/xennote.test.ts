@@ -4,20 +4,14 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
 import { usageFor } from "../utils/xendriveUtils";
 
-// The model below loads storage config at import time, before the test app sets its environment.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 // XenNote through the real routes, models and validation against an in-memory database. Only storage is faked.
 
 const stored = new Set<string>();
 const removed: string[] = [];
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_buf: Buffer, path: string) => void stored.add(path)),
-  deleteFromGCS: vi.fn(async (path: string) => {
+  uploadToStorage: vi.fn(async (_buf: Buffer, path: string) => void stored.add(path)),
+  deleteFromStorage: vi.fn(async (path: string) => {
     stored.delete(path);
     removed.push(path);
   }),

@@ -6,7 +6,7 @@ import { validate, validateQuery } from "../../utils/validation";
 import { adminBackupNameSchema, adminRestoreBackupSchema } from "../../utils/validation/admin";
 import { AppError } from "../../utils/http";
 import { recordAudit } from "../../utils/adminAudit";
-import { generateSignedUrl } from "../../utils/gcsUtils";
+import { generateSignedUrl } from "../../utils/storageUtils";
 import {
   backupExists,
   createBackup,
@@ -15,7 +15,7 @@ import {
   listBackups,
   restoreBackup,
   startJob,
-} from "../../utils/gcsBackups";
+} from "../../utils/storageBackups";
 import type { AuthenticatedRequest } from "../../types";
 
 const admin = [authenticateToken, requireAdmin];

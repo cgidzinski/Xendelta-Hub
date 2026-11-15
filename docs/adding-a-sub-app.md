@@ -128,7 +128,7 @@ spellings.
   `<app>:<thing>_update`.
 - Notifications go through `notify()`. **Files a person uploads in your app are XenDrive files**: register a source with
   `registerDriveSource` (see `utils/xenNoteFiles.ts`) and store them with `storeAppFiles` from `utils/appFiles.ts`, not
-  `uploadToGCS`, so they are owned by the uploader, listed under XenDrive > From apps and deleted properly (`docs/storage.md`).
+  `uploadToStorage`, so they are owned by the uploader, listed under XenDrive > From apps and deleted properly (`docs/storage.md`).
   Only small, resized or admin-only images (avatars, a group image) use `utils/mediaUtils.ts`. A long upload needs the
   client's progress bar (below).
 
@@ -273,6 +273,6 @@ Not every app needs these; decide for each and say so in the PR.
 - **Share target** (`src/client/routes/Internal/Share/`, `pwa/shareStash.ts`): the phone's Share button can send a link, text or
   photos to the hub, which offers places to save them. An app that makes sense as a destination adds an option there
   (the receipt flow into XenSplit and XenBudget in `Share/receipt.ts` is the example: pick a group, open the new-expense form).
-- **Admin backups** (`utils/gcsBackups.ts`) dump the whole database, so a new collection is included with nothing to do.
+- **Admin backups** (`utils/storageBackups.ts`) dump the whole database, so a new collection is included with nothing to do.
 - **Feedback** (`/internal/feedback`) is for the hub as a whole; an app does not need its own.
 

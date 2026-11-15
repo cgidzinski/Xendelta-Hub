@@ -1,30 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
-// Storage and the network are faked; sessions, models and Mongo are real. The point: an upload
+// Storage is in memory (storage/memoryStore.ts); sessions, models and Mongo are real. The point: an upload
 // session lives in the database, so it is still there after the "server" forgets everything it
 // held in memory (which is what a restart or deploy does), and it belongs to whoever started it.
-
-const deleted: string[] = [];
-vi.mock("../config/gcs", () => ({
-  privateBucket: {
-    file: (path: string) => ({
-      createResumableUpload: async () => ["https://storage.example.test/upload?id=1"],
-      getMetadata: async () => [{ size: "6", contentType: "text/plain" }],
-      exists: async () => [true],
-      delete: async () => void deleted.push(path),
-    }),
-  },
-}));
-vi.mock("https", () => {
-  const request = (_opts: unknown, cb: (res: { statusCode: number }) => void) => ({
-    on: () => undefined,
-    write: () => undefined,
-    end: () => cb({ statusCode: 308 }),
-  });
-  return { default: { request }, request };
-});
 
 let t: TestApp;
 let utils: typeof import("./xendriveUtils.js");
@@ -35,9 +15,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await t?.stop();
 }, 60_000);
-beforeEach(() => {
-  deleted.length = 0;
-});
 
 const uid = (u: { user: { _id: unknown } }) => String(u.user._id);
 
@@ -55,6 +32,11 @@ describe("XenDrive upload sessions", () => {
     const done = await utils.finalizeChunkedUpload(id, uid(me));
     expect(done.name).toBe("notes.txt"); // the person's own file name, not the storage name
     expect(done.size).toBe(6);
+    // The parts were joined in order into one stored object.
+    const { memoryStores } = await import("../storage/index.js");
+    const { XenDriveFile } = await import("../models/xendriveFile.js");
+    const file = await XenDriveFile.findById(done._id).lean();
+    expect(memoryStores().privateStore.objects.get(file!.storage_path)?.body.toString()).toBe("abcdef");
     expect(await utils.getUploadSessionStatus(id, uid(me))).toBeNull(); // finished sessions are removed
   });
 
@@ -103,10 +85,15 @@ describe("XenDrive upload sessions", () => {
 
   it("cancelling removes the session and the partial file", async () => {
     const me = await createUser();
+    const { memoryStores } = await import("../storage/index.js");
+    const store = memoryStores().privateStore;
+    const before = store.openUploads().length;
     const id = await utils.initiateChunkedUpload(uid(me), "gone.txt", 1);
+    await utils.uploadChunk(id, uid(me), 0, Buffer.from("partial"));
+    expect(store.openUploads().length).toBe(before + 1);
     await utils.cleanupFailedUpload(id, uid(me));
     expect(await utils.getUploadSessionStatus(id, uid(me))).toBeNull();
-    expect(deleted.some((p) => p.includes(uid(me)))).toBe(true);
+    expect(store.openUploads().length).toBe(before); // the multipart upload is abandoned, its parts gone
   });
 
   it("the scheduled cleanup removes sessions older than an hour and keeps fresh ones", async () => {

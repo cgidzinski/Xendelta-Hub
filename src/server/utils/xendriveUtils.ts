@@ -1,12 +1,11 @@
 /**
  * XenDrive upload utilities
- * Chunked uploads to the private GCS bucket, streamed through resumable uploads. A session is kept in
+ * Chunked uploads to the private bucket as multipart uploads (one part per chunk). A session is kept in
  * Mongo (models/xendriveUploadSession.ts) and belongs to the person who started it.
  */
 
-import https from "https";
 import { Types } from "mongoose";
-import { privateBucket } from "../config/gcs";
+import { privateStore } from "../storage";
 import { formatFileSize } from "./fileUtils";
 import { randomToken } from "./tokens";
 import { XenDriveFile } from "../models/xendriveFile";
@@ -15,8 +14,6 @@ import { User } from "../models/user";
 import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import { driveSourceApp } from "./driveSources";
-
-const gcsFileFor = (storagePath: string) => privateBucket.file(storagePath);
 
 /** A unique, storage-safe object name for an uploaded file. Never shown to people. */
 export function generateXendriveFilename(originalName: string): string {
@@ -55,7 +52,7 @@ export async function assertOwnFolder(userId: string, folderId: string | null | 
 }
 
 /**
- * Start a chunked upload into a folder (null = top level) using a GCS resumable upload.
+ * Start a chunked upload into a folder (null = top level) as a multipart upload.
  * @returns the upload session id
  */
 export async function initiateChunkedUpload(
@@ -68,13 +65,9 @@ export async function initiateChunkedUpload(
   await assertOwnFolder(userId, folderId);
   const uploadId = `xendrive-${Date.now()}-${randomToken(9)}`;
   const storedName = generateXendriveFilename(name);
-  const gcsFile = gcsFileFor(`xendrive/${userId}/${storedName}`);
-
-  const [resumableUri] = await gcsFile.createResumableUpload({
-    metadata: {
-      contentType: detectContentType(storedName),
-      cacheControl: "no-cache, no-store, must-revalidate",
-    },
+  const storageUploadId = await privateStore.startMultipart(`xendrive/${userId}/${storedName}`, {
+    contentType: detectContentType(storedName),
+    cacheControl: "no-cache, no-store, must-revalidate",
   });
 
   await XenDriveUploadSession.create({
@@ -85,7 +78,7 @@ export async function initiateChunkedUpload(
     folder_id: folderId,
     ...(source ? { source_app: source.app, source_ref: source.ref } : {}),
     total_chunks: totalChunks,
-    resumable_uri: resumableUri,
+    storage_upload_id: storageUploadId,
   });
   return uploadId;
 }
@@ -95,7 +88,7 @@ async function ownSession(uploadId: string, userId: string) {
   return XenDriveUploadSession.findOne({ upload_id: uploadId, user_id: userId });
 }
 
-/** Upload one chunk straight to GCS over the resumable-upload HTTP API. */
+/** Upload one chunk as one part of the multipart upload (part numbers start at 1). */
 export async function uploadChunk(
   uploadId: string,
   userId: string,
@@ -111,56 +104,25 @@ export async function uploadChunk(
     throw new Error(`Invalid chunk index: ${chunkIndex}`);
   }
 
-  const startByte = session.bytes_uploaded;
-  const endByte = startByte + chunkData.length - 1;
-  const isLastChunk = chunkIndex === session.total_chunks - 1;
+  const partNumber = chunkIndex + 1;
+  const etag = await privateStore.uploadPart(
+    `xendrive/${session.user_id}/${session.filename}`,
+    session.storage_upload_id,
+    partNumber,
+    chunkData,
+  );
 
-  await new Promise<void>((resolve, reject) => {
-    const url = new URL(session.resumable_uri);
-
-    // For the last chunk, include the total size; otherwise `*` for unknown total
-    const totalSize = isLastChunk ? endByte + 1 : "*";
-    const contentRange = `bytes ${startByte}-${endByte}/${totalSize}`;
-
-    const options = {
-      hostname: url.hostname,
-      port: url.port || 443,
-      path: url.pathname + url.search,
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Length": chunkData.length.toString(),
-        "Content-Range": contentRange,
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      if (res.statusCode === 308 || res.statusCode === 200 || res.statusCode === 201) {
-        // 308 Resume Incomplete: stored, more chunks expected. 200/201: complete.
-        resolve();
-      } else {
-        let errorBody = "";
-        res.on("data", (chunk) => {
-          errorBody += chunk.toString();
-        });
-        res.on("end", () => {
-          reject(new Error(`GCS upload failed: ${res.statusCode} ${res.statusMessage} - ${errorBody}`));
-        });
-      }
-    });
-
-    req.on("error", (error) => {
-      reject(new Error(`GCS upload request failed: ${error.message}`));
-    });
-
-    req.write(chunkData);
-    req.end();
-  });
-
+  // A resent chunk replaces its earlier part, so only the newest ETag is kept and its bytes are counted once.
+  const previous = session.parts.find((p) => p.partNumber === partNumber);
   await XenDriveUploadSession.updateOne(
     { upload_id: uploadId },
-    { $inc: { bytes_uploaded: chunkData.length }, $addToSet: { received_chunks: chunkIndex } },
+    {
+      $inc: { bytes_uploaded: previous ? 0 : chunkData.length },
+      $addToSet: { received_chunks: chunkIndex },
+      $pull: { parts: { partNumber } },
+    },
   );
+  await XenDriveUploadSession.updateOne({ upload_id: uploadId }, { $push: { parts: { partNumber, etag } } });
 }
 
 /** Verify every chunk arrived and create the file record. */
@@ -186,9 +148,15 @@ export async function finalizeChunkedUpload(
   }
 
   const storagePath = `xendrive/${session.user_id}/${session.filename}`;
-  const [metadata] = await gcsFileFor(storagePath).getMetadata();
-  const fileSize = parseInt(String(metadata.size ?? "0"), 10);
-  const contentType = metadata.contentType || detectContentType(session.filename);
+  await privateStore.completeMultipart(
+    storagePath,
+    session.storage_upload_id,
+    session.parts.map((p) => ({ partNumber: p.partNumber ?? 0, etag: p.etag ?? "" })),
+  );
+  const stored = await privateStore.head(storagePath);
+  if (!stored) throw new Error("The uploaded file wasn't found in storage");
+  const fileSize = stored.size;
+  const contentType = stored.contentType || detectContentType(session.filename);
 
   // An app's file counts only if that app says so for this ref (utils/driveSources.ts). Direct uploads always count.
   const counted = session.source_app
@@ -223,13 +191,10 @@ export async function cleanupFailedUpload(uploadId: string, userId?: string): Pr
     userId ? { upload_id: uploadId, user_id: userId } : { upload_id: uploadId },
   );
   if (session) {
-    const gcsFile = gcsFileFor(`xendrive/${session.user_id}/${session.filename}`);
-    const [exists] = await gcsFile.exists();
-    if (exists) {
-      await gcsFile.delete().catch(() => {
-        // Ignore errors if the object doesn't exist or deletion fails
-      });
-    }
+    const key = `xendrive/${session.user_id}/${session.filename}`;
+    // Abandon the multipart upload (its parts are stored, and billed, until then) and any object it already made.
+    await privateStore.abortMultipart(key, session.storage_upload_id).catch(() => undefined);
+    await privateStore.delete(key).catch(() => undefined);
     await XenDriveUploadSession.deleteOne({ upload_id: uploadId });
   }
 }

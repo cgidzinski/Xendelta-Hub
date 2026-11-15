@@ -1,5 +1,21 @@
 # Where uploads live, and what counts toward storage
 
+## The buckets
+
+Files live in two Cloudflare R2 buckets, reached through the S3 API (`src/server/storage/`; they were on Google Cloud
+Storage until #375, with the same keys):
+
+- **private** (`R2_PRIVATE_BUCKET`): every XenDrive file (app photos and chat attachments included) and database backups.
+  Only read through short-lived signed links (`generateSignedUrl`) or streamed by the server (public share links).
+- **public** (`R2_PUBLIC_BUCKET`): profile and group pictures, custom emoji, Recipaint and blog images, served at
+  `STORAGE_PUBLIC_BASE_URL` (the bucket's custom domain).
+
+Server code goes through `privateStore` / `publicStore` (`storage/index.ts`) or the helpers in `utils/storageUtils.ts`,
+never the SDK directly. Chunked XenDrive uploads are R2 multipart uploads, one part per 10 MB chunk (R2 needs every part
+but the last to be at least 5 MB). `STORAGE_DRIVER=memory` keeps both buckets in memory: the tests use it, and so can
+local development without R2 keys. Downloads from R2 cost nothing, so only storage is a cost (`docs/billing.md`).
+
+
 Every file a person uploads is a `XenDriveFile` owned by them, in the private bucket. Files uploaded straight to XenDrive
 **count toward the person's storage**, and so do chat attachments. Files the other apps store for them (photos) are tagged
 with where they came from and are **exempt from the quota for now** (`counted: false`). `usageFor` and `checkQuota`

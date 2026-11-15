@@ -8,17 +8,10 @@ import { XenRoutine } from "../models/xenRoutine";
 // links, shared with everyone on the routine, and removed with the photo, the routine, or the history entry they were on.
 // Real routes, models and Mongo; only storage is faked, as an in-memory bucket.
 const { priv } = vi.hoisted(() => ({ priv: new Set<string>() }));
-vi.mock("../config/gcs", () => {
-  const bucket = (name: string, set: Set<string>) => ({
-    name,
-    file: (path: string) => ({ path, set, getMetadata: async () => [{ size: "42", contentType: "image/webp" }] }),
-  });
-  return { privateBucket: bucket("private", priv), publicBucket: bucket("public", new Set()) };
-});
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_b: Buffer, path: string) => void priv.add(path)),
-  deleteFromGCS: vi.fn(async (path: string) => void priv.delete(path)),
+  uploadToStorage: vi.fn(async (_b: Buffer, path: string) => void priv.add(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void priv.delete(path)),
   generateSignedUrl: vi.fn(async (path: string) => `https://example.test/signed/${path}`),
 }));
 

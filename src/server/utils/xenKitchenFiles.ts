@@ -6,7 +6,7 @@ import { Types } from "mongoose";
 import { XenKitchenBook, XenKitchenItem } from "../models/xenKitchen";
 import { canEdit } from "./membership";
 import { registerDriveSource } from "./driveSources";
-import { deleteFromGCS } from "./gcsUtils";
+import { deleteFromStorage } from "./storageUtils";
 import { removeAppFiles, signedUrlsFor } from "./appFiles";
 
 export const XENKITCHEN_SOURCE = "xenkitchen";
@@ -58,7 +58,7 @@ export async function removeKitchenPhotos(images: Photo[]): Promise<void> {
   const legacy = images.filter((i) => !i.file_id && i.gcs_path).map((i) => i.gcs_path as string);
   await Promise.all([
     removeAppFiles(fileIds),
-    ...legacy.map((path) => deleteFromGCS(path, false).catch(() => undefined)),
+    ...legacy.map((path) => deleteFromStorage(path, false).catch(() => undefined)),
   ]);
 }
 

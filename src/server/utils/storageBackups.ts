@@ -3,14 +3,14 @@ import { PassThrough, pipeline } from "stream";
 import zlib from "zlib";
 import readline from "readline";
 import { randomUUID } from "crypto";
-import { privateBucket } from "../config/gcs";
+import { privateStore } from "../storage";
 import { BACKUP_NAME_PATTERN, BACKUP_PREFIX } from "@shared/admin";
 import type { AdminBackup, AdminBackupJob } from "@shared/admin";
 import { restoreFromGzipStream, streamExport } from "./databaseBackup";
 import { AppError } from "./http";
 import { BRAND_NAME } from "@shared/brand";
 
-// Database backups kept in the private bucket (docs/admin.md). The dump format and the wipe-and-replace restore are
+// Database backups kept in the private bucket (storage/index.ts) (docs/admin.md). The dump format and the wipe-and-replace restore are
 // utils/databaseBackup.ts, the same code `npm run db:export` / `db:import` use.
 
 const fileSafeStamp = () => new Date().toISOString().replace(/[:.]/g, "-");
@@ -25,40 +25,40 @@ const kindOf = (name: string): AdminBackup["kind"] =>
 export const isBackupName = (name: string) => BACKUP_NAME_PATTERN.test(name);
 
 export async function backupExists(name: string): Promise<boolean> {
-  const [exists] = await privateBucket.file(name).exists();
-  return exists;
+  return privateStore.exists(name);
 }
 
 /** Newest first. Anything under the prefix that isn't one of ours is ignored. */
 export async function listBackups(): Promise<AdminBackup[]> {
-  const [files] = await privateBucket.getFiles({ prefix: BACKUP_PREFIX });
+  const files = await privateStore.list(BACKUP_PREFIX);
   return files
-    .filter((f) => isBackupName(f.name))
+    .filter((f) => isBackupName(f.key))
     .map((f) => ({
-      name: f.name,
-      kind: kindOf(f.name),
-      size: Number(f.metadata?.size ?? 0),
-      createdAt: f.metadata?.timeCreated ? new Date(f.metadata.timeCreated as string).toISOString() : null,
+      name: f.key,
+      kind: kindOf(f.key),
+      size: f.size,
+      createdAt: f.lastModified ? f.lastModified.toISOString() : null,
     }))
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 }
 
 export async function deleteBackup(name: string): Promise<void> {
-  await privateBucket.file(name).delete({ ignoreNotFound: true });
+  await privateStore.delete(name);
 }
 
 /** Streams the whole database to a new object and returns its name. A half-written object is removed. */
 export async function createBackup(db: Db, by: string, kind: AdminBackup["kind"] = "backup"): Promise<string> {
   const prefix = { backup: "xendelta-hub-backup", "pre-restore": "pre-restore", scheduled: "scheduled" }[kind];
   const name = `${BACKUP_PREFIX}${prefix}-${fileSafeStamp()}.ndjson.gz`;
-  const file = privateBucket.file(name);
+  const upload = privateStore.write(name, { contentType: "application/gzip" });
   try {
-    // streamExport resolves when the destination finishes, which for a GCS write stream is when the upload is complete.
-    await streamExport(db, file.createWriteStream({ resumable: true, contentType: "application/gzip" }), {
-      exportedBy: by,
-    });
+    // streamExport resolves when the stream finishes; the object is stored once the upload behind it is done.
+    await streamExport(db, upload.stream, { exportedBy: by });
+    await upload.done;
   } catch (err) {
-    await file.delete({ ignoreNotFound: true }).catch(() => undefined);
+    upload.stream.destroy();
+    await upload.done.catch(() => undefined);
+    await privateStore.delete(name).catch(() => undefined);
     throw err;
   }
   return name;
@@ -72,7 +72,7 @@ export async function createBackup(db: Db, by: string, kind: AdminBackup["kind"]
 export async function verifyBackup(name: string): Promise<void> {
   const gunzip = zlib.createGunzip();
   let sourceError: Error | null = null;
-  pipeline(privateBucket.file(name).createReadStream(), gunzip, (err) => {
+  pipeline(await privateStore.read(name), gunzip, (err) => {
     if (err) sourceError = err;
   });
   let first = true;
@@ -95,7 +95,7 @@ export async function restoreBackup(db: Db, name: string, by: string) {
   await verifyBackup(name);
   const snapshot = await createBackup(db, by, "pre-restore");
   // A read error from the bucket must reach the restore, so it goes through a PassThrough that is destroyed with it.
-  const source = privateBucket.file(name).createReadStream();
+  const source = await privateStore.read(name);
   const pass = new PassThrough();
   source.on("error", (err: Error) => pass.destroy(err));
   source.pipe(pass);

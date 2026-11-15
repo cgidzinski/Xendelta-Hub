@@ -9,7 +9,7 @@ import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
 import { unreadConversationCount } from "../chat/service";
-import { deleteFromGCS } from "../utils/gcsUtils";
+import { deleteFromStorage } from "../utils/storageUtils";
 import {
   addPasswordSchema,
   inventoryItemIdParamSchema,
@@ -201,7 +201,7 @@ module.exports = function (app: express.Application) {
         const urlParts = user.avatar.split("/");
         const filename = urlParts[urlParts.length - 1];
         const gcsPath = `avatar/${filename}`;
-        await deleteFromGCS(gcsPath).catch(() => {
+        await deleteFromStorage(gcsPath).catch(() => {
           // Ignore errors if file doesn't exist
         });
       }

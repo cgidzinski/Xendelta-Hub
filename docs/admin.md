@@ -27,7 +27,7 @@
   people, and the filters that need storage or purchases are exact. Move it to an aggregation if that stops being true.
 
 ## Database backups and restore (System page)
-`routes/admin/backups.ts`, with the bucket and job logic in `utils/gcsBackups.ts`. The dump format and the wipe-and-replace
+`routes/admin/backups.ts`, with the bucket and job logic in `utils/storageBackups.ts`. The dump format and the wipe-and-replace
 restore are `utils/databaseBackup.ts`, the same code `npm run db:export` / `db:import` use (the CLI stays the way to rehearse
 a migration on a scratch database).
 

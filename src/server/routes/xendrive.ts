@@ -47,8 +47,8 @@ import {
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
 import { checkSharePassword, hashSharePassword, isUnset } from "../utils/sharePasswords";
-import { generateSignedUrl } from "../utils/gcsUtils";
-import { privateBucket } from "../config/gcs";
+import { generateSignedUrl } from "../utils/storageUtils";
+import { privateStore } from "../storage";
 import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 
@@ -827,9 +827,7 @@ module.exports = function (app: express.Application) {
  * link it came through, when there is one).
  */
 async function streamFile(res: express.Response, file: XenDriveFileDocument, viaFolderId?: string) {
-  const gcsFile = privateBucket.file(file.storage_path);
-  const [exists] = await gcsFile.exists();
-  if (!exists) throw new AppError(404, "File not found in storage");
+  if (!(await privateStore.exists(file.storage_path))) throw new AppError(404, "File not found in storage");
 
   const at = new Date();
   await Promise.all([
@@ -846,5 +844,5 @@ async function streamFile(res: express.Response, file: XenDriveFileDocument, via
   res.setHeader("Content-Disposition", attachment(file.name));
   if (file.size != null) res.setHeader("Content-Length", file.size);
   if (file.expiry) res.setHeader("X-File-Expiry", file.expiry.toISOString());
-  gcsFile.createReadStream().pipe(res);
+  (await privateStore.read(file.storage_path)).pipe(res);
 }
