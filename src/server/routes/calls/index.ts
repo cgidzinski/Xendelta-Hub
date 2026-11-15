@@ -12,6 +12,8 @@ import {
   sessionTracks,
 } from "../../calls/cloudflare";
 import { callRegistry } from "../../calls/registry";
+import { assertCanCall, ensureCallMeter } from "../../calls/meter";
+import { meterCall } from "../../calls/usage";
 import { announceCall, callKindOf, isVoiceChannel, leaveAllCalls, leaveCall, ringOthers } from "../../calls/service";
 import { realtime } from "../../realtime";
 import { AppError, callerId, loadCaller } from "../../utils/http";
@@ -97,8 +99,13 @@ module.exports = function (app: Application) {
         throw new AppError(409, "This call is full");
       }
 
+      // Whoever pays for the call (you, or the community of a voice channel) must be able to, once billing is enforced.
+      const communityId = context.community ? String(context.community._id) : undefined;
+      await assertCanCall(me, communityId);
+      ensureCallMeter();
+      await meterCall(conversationId); // up to now, before the number of people changes
       const sessionId = await createSession();
-      const joined = callRegistry.join(conversationId, me, sessionId, video, callKindOf(context));
+      const joined = callRegistry.join(conversationId, me, sessionId, video, callKindOf(context), communityId);
       if (joined.full) throw new AppError(409, "This call is full");
       const name = (await loadCaller(req)).username ?? "Someone";
       if (joined.started && !isVoiceChannel(context)) await ringOthers(context, me, name, video);
@@ -179,6 +186,7 @@ module.exports = function (app: Application) {
     validate(callStateSchema),
     async (req: Request, res: Response) => {
       const { me, context } = await inCall(req);
+      await meterCall(String(context.chat._id)); // up to now, before what is sent changes
       callRegistry.update(String(context.chat._id), me, callStateSchema.parse(req.body));
       announceCall(context);
       ok(res, { call: callRegistry.state(String(context.chat._id)) });

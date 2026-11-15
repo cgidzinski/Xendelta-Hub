@@ -36,6 +36,8 @@ export interface RealtimeEvents {
   // Calls. `call` is null once the call has ended. A person who may join is told when it starts, and everyone in the chat
   // hears of each change, so "Join call" and the participant list stay right.
   "call:state": { conversationId: string; call: CallState | null };
+  /** Billing cut a call short: a warning first, then the call ends for whoever can no longer pay. */
+  "call:billing": { conversationId: string; message: string; ending: boolean };
   /** Someone is calling you: it rings until you join or decline, or it times out. */
   "call:ring": { conversationId: string; fromUserId: string; fromName: string; video: boolean; ringing: boolean };
 

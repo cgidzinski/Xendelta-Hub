@@ -2,6 +2,7 @@
 // through it, and the tracks of everyone else are pulled in through it. The signalling goes via our own /api/calls
 // routes (which hold the Cloudflare secret). Steps that change the connection are queued, because two renegotiations at
 // once would break it.
+import { CALL_BITRATE_BPS } from "@shared/calls";
 import { api } from "../config/api";
 import type { CallTrackRequest, CallTracksResult, IceServer } from "@shared/calls";
 import type { RemoteTrack, TrackKind } from "./callMedia";
@@ -46,7 +47,12 @@ export class CallSession {
   /** Start sending a track (a microphone, camera or screen). */
   publish(kind: TrackKind, track: MediaStreamTrack, trackName: string): Promise<void> {
     return this.enqueue(async () => {
-      const transceiver = this.pc.addTransceiver(track, { direction: "sendonly", streams: [new MediaStream([track])] });
+      // Hold the encoder to the bitrate the call is billed at (shared/calls.ts), so the bill is an upper bound.
+      const transceiver = this.pc.addTransceiver(track, {
+        direction: "sendonly",
+        streams: [new MediaStream([track])],
+        sendEncodings: [{ maxBitrate: CALL_BITRATE_BPS[kind] }],
+      });
       this.senders.set(kind, transceiver.sender);
       const offer = await this.pc.createOffer();
       await this.pc.setLocalDescription(offer);

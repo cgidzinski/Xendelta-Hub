@@ -366,3 +366,98 @@ describe("voice channels", () => {
     expect(callRegistry.get(general._id)).toBeUndefined();
   });
 });
+
+describe("calls on the bill", () => {
+  const usageOf = async (account: { type: "user" | "community"; id: string }, month?: string) => {
+    const { usageFor } = await import("../../billing/usage.js");
+    return (await usageFor(account, month)).find((l) => l.center === "calls")?.units ?? 0;
+  };
+  const AUDIO = 32_000;
+  const VIDEO = 1_500_000;
+
+  it("splits a call's cost evenly between the people in it, from what each sends (as capped)", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await dm(a, b);
+    await join(a, chat);
+    await join(b, chat);
+    const { meterCall } = await import("../../calls/usage.js");
+    callRegistry.update(chat, id(a), { cameraOn: true });
+    const call = callRegistry.get(chat)!;
+    call.lastMeteredAt = Date.now() - 60_000; // a minute of both sending audio, and a's camera on
+    await meterCall(chat);
+
+    // Each person receives the other's media: (a: audio + video) + (b: audio), for 60 s, shared by the two.
+    const total = ((AUDIO + VIDEO + AUDIO) / 8) * 60;
+    expect(await usageOf({ type: "user", id: id(a) })).toBe(Math.round(total / 2));
+    expect(await usageOf({ type: "user", id: id(b) })).toBe(Math.round(total / 2));
+  });
+
+  it("is nothing while one person is alone in the call, or everyone is muted with the camera off", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await dm(a, b);
+    await join(a, chat);
+    const { meterCall } = await import("../../calls/usage.js");
+    callRegistry.get(chat)!.lastMeteredAt = Date.now() - 60_000;
+    await meterCall(chat);
+    expect(await usageOf({ type: "user", id: id(a) })).toBe(0);
+    await join(b, chat);
+    callRegistry.update(chat, id(a), { muted: true });
+    callRegistry.update(chat, id(b), { muted: true });
+    callRegistry.get(chat)!.lastMeteredAt = Date.now() - 60_000;
+    await meterCall(chat);
+    expect(await usageOf({ type: "user", id: id(a) })).toBe(0);
+  });
+
+  it("is the community's cost in a voice channel", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const community = (await request(t.app).post("/api/communities").set(as(a)).send({ name: "Crew" })).body.data
+      .community;
+    const { Community } = await import("../../models/community.js");
+    await Community.updateOne({ _id: community._id }, { $push: { members: { user_id: id(b), role: "member" } } });
+    const made = await request(t.app)
+      .post(`/api/communities/${community._id}/channels`)
+      .set(as(a))
+      .send({ name: "Lounge", kind: "voice" });
+    const general = made.body.data.channel;
+    expect((await join(a, general._id)).status).toBe(200);
+    expect((await join(b, general._id)).status).toBe(200);
+    const { meterCall } = await import("../../calls/usage.js");
+    callRegistry.get(general._id)!.lastMeteredAt = Date.now() - 30_000;
+    await meterCall(general._id);
+    expect(await usageOf({ type: "community", id: String(community._id) })).toBe(Math.round(((2 * AUDIO) / 8) * 30));
+    expect(await usageOf({ type: "user", id: id(a) })).toBe(0);
+  });
+
+  it("refuses to join once billing is enforced and the free allowance is used up, warns, then ends the call", async () => {
+    const [a, b] = [await createUser(), await createUser()];
+    const chat = await dm(a, b);
+    const { recordUsage } = await import("../../billing/usage.js");
+    const { userAccount } = await import("../../billing/ledger.js");
+    await recordUsage(userAccount(a.user._id), "calls", 1_000 * 1_000_000_000); // 1,000 GB: far past the allowance
+    expect((await join(a, chat)).status).toBe(200); // shadow mode lets it through
+    await leave(a, chat);
+
+    process.env.BILLING_ENFORCED = "true";
+    try {
+      const refused = await join(a, chat);
+      expect(refused.status).toBe(402);
+      expect(refused.body).toMatchObject({ billing: true });
+
+      // b can still join. If a's allowance ran out mid-call they are warned, then taken out on the next check.
+      process.env.BILLING_ENFORCED = "false";
+      await join(a, chat);
+      await join(b, chat);
+      process.env.BILLING_ENFORCED = "true";
+      events = [];
+      const { enforceCallBilling } = await import("../../calls/meter.js");
+      await enforceCallBilling(chat);
+      expect(events.find((e) => e.event === "call:billing")?.payload).toMatchObject({ ending: false });
+      expect(callRegistry.get(chat)?.participants.has(id(a))).toBe(true);
+      await enforceCallBilling(chat);
+      expect(events.some((e) => e.event === "call:billing" && e.payload.ending === true)).toBe(true);
+      expect(callRegistry.get(chat)?.participants.has(id(a))).toBeFalsy();
+    } finally {
+      process.env.BILLING_ENFORCED = "false";
+    }
+  });
+});

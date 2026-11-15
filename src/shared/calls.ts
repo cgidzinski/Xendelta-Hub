@@ -4,6 +4,15 @@
 
 /** The most people in one call. */
 export const CALL_MAX_PARTICIPANTS = 25;
+/**
+ * The most each kind of media a person sends can use, in bits per second. The client holds its encoders to these
+ * (`maxBitrate`), and the server bills calls from them (calls/meter.ts), so a call's cost is an upper bound.
+ */
+export const CALL_BITRATE_BPS = { audio: 32_000, video: 1_500_000, screen: 2_500_000 } as const;
+/** How often a running call is metered and its payers checked. */
+export const CALL_METER_SECONDS = 30;
+/** Nobody is billed for more than this in one call: a tab that never said goodbye is taken out after it. */
+export const CALL_MAX_SESSION_SECONDS = 4 * 60 * 60;
 /** How long a call rings, with nobody else joining, before it counts as missed. */
 export const CALL_RING_SECONDS = 45;
 

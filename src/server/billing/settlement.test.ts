@@ -36,6 +36,10 @@ function meterDownloads(gemsPerGb: number) {
 }
 
 const GB = 1_000_000_000;
+const F = billing.PERSON_FREE_TIER_GEMS;
+const CF = billing.COMMUNITY_FREE_TIER_GEMS;
+/** Bytes that cost `gems` gems at the 100 gems per GB the tests set. */
+const bytesFor = (gems: number) => (gems / 100) * GB;
 const Statement = () => mongoose.model("BillingStatement") as any;
 const gemsOf = async (id: unknown) => ((await mongoose.model("User").findById(id, "gems").lean()) as any).gems;
 const october = new Date(Date.UTC(2026, 9, 15));
@@ -59,10 +63,10 @@ describe("settleMonth", () => {
     try {
       process.env.BILLING_ENFORCED = "false";
       const { user } = await createUser({ gems: 1000 });
-      await usage.recordUsage(ledger.userAccount(user._id), "calls", 6 * GB, october); // 600 gems
+      await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F + 100), october); // 100 beyond the free tier
       await settlement.settleMonth("2026-10");
       const row = await Statement().findOne({ "account.id": user._id }).lean();
-      expect(row).toMatchObject({ status: "shadow", amountDue: 600 - billing.PERSON_FREE_TIER_GEMS, paid: 0 });
+      expect(row).toMatchObject({ status: "shadow", amountDue: 100, paid: 0 });
       expect(await gemsOf(user._id)).toBe(1000);
     } finally {
       restore();
@@ -74,8 +78,8 @@ describe("settleMonth", () => {
     try {
       process.env.BILLING_ENFORCED = "true";
       const { user } = await createUser({ gems: 1000 });
-      // 5.0001 GB = 500.01 gems; 0.01 beyond the free tier rounds up to 1 gem.
-      await usage.recordUsage(ledger.userAccount(user._id), "calls", 5.0001 * GB, october);
+      // 0.01 gems beyond the free tier rounds up to 1 gem.
+      await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F + 0.01), october);
       await settlement.settleMonth("2026-10");
       const row = await Statement().findOne({ "account.id": user._id }).lean();
       expect(row).toMatchObject({ status: "paid", amountDue: 1, paid: 1, unpaid: 0 });
@@ -92,7 +96,7 @@ describe("settleMonth", () => {
     try {
       process.env.BILLING_ENFORCED = "true";
       const { user } = await createUser({ gems: 50 });
-      await usage.recordUsage(ledger.userAccount(user._id), "calls", 6 * GB, october); // 100 beyond the free tier
+      await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F + 100), october); // 100 beyond the free tier
       await settlement.settleMonth("2026-10");
       const row = await Statement().findOne({ "account.id": user._id }).lean();
       expect(row).toMatchObject({ status: "unpaid", amountDue: 100, paid: 0, unpaid: 100 });
@@ -107,12 +111,10 @@ describe("settleMonth", () => {
     try {
       process.env.BILLING_ENFORCED = "true";
       const Community = (await import("../models/community.js")).Community;
-      const community = await Community.create({ name: "Club", members: [], fund: 500 });
-      await usage.recordUsage(ledger.communityAccount(community._id), "calls", 5 * GB, october);
+      const community = await Community.create({ name: "Club", members: [], fund: 1000 });
+      await usage.recordUsage(ledger.communityAccount(community._id), "calls", bytesFor(CF + 300), october);
       await settlement.settleMonth("2026-10");
-      expect((await Community.findById(community._id).lean())!.fund).toBe(
-        500 - (500 - billing.COMMUNITY_FREE_TIER_GEMS),
-      );
+      expect((await Community.findById(community._id).lean())!.fund).toBe(700);
     } finally {
       restore();
     }
@@ -147,7 +149,7 @@ describe("canSpend", () => {
       const { user } = await createUser();
       const account = ledger.userAccount(user._id);
       expect(await settlement.canSpend(account)).toBe(true);
-      await usage.recordUsage(account, "calls", 5.5 * GB); // 550 gems: 50 beyond the free tier
+      await usage.recordUsage(account, "calls", bytesFor(F + 50)); // 50 beyond the free tier
       expect(await settlement.canSpend(account)).toBe(false);
       await ledger.transfer({
         from: ledger.HOUSE,
@@ -199,12 +201,12 @@ describe("warnNearFreeTier", () => {
       const notifications = await import("../utils/notificationUtils.js");
       const spy = vi.spyOn(notifications, "notify");
       const { user } = await createUser();
-      await usage.recordUsage(ledger.userAccount(user._id), "calls", 4.5 * GB, november); // 450 of 500
+      await usage.recordUsage(ledger.userAccount(user._id), "calls", bytesFor(F * 0.9), november); // 90% of the free tier
       await settlement.warnNearFreeTier(november);
       await settlement.warnNearFreeTier(november);
       const mine = spy.mock.calls.filter(([id]) => String(id) === String(user._id));
       expect(mine).toHaveLength(1);
-      expect(mine[0][1].message).toBe("50 gems left this month.");
+      expect(mine[0][1].message).toBe(`${F * 0.1} gems left this month.`);
     } finally {
       restore();
     }
