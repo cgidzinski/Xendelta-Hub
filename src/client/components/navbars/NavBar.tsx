@@ -2,6 +2,7 @@ import { alpha } from "@mui/material/styles";
 import HomeIcon from "@mui/icons-material/Home";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import InventoryIcon from "@mui/icons-material/Inventory2Outlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SecurityIcon from "@mui/icons-material/Security";
 import { APPS_REGISTRY, AppRegistryItem, resolvePinnedApps } from "../../constants/apps";
 import IconButton from "@mui/material/IconButton";
@@ -79,6 +80,13 @@ export default function Root() {
       icon: <InventoryIcon />,
       path: "/internal/inventory",
       isSelected: (pathname) => pathname.startsWith("/internal/inventory"),
+    },
+    {
+      key: "billing",
+      label: "Billing",
+      icon: <ReceiptLongOutlinedIcon />,
+      path: "/internal/billing",
+      isSelected: (pathname) => pathname.startsWith("/internal/billing"),
     },
     ...(pinnedNavItems.length > 0 || allAppNavItems.length > 0
       ? [

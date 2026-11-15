@@ -6,11 +6,6 @@ import { mergePhotoParts } from "../ai/vision";
 
 // Reading a recipe out of a photo, through the real route and the real Workers AI call shape. Cloudflare is replaced by
 // a fake fetch: what is being checked is the request we send, what we make of the answer, and that nothing is saved.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 let t: TestApp;
 beforeAll(async () => {
   t = await startTestApp([() => import("./xenkitchen.js")]);

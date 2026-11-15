@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
-import { Readable } from "stream";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { hashSharePassword } from "../utils/sharePasswords";
 
@@ -8,18 +7,9 @@ import { hashSharePassword } from "../utils/sharePasswords";
 // Only storage is faked.
 
 const removed: string[] = [];
-vi.mock("../config/gcs", () => ({
-  privateBucket: {
-    file: (path: string) => ({
-      exists: async () => [true],
-      createReadStream: () => Readable.from([Buffer.alloc(10, "x")]), // matches the 10-byte size of the test files
-      delete: async () => void removed.push(path),
-    }),
-  },
-}));
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  deleteFromGCS: vi.fn(async (path: string) => void removed.push(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void removed.push(path)),
   generateSignedUrl: vi.fn(
     async (path: string, _minutes?: number, opts?: { downloadName?: string }) =>
       `https://example.test/signed/${path}${opts?.downloadName ? `?download=${encodeURIComponent(opts.downloadName)}` : ""}`,
@@ -53,6 +43,11 @@ const folder = async (who: U, name: string, parentId?: string) => {
 /** A stored file, made directly (uploads are covered in xendriveSessions.test.ts). */
 const addFile = async (who: U, name: string, folderId: string | null, extra: object = {}) => {
   const { XenDriveFile } = await import("../models/xendriveFile.js");
+  // The bytes, in the in-memory bucket: 10 of them, matching the file's size.
+  const { privateStore } = await import("../storage/index.js");
+  await privateStore.put(`xendrive/${who.user._id}/${name}-stored`, Buffer.alloc(10, "x"), {
+    contentType: "text/plain",
+  });
   return XenDriveFile.create({
     owner_id: who.user._id,
     folder_id: folderId,

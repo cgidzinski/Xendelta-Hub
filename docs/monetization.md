@@ -24,8 +24,9 @@ thinking is not lost. Only the "built" section exists in code today.
   packs are items in the `Gems` category with `grantsGems` and `addToInventory: false`, so buying one adds the gems
   and puts nothing in the inventory. Money-priced items go through the payment provider; gem-priced ones are paid from
   the balance.
-- **Buying gems.** `src/shared/monetization.ts` lists the packs (1,000 / 2,200 / 6,000 / 13,000 gems for $5 / $10 /
-  $25 / $50, so 200 gems to the dollar plus a bonus on the bigger packs). Checkout goes through a payment
+- **Buying gems.** `src/shared/monetization.ts` lists the packs (5,000 / 11,000 / 30,000 / 65,000 gems for $5 / $10 /
+  $25 / $50, so 1,000 gems to the dollar plus a bonus on the bigger packs). Gems were 200 to the dollar until #376,
+  which multiplied packs and prices by 5 and reset everyone's gems and inventory (migration `1795200000000-gems-reset`). Checkout goes through a payment
   provider interface (`src/server/payments/`). Only a **dummy provider** exists: it takes no money and would credit
   the gems at once, so **buying gems is switched off everywhere** (`getPaymentProvider()` returns null; the Shop shows
   "Buying gems is not available yet"). Every purchase is recorded in `GemPurchase` (the audit trail of gems bought).
@@ -50,9 +51,8 @@ thinking is not lost. Only the "built" section exists in code today.
    the call that moves the purchase from `pending` to `completed` credits the gems.
 3. Return the new provider from `getPaymentProvider()` and set `PAYMENTS_PROVIDER=stripe`.
 
-Known limit: `fulfilGemPurchase` marks the purchase completed and then credits the gems as two writes, so a crash
-between them would leave a completed purchase without gems. The ledger design below closes that gap; build it
-before real money is involved.
+`fulfilGemPurchase` credits the gems through the gem ledger before marking the purchase completed, so a crash in
+between leaves a pending purchase whose retry finds the same transfer (`docs/billing.md`).
 
 ## Decided, not built yet
 
@@ -61,7 +61,7 @@ before real money is involved.
 | | Free | Plus | Pro |
 |---|---|---|---|
 | Price by card | none | $5 a month | $10 a month |
-| 30-day pass in gems | none | 1,000 gems | 2,000 gems |
+| 30-day pass in gems | none | 5,000 gems | 10,000 gems |
 | XenDrive storage (total) | 1 GB | 50 GB | 250 GB |
 | Largest single file | 2 GB | 2 GB | 5 GB |
 | Password-protected folder links | no | yes | yes |
@@ -120,6 +120,9 @@ text. Frames and name colours are not built; they need the shared avatar compone
 - Not allowed: the dummy provider cannot create gems from a sale; a seller cannot buy their own listing.
 
 ### A crash-safe gem ledger (no database transactions)
+
+**Built** (#353): see `docs/billing.md`. Every gem movement now goes through it, which also closes the
+`fulfilGemPurchase` gap described above. The original design is kept below for reference.
 
 The test database and possibly production have no replica set, so Mongo transactions are not available.
 

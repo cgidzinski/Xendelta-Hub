@@ -15,7 +15,13 @@
 // The other apps' photos stay where they are: the new record's `storage_path` is the old path.
 import crypto from "crypto";
 import { Types, type Connection } from "mongoose";
-import { privateBucket, publicBucket } from "../src/server/config/gcs";
+// Storage moved from Google Cloud Storage to R2 (#375) after this ran; it now goes through the same storage module.
+import {
+  privateStore as privateBucket,
+  publicStore as publicBucket,
+  type ObjectStore,
+  publicUrlFor,
+} from "../src/server/storage";
 
 type Row = Record<string, any>;
 
@@ -51,13 +57,10 @@ async function fileFor(
 }
 
 /** Size and type of a stored object, or null if it is gone (its photo is already broken; leave it be). */
-async function inspect(bucket: typeof privateBucket, path: string) {
+async function inspect(bucket: ObjectStore, path: string) {
   try {
-    const [metadata] = await bucket.file(path).getMetadata();
-    return {
-      size: parseInt(String(metadata.size ?? "0"), 10),
-      mimeType: String(metadata.contentType || "application/octet-stream"),
-    };
+    const info = await bucket.head(path);
+    return info ? { size: info.size, mimeType: info.contentType || "application/octet-stream" } : null;
   } catch {
     return null;
   }
@@ -217,7 +220,7 @@ export async function up(connection: Connection): Promise<void> {
       // A fixed destination, so a re-run after a crash finds the copy it already made instead of making another.
       const extension = baseName(image.gcs_path).split(".").pop() || "webp";
       const dest = `xendrive/${owner}/kitchen-${String(image._id)}.${extension}`;
-      await publicBucket.file(image.gcs_path).copy(privateBucket.file(dest));
+      await privateBucket.copyFrom(publicBucket, image.gcs_path, dest);
       const fileId = await fileFor(connection, {
         owner,
         app: "xenkitchen",
@@ -235,10 +238,7 @@ export async function up(connection: Connection): Promise<void> {
         },
         { arrayFilters: [{ "i._id": image._id }] },
       );
-      await publicBucket
-        .file(image.gcs_path)
-        .delete()
-        .catch(() => undefined);
+      await publicBucket.delete(image.gcs_path).catch(() => undefined);
       moved += 1;
     }
   }
@@ -283,22 +283,19 @@ export async function down(connection: Connection): Promise<void> {
   for await (const file of tagged("xenkitchen")) {
     const id = file._id as Types.ObjectId;
     const name = `xenkitchen/${file.source.ref}/${baseName(file.storage_path)}`;
-    await privateBucket.file(file.storage_path).copy(publicBucket.file(name));
+    await publicBucket.copyFrom(privateBucket, file.storage_path, name);
     await items.updateMany(
       { "images.file_id": id },
       {
         $set: {
           "images.$[i].gcs_path": name,
-          "images.$[i].url": `https://storage.googleapis.com/${publicBucket.name}/${name}`,
+          "images.$[i].url": publicUrlFor(name),
         },
         $unset: { "images.$[i].file_id": "" },
       },
       { arrayFilters: [{ "i.file_id": id }] },
     );
-    await privateBucket
-      .file(file.storage_path)
-      .delete()
-      .catch(() => undefined);
+    await privateBucket.delete(file.storage_path).catch(() => undefined);
     await files.deleteOne({ _id: id });
   }
 }

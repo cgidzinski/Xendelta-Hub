@@ -6,14 +6,9 @@ import {
   AVATAR_QUALITY,
   AVATAR_COMPRESSION_LEVEL,
 } from "../constants";
-import { uploadToGCS, deleteFromGCS } from "./gcsUtils";
+import { uploadToStorage } from "./storageUtils";
 
-import {
-  RECIPAINT_ASSET_FOLDER,
-  RECIPAINT_THUMB_MAX_EDGE,
-  thumbGcsPathFor,
-  filenameFromAssetUrl,
-} from "@shared/recipaint/assetUrls";
+import { RECIPAINT_ASSET_FOLDER, RECIPAINT_THUMB_MAX_EDGE, thumbGcsPathFor } from "@shared/recipaint/assetUrls";
 
 // Recipaint filenames are unique per upload (timestamp + random), so the objects are
 // immutable and can be cached hard - the default no-store would refetch every photo.
@@ -143,7 +138,7 @@ export async function uploadBlogAsset(
 
   // Upload to public GCS bucket in blog-assets folder
   const gcsPath = `blog-assets/${finalFilename}`;
-  const publicUrl = (await uploadToGCS(file.buffer, gcsPath, contentType)) as string;
+  const publicUrl = (await uploadToStorage(file.buffer, gcsPath, contentType)) as string;
 
   return {
     url: publicUrl,
@@ -193,7 +188,7 @@ export async function uploadRecipaintAsset(
 
   // The original is kept untouched - it is what the lightbox shows.
   const gcsPath = `${RECIPAINT_ASSET_FOLDER}/${finalFilename}`;
-  const publicUrl = (await uploadToGCS(file.buffer, gcsPath, contentType, false, IMMUTABLE_CACHE)) as string;
+  const publicUrl = (await uploadToStorage(file.buffer, gcsPath, contentType, false, IMMUTABLE_CACHE)) as string;
 
   // Cards and dense galleries render the thumbnail instead of a multi-megabyte photo.
   // A thumbnail failure must not fail the upload: the original is already stored, and the
@@ -204,7 +199,7 @@ export async function uploadRecipaintAsset(
       .resize(RECIPAINT_THUMB_MAX_EDGE, RECIPAINT_THUMB_MAX_EDGE, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: 80 })
       .toBuffer();
-    await uploadToGCS(thumbnail, thumbGcsPathFor(finalFilename), "image/webp", false, IMMUTABLE_CACHE);
+    await uploadToStorage(thumbnail, thumbGcsPathFor(finalFilename), "image/webp", false, IMMUTABLE_CACHE);
   } catch (e) {
     console.error(">>> Recipaint thumbnail generation failed for", finalFilename, e);
   }
@@ -215,21 +210,6 @@ export async function uploadRecipaintAsset(
     mimeType: contentType,
     size: file.buffer.length,
   };
-}
-
-/**
- * Remove an asset and the thumbnail derived from it. Neither is allowed to fail the caller:
- * a missing object is the normal case when a recipe is deleted twice, or was uploaded
- * before thumbnails existed.
- */
-export async function deleteRecipaintAssetByUrl(assetUrl: string): Promise<void> {
-  const filename = filenameFromAssetUrl(assetUrl);
-  if (!filename) return;
-
-  await Promise.all([
-    deleteFromGCS(`${RECIPAINT_ASSET_FOLDER}/${filename}`, false).catch(() => {}),
-    deleteFromGCS(thumbGcsPathFor(filename), false).catch(() => {}),
-  ]);
 }
 
 /**
@@ -266,7 +246,7 @@ export async function uploadAvatarFile(
 
   // Upload to public GCS bucket with user_id as filename
   const gcsPath = `avatar/${userId}.${ext}`;
-  const publicUrl = (await uploadToGCS(processedBuffer, gcsPath, contentType)) as string;
+  const publicUrl = (await uploadToStorage(processedBuffer, gcsPath, contentType)) as string;
 
   return {
     url: publicUrl,
@@ -304,7 +284,7 @@ export async function uploadXenSplitGroupImageFile(
     .toBuffer();
 
   const gcsPath = `xensplit-group-images/${groupId}.jpg`;
-  const publicUrl = (await uploadToGCS(processedBuffer, gcsPath, "image/jpeg")) as string;
+  const publicUrl = (await uploadToStorage(processedBuffer, gcsPath, "image/jpeg")) as string;
 
   return { url: publicUrl };
 }

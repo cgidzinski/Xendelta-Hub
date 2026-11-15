@@ -72,6 +72,7 @@ const InternalBlog = lazyPage(() => import("./routes/Internal/Blog/InternalBlog"
 const InternalBlogPostDetail = lazyPage(() => import("./routes/Internal/Blog/InternalBlogPostDetail"));
 const Shop = lazyPage(() => import("./routes/Internal/Shop/Shop"));
 const Inventory = lazyPage(() => import("./routes/Internal/Inventory/Inventory"));
+const Billing = lazyPage(() => import("./routes/Internal/Billing/Billing"));
 const Share = lazyPage(() => import("./routes/Internal/Share/Share"));
 const XenLinkRedirect = lazyPage(() => import("./routes/External/XenLinkRedirect/XenLinkRedirect"));
 // Routes - Xensplit
@@ -88,6 +89,7 @@ const Users = lazyPage(() => import("./routes/Admin/Users"));
 const UserDetail = lazyPage(() => import("./routes/Admin/UserDetail"));
 const AdminStorage = lazyPage(() => import("./routes/Admin/Storage"));
 const AdminMoney = lazyPage(() => import("./routes/Admin/Money"));
+const AdminBilling = lazyPage(() => import("./routes/Admin/Billing"));
 const AdminMessaging = lazyPage(() => import("./routes/Admin/Messaging"));
 const AdminFeedback = lazyPage(() => import("./routes/Admin/Feedback"));
 const AdminSystem = lazyPage(() => import("./routes/Admin/System"));
@@ -215,6 +217,7 @@ const router = createBrowserRouter(
         {xenlinkRoutes}
         <Route path="shop" element={<Shop />} />
         <Route path="inventory" element={<Inventory />} />
+        <Route path="billing" element={<Billing />} />
         {xensplitRoutes}
         {xenroutineRoutes}
         {xenkitchenRoutes}
@@ -236,6 +239,7 @@ const router = createBrowserRouter(
         <Route path="users/:userId" element={<UserDetail />} />
         <Route path="storage" element={<AdminStorage />} />
         <Route path="money" element={<AdminMoney />} />
+        <Route path="billing" element={<AdminBilling />} />
         <Route path="messaging" element={<AdminMessaging />} />
         <Route path="system" element={<AdminSystem />} />
         <Route path="feedback" element={<AdminFeedback />} />

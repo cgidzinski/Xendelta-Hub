@@ -26,17 +26,10 @@ vi.mock("../utils/safeFetch", () => ({
 }));
 
 const { priv } = vi.hoisted(() => ({ priv: new Set<string>() }));
-vi.mock("../config/gcs", () => {
-  const bucket = (name: string, set: Set<string>) => ({
-    name,
-    file: (path: string) => ({ path, set, getMetadata: async () => [{ size: "42", contentType: "image/webp" }] }),
-  });
-  return { privateBucket: bucket("private", priv), publicBucket: bucket("public", new Set()) };
-});
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_b: Buffer, path: string) => void priv.add(path)),
-  deleteFromGCS: vi.fn(async (path: string) => void priv.delete(path)),
+  uploadToStorage: vi.fn(async (_b: Buffer, path: string) => void priv.add(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void priv.delete(path)),
   generateSignedUrl: vi.fn(async (path: string) => `https://example.test/signed/${path}`),
 }));
 
@@ -202,7 +195,7 @@ describe("adding the page's photo to an item", () => {
     const res = await addFrom(me, id, "https://img.example.com/pancakes.png");
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.data.item.images).toHaveLength(1);
-    expect(res.body.data.item.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xendrive\//);
+    expect(res.body.data.item.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xenkitchen\//); // the app's own folder
     expect(priv.size).toBe(1);
     const files = await XenDriveFile.find({ "source.app": "xenkitchen", "source.ref": id });
     expect(files).toHaveLength(1);

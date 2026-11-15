@@ -1,46 +1,21 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
-import { Readable, Writable } from "stream";
+import { memoryStores } from "../../storage/index.js";
 import { startTestApp, createUser, type TestApp } from "../../testing/testApp";
 
-// An in-memory stand-in for the private bucket: objects by name, with the few calls the backup code makes.
-const bucket = vi.hoisted(() => ({ objects: new Map<string, { data: Buffer; created: string }>() }));
-vi.mock("../../config/gcs", () => {
-  const file = (name: string) => ({
-    name,
-    exists: async () => [bucket.objects.has(name)],
-    delete: async () => void bucket.objects.delete(name),
-    getSignedUrl: async () => [`https://signed.example/${name}`],
-    createWriteStream: () => {
-      const chunks: Buffer[] = [];
-      return new Writable({
-        write(chunk, _enc, cb) {
-          chunks.push(Buffer.from(chunk));
-          cb();
-        },
-        final(cb) {
-          bucket.objects.set(name, { data: Buffer.concat(chunks), created: new Date().toISOString() });
-          cb();
-        },
-      });
-    },
-    createReadStream: () => Readable.from([bucket.objects.get(name)!.data]),
-  });
-  const privateBucket = {
-    file,
-    getFiles: async ({ prefix }: { prefix: string }) => [
-      [...bucket.objects]
-        .filter(([name]) => name.startsWith(prefix))
-        .map(([name, o]) => ({ name, metadata: { size: String(o.data.length), timeCreated: o.created } })),
-    ],
-  };
-  return { privateBucket, publicBucket: privateBucket };
-});
+// The private bucket is the in-memory one (storage/memoryStore.ts): objects by name.
+const bucket = {
+  get objects() {
+    return memoryStores().privateStore.objects;
+  },
+};
+const putObject = (name: string, data: Buffer, created = new Date().toISOString()) =>
+  bucket.objects.set(name, { body: data, contentType: "application/gzip", lastModified: new Date(created) });
 
 let t: TestApp;
 let adminUser: Awaited<ReturnType<typeof createUser>>;
-let gcsBackups: typeof import("../../utils/gcsBackups.js");
+let storageBackups: typeof import("../../utils/storageBackups.js");
 
 beforeAll(async () => {
   t = await startTestApp([
@@ -50,7 +25,7 @@ beforeAll(async () => {
     },
     () => import("./index.js"),
   ]);
-  gcsBackups = await import("../../utils/gcsBackups.js");
+  storageBackups = await import("../../utils/storageBackups.js");
   adminUser = await createUser({ roles: ["admin"], username: "boss" });
 }, 180_000);
 afterAll(async () => {
@@ -58,7 +33,7 @@ afterAll(async () => {
 }, 60_000);
 beforeEach(async () => {
   bucket.objects.clear();
-  gcsBackups.resetJobsForTests();
+  storageBackups.resetJobsForTests();
   await mongoose.model("AdminAudit").deleteMany({});
 });
 
@@ -123,7 +98,7 @@ describe("database backups", () => {
   it("runs one job at a time", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    gcsBackups.startJob(
+    storageBackups.startJob(
       "backup",
       async () => {
         await gate;
@@ -169,7 +144,7 @@ describe("database backups", () => {
 
   it("needs the word RESTORE and one of our own backup names", async () => {
     const name = "db-backups/xendelta-hub-backup-2026-01-01T00-00-00-000Z.ndjson.gz";
-    bucket.objects.set(name, { data: Buffer.from("x"), created: new Date().toISOString() });
+    putObject(name, Buffer.from("x"));
 
     expect((await send("post", "/backups/restore", { name })).status).toBe(400);
     expect((await send("post", "/backups/restore", { name, confirm: "restore" })).status).toBe(400);
@@ -188,7 +163,7 @@ describe("database backups", () => {
     const { name } = await finished();
 
     const link = await get(`/backups/download?name=${encodeURIComponent(name)}`);
-    expect(link.body.data.url).toBe(`https://signed.example/${name}`);
+    expect(link.body.data.url).toContain(name);
 
     expect((await send("delete", "/backups", { name })).body.status).toBe(true);
     expect((await get("/backups")).body.data.backups).toHaveLength(0);
@@ -208,7 +183,7 @@ describe("database backups", () => {
       [bad("3")]: gzipSync('#META\t{"collections":[]}\n#COLLECTION\tx\n' + "{}\n".repeat(5000)).subarray(0, 40),
     };
     for (const [name, data] of Object.entries(cases)) {
-      bucket.objects.set(name, { data, created: new Date().toISOString() });
+      putObject(name, data);
       expect((await send("post", "/backups/restore", { name, confirm: "RESTORE" })).status).toBe(202);
       const job = await finished();
       expect(job, name).toMatchObject({ kind: "restore", status: "error" });
@@ -227,7 +202,7 @@ describe("database backups", () => {
   it("answers 503 to API requests while a restore runs, and keeps the status open", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    gcsBackups.startJob(
+    storageBackups.startJob(
       "restore",
       async () => {
         await gate;

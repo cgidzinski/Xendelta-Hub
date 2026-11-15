@@ -2,7 +2,7 @@ import type { Application, Request, Response } from "express";
 import { Message, type MessageDocument } from "../../models/message";
 import { Conversation } from "../../models/conversation";
 import { XenDriveFile } from "../../models/xendriveFile";
-import { generateSignedUrl } from "../../utils/gcsUtils";
+import { generateSignedUrl } from "../../utils/storageUtils";
 import { authenticateToken } from "../../middleware/auth";
 import { audienceOf, type ChatContext } from "../../chat/access";
 import { refreshEmbeds } from "../../chat/embeds";

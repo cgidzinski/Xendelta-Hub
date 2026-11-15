@@ -2,6 +2,7 @@ import { registerAdminOverviewRoutes } from "./overview";
 import { registerAdminUserRoutes } from "./users";
 import { registerAdminStorageRoutes } from "./storage";
 import { registerAdminMoneyRoutes } from "./money";
+import { registerAdminBillingRoutes } from "./billing";
 import { registerAdminMessagingRoutes } from "./messaging";
 import { registerAdminSystemRoutes } from "./system";
 import { registerAdminBackupRoutes } from "./backups";
@@ -18,6 +19,7 @@ module.exports = function (app: any) {
   registerAdminUserRoutes(app);
   registerAdminStorageRoutes(app);
   registerAdminMoneyRoutes(app);
+  registerAdminBillingRoutes(app);
   registerAdminMessagingRoutes(app);
   registerAdminSystemRoutes(app);
   registerAdminBackupRoutes(app);

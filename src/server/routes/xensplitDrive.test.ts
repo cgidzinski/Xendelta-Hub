@@ -4,20 +4,14 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
 import { usageFor } from "../utils/xendriveUtils";
 
-// The model below loads storage config at import time, before the test app sets its environment.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 // Expense photos are XenDrive files tagged to the group: owned by the uploader, listed under From apps, exempt from the
 // quota for now, and removed with the photo, the group or the file. Only storage is faked.
 const stored = new Set<string>();
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_b: Buffer, path: string) => void stored.add(path)),
+  uploadToStorage: vi.fn(async (_b: Buffer, path: string) => void stored.add(path)),
   generateSignedUrl: vi.fn(async (path: string) => `https://example.test/signed/${path}`),
-  deleteFromGCS: vi.fn(async (path: string) => void stored.delete(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void stored.delete(path)),
 }));
 
 let t: TestApp;
@@ -135,6 +129,43 @@ describe("XenSplit photos in XenDrive", () => {
     expect(del.status).toBe(200);
     expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
     expect(stored.size).toBe(0);
+  });
+
+  it("deleting the group deletes its group picture too", async () => {
+    const { owner, groupId } = await setup();
+    const { XenSplit } = await import("../models/xenSplit.js");
+    const { publicUrlFor } = await import("../storage/index.js");
+    stored.add(`xensplit-group-images/${groupId}.jpg`);
+    await XenSplit.updateOne(
+      { _id: groupId },
+      { $set: { image_url: publicUrlFor(`xensplit-group-images/${groupId}.jpg`) } },
+    );
+    expect((await request(t.app).delete(`/api/xensplit/groups/${groupId}`).set(auth(owner.token))).status).toBe(200);
+    expect(stored.has(`xensplit-group-images/${groupId}.jpg`)).toBe(false);
+  });
+
+  it("removes a deleted expense's photos after 30 days, keeping the expense restorable", async () => {
+    const { owner, uid, groupId, expenseId, photos } = await setup();
+    await photos(2);
+    const { XenSplit } = await import("../models/xenSplit.js");
+    const { purgeDeletedExpensePhotos } = await import("../utils/xensplitFiles.js");
+    expect(
+      (await request(t.app).delete(`/api/xensplit/groups/${groupId}/expenses/${expenseId}`).set(auth(owner.token)))
+        .status,
+    ).toBe(200);
+
+    // A fresh delete keeps its photos, so restoring brings them back.
+    await purgeDeletedExpensePhotos();
+    expect(stored.size).toBe(2);
+
+    const day = 24 * 60 * 60 * 1000;
+    await purgeDeletedExpensePhotos(new Date(Date.now() + 31 * day));
+    expect(stored.size).toBe(0);
+    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    const group = await XenSplit.findById(groupId).lean();
+    const expense = group!.expenses.find((e: any) => String(e._id) === String(expenseId))!;
+    expect(expense.images).toHaveLength(0);
+    expect(expense.deleted_at).toBeTruthy();
   });
 
   it("refuses a photo for a group the person is not in", async () => {

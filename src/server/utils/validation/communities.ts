@@ -107,3 +107,9 @@ export const inviteCommunitySchema = z.object({
 });
 /** Answer an invite: join (true) or turn it down (false). */
 export const respondInviteSchema = z.object({ accept: z.boolean() });
+
+// Donating gems to a community's fund (billing). `requestId` comes from the client so a retried request can't donate twice.
+export const donateToFundSchema = z.object({
+  gems: z.number().int("Donate whole gems").min(1, "Donate at least 1 gem").max(1_000_000),
+  requestId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/, "Invalid request id"),
+});

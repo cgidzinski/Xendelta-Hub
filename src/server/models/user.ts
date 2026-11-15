@@ -32,6 +32,9 @@ const userSchema = new Schema({
   password: { type: String }, // For local authentication
   // Premium currency, bought in the shop (docs/monetization.md). New accounts start with none.
   gems: { type: Number, default: 0 },
+  // The last gem transactions applied to this balance (billing/ledger.ts), so a retried transfer can't apply twice.
+  // Never sent anywhere: `select: false` keeps it out of every query unless asked for.
+  gemTxApplied: { type: [Schema.Types.ObjectId], default: [], select: false },
   authProviders: [authProviderSchema], // Multiple authentication methods
   resetPassword: {
     token: { type: String },

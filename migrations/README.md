@@ -44,5 +44,7 @@ write or test a data migration:
 
 - Rehearse it on a copy: `npm run db:export`, restore into a scratch database, point `MONGODB_URI`
   there, then `npm run db:migrate`.
-- Check how big the data really is first: `npm run db:stats` (read-only, safe on production).
+- Check how big the data really is first: `npm run db:stats` (read-only, safe on production). Its "Unused data"
+  section lists collections no model uses, fields no schema defines and older leftovers: the place to look before
+  writing a cleanup migration.
 - Never run a branch containing an unmerged migration against a shared database.

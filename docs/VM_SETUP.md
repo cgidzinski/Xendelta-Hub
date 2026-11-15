@@ -115,10 +115,13 @@ GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
 GITHUB_CALLBACK_URL=https://xendelta.com/api/auth/github/callback
 
-# Google Cloud Storage Configuration
-GCS_PUBLIC_BUCKET_NAME=your-public-bucket-name
-GCS_PRIVATE_BUCKET_NAME=your-private-bucket-name
-GOOGLE_APPLICATION_CREDENTIALS=./gcs-service-account.json
+# File storage: Cloudflare R2 (docs/storage.md)
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key-id
+R2_SECRET_ACCESS_KEY=your-r2-secret-access-key
+R2_PRIVATE_BUCKET=your-private-bucket-name
+R2_PUBLIC_BUCKET=your-public-bucket-name
+STORAGE_PUBLIC_BASE_URL=https://files.your-domain.com
 
 # Bugsnag Error Monitoring — the server only reports errors when this key is present, so
 # it's safe to leave unset (e.g. in a local .env) to stay silent. Add BUGSNAG_API_KEY to
@@ -131,53 +134,19 @@ BUGSNAG_RELEASE_STAGE=production
 
 > **Security Note:** Never commit the `.env` file to version control. Make sure it's listed in `.gitignore`.
 
-### Google Cloud Storage Service Account Setup
+### Cloudflare R2 Setup
 
-To use Google Cloud Storage for media uploads (avatars, blog assets, etc.), you need to set up a service account:
+Files live in two Cloudflare R2 buckets (`docs/storage.md`).
 
-1. **Go to Google Cloud Console:**
-   - Navigate to [Google Cloud Console](https://console.cloud.google.com/)
-   - Select your project (or create a new one)
-
-2. **Create a Service Account:**
-   - Go to **IAM & Admin** → **Service Accounts**
-   - Click **Create Service Account**
-   - Enter a name (e.g., `xendelta-hub-storage`)
-   - Click **Create and Continue**
-
-3. **Grant Permissions:**
-   - Add the role: **Storage Object Admin** (or **Storage Admin** for full access)
-   - Click **Continue** and then **Done**
-
-4. **Create and Download JSON Key:**
-   - Click on the created service account
-   - Go to the **Keys** tab
-   - Click **Add Key** → **Create new key**
-   - Select **JSON** format
-   - Click **Create** (the JSON file will download automatically)
-
-5. **Upload the JSON File to Your Server:**
-   ```bash
-   # Upload the file using SCP (from your local machine)
-   scp path/to/your-service-account.json user@your-server:/path/to/Xendelta-Hub/gcs-service-account.json
-   
-   # Or create it directly on the server
-   nano gcs-service-account.json
-   # Paste the JSON content and save
-   ```
-
-6. **Set Proper Permissions:**
-   ```bash
-   chmod 600 gcs-service-account.json
-   ```
-
-7. **Create GCS Buckets:**
-   - In Google Cloud Console, go to **Cloud Storage** → **Buckets**
-   - Create two buckets:
-     - One for public assets (e.g., `xendelta-hub-public`)
-     - One for private assets (e.g., `xendelta-hub-private`)
-   - Set the public bucket's permissions to allow public read access
-   - Update the bucket names in your `.env` file
+1. In the Cloudflare dashboard, open **R2 Object Storage** and create two buckets, e.g. `xendelta-hub-private` and
+   `xendelta-hub-public` (staging gets its own pair).
+2. On the public bucket, under **Settings → Custom Domains**, connect a domain such as `files.your-domain.com`. That
+   address is `STORAGE_PUBLIC_BASE_URL`. Leave the private bucket without public access: it is only read through signed
+   links.
+3. Under **R2 → Manage API tokens**, create a token with **Object Read & Write** on both buckets. It shows the access key
+   id and secret once: put them in `.env` as `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. `R2_ACCOUNT_ID` is the
+   account id shown on the R2 overview page.
+4. CORS: XenDrive uploads go through the server, so the buckets need no CORS rules.
 
 ### Install Dependencies and Start
 

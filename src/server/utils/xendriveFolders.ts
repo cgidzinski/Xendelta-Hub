@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { XenDriveFile } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
-import { deleteFromGCS } from "./gcsUtils";
+import { deleteFromStorage } from "./storageUtils";
 
 // Folder tree helpers. Folders nest through parent_id; these walk that tree. Nothing here trusts the
 // caller: every function that takes a folder id either filters by owner or is given an already-verified id.
@@ -88,7 +88,7 @@ export async function deleteFolderTree(rootId: string): Promise<void> {
   const ids = await subtreeIds(rootId);
   const files = await XenDriveFile.find({ folder_id: { $in: ids } }, "storage_path").lean();
   for (const file of files) {
-    await deleteFromGCS(file.storage_path, true).catch(() => {
+    await deleteFromStorage(file.storage_path, true).catch(() => {
       // already gone
     });
   }

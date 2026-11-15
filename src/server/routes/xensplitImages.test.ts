@@ -4,14 +4,14 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
 // Google Cloud Storage is the only thing stubbed: the rest (routes, models, Mongo) is real. The
 // stub takes a moment, like a real upload does, which is what widens the race window below.
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async () => {
+  uploadToStorage: vi.fn(async () => {
     await new Promise((r) => setTimeout(r, 150));
     return "stub-url";
   }),
   generateSignedUrl: vi.fn(async () => "https://example.test/signed"),
-  deleteFromGCS: vi.fn(async () => undefined),
+  deleteFromStorage: vi.fn(async () => undefined),
 }));
 
 let t: TestApp;
@@ -114,13 +114,13 @@ describe("XenSplit expense images: several at once", () => {
   });
 
   it("saves nothing and cleans up when one photo fails to store", async () => {
-    const gcs = await import("../utils/gcsUtils.js");
+    const gcs = await import("../utils/storageUtils.js");
     const { owner, groupId } = await setup();
     const add = await addExpense(owner.token, groupId, owner.user._id.toString(), "Museum");
-    vi.mocked(gcs.deleteFromGCS).mockClear();
+    vi.mocked(gcs.deleteFromStorage).mockClear();
     // second photo's storage call fails
     let calls = 0;
-    vi.mocked(gcs.uploadToGCS).mockImplementation(async () => {
+    vi.mocked(gcs.uploadToStorage).mockImplementation(async () => {
       calls += 1;
       if (calls === 2) throw new Error("storage unavailable");
       return "ok";
@@ -129,7 +129,7 @@ describe("XenSplit expense images: several at once", () => {
     const res = await uploadMany(owner.token, groupId, add.body.data.newExpenseId, 3);
     expect(res.status).toBe(500);
     // the two that did upload were removed again
-    expect(vi.mocked(gcs.deleteFromGCS)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(gcs.deleteFromStorage)).toHaveBeenCalledTimes(2);
     const group = await request(t.app).get(`/api/xensplit/groups/${groupId}`).set(auth(owner.token));
     const museum = group.body.data.expenses.find((e: any) => e.title === "Museum");
     expect(museum.images ?? []).toHaveLength(0);

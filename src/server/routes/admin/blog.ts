@@ -15,7 +15,8 @@ import {
 import { ensureUniqueSlug } from "../../utils/slugUtils";
 import { uploadBlogAsset as multerUploadBlogAsset } from "../../config/multer";
 import { uploadBlogAsset, generateUniqueFilename } from "../../utils/mediaUtils";
-import { deleteFromGCS } from "../../utils/gcsUtils";
+import { publicKeyFromUrl } from "../../storage";
+import { deleteFromStorage } from "../../utils/storageUtils";
 import { PUBLIC_USER_FIELDS } from "../../utils/publicUser";
 
 export function registerAdminBlogRoutes(app: express.Application) {
@@ -152,7 +153,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
       const urlParts = assetUrl.split("/");
       const filename = urlParts[urlParts.length - 1];
       const gcsPath = `blog-assets/${filename}`;
-      await deleteFromGCS(gcsPath).catch(() => {
+      await deleteFromStorage(gcsPath).catch(() => {
         // Ignore errors if file doesn't exist
       });
 
@@ -182,6 +183,8 @@ export function registerAdminBlogRoutes(app: express.Application) {
       if (slug && slug !== post.slug) {
         post.slug = await ensureUniqueSlug(slug, post._id.toString());
       }
+      // What the post used before, so files the edit drops (a replaced featured image, a removed asset) can go.
+      const before = [...(post.assets ?? []), post.featuredImage].filter((u): u is string => !!u);
       if (title !== undefined) post.title = title;
       if (markdown !== undefined) post.markdown = markdown;
       if (publishDate !== undefined) post.publishDate = new Date(publishDate);
@@ -195,6 +198,14 @@ export function registerAdminBlogRoutes(app: express.Application) {
       if (published !== undefined) post.published = published;
 
       await post.save();
+
+      const kept = new Set([...(post.assets ?? []), post.featuredImage].filter((u): u is string => !!u));
+      for (const url of before) {
+        const key = publicKeyFromUrl(url);
+        // Only our own blog files, and never one the post still shows (in its assets, as the cover, or in the text).
+        if (!key?.startsWith("blog-assets/") || kept.has(url) || (post.markdown ?? "").includes(url)) continue;
+        await deleteFromStorage(key).catch(() => undefined);
+      }
 
       const updated = await BlogPost.findById(post._id).populate("author", PUBLIC_USER_FIELDS).lean().exec();
 
@@ -225,7 +236,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
           const urlParts = assetUrl.split("/");
           const filename = urlParts[urlParts.length - 1];
           const gcsPath = `blog-assets/${filename}`;
-          await deleteFromGCS(gcsPath).catch(() => {
+          await deleteFromStorage(gcsPath).catch(() => {
             // Ignore errors if file doesn't exist
           });
         }
@@ -236,7 +247,7 @@ export function registerAdminBlogRoutes(app: express.Application) {
         const urlParts = post.featuredImage.split("/");
         const filename = urlParts[urlParts.length - 1];
         const gcsPath = `blog-assets/${filename}`;
-        await deleteFromGCS(gcsPath).catch(() => {
+        await deleteFromStorage(gcsPath).catch(() => {
           // Ignore errors if file doesn't exist
         });
       }

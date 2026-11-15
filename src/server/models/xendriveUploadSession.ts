@@ -8,6 +8,7 @@ const xendriveUploadSessionSchema = new Schema({
   upload_id: { type: String, required: true, unique: true },
   user_id: { type: String, required: true },
   filename: { type: String, required: true }, // the generated storage name
+  storage_key: { type: String }, // its full path in the bucket (utils/xendriveUtils.ts storageKeyFor)
   name: { type: String, required: true }, // the original file name, shown to people
   folder_id: { type: String, default: null },
   // Set when an app is uploading on the person's behalf (utils/driveSources.ts); the finished file carries it.
@@ -15,7 +16,9 @@ const xendriveUploadSessionSchema = new Schema({
   source_ref: { type: String },
   total_chunks: { type: Number, required: true },
   received_chunks: { type: [Number], default: [] },
-  resumable_uri: { type: String, required: true },
+  // The storage's multipart upload (storage/index.ts) and the parts it has accepted so far.
+  storage_upload_id: { type: String, required: true },
+  parts: { type: [{ partNumber: Number, etag: String, _id: false }], default: [] },
   bytes_uploaded: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now },
 });

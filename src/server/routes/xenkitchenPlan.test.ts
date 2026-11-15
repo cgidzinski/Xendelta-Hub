@@ -1,13 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
 // The meal plan and the shopping list made from it, through the real routes and models. Only storage is faked.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 let t: TestApp;
 beforeAll(async () => {
   t = await startTestApp([() => import("./xenkitchen.js"), () => import("./xenkitchenPlan.js")]);

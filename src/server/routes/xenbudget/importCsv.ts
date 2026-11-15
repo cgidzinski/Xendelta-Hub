@@ -32,6 +32,7 @@ import {
   plainRules,
   resolveBatchLabel,
 } from "./shared";
+import { removeItemPhotos } from "../../utils/xenBudgetFiles";
 
 export function registerImportRoutes(app: any) {
   // --- CSV import ----------------------------------------------------------
@@ -278,7 +279,10 @@ export function registerImportRoutes(app: any) {
     async (req: Request, res: Response) => {
       const book = await loadBookForMember(req);
       const batchId = new mongoose.Types.ObjectId(req.params.batchId);
+      const undone = await XenBudgetItem.find({ book_id: book._id, import_batch_id: batchId }, "images").lean();
       const result = await XenBudgetItem.deleteMany({ book_id: book._id, import_batch_id: batchId });
+      // Photos added to those items since the import go with them.
+      await removeItemPhotos(undone.flatMap((i: any) => i.images ?? []));
       if (book.import_batches.id(batchId)) {
         book.import_batches.pull({ _id: batchId });
         await book.save();

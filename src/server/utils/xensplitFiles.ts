@@ -5,8 +5,9 @@ import { Types } from "mongoose";
 import { XenSplit } from "../models/xenSplit";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { registerDriveSource } from "./driveSources";
-import { deleteFromGCS } from "./gcsUtils";
+import { deleteFromStorage } from "./storageUtils";
 import { removeAppFiles } from "./appFiles";
+import { publicKeyFromUrl } from "../storage";
 
 export const XENSPLIT_SOURCE = "xensplit";
 
@@ -48,10 +49,46 @@ export async function removeExpensePhotos(images: Photo[]): Promise<void> {
   const legacy = images.filter((i) => !i.file_id && i.gcs_path).map((i) => i.gcs_path as string);
   await Promise.all([
     removeAppFiles(fileIds),
-    ...legacy.map((path) => deleteFromGCS(path, true).catch(() => undefined)),
+    ...legacy.map((path) => deleteFromStorage(path, true).catch(() => undefined)),
   ]);
 }
 
-/** Delete every photo of a group (when the group itself is deleted). Soft-deleted expenses keep theirs until now. */
-export const removeGroupPhotos = (group: { expenses: Array<{ images?: Photo[] }> }) =>
-  removeExpensePhotos(group.expenses.flatMap((e) => e.images ?? []));
+/** Delete every photo of a group and its group picture, when the group itself is deleted. */
+export async function removeGroupPhotos(group: {
+  expenses: Array<{ images?: Photo[] }>;
+  image_url?: string | null;
+}): Promise<void> {
+  const picture = publicKeyFromUrl(group.image_url);
+  await Promise.all([
+    removeExpensePhotos(group.expenses.flatMap((e) => e.images ?? [])),
+    picture ? deleteFromStorage(picture).catch(() => undefined) : undefined,
+  ]);
+}
+
+/** How long a deleted expense keeps its photos, so restoring it soon after brings them back. */
+export const DELETED_EXPENSE_PHOTO_DAYS = 30;
+
+/**
+ * Remove the photos of expenses deleted more than DELETED_EXPENSE_PHOTO_DAYS ago (daily job). The expense itself stays
+ * restorable, without its photos. Returns how many photos went.
+ */
+export async function purgeDeletedExpensePhotos(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - DELETED_EXPENSE_PHOTO_DAYS * 24 * 60 * 60 * 1000);
+  const old = { deleted_at: { $ne: null, $lt: cutoff }, "images.0": { $exists: true } };
+  let removed = 0;
+  for await (const group of XenSplit.find(
+    { expenses: { $elemMatch: old } },
+    "expenses._id expenses.deleted_at expenses.images",
+  )) {
+    const expenses = group.expenses.filter((e) => e.deleted_at && e.deleted_at < cutoff && (e.images?.length ?? 0) > 0);
+    const photos = expenses.flatMap((e) => (e.images ?? []) as Photo[]);
+    await XenSplit.updateOne(
+      { _id: group._id },
+      { $set: { "expenses.$[e].images": [] } },
+      { arrayFilters: [{ "e._id": { $in: expenses.map((e) => e._id) } }] },
+    );
+    await removeExpensePhotos(photos);
+    removed += photos.length;
+  }
+  return removed;
+}

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRealtime } from "../useRealtime";
 import { communityKeys } from "./keys";
+import { billingKeys } from "../billing/keys";
 
 /**
  * Keeps the community caches current from what the server pushes. Mounted once while signed in, beside the chat's own
@@ -23,6 +24,12 @@ export function useCommunityRealtime() {
   // A channel was added, changed, reordered or deleted, or a role changed what someone can see.
   useRealtime("community:channels", ({ communityId }) => {
     queryClient.invalidateQueries({ queryKey: communityKeys.channels(communityId) });
+  });
+
+  // A donation or a bill payment moved the community's fund.
+  useRealtime("community:fund", ({ communityId }) => {
+    queryClient.invalidateQueries({ queryKey: billingKeys.community(communityId) });
+    queryClient.invalidateQueries({ queryKey: billingKeys.fund(communityId) });
   });
 
   // You were invited, or an invite to you was taken back.

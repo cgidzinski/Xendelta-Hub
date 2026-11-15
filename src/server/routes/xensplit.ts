@@ -8,7 +8,7 @@ import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadXenSplitImages } from "../config/multer";
-import { generateSignedUrl } from "../utils/gcsUtils";
+import { generateSignedUrl } from "../utils/storageUtils";
 import { storeAppFiles, signedUrlsFor } from "../utils/appFiles";
 import { XENSPLIT_SOURCE, removeExpensePhotos, removeGroupPhotos } from "../utils/xensplitFiles";
 import { uploadXenSplitGroupImageFile } from "../utils/mediaUtils";

@@ -13,8 +13,6 @@ interface StepEditorProps {
   canMoveUp: boolean;
   canMoveDown: boolean;
   dispatch: (action: StepAction) => void;
-  /** Reports an image the user removed. Deleting it is the form's call, after the save lands. */
-  onAssetRemoved: (url: string) => void;
 }
 
 /**
@@ -22,13 +20,12 @@ interface StepEditorProps {
  * It used to mirror each field into local state and resync from props, which fought with
  * reordering. Memoized so a keystroke in one step doesn't re-render the whole list.
  */
-function StepEditor({ step, index, canMoveUp, canMoveDown, dispatch, onAssetRemoved }: StepEditorProps) {
+function StepEditor({ step, index, canMoveUp, canMoveDown, dispatch }: StepEditorProps) {
   const update = (updates: Partial<RecipeStep>) => {
     dispatch({ type: "update", index, step: { ...step, ...updates } });
   };
 
   const handleImageRemove = (url: string) => {
-    onAssetRemoved(url);
     update({ images: (step.images || []).filter((u) => u !== url) });
   };
 

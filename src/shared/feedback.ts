@@ -23,8 +23,8 @@ export type FeedbackOutcome = (typeof FEEDBACK_OUTCOMES)[number];
 export const FEEDBACK_OUTCOME_LABEL: Record<FeedbackOutcome, string> = { resolved: "Resolved", dismissed: "Dismissed" };
 
 /** Gem amounts offered when thanking someone for a bug report (Admin → Feedback). */
-export const FEEDBACK_REWARD_PRESETS = [100, 250, 500, 1000, 2500, 5000] as const;
-export const FEEDBACK_REWARD_MAX_GEMS = 10_000;
+export const FEEDBACK_REWARD_PRESETS = [500, 1250, 2500, 5000, 12500, 25000] as const;
+export const FEEDBACK_REWARD_MAX_GEMS = 50_000;
 export const FEEDBACK_REWARD_MESSAGE_MAX_LENGTH = 500;
 
 export interface FeedbackMessagePreset {

@@ -34,6 +34,7 @@ import {
   memberIds,
   normalizeMeasures,
 } from "./shared";
+import { removeItemPhotos } from "../../utils/xenBudgetFiles";
 
 /**
  * Which item type a budget counts.
@@ -338,7 +339,10 @@ export function registerPiggyBankRoutes(app: any) {
       }
 
       const item = await linkedItem(book, contribution);
-      if (item) await XenBudgetItem.deleteOne({ _id: item._id });
+      if (item) {
+        await XenBudgetItem.deleteOne({ _id: item._id });
+        await removeItemPhotos((item as any).images ?? []);
+      }
       bank.contributions.pull({ _id: contribution._id });
       await saveAndRespond(req, res, book, item ? "Contribution and its transaction removed" : "Contribution removed");
     },

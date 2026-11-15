@@ -1,17 +1,17 @@
 /**
  * Files an app stores for a person (photos on an expense, a note, a recipe) are real XenDrive files, tagged with
  * `source: { app, ref }` (utils/driveSources.ts). They live in the private bucket, belong to the uploader, show up
- * under XenDrive > From apps, and are deleted like any file. Apps call these helpers instead of `uploadToGCS`.
+ * under XenDrive > From apps, and are deleted like any file. Apps call these helpers instead of `uploadToStorage`.
  *
  * Whether a file counts toward the owner's quota is the app's call for that `ref` (`DriveSourceApp.counts`).
  */
 
-import { privateBucket, publicBucket } from "../config/gcs";
+import { privateStore, publicStore, type ObjectStore } from "../storage";
 import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
 import { AppError } from "./http";
 import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
-import { deleteFromGCS, generateSignedUrl, uploadToGCS } from "./gcsUtils";
-import { checkQuota, generateXendriveFilename } from "./xendriveUtils";
+import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storageUtils";
+import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -41,8 +41,8 @@ export async function storeAppFiles(
     if (!quota.canUpload) throw new AppError(413, quota.message ?? "Not enough storage");
   }
 
-  const paths = files.map((f) => `xendrive/${userId}/${generateXendriveFilename(f.name)}`);
-  const uploads = await Promise.allSettled(files.map((f, i) => uploadToGCS(f.buffer, paths[i], f.mimeType, true)));
+  const paths = files.map((f) => storageKeyFor(userId, source, generateXendriveFilename(f.name)));
+  const uploads = await Promise.allSettled(files.map((f, i) => uploadToStorage(f.buffer, paths[i], f.mimeType, true)));
   const uploaded = paths.filter((_, i) => uploads[i].status === "fulfilled");
   const failed = uploads.find((u): u is PromiseRejectedResult => u.status === "rejected");
   if (failed) {
@@ -95,19 +95,21 @@ export async function copyAppFiles(
           const doc = await XenDriveFile.findById(origin.fileId, "storage_path name mimeType size").lean();
           if (!doc) return null;
           return {
-            file: privateBucket.file(doc.storage_path),
+            store: privateStore as ObjectStore,
+            key: doc.storage_path,
             name: doc.name,
             mimeType: doc.mimeType,
             size: doc.size ?? 0,
           };
         }
-        const file = publicBucket.file(origin.publicPath);
-        const [metadata] = await file.getMetadata();
+        const info = await publicStore.head(origin.publicPath);
+        if (!info) return null;
         return {
-          file,
+          store: publicStore,
+          key: origin.publicPath,
           name: origin.publicPath.split("/").pop() || "photo",
-          mimeType: String(metadata.contentType || "application/octet-stream"),
-          size: parseInt(String(metadata.size ?? "0"), 10),
+          mimeType: info.contentType || "application/octet-stream",
+          size: info.size,
         };
       } catch (error) {
         console.error(">>> App file copy skipped:", origin, error);
@@ -128,9 +130,9 @@ export async function copyAppFiles(
 
   const copies: XenDriveFileDocument[] = [];
   for (const from of sources) {
-    const path = `xendrive/${userId}/${generateXendriveFilename(from.name)}`;
+    const path = storageKeyFor(userId, source, generateXendriveFilename(from.name));
     try {
-      await from.file.copy(privateBucket.file(path));
+      await privateStore.copyFrom(from.store, from.key, path);
     } catch (error) {
       console.error(">>> App file copy failed:", from.name, error);
       continue;
@@ -178,4 +180,4 @@ export async function signedUrlsFor(
 }
 
 const deleteBytes = (paths: string[]) =>
-  Promise.allSettled(paths.map((p) => deleteFromGCS(p, true))).then(() => undefined);
+  Promise.allSettled(paths.map((p) => deleteFromStorage(p, true))).then(() => undefined);

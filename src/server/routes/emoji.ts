@@ -10,7 +10,7 @@ import { CustomEmojiModel, type CustomEmojiDocument } from "../models/customEmoj
 import { hasPermission } from "../communities/policy";
 import { loadCommunity, communityMemberIds } from "../communities/service";
 import { realtime } from "../realtime";
-import { deleteFromGCS, uploadToGCS } from "../utils/gcsUtils";
+import { deleteFromStorage, uploadToStorage } from "../utils/storageUtils";
 import { AppError, callerId } from "../utils/http";
 import { validate, validateParams, emojiParamSchema, renameEmojiSchema, uploadEmojiSchema } from "../utils/validation";
 import { CUSTOM_EMOJI_MAX_PER_SCOPE, CUSTOM_EMOJI_SIZE, type CustomEmoji } from "@shared/emoji";
@@ -146,7 +146,7 @@ module.exports = function (app: Application) {
       // A storage problem is ours, not theirs: say so plainly and keep the details in the log.
       let url: string;
       try {
-        url = (await uploadToGCS(processed, storagePath, req.file.mimetype, false, IMMUTABLE)) as string;
+        url = (await uploadToStorage(processed, storagePath, req.file.mimetype, false, IMMUTABLE)) as string;
       } catch (error) {
         console.error("Emoji upload failed:", error);
         throw new AppError(502, "Couldn't save the picture. Try again in a moment.");
@@ -156,7 +156,7 @@ module.exports = function (app: Application) {
         doc = await CustomEmojiModel.create({ _id: id, ...scope.key, name, url, storagePath, animated, createdBy: me });
       } catch (error: any) {
         // Someone took the name between the check above and now: don't leave the picture behind.
-        await deleteFromGCS(storagePath).catch(() => undefined);
+        await deleteFromStorage(storagePath).catch(() => undefined);
         if (error?.code === 11000) throw new AppError(400, `There is already an emoji called :${name}:`);
         throw error;
       }
@@ -198,7 +198,7 @@ module.exports = function (app: Application) {
       const scope = await scopeOfEmoji(me, emoji);
       if (!scope.canChange(emoji.createdBy)) throw new AppError(403, "You can't remove this emoji");
       await emoji.deleteOne();
-      await deleteFromGCS(emoji.storagePath).catch(() => undefined);
+      await deleteFromStorage(emoji.storagePath).catch(() => undefined);
       realtime.toUsers(scope.audience, "emoji:changed", { scopeId: scope.id });
       ok(res, {});
     },

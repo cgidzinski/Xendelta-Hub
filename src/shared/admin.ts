@@ -21,7 +21,8 @@ export type AuditAction =
   | "feedback_update"
   | "feedback_reward"
   | "feedback_resolve"
-  | "feedback_delete";
+  | "feedback_delete"
+  | "provider_cost_set";
 
 /** Which filter chip each action sits under. */
 export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
@@ -42,6 +43,7 @@ export const AUDIT_CATEGORY_OF: Record<AuditAction, AuditCategory> = {
   feedback_reward: "Gems",
   feedback_resolve: "System",
   feedback_delete: "System",
+  provider_cost_set: "Gems",
 };
 
 export interface AuditEntry {
@@ -51,7 +53,7 @@ export interface AuditEntry {
   action: AuditAction;
   category: AuditCategory;
   target: {
-    type: "user" | "everyone" | "chats" | "task" | "group" | "database" | "feedback";
+    type: "user" | "everyone" | "chats" | "task" | "group" | "database" | "feedback" | "billing";
     id?: string;
     label: string;
   };
@@ -165,6 +167,56 @@ export interface AdminMoneyReport {
   };
   purchases: Paged<AdminPurchase>;
   catalogue: Array<{ id: string; name: string; kind: string; price: string }>;
+}
+
+/** One cost center's month in the admin billing report. Gems are exact (fractions). */
+export interface AdminBillingCenterRow {
+  center: string;
+  label: string;
+  payer: "account" | "house";
+  status: "free" | "metered";
+  provider: string;
+  units: number;
+  quantity: number;
+  displayUnit: string;
+  /** Billed to people and communities at the billed rate (before the free tier). */
+  billedPeople: number;
+  billedCommunities: number;
+  /** What this usage cost us at the cost rate, every account and the house included. */
+  costGems: number;
+}
+
+export interface AdminBillingProviderRow {
+  provider: string;
+  label: string;
+  /** What the centers on this provider say it cost us, in gems. */
+  estimatedGems: number;
+  /** What the provider actually billed, as entered by an admin. */
+  actualCents: number | null;
+  actualGems: number | null;
+  /** Billed to people and communities (before the free tier) over the actual cost; null without an actual cost. */
+  margin: number | null;
+}
+
+export interface AdminBillingReport {
+  month: string;
+  months: string[];
+  enforced: boolean;
+  everythingFree: boolean;
+  billingMargin: number;
+  gemsPerDollar: number;
+  centers: AdminBillingCenterRow[];
+  providers: AdminBillingProviderRow[];
+  totals: {
+    /** Usage taken off bills by the free tier, by people and by communities. */
+    freeTierPeople: number;
+    freeTierCommunities: number;
+    /** From closed statements: due, collected and left unpaid (whole gems). */
+    due: number;
+    collected: number;
+    unpaid: number;
+    statements: number;
+  };
 }
 
 export type NotifyAudience =

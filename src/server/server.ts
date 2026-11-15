@@ -107,6 +107,30 @@ mongoConnection.on("connected", async () => {
       handler: runDueTasks,
     });
     scheduler.register({ name: "xendrive-session-cleanup", everyMs: 30 * 60 * 1000, handler: cleanupOldSessions });
+    // Finish gem transfers a crash or restart interrupted (billing/ledger.ts).
+    const { reconcilePendingGems } = require("./billing/ledger");
+    scheduler.register({
+      name: "gem-ledger-reconcile",
+      everyMs: 60 * 60 * 1000,
+      runOnStart: true,
+      handler: () => reconcilePendingGems(),
+    });
+    // Photos of XenSplit expenses deleted over a month ago (utils/xensplitFiles.ts).
+    const { purgeDeletedExpensePhotos } = require("./utils/xensplitFiles");
+    scheduler.register({
+      name: "xensplit-deleted-photos",
+      everyMs: 24 * 60 * 60 * 1000,
+      runOnStart: true,
+      handler: () => purgeDeletedExpensePhotos(),
+    });
+    // Close finished billing months and warn accounts near their free tier (billing/settlement.ts).
+    const { runBillingJobs } = require("./billing/settlement");
+    scheduler.register({
+      name: "billing-settlement",
+      everyMs: 60 * 60 * 1000,
+      runOnStart: true,
+      handler: runBillingJobs,
+    });
     scheduler.register({
       name: "xenroutine-reminders",
       everyMs: 60 * 60 * 1000,
@@ -120,7 +144,7 @@ mongoConnection.on("connected", async () => {
       handler: () => runNoteReminders(),
     });
     // Automatic database backups to the private bucket, only when BACKUP_SCHEDULE_HOURS is set (docs/admin.md).
-    const { scheduleFromEnv, runScheduledBackup } = require("./utils/gcsBackups");
+    const { scheduleFromEnv, runScheduledBackup } = require("./utils/storageBackups");
     const backupSchedule = scheduleFromEnv();
     if (backupSchedule) {
       scheduler.register({
@@ -203,6 +227,7 @@ require("./routes/users.ts")(app);
 require("./routes/people.ts")(app);
 require("./routes/apiKeys.ts")(app);
 require("./routes/shop.ts")(app);
+require("./routes/billing.ts")(app);
 require("./routes/notifications.ts")(app);
 require("./routes/push.ts")(app);
 require("./routes/chat")(app);

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../config/api";
 import type {
+  AdminBillingReport,
   AdminMoneyReport,
   AdminOverview,
   AdminStorageReport,
@@ -66,6 +67,26 @@ export const useAdminMoney = (status: string, page: number) =>
       ).report,
     placeholderData: keepPreviousData,
   });
+
+/** The billing report for a month (the current one when empty). */
+export const useAdminBilling = (month: string) =>
+  useQuery({
+    queryKey: adminKeys.billing(month),
+    queryFn: async () =>
+      (await api.get<{ report: AdminBillingReport }>("/api/admin/billing", { params: { month: month || undefined } }))
+        .report,
+    placeholderData: keepPreviousData,
+  });
+
+/** Enter (or clear, with null) what a provider actually billed for a month. */
+export function useSetProviderCost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { month: string; provider: string; amountCents: number | null }) =>
+      api.put(`/api/admin/billing/costs/${v.month}/${v.provider}`, { amountCents: v.amountCents }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.billingAll() }),
+  });
+}
 
 export const useAdminSystem = () =>
   useQuery({

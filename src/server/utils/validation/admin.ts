@@ -90,3 +90,14 @@ export const adminDeleteChatsSchema = z.object({ confirm: z.literal("DELETE") })
 const backupName = z.string().regex(BACKUP_NAME_PATTERN, "Not a backup file");
 export const adminBackupNameSchema = z.object({ name: backupName });
 export const adminRestoreBackupSchema = z.object({ name: backupName, confirm: z.literal("RESTORE") });
+
+const billingMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use a month like 2026-11");
+export const adminBillingQuerySchema = z.object({ month: billingMonthSchema.optional() });
+export const adminProviderCostParamSchema = z.object({
+  month: billingMonthSchema,
+  provider: z.enum(["cloud_storage", "cloudflare_realtime", "cloudflare_ai", "resend"]),
+});
+export const adminProviderCostSchema = z.object({
+  /** What the provider billed for the month, in US cents; null clears it. */
+  amountCents: z.number().int().min(0).max(100_000_000).nullable(),
+});

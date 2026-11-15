@@ -6,27 +6,9 @@ import { startTestApp, createUser, type TestApp } from "../../testing/testApp";
 // Chat attachments are XenDrive files tagged with where they came from. Real routes, models and Mongo; only storage
 // and the network are faked.
 const deleted: string[] = [];
-vi.mock("../../config/gcs", () => ({
-  privateBucket: {
-    file: (path: string) => ({
-      createResumableUpload: async () => ["https://storage.example.test/upload?id=1"],
-      getMetadata: async () => [{ size: "6", contentType: path.endsWith(".webm") ? "audio/webm" : "text/plain" }],
-      exists: async () => [true],
-      delete: async () => void deleted.push(path),
-    }),
-  },
-}));
-vi.mock("https", () => {
-  const request = (_opts: unknown, cb: (res: { statusCode: number }) => void) => ({
-    on: () => undefined,
-    write: () => undefined,
-    end: () => cb({ statusCode: 308 }),
-  });
-  return { default: { request }, request };
-});
-vi.mock("../../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  deleteFromGCS: vi.fn(async (path: string) => void deleted.push(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void deleted.push(path)),
   generateSignedUrl: vi.fn(
     async (path: string, _m?: number, opts?: { downloadName?: string }) =>
       `https://example.test/signed/${path}?name=${encodeURIComponent(opts?.downloadName ?? "")}`,
@@ -83,6 +65,8 @@ describe("chat uploads", () => {
     expect(stored.source).toEqual({ app: "chat", ref: chatId });
     expect(stored.folder_id).toBeNull();
     expect(stored.counted).toBe(true);
+    // Stored in chat's own folder, under the conversation (docs/storage.md), not the sender's XenDrive folder.
+    expect(stored.storage_path).toMatch(new RegExp(`^chat/${chatId}/`));
 
     // Hidden from My Drive, search and recent unless asked for...
     const browse = (query: string) => request(t.app).get(`/api/xendrive/browse${query}`).set(as(a.token));

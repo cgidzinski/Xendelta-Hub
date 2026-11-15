@@ -3,11 +3,7 @@ import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
 // "Linked from": which notes link to this one with [[its title]]. Real routes and models; only storage is faked.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
   generateSignedUrl: vi.fn(async (path: string) => `https://signed.example/${path}`),
 }));

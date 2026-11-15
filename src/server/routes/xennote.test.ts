@@ -4,20 +4,14 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
 import { usageFor } from "../utils/xendriveUtils";
 
-// The model below loads storage config at import time, before the test app sets its environment.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 // XenNote through the real routes, models and validation against an in-memory database. Only storage is faked.
 
 const stored = new Set<string>();
 const removed: string[] = [];
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_buf: Buffer, path: string) => void stored.add(path)),
-  deleteFromGCS: vi.fn(async (path: string) => {
+  uploadToStorage: vi.fn(async (_buf: Buffer, path: string) => void stored.add(path)),
+  deleteFromStorage: vi.fn(async (path: string) => {
     stored.delete(path);
     removed.push(path);
   }),
@@ -307,7 +301,7 @@ describe("photos", () => {
     const up = await send(2);
     expect(up.status, JSON.stringify(up.body)).toBe(200);
     expect(up.body.data.note.images).toHaveLength(2);
-    expect(up.body.data.note.images[0].url).toMatch(/^https:\/\/signed\.example\/xendrive\//);
+    expect(up.body.data.note.images[0].url).toMatch(/^https:\/\/signed\.example\/xennote\//); // the app's own folder
     expect(stored.size).toBe(2);
 
     expect((await send(9)).status).toBe(400); // 2 + 9 would pass the limit of 10

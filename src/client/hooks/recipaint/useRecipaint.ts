@@ -93,10 +93,6 @@ const uploadRecipaintAsset = async (file: File): Promise<RecipaintAssetUploadRes
   return api.post<RecipaintAssetUploadResponse>("/api/recipaint/upload-asset", formData);
 };
 
-const deleteRecipaintAsset = async (assetUrl: string): Promise<void> => {
-  await apiClient.delete(`/api/recipaint/asset?assetUrl=${encodeURIComponent(assetUrl)}`);
-};
-
 // Hooks
 export const useRecipaint = (search?: string) => {
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -264,14 +260,5 @@ export const useRecipaintAssets = () => {
     mutationFn: uploadRecipaintAsset,
   });
 
-  const { mutate: deleteAsset, isPending: isDeletingAsset } = useMutation({
-    mutationFn: deleteRecipaintAsset,
-  });
-
-  return {
-    uploadAsset,
-    isUploadingAsset,
-    deleteAsset: (assetUrl: string) => deleteAsset(assetUrl),
-    isDeletingAsset,
-  };
+  return { uploadAsset, isUploadingAsset };
 };

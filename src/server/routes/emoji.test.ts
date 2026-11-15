@@ -5,13 +5,13 @@ import { CUSTOM_EMOJI_MAX_PER_SCOPE } from "@shared/emoji";
 
 // Custom emoji through the real routes, models and Mongo. Only the bucket is faked, as an in-memory set of paths.
 const { stored } = vi.hoisted(() => ({ stored: new Map<string, { type: string; size: number }>() }));
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (buf: Buffer, path: string, type: string) => {
+  uploadToStorage: vi.fn(async (buf: Buffer, path: string, type: string) => {
     stored.set(path, { type, size: buf.length });
     return `https://example.test/public/${path}`;
   }),
-  deleteFromGCS: vi.fn(async (path: string) => void stored.delete(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void stored.delete(path)),
 }));
 
 let t: TestApp;
@@ -307,9 +307,9 @@ describe("when storage fails", () => {
   it("says so plainly, keeps the details out of the answer, and stores nothing", async () => {
     const a = await createUser();
     const community = await makeCommunity(a);
-    const gcs = await import("../utils/gcsUtils.js");
+    const gcs = await import("../utils/storageUtils.js");
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(gcs.uploadToGCS).mockRejectedValueOnce(new Error("secret path /srv/credentials.json"));
+    vi.mocked(gcs.uploadToStorage).mockRejectedValueOnce(new Error("secret path /srv/credentials.json"));
     const res = await upload(a, { name: "unlucky", scopeType: "community", scopeId: community._id });
     expect(res.status).toBe(502);
     expect(res.body.message).toBe("Couldn't save the picture. Try again in a moment.");

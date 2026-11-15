@@ -30,6 +30,10 @@ const communitySchema = new Schema(
   {
     name: { type: String, required: true },
     icon: { type: String, default: null },
+    // Gems members donated to pay the community's bills (billing/ledger.ts). Whole gems; carries over month to month.
+    fund: { type: Number, default: 0 },
+    // The last gem transactions applied to the fund, so a retried transfer can't apply twice. Never sent anywhere.
+    gemTxApplied: { type: [Schema.Types.ObjectId], default: [], select: false },
     members: [communityMemberSchema],
     roles: {
       type: [communityRoleSchema],

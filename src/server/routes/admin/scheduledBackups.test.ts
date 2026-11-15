@@ -1,48 +1,23 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import mongoose from "mongoose";
-import { Readable, Writable } from "stream";
+import { memoryStores } from "../../storage/index.js";
 import { startTestApp, type TestApp } from "../../testing/testApp";
 
-// An in-memory stand-in for the private bucket: objects by name, with the few calls the backup code makes.
-const bucket = vi.hoisted(() => ({ objects: new Map<string, { data: Buffer; created: string }>() }));
-vi.mock("../../config/gcs", () => {
-  const file = (name: string) => ({
-    name,
-    exists: async () => [bucket.objects.has(name)],
-    delete: async () => void bucket.objects.delete(name),
-    getSignedUrl: async () => [`https://signed.example/${name}`],
-    createWriteStream: () => {
-      const chunks: Buffer[] = [];
-      return new Writable({
-        write(chunk, _enc, cb) {
-          chunks.push(Buffer.from(chunk));
-          cb();
-        },
-        final(cb) {
-          bucket.objects.set(name, { data: Buffer.concat(chunks), created: new Date().toISOString() });
-          cb();
-        },
-      });
-    },
-    createReadStream: () => Readable.from([bucket.objects.get(name)!.data]),
-  });
-  const privateBucket = {
-    file,
-    getFiles: async ({ prefix }: { prefix: string }) => [
-      [...bucket.objects]
-        .filter(([name]) => name.startsWith(prefix))
-        .map(([name, o]) => ({ name, metadata: { size: String(o.data.length), timeCreated: o.created } })),
-    ],
-  };
-  return { privateBucket, publicBucket: privateBucket };
-});
+// The private bucket is the in-memory one (storage/memoryStore.ts): objects by name.
+const bucket = {
+  get objects() {
+    return memoryStores().privateStore.objects;
+  },
+};
+const putObject = (name: string, data: Buffer, created = new Date().toISOString()) =>
+  bucket.objects.set(name, { body: data, contentType: "application/gzip", lastModified: new Date(created) });
 
 let t: TestApp;
-let backups: typeof import("../../utils/gcsBackups.js");
+let backups: typeof import("../../utils/storageBackups.js");
 
 beforeAll(async () => {
   t = await startTestApp([]);
-  backups = await import("../../utils/gcsBackups.js");
+  backups = await import("../../utils/storageBackups.js");
 }, 180_000);
 afterAll(async () => {
   await t?.stop();
@@ -53,7 +28,7 @@ beforeEach(() => {
 });
 
 const db = () => mongoose.connection.db!;
-const put = (name: string, created: string) => bucket.objects.set(name, { data: Buffer.from("x"), created });
+const put = (name: string, created: string) => putObject(name, Buffer.from("x"), created);
 const names = () => [...bucket.objects.keys()].sort();
 const HOUR = 3_600_000;
 

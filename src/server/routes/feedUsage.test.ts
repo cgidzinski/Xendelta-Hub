@@ -1,14 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 
 // Which apps someone already uses (GET /api/feed/usage), for the "Did you know?" tips on Home: a thing they made or belong to
 // counts, an app's own files and other people's things do not.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 let t: TestApp;
 beforeAll(async () => {
   t = await startTestApp([

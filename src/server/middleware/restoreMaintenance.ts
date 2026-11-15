@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { currentJob } from "../utils/gcsBackups";
+import { currentJob } from "../utils/storageBackups";
 
 /**
  * While a database restore runs, answer every API request with a 503 instead of letting it hit half-restored data.

@@ -30,6 +30,8 @@ export interface RealtimeEvents {
   "community:invite": { communityId: string };
   /** A channel in the community was added, changed, reordered or deleted. */
   "community:channels": { communityId: string };
+  /** The community's fund changed (a donation or a bill payment). Only its members get this. */
+  "community:fund": { communityId: string; fund: number };
 
   // Calls. `call` is null once the call has ended. A person who may join is told when it starts, and everyone in the chat
   // hears of each change, so "Join call" and the participant list stay right.

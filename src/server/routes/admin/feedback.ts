@@ -2,9 +2,9 @@ import express = require("express");
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { Feedback } from "../../models/feedback";
-import { User } from "../../models/user";
 import { AppError } from "../../utils/http";
 import { recordAudit } from "../../utils/adminAudit";
+import { HOUSE, balanceOf, transfer, userAccount } from "../../billing/ledger";
 import { notify } from "../../utils/notificationUtils";
 import {
   adminFeedbackIdParamSchema,
@@ -96,11 +96,21 @@ export function registerAdminFeedbackRoutes(app: express.Application) {
 
       let balance: number | undefined;
       if (gems > 0) {
-        const credited = await User.findOneAndUpdate(
-          { _id: claimed.user_id },
-          { $inc: { gems } },
-          { new: true, projection: "gems" },
-        ).exec();
+        const person = userAccount(claimed.user_id);
+        const credited = await transfer({
+          from: HOUSE,
+          to: person,
+          amount: gems,
+          kind: "feedback_reward",
+          idempotencyKey: `feedback-reward:${claimed._id}`,
+          meta: { feedbackId: String(claimed._id) },
+        }).then(
+          async () => ({ gems: await balanceOf(person) }),
+          (e) => {
+            if (e instanceof AppError && e.status === 404) return null;
+            throw e;
+          },
+        );
         if (!credited) {
           // The sender is gone: release the claim rather than leave it marked as paid.
           await Feedback.updateOne(

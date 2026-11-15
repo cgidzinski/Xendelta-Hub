@@ -1,35 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
+import { bucketView } from "../testing/storage";
 import { XenDriveFile } from "../models/xendriveFile";
 import { XenKitchenItem } from "../models/xenKitchen";
 import { usageFor } from "../utils/xendriveUtils";
 
 // Photos are private XenDrive files tagged to the item: owned by the uploader, exempt from the quota for now, shown
 // through signed links (also on a shared page), copied for each duplicate, and removed with the photo, the item or the
-// file. Real routes, models and Mongo; only storage is faked, as two in-memory buckets.
-const { priv, pub } = vi.hoisted(() => ({ priv: new Set<string>(), pub: new Set<string>() }));
-vi.mock("../config/gcs", () => {
-  const bucket = (name: string, set: Set<string>) => ({
-    name,
-    file: (path: string) => ({
-      path,
-      set,
-      copy: async (dest: { path: string; set: Set<string> }) => {
-        if (!set.has(path)) throw new Error("no such object");
-        dest.set.add(dest.path);
-      },
-      getMetadata: async () => [{ size: "42", contentType: "image/webp" }],
-    }),
-  });
-  return { privateBucket: bucket("private", priv), publicBucket: bucket("public", pub) };
-});
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+// file. Real routes, models and Mongo; storage is the in-memory buckets.
+const priv = bucketView("private");
+const pub = bucketView("public");
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_b: Buffer, path: string, _t: string, isPrivate = false) => {
-    (isPrivate ? priv : pub).add(path);
-  }),
-  deleteFromGCS: vi.fn(async (path: string, isPrivate = false) => void (isPrivate ? priv : pub).delete(path)),
   generateSignedUrl: vi.fn(async (path: string) => `https://example.test/signed/${path}`),
 }));
 
@@ -81,7 +64,8 @@ describe("XenKitchen photos in XenDrive", () => {
 
     const images = res.body.data.item.images;
     expect(images).toHaveLength(2);
-    expect(images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xendrive\//);
+    // In XenKitchen's own folder, under the recipe.
+    expect(images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xenkitchen\//);
     expect(priv.size).toBe(2);
     expect(pub.size).toBe(0);
 

@@ -68,6 +68,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Choose a light or dark look and your timezone.",
       "Create keys so your own scripts or smart-home tools can use your account.",
       "Send feedback to the people who run it, and earn gems when a bug you report is fixed or an idea you suggest is built.",
+      "See what you've used each month and what it costs on your Billing page, with a free allowance every month.",
+      "See your community's monthly bill in its settings, along with its fund and who chipped in.",
     ],
     tips: [
       {
@@ -130,6 +132,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/settings/notifications",
       },
       { text: "Use your phone's Share button to send a link, some text or a photo straight to XenSuite." },
+      { text: "Try Billing in the side menu to see what you've used so far this month.", link: "/internal/billing" },
       {
         text: "Found a bug or have an idea? Send feedback and describe it. If we fix or build it, you get gems as a thank you.",
         link: "/internal/feedback",

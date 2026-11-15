@@ -61,6 +61,9 @@ export default function AccountCard({ profile, inventory }: AccountCardProps) {
             Get gems
           </Button>
         </Box>
+        <Button size="small" sx={{ mt: 1, ml: -1 }} onClick={() => navigate("/internal/billing")}>
+          See what you've used this month
+        </Button>
       </Box>
 
       <Divider />

@@ -4,20 +4,14 @@ import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { XenDriveFile } from "../models/xendriveFile";
 import { usageFor } from "../utils/xendriveUtils";
 
-// The model below loads storage config at import time, before the test app sets its environment.
-vi.hoisted(() => {
-  process.env.GCS_PUBLIC_BUCKET_NAME = "test-public";
-  process.env.GCS_PRIVATE_BUCKET_NAME = "test-private";
-});
-
 // Item photos are XenDrive files tagged to the book: owned by the uploader, listed under From apps, exempt from the
 // quota for now, and removed with the photo, the item, the book or the file. Only storage is faked.
 const stored = new Set<string>();
-vi.mock("../utils/gcsUtils.js", async (importOriginal) => ({
+vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  uploadToGCS: vi.fn(async (_b: Buffer, path: string) => void stored.add(path)),
+  uploadToStorage: vi.fn(async (_b: Buffer, path: string) => void stored.add(path)),
   generateSignedUrl: vi.fn(async (path: string) => `https://example.test/signed/${path}`),
-  deleteFromGCS: vi.fn(async (path: string) => void stored.delete(path)),
+  deleteFromStorage: vi.fn(async (path: string) => void stored.delete(path)),
 }));
 
 let t: TestApp;
@@ -66,6 +60,27 @@ async function setup() {
 }
 
 describe("XenBudget photos in XenDrive", () => {
+  it("undoing an import or restoring everything deletes the photos of the items it removes", async () => {
+    const { owner, uid, b, itemId, photos } = await setup();
+    await photos(1);
+    const { XenBudgetItem } = await import("../models/xenBudget.js");
+    const batch = new (await import("mongoose")).default.Types.ObjectId();
+    await XenBudgetItem.updateOne({ _id: itemId }, { $set: { import_batch_id: batch } });
+    expect((await request(t.app).delete(`${b}/imports/${batch}`).set(auth(owner.token))).status).toBe(200);
+    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(stored.size).toBe(0);
+
+    const second = await setup();
+    await second.photos(1);
+    const restore = await request(t.app)
+      .post(`${second.b}/import`)
+      .set(auth(second.owner.token))
+      .send({ format_version: 1, scope: "everything", book: { name: "Home" }, items: [] });
+    expect(restore.status, JSON.stringify(restore.body)).toBe(200);
+    expect(await XenDriveFile.countDocuments({ owner_id: second.uid })).toBe(0);
+    expect(stored.size).toBe(0);
+  });
+
   it("stores each photo as a tagged file owned by the uploader that doesn't count toward storage", async () => {
     const { owner, uid, bookId, photos, urls } = await setup();
     const before = await usageFor(uid);
