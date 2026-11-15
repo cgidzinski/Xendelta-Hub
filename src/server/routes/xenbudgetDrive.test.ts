@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { usageFor } from "../utils/xendriveUtils";
 
 // Item photos are XenDrive files tagged to the book: owned by the uploader, listed under From apps, exempt from the
@@ -71,7 +71,7 @@ describe("XenBudget photos in XenDrive", () => {
     const batch = new (await import("mongoose")).default.Types.ObjectId();
     await XenBudgetItem.updateOne({ _id: itemId }, { $set: { import_batch_id: batch } });
     expect((await request(t.app).delete(`${b}/imports/${batch}`).set(auth(owner.token))).status).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);
     expect(stored.size).toBe(0);
 
     const second = await setup();
@@ -81,7 +81,7 @@ describe("XenBudget photos in XenDrive", () => {
       .set(auth(second.owner.token))
       .send({ format_version: 1, scope: "everything", book: { name: "Home" }, items: [] });
     expect(restore.status, JSON.stringify(restore.body)).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: second.uid })).toBe(0);
+    expect(await FileRecord.countDocuments({ uploadedBy: second.uid })).toBe(0);
     expect(stored.size).toBe(0);
   });
 
@@ -91,9 +91,9 @@ describe("XenBudget photos in XenDrive", () => {
     const res = await photos(2);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
 
-    const files = await XenDriveFile.find({ owner_id: uid, "source.app": "xenbudget" });
+    const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xenbudget" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.source?.ref === bookId && f.counted === false)).toBe(true);
+    expect(files.every((f) => f.space?.ref === bookId && f.counted === false)).toBe(true);
     expect(await usageFor(uid)).toEqual(before);
     expect(await urls()).toHaveLength(2);
 
@@ -108,9 +108,9 @@ describe("XenBudget photos in XenDrive", () => {
     const [first] = await urls();
     const del = await request(t.app).delete(`${b}/items/${itemId}/images/${first._id}`).set(auth(owner.token));
     expect(del.status).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(2);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
 
-    const file = await XenDriveFile.findOne({ owner_id: uid });
+    const file = await FileRecord.findOne({ uploadedBy: uid });
     expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token))).status).toBe(400);
     expect(await urls()).toHaveLength(2);
   });
@@ -119,7 +119,7 @@ describe("XenBudget photos in XenDrive", () => {
     const { owner, uid, bookId, b, itemId, photos } = await setup();
     await photos(2);
     expect((await request(t.app).delete(`${b}/items/${itemId}`).set(auth(owner.token))).status).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);
     expect(stored.size).toBe(0);
 
     const second = await setup();

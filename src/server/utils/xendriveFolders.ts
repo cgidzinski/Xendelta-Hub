@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import { XenDriveFile } from "../models/xendriveFile";
-import { forgetFileRecords } from "./fileRecords";
+import { FileRecord } from "../models/fileRecord";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { deleteFromStorage } from "./storageUtils";
 
@@ -88,11 +88,11 @@ export async function folderStats(rootId: string): Promise<{ folders: number; fi
 export async function deleteFolderTree(rootId: string): Promise<void> {
   const ids = await subtreeIds(rootId);
   const files = await XenDriveFile.find({ folder_id: { $in: ids } }, "storage_path").lean();
-  await forgetFileRecords(files.map((f) => f._id));
-  for (const file of files) {
-    await deleteFromStorage(file.storage_path, true).catch(() => {
-      // already gone
-    });
+  const records = await FileRecord.find({ _id: { $in: files.map((f) => f._id) } }).lean();
+  await FileRecord.deleteMany({ _id: { $in: files.map((f) => f._id) } });
+  const keys = [...files.map((f) => f.storage_path), ...records.flatMap((r) => [r.thumbKey, r.previewKey])];
+  for (const key of keys) {
+    if (key) await deleteFromStorage(key, true).catch(() => undefined); // already gone
   }
   await XenDriveFile.deleteMany({ folder_id: { $in: ids } });
   await XenDriveFolder.deleteMany({ _id: { $in: ids } });

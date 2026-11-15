@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { driveSourceApp } from "./driveSources";
 import type { StorageByApp } from "@shared/admin";
 
@@ -12,10 +12,11 @@ export const objectIdFrom = (date: Date) => Types.ObjectId.createFromTime(Math.f
 
 /** What is stored, by where it came from: My Drive, and each app that stores files in the drive (chat). */
 export async function storageByApp(): Promise<StorageByApp[]> {
-  const rows = await XenDriveFile.aggregate<{ _id: string; bytes: number; files: number }>([
+  const rows = await FileRecord.aggregate<{ _id: string; bytes: number; files: number }>([
+    { $match: { bucket: "private" } },
     {
       $group: {
-        _id: { $ifNull: ["$source.app", "drive"] },
+        _id: { $cond: [{ $eq: ["$space.app", "xendrive"] }, "drive", "$space.app"] },
         bytes: { $sum: { $ifNull: ["$size", 0] } },
         files: { $sum: 1 },
       },

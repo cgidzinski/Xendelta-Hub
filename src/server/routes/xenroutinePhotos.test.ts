@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { XenRoutine } from "../models/xenRoutine";
 
 // Photos and notes when a routine is marked done: private XenDrive files tagged to the routine, shown through signed
@@ -75,11 +75,9 @@ describe("marking a routine done with a note and photos", () => {
     expect(priv.size).toBe(2);
 
     // private XenDrive files owned by the person, tagged to the routine, not counted toward storage
-    const files = await XenDriveFile.find({ owner_id: me.user._id, "source.app": "xenroutine" });
+    const files = await FileRecord.find({ uploadedBy: me.user._id, "space.app": "xenroutine" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.source?.ref === r._id && f.counted === false && f.mimeType === "image/webp")).toBe(
-      true,
-    );
+    expect(files.every((f) => f.space?.ref === r._id && f.counted === false && f.mimeType === "image/webp")).toBe(true);
     expect((await mine(me, r._id)).history[0].images).toHaveLength(2);
   });
 
@@ -125,7 +123,7 @@ describe("marking a routine done with a note and photos", () => {
     expect((await doneWith(friend, r._id, { note: "friend did it", photos: 1 })).status).toBe(200);
     expect((await mine(owner, r._id)).history[0].images).toHaveLength(1); // the owner sees the friend's photo
     // the friend owns the file they uploaded
-    expect(await XenDriveFile.countDocuments({ owner_id: friend.user._id, "source.app": "xenroutine" })).toBe(1);
+    expect(await FileRecord.countDocuments({ uploadedBy: friend.user._id, "space.app": "xenroutine" })).toBe(1);
 
     const before = priv.size;
     expect((await doneWith(stranger, r._id, { photos: 1 })).status).toBe(404);
@@ -180,7 +178,7 @@ describe("what happens to the photos later", () => {
     const me = await createUser();
     const r = await make(me);
     await doneWith(me, r._id, { photos: 2 });
-    const [first] = await XenDriveFile.find({ owner_id: me.user._id, "source.app": "xenroutine" }).sort({ _id: 1 });
+    const [first] = await FileRecord.find({ uploadedBy: me.user._id, "space.app": "xenroutine" }).sort({ _id: 1 });
     const del = await request(t.app).delete(`/api/storage/files/${first.id}`).set(as(me));
     expect(del.status, JSON.stringify(del.body)).toBe(400);
     expect((await mine(me, r._id)).history[0].images).toHaveLength(2);
@@ -195,7 +193,7 @@ describe("what happens to the photos later", () => {
     const del = await request(t.app).delete(`/api/xenroutine/routines/${r._id}`).set(as(me));
     expect(del.status).toBe(200);
     expect(priv.size).toBe(0);
-    expect(await XenDriveFile.countDocuments({ "source.ref": r._id })).toBe(0);
+    expect(await FileRecord.countDocuments({ "space.ref": String(r._id) })).toBe(0);
   });
 
   it("history keeps the latest 50 entries, and the photos on one that ages out go with it", async () => {
@@ -212,7 +210,7 @@ describe("what happens to the photos later", () => {
     await doneWith(me, r._id, {}); // the 51st pushes the first out
     expect((await XenRoutine.findById(r._id))!.history).toHaveLength(50);
     expect(priv.size).toBe(0);
-    expect(await XenDriveFile.countDocuments({ "source.ref": r._id })).toBe(0);
+    expect(await FileRecord.countDocuments({ "space.ref": String(r._id) })).toBe(0);
   }, 60_000);
 
   it("is listed in the storage viewer with the routine's name", async () => {

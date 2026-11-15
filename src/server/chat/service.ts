@@ -2,7 +2,7 @@ import { Types } from "mongoose";
 import { Conversation, type ConversationDocument } from "../models/conversation";
 import { Message, type MessageDocument } from "../models/message";
 import { User } from "../models/user";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { AppError } from "../utils/http";
 import { PUBLIC_USER_FIELDS, cosmeticsOf } from "../utils/publicUser";
 import { realtime } from "../realtime";
@@ -115,7 +115,7 @@ export async function serializeMessages(messages: MessageDocument[]): Promise<Ch
   const fileIds = [...new Set(messages.flatMap((m) => m.attachments.map((a) => String(a.fileId))))];
   const existing = new Set<string>();
   if (fileIds.length > 0) {
-    const files = await XenDriveFile.find({ _id: { $in: fileIds } }, "_id")
+    const files = await FileRecord.find({ _id: { $in: fileIds } }, "_id")
       .lean()
       .exec();
     for (const f of files) existing.add(String(f._id));

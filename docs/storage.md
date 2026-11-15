@@ -53,7 +53,11 @@ also its folder) and the keys of its thumbnail and preview. They are what storag
   images (the uploader, until community emoji are billed to the community's fund).
 - The migration `1795600000000-file-records` makes the records for everything already stored. `npm run db:stats` lists XenDrive
   files without one.
-- Reads still use `XenDriveFile` for now; moving them to the records and the orphan sweep to "objects with no record" is next.
+- **App files are only records.** A chat attachment or a photo in XenSplit, XenBudget, XenNote, XenKitchen or XenRoutine has
+  a `FileRecord` and no XenDrive item (migration `1795700000000-app-files-to-records`); a file uploaded straight to XenDrive
+  has both, with one id. The storage viewer, chat attachments, quota usage, the admin storage pages, the thumbnail job
+  and account deletion all read the records. The thumbnail status lives on the record; a XenDrive item gets the finished
+  thumbnail copied onto it. Slimming `XenDriveFile` down to the item (name, folder, link) is a later step.
 
 ## Cleaning up
 
@@ -74,10 +78,9 @@ Run it with the database the buckets belong to (production's database with produ
 database, nearly every file looks unused, so `--delete` refuses when a bucket would lose more than a quarter of its files;
 `--force` overrides that once the dry run has been checked.
 
-A private file is used when a XenDrive record points at it, when it's that file's thumbnail (`thumbs/<storage_path>.webp`),
-or when it's a backup; a public one when any document holds its link (anywhere, blog text included), a custom emoji's
-`storagePath` is its key, or it's the thumbnail of a used Recipaint image. Files under a day old are never touched.
-XenDrive records whose file is missing are listed, not changed.
+An object is used when a file record names it (as its key, thumbnail or preview), or when it's a database backup. An
+object with no record is an orphan; nothing else in the database is read, so a file a document still points at can never be
+deleted by the sweep. Files under a day old are never touched. Records whose object is missing are listed, not changed.
 
 
 Every file a person uploads is a `XenDriveFile` owned by them, in the private bucket. Files uploaded straight to XenDrive

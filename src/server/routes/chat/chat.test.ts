@@ -338,7 +338,8 @@ describe("members", () => {
 
 describe("attachments", () => {
   const makeFile = async (owner: U, name = "plan.pdf") => {
-    const file = await mongoose.model("XenDriveFile").create({
+    const { createDriveFile } = await import("../../testing/files.js");
+    const file = await createDriveFile({
       owner_id: owner.user._id,
       name,
       storage_path: `xendrive/${id(owner)}/${name}`,
@@ -369,7 +370,7 @@ describe("attachments", () => {
     const { conversation } = await open(a, [b]);
     const fileId = await makeFile(a);
     await send(a, conversation._id, "see attached", { attachmentIds: [fileId] });
-    await mongoose.model("XenDriveFile").collection.deleteOne({ _id: new mongoose.Types.ObjectId(fileId) });
+    await mongoose.model("FileRecord").collection.deleteOne({ _id: new mongoose.Types.ObjectId(fileId) });
 
     const history = await request(t.app).get(`/api/chat/conversations/${conversation._id}/messages`).set(as(b.token));
     expect(history.body.data.messages[0].attachments[0]).toMatchObject({ fileId, removed: true, name: "plan.pdf" });

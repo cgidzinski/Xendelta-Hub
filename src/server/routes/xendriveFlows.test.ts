@@ -42,13 +42,13 @@ const folder = async (who: U, name: string, parentId?: string) => {
 };
 /** A stored file, made directly (uploads are covered in xendriveSessions.test.ts). */
 const addFile = async (who: U, name: string, folderId: string | null, extra: object = {}) => {
-  const { XenDriveFile } = await import("../models/xendriveFile.js");
+  const { createDriveFile } = await import("../testing/files.js");
   // The bytes, in the in-memory bucket: 10 of them, matching the file's size.
   const { privateStore } = await import("../storage/index.js");
   await privateStore.put(`xendrive/${who.user._id}/${name}-stored`, Buffer.alloc(10, "x"), {
     contentType: "text/plain",
   });
-  return XenDriveFile.create({
+  return createDriveFile({
     owner_id: who.user._id,
     folder_id: folderId,
     name,

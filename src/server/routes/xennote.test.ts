@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { usageFor } from "../utils/xendriveUtils";
 
 // XenNote through the real routes, models and validation against an in-memory database. Only storage is faked.
@@ -331,11 +331,9 @@ describe("photos", () => {
       .attach("images", PNG, "b.png");
     expect(up.status, JSON.stringify(up.body)).toBe(200);
 
-    const files = await XenDriveFile.find({ owner_id: uid, "source.app": "xennote" });
+    const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xennote" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.source?.ref === n._id && f.counted === false && f.mimeType === "image/webp")).toBe(
-      true,
-    );
+    expect(files.every((f) => f.space?.ref === n._id && f.counted === false && f.mimeType === "image/webp")).toBe(true);
     expect(await usageFor(uid)).toEqual(before);
 
     const apps = (

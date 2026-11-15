@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { bucketView } from "../testing/storage";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { XenKitchenItem } from "../models/xenKitchen";
 import { usageFor } from "../utils/xendriveUtils";
 
@@ -73,9 +73,9 @@ describe("XenKitchen photos in XenDrive", () => {
     expect(priv.size).toBe(2);
     expect(pub.size).toBe(0);
 
-    const files = await XenDriveFile.find({ owner_id: uid, "source.app": "xenkitchen" });
+    const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xenkitchen" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.source?.ref === itemId && f.counted === false)).toBe(true);
+    expect(files.every((f) => f.space?.ref === itemId && f.counted === false)).toBe(true);
     expect(await usageFor(uid)).toEqual(before);
 
     const apps = (await request(t.app).get("/api/storage/app-files").set(auth(me.token))).body.data;
@@ -99,13 +99,13 @@ describe("XenKitchen photos in XenDrive", () => {
     const dup = await request(t.app).post(`/api/xenkitchen/items/${itemId}/duplicate`).set(auth(me.token));
     expect(dup.status, JSON.stringify(dup.body)).toBe(200);
     expect(dup.body.data.item.images).toHaveLength(2);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(4);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(4);
     expect(priv.size).toBe(4);
 
     expect(
       (await request(t.app).delete(`/api/xenkitchen/items/${dup.body.data.item._id}`).set(auth(me.token))).status,
     ).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(2);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
     expect(priv.size).toBe(2);
     expect((await item()).images).toHaveLength(2);
   });
@@ -117,14 +117,14 @@ describe("XenKitchen photos in XenDrive", () => {
     expect(
       (await request(t.app).delete(`/api/xenkitchen/items/${itemId}/images/${first}`).set(auth(me.token))).status,
     ).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(2);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
 
-    const file = await XenDriveFile.findOne({ owner_id: uid });
+    const file = await FileRecord.findOne({ uploadedBy: uid });
     expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(me.token))).status).toBe(400);
     expect((await item()).images).toHaveLength(2);
 
     expect((await request(t.app).delete(`/api/xenkitchen/items/${itemId}`).set(auth(me.token))).status).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);
     expect(priv.size).toBe(0);
   });
 
@@ -139,7 +139,7 @@ describe("XenKitchen photos in XenDrive", () => {
 
     const dup = await request(t.app).post(`/api/xenkitchen/items/${itemId}/duplicate`).set(auth(me.token));
     expect(dup.body.data.item.images[0].url).toMatch(/signed/);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(1);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(1);
     expect(priv.size).toBe(1);
 
     await request(t.app).delete(`/api/xenkitchen/items/${itemId}`).set(auth(me.token));

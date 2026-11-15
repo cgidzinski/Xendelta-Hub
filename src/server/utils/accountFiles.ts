@@ -3,7 +3,7 @@
 // picture, and their Recipaint recipes with the recipes' images.
 
 import { XenDriveFile } from "../models/xendriveFile";
-import { forgetFileRecords } from "./fileRecords";
+import { FileRecord } from "../models/fileRecord";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { Recipe } from "../models/recipe";
 import { RecipeProgress } from "../models/recipeProgress";
@@ -17,23 +17,24 @@ export async function deleteStoredAvatar(avatarUrl: string | null | undefined): 
   if (key && key.startsWith("avatar/")) await publicStore.delete(key).catch(() => undefined);
 }
 
-/** Remove everything this person stored. Returns how many XenDrive files went. */
+/** Remove everything this person stored. Returns how many files went (XenDrive files and app files). */
 export async function removeAccountFiles(userId: string, avatarUrl?: string | null): Promise<number> {
-  const files = await XenDriveFile.find({ owner_id: userId }, "storage_path source thumb").lean();
+  const files = await FileRecord.find({ bucket: "private", uploadedBy: userId }).lean();
   for (const file of files) {
-    await privateStore.delete(file.storage_path).catch(() => undefined);
-    if (file.thumb?.path) await privateStore.delete(file.thumb.path).catch(() => undefined);
+    for (const key of [file.key, file.thumbKey, file.previewKey]) {
+      if (key) await privateStore.delete(key).catch(() => undefined);
+    }
   }
   await XenDriveFile.deleteMany({ owner_id: userId });
-  await forgetFileRecords(files.map((f) => f._id));
+  await FileRecord.deleteMany({ _id: { $in: files.map((f) => f._id) } });
   await XenDriveFolder.deleteMany({ owner_id: userId });
 
   // Each app lets go of the photos it showed (an expense's receipt, a note's picture), so nothing shows a broken image.
   const bySource = new Map<string, { app: string; ref: string; ids: string[] }>();
   for (const f of files) {
-    if (!f.source?.app) continue;
-    const key = `${f.source.app}:${f.source.ref}`;
-    const entry = bySource.get(key) ?? { app: f.source.app, ref: f.source.ref ?? "", ids: [] };
+    if (f.space.app === "xendrive") continue;
+    const key = `${f.space.app}:${f.space.ref}`;
+    const entry = bySource.get(key) ?? { app: f.space.app, ref: f.space.ref ?? "", ids: [] };
     entry.ids.push(String(f._id));
     bySource.set(key, entry);
   }

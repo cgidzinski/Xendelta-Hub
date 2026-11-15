@@ -2,7 +2,7 @@ import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Mod
 import { randomToken } from "../utils/tokens";
 import { deleteFromStorage } from "../utils/storageUtils";
 import { checkSharePassword } from "../utils/sharePasswords";
-import { forgetFileRecords } from "../utils/fileRecords";
+import { FileRecord } from "./fileRecord";
 
 // One stored file. `storage_path` is where the bytes live in the private bucket and is stored, not
 // derived, so a file can be renamed or moved between folders without touching storage.
@@ -86,12 +86,13 @@ xendriveFileSchema.method("isExpired", function (this: XenDriveFileDocument) {
 // Deleting a file through a query (findByIdAndDelete, deleteOne) also deletes its bytes and its thumbnail.
 xendriveFileSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
   const doc = await this.model.findOne(this.getQuery());
-  if (doc) await forgetFileRecords([doc._id]);
+  // The file's record (same id) says which renditions exist; it goes with the item.
+  const record = doc ? await FileRecord.findByIdAndDelete(doc._id).lean() : null;
   if (doc?.storage_path) {
-    await Promise.allSettled([
-      deleteFromStorage(doc.storage_path, true),
-      doc.thumb?.path ? deleteFromStorage(doc.thumb.path, true) : Promise.resolve(),
-    ]).catch(() => {
+    const keys = [doc.storage_path, doc.thumb?.path, record?.thumbKey, record?.previewKey];
+    await Promise.allSettled(
+      [...new Set(keys)].filter((k): k is string => !!k).map((k) => deleteFromStorage(k, true)),
+    ).catch(() => {
       // Ignore errors if the object is already gone
     });
   }

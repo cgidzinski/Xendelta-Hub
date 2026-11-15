@@ -1,7 +1,7 @@
 import type { Application, Request, Response } from "express";
 import { Message, type MessageDocument } from "../../models/message";
 import { Conversation } from "../../models/conversation";
-import { XenDriveFile } from "../../models/xendriveFile";
+import { FileRecord } from "../../models/fileRecord";
 import { generateSignedUrl } from "../../utils/storageUtils";
 import { thumbnailUrlFor } from "../../utils/xendriveThumbs";
 import { authenticateToken } from "../../middleware/auth";
@@ -153,7 +153,7 @@ export function registerMessageRoutes(app: Application) {
       let attachments: Array<{ fileId: string; name: string; mimeType: string; size: number }> = [];
       if (attachmentIds?.length) {
         const unique = [...new Set(attachmentIds)];
-        const files = await XenDriveFile.find({ _id: { $in: unique }, owner_id: me }).exec();
+        const files = await FileRecord.find({ _id: { $in: unique }, bucket: "private", uploadedBy: me }).exec();
         if (files.length !== unique.length) throw new AppError(400, "You can only attach your own files");
         const byId = new Map(files.map((f) => [String(f._id), f]));
         attachments = unique.map((id) => {
@@ -202,10 +202,10 @@ export function registerMessageRoutes(app: Application) {
       if (message.deletedAt || !message.attachments.some((a) => String(a.fileId) === fileId)) {
         throw new AppError(404, "Attachment not found");
       }
-      const file = await XenDriveFile.findById(fileId).exec();
+      const file = await FileRecord.findById(fileId).exec();
       if (!file) throw new AppError(404, "This file was removed from XenDrive");
-      const url = await generateSignedUrl(file.storage_path, 15, { downloadName: file.name });
-      const thumbUrl = file.thumb?.path ? await thumbnailUrlFor(file.storage_path) : null;
+      const url = await generateSignedUrl(file.key, 15, { downloadName: file.name });
+      const thumbUrl = file.thumbKey ? await thumbnailUrlFor(file.key) : null;
       res.json({ status: true, message: "", data: { url, thumbUrl } });
     },
   );

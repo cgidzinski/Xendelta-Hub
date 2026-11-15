@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 import { usageFor } from "../utils/xendriveUtils";
 
 // Expense photos are XenDrive files tagged to the group: owned by the uploader, listed under From apps, exempt from the
@@ -72,9 +72,9 @@ describe("XenSplit photos in XenDrive", () => {
     const before = await usageFor(uid);
     expect((await photos(2)).status).toBe(200);
 
-    const files = await XenDriveFile.find({ owner_id: uid, "source.app": "xensplit" });
+    const files = await FileRecord.find({ uploadedBy: uid, "space.app": "xensplit" });
     expect(files).toHaveLength(2);
-    expect(files.every((f) => f.source?.ref === groupId && f.counted === false && f.folder_id === null)).toBe(true);
+    expect(files.every((f) => f.space?.ref === groupId && f.counted === false)).toBe(true);
     expect(await usageFor(uid)).toEqual(before);
     expect(await urls()).toHaveLength(2);
 
@@ -105,14 +105,14 @@ describe("XenSplit photos in XenDrive", () => {
       .delete(`/api/xensplit/groups/${groupId}/expenses/${expenseId}/images/${first._id}`)
       .set(auth(owner.token));
     expect(del.status).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(1);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(1);
     expect(stored.size).toBe(1);
   });
 
   it("the storage viewer will not delete a photo that belongs to an expense", async () => {
     const { owner, uid, photos, urls } = await setup();
     await photos(2);
-    const file = await XenDriveFile.findOne({ owner_id: uid });
+    const file = await FileRecord.findOne({ uploadedBy: uid });
     const del = await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token));
     expect(del.status).toBe(400);
     expect(await urls()).toHaveLength(2);
@@ -124,7 +124,7 @@ describe("XenSplit photos in XenDrive", () => {
     expect(stored.size).toBe(3);
     const del = await request(t.app).delete(`/api/xensplit/groups/${groupId}`).set(auth(owner.token));
     expect(del.status).toBe(200);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);
     expect(stored.size).toBe(0);
   });
 
@@ -158,7 +158,7 @@ describe("XenSplit photos in XenDrive", () => {
     const day = 24 * 60 * 60 * 1000;
     await purgeDeletedExpensePhotos(new Date(Date.now() + 31 * day));
     expect(stored.size).toBe(0);
-    expect(await XenDriveFile.countDocuments({ owner_id: uid })).toBe(0);
+    expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);
     const group = await XenSplit.findById(groupId).lean();
     const expense = group!.expenses.find((e: any) => String(e._id) === String(expenseId))!;
     expect(expense.images).toHaveLength(0);

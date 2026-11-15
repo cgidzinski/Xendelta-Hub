@@ -67,9 +67,9 @@ describe("which apps someone uses", () => {
   });
 
   it("a file they uploaded counts for XenDrive, a file an app stored for them does not", async () => {
-    const { XenDriveFile } = await import("../models/xendriveFile.js");
+    const { createDriveFile } = await import("../testing/files.js");
     const ann = await createUser();
-    await XenDriveFile.create({
+    await createDriveFile({
       owner_id: ann.user._id,
       folder_id: null,
       name: "chat.png",
@@ -79,7 +79,7 @@ describe("which apps someone uses", () => {
       source: { app: "chat", ref: "c1" },
     });
     expect(await used(ann)).toEqual([]);
-    await XenDriveFile.create({
+    await createDriveFile({
       owner_id: ann.user._id,
       folder_id: null,
       name: "mine.png",

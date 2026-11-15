@@ -15,7 +15,8 @@ import { XenDriveUploadSession } from "../models/xendriveUploadSession";
 import { FREE_STORAGE_BYTES } from "@shared/monetization";
 import { driveSourceApp } from "./driveSources";
 import { thumbStatusFor } from "./xendriveThumbs";
-import { recordDriveFile } from "./fileRecords";
+import { payerFor } from "./fileRecords";
+import { FileRecord } from "../models/fileRecord";
 
 /** A unique, storage-safe object name for an uploaded file. Never shown to people. */
 export function generateXendriveFilename(originalName: string): string {
@@ -184,20 +185,36 @@ export async function finalizeChunkedUpload(
     ? ((await driveSourceApp(session.source_app)?.counts(session.source_ref ?? "")) ?? true)
     : true;
 
-  const saved = await new XenDriveFile({
-    owner_id: session.user_id,
-    folder_id: session.folder_id || null,
-    name: session.name,
-    storage_path: storagePath,
-    mimeType: contentType,
+  // An app's file (a chat attachment) is only a record. A file uploaded straight to XenDrive is a XenDrive item that
+  // points at its record; both share one id.
+  const source = session.source_app ? { app: session.source_app, ref: session.source_ref ?? "" } : null;
+  const id = new Types.ObjectId();
+  await FileRecord.create({
+    _id: id,
+    bucket: "private",
+    key: storagePath,
     size: fileSize,
+    mimeType: contentType,
+    name: session.name,
+    uploadedBy: session.user_id,
+    payer: payerFor(String(session.user_id), source),
+    space: source ?? { app: "xendrive", ref: String(session.user_id) },
     counted,
     thumbStatus: thumbStatusFor(contentType),
-    ...(session.source_app ? { source: { app: session.source_app, ref: session.source_ref } } : {}),
-  }).save();
-  // The file's record has the same id. A file uploaded straight to XenDrive also points at it.
-  await recordDriveFile(saved);
-  if (!session.source_app) await XenDriveFile.updateOne({ _id: saved._id }, { $set: { file: saved._id } });
+  });
+  if (!source) {
+    await new XenDriveFile({
+      _id: id,
+      file: id,
+      owner_id: session.user_id,
+      folder_id: session.folder_id || null,
+      name: session.name,
+      storage_path: storagePath,
+      mimeType: contentType,
+      size: fileSize,
+    }).save();
+  }
+  const saved = { _id: id, name: session.name, folder_id: source ? null : session.folder_id || null };
 
   await XenDriveUploadSession.deleteOne({ upload_id: uploadId });
 
@@ -246,12 +263,12 @@ export async function cleanupOldSessions(): Promise<void> {
 }
 
 /** Only files that count toward storage. Files an app stored for the person may be exempt (`counted: false`). */
-const countedOnly = { counted: { $ne: false } } as const;
+const countedOnly = { bucket: "private", "payer.type": "user", counted: { $ne: false } } as const;
 
-/** How much space and how many files a person's drive holds. */
+/** How much space and how many files a person's storage holds, from the file records they pay for. */
 export async function usageFor(userId: string): Promise<{ fileCount: number; spaceUsed: number }> {
-  const [row] = await XenDriveFile.aggregate<{ _id: null; fileCount: number; spaceUsed: number }>([
-    { $match: { owner_id: new Types.ObjectId(userId), ...countedOnly } },
+  const [row] = await FileRecord.aggregate<{ _id: null; fileCount: number; spaceUsed: number }>([
+    { $match: { ...countedOnly, "payer.id": userId } },
     { $group: { _id: null, fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
   ]);
   return { fileCount: row?.fileCount ?? 0, spaceUsed: row?.spaceUsed ?? 0 };
@@ -259,9 +276,9 @@ export async function usageFor(userId: string): Promise<{ fileCount: number; spa
 
 /** Usage for every owner in one pass (the admin user list). */
 export async function usageForAll(): Promise<Map<string, { fileCount: number; spaceUsed: number }>> {
-  const rows = await XenDriveFile.aggregate<{ _id: Types.ObjectId; fileCount: number; spaceUsed: number }>([
+  const rows = await FileRecord.aggregate<{ _id: string; fileCount: number; spaceUsed: number }>([
     { $match: countedOnly },
-    { $group: { _id: "$owner_id", fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
+    { $group: { _id: "$payer.id", fileCount: { $sum: 1 }, spaceUsed: { $sum: { $ifNull: ["$size", 0] } } } },
   ]);
   return new Map(rows.map((r) => [r._id.toString(), { fileCount: r.fileCount, spaceUsed: r.spaceUsed }]));
 }
