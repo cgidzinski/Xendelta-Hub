@@ -120,11 +120,12 @@ describe("rounding", () => {
 
   it("shows one decimal, rounded up", () => {
     expect(formatGems(0)).toBe("0 gems");
-    expect(formatGems(0.04)).toBe("less than 0.1 gems");
-    expect(formatGems(0.1 + 0.2)).toBe("0.3 gems");
-    expect(formatGems(0.31)).toBe("0.4 gems");
+    expect(formatGems(0.04)).toBe("< 1 gem"); // a sliver
+    expect(formatGems(0.1)).toBe("1 gem"); // anything else under one gem is one
+    expect(formatGems(0.99)).toBe("1 gem");
     expect(formatGems(1)).toBe("1 gem");
-    expect(formatGems(1234.56)).toBe("1,234.6 gems");
+    expect(formatGems(1.01)).toBe("2 gems"); // whole gems, rounded up
+    expect(formatGems(1234.56)).toBe("1,235 gems");
   });
 });
 

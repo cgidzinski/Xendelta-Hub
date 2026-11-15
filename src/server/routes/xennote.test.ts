@@ -319,7 +319,7 @@ describe("photos", () => {
     expect(stored.size).toBe(0);
   });
 
-  it("stores photos as files the uploader pays for, and the storage viewer can delete them", async () => {
+  it("stores photos as files the uploader pays for, and the storage viewer only shows them", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
     const n = await note(me, { type: "image", title: "Garden", notebook_id: undefined });
@@ -344,13 +344,13 @@ describe("photos", () => {
     expect(apps.apps[0]).toMatchObject({ app: "xennote", label: "XenNote" });
     expect(apps.apps[0].groups[0].label).toBe("Garden");
 
-    // deleting it in the storage viewer takes it off the note
+    // the storage viewer only shows it: it has no way to delete it
     const del = await request(t.app)
       .delete(`/api/storage/files/${files[0]._id}`)
       .set({ Authorization: `Bearer ${me.token}` });
-    expect(del.status).toBe(200);
+    expect(del.status).toBe(404);
     const read = await api(me).get(`/notes/${n._id}`);
-    expect(read.body.data.note.images).toHaveLength(1);
+    expect(read.body.data.note.images).toHaveLength(2);
   });
 
   it("a viewer cannot add photos", async () => {

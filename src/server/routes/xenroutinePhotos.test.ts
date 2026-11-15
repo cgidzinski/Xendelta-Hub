@@ -174,14 +174,14 @@ describe("marking a routine done with a note and photos", () => {
 });
 
 describe("what happens to the photos later", () => {
-  it("the storage viewer can delete a photo, which leaves the history", async () => {
+  it("the storage viewer can't delete a photo that is in the history", async () => {
     const me = await createUser();
     const r = await make(me);
     await doneWith(me, r._id, { photos: 2 });
     const [first] = await FileRecord.find({ uploadedBy: me.user._id, "space.app": "xenroutine" }).sort({ _id: 1 });
     const del = await request(t.app).delete(`/api/storage/files/${first.id}`).set(as(me));
-    expect(del.status, JSON.stringify(del.body)).toBe(200);
-    expect((await mine(me, r._id)).history[0].images).toHaveLength(1);
+    expect(del.status, JSON.stringify(del.body)).toBe(404);
+    expect((await mine(me, r._id)).history[0].images).toHaveLength(2);
   });
 
   it("deleting the routine deletes its photos", async () => {
