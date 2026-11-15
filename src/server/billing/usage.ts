@@ -31,6 +31,8 @@ export async function recordUsage(
   try {
     if (!isCostCenterId(center)) throw new Error(`Unknown cost center "${center}"`);
     if (!Number.isFinite(units) || units <= 0) return;
+    // One row per account, month and center needs the unique index to exist before the first upsert.
+    await UsageRecord.init();
     await UsageRecord.updateOne(
       { ...storedAccount(account), month: billingMonth(at), center },
       { $inc: { units: Math.round(units) } },

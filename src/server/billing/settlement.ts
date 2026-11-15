@@ -160,6 +160,8 @@ async function settleAccountMonth(account: BillableAccount, month: string): Prom
   if (!statement) {
     const s = statementOf(await usageFor(account, month), freeTierFor(account));
     try {
+      // Once per account and month relies on the unique index; wait for it on a fresh database.
+      await BillingStatement.init();
       statement = await BillingStatement.create({
         account: { type: account.type, id: new Types.ObjectId(account.id) },
         month,
@@ -219,6 +221,7 @@ export async function warnNearFreeTier(now: Date = new Date()): Promise<number> 
     const statement = await currentStatement(account, month);
     if (statement.freeTierGems <= 0 || statement.usageGems < statement.freeTierGems * FREE_TIER_WARNING_SHARE) continue;
     try {
+      await BillingNotice.init();
       await BillingNotice.create({
         account: { type: account.type, id: new Types.ObjectId(account.id) },
         month,

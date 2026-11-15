@@ -67,6 +67,9 @@ export async function transfer(input: TransferInput): Promise<GemTransactionDocu
   if (from.type === "house" && to.type === "house") throw new AppError(400, "The house can't pay itself");
   if (debitPush && from.type !== "user") throw new Error("debitPush is only for a person paying");
 
+  // Retries are only safe once the unique index exists. Mongoose builds indexes in the background when the model
+  // loads, so on a fresh database the first writes could race it; init() waits for that build (and is free after).
+  await GemTransaction.init();
   let tx: GemTransactionDocument;
   try {
     tx = await GemTransaction.create({
