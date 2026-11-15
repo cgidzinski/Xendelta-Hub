@@ -240,17 +240,14 @@ export function ceilGemsTenth(gems: number): number {
 }
 
 /**
- * Gems for people to read: one decimal, rounded up ("0.4 gems"), "less than 0.1 gems" for a sliver, whole numbers
- * without a decimal ("3 gems").
+ * Gems for people to read, whole numbers rounded up: "3 gems". A sliver (under 0.1) is "< 1 gem" and anything else under
+ * one gem is "1 gem", so a bill never shows fractions.
  */
 export function formatGems(gems: number): string {
   if (gems <= EPSILON) return "0 gems";
-  if (gems < 0.1) return "less than 0.1 gems";
-  const rounded = ceilGemsTenth(gems);
-  const text = Number.isInteger(rounded)
-    ? rounded.toLocaleString("en-US")
-    : rounded.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return `${text} ${rounded === 1 ? "gem" : "gems"}`;
+  if (gems < 0.1) return "< 1 gem";
+  const whole = Math.max(1, Math.ceil(gems - EPSILON));
+  return `${whole.toLocaleString("en-US")} ${whole === 1 ? "gem" : "gems"}`;
 }
 
 /** Whole gems for people to read ("1 gem", "1,200 gems"). */

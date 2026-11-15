@@ -1,19 +1,31 @@
 import type { ReactNode } from "react";
-import { Alert, Box, Chip, LinearProgress, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Chip,
+  LinearProgress,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import {
   COST_CENTERS,
   billedRate,
-  ceilGems,
   formatGems,
   formatWholeGems,
   type BillingOverview,
   type PastStatement,
-  type StatementLine,
 } from "@shared/billing";
 import SectionLabel from "../ui/SectionLabel";
 import EmptyState from "../ui/EmptyState";
 import { cardSx } from "../ui/surfaceStyles";
+import { CHART_COLORS } from "../ui/chartColors";
 
 // The Billing view (docs/billing.md), shared by your own Billing page and a community's Billing tab: this month so far
 // by kind of use, the free allowance, the balance, and past statements. Never per file or per call.
@@ -37,15 +49,6 @@ export const nextMonthStart = (month: string) => {
   });
 };
 
-/** "2.4 GB-month", "3 scans". */
-function formatQuantity(quantity: number, unit: string): string {
-  if (quantity === 0) return "Not used yet";
-  const rounded = quantity >= 10 ? Math.round(quantity) : Math.ceil(quantity * 10) / 10;
-  const text = rounded < 0.1 ? "less than 0.1" : rounded.toLocaleString("en-US", { maximumFractionDigits: 1 });
-  const plural = unit === "scan" || unit === "email" ? (rounded === 1 ? unit : `${unit}s`) : unit;
-  return `${text} ${plural}`;
-}
-
 function SummaryCard({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
@@ -57,94 +60,97 @@ function SummaryCard({ label, children }: { label: string; children: ReactNode }
 
 const bigNumberSx = { fontSize: 28, fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.2 } as const;
 
-function FreeAllowance({ overview, paidFrom }: { overview: BillingOverview; paidFrom: string }) {
-  const { current, month } = overview;
+/** What is left of the free allowance this month: one number and a bar. */
+function FreeAllowance({ overview }: { overview: BillingOverview }) {
+  const { current } = overview;
   const total = current.freeTierGems;
-  const used = Math.min(current.usageGems, total);
-  const allIn = total > 0 && current.usageGems >= total;
-  const beyond = current.usageGems - total;
+  const left = Math.max(0, Math.floor(current.freeTierLeft));
   return (
     <SummaryCard label="Free allowance">
-      <Typography sx={bigNumberSx}>
-        {allIn
-          ? `${total.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`
-          : `${ceilGems(current.freeTierLeft).toLocaleString("en-US")} left`}
-      </Typography>
+      <Typography sx={bigNumberSx}>{formatWholeGems(left)} left</Typography>
       <LinearProgress
         variant="determinate"
-        value={total > 0 ? (used / total) * 100 : 0}
+        value={total > 0 ? Math.min(100, (current.freeTierUsed / total) * 100) : 0}
         aria-label="Free allowance in use"
         sx={{ my: 1.25, height: 6, borderRadius: 999 }}
       />
       <Typography variant="body2" color="text.secondary">
-        {allIn
-          ? `Covered by the free allowance this month.${beyond > 0 ? ` The ${formatGems(beyond)} after it come from ${paidFrom}.` : ""} Starts fresh ${nextMonthStart(month)}.`
-          : `${formatWholeGems(total)} a month. It doesn't roll over.`}
+        of {formatWholeGems(total)} a month
       </Typography>
     </SummaryCard>
   );
 }
 
-function CostRows({ overview }: { overview: BillingOverview }) {
-  const lines = new Map<string, StatementLine>(overview.current.lines.map((l) => [l.center, l]));
+/** This month's cost by kind of use, as a ring with its key. */
+function MonthCost({ overview }: { overview: BillingOverview }) {
+  const theme = useTheme();
+  const { current, centers } = overview;
+  const lines = new Map(current.lines.map((l) => [l.center, l]));
+  const rows = centers
+    .map((c, i) => ({
+      id: c.id,
+      label: c.label,
+      gems: lines.get(c.id)?.gems ?? 0,
+      color: CHART_COLORS[i % CHART_COLORS.length],
+    }))
+    .filter((r) => r.gems > 0);
+  const empty = rows.length === 0;
   return (
-    <Box component="section" sx={{ ...cardSx }}>
-      <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: "divider" }}>
-        <Typography component="h2" variant="subtitle1" sx={{ fontWeight: 600 }}>
-          This month by cost
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Priced per kind of use, never per file or call.
-        </Typography>
-      </Box>
-      {overview.centers.map((center, i) => {
-        const line = lines.get(center.id);
-        return (
+    <SummaryCard label="This month">
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, flexWrap: "wrap" }}>
+        <Box sx={{ position: "relative", width: 140, height: 140, flexShrink: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={empty ? [{ id: "none", gems: 1 }] : rows}
+                dataKey="gems"
+                nameKey="label"
+                innerRadius={46}
+                outerRadius={66}
+                paddingAngle={empty ? 0 : 2}
+                stroke="none"
+                isAnimationActive={false}
+              >
+                {empty ? <Cell fill={theme.palette.divider} /> : rows.map((r) => <Cell key={r.id} fill={r.color} />)}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
           <Box
-            key={center.id}
             sx={{
-              px: 2.5,
-              py: 1.75,
-              display: "grid",
-              gap: { xs: 0.5, sm: 2 },
-              gridTemplateColumns: { xs: "1fr auto", sm: "minmax(0, 1fr) 150px 150px 110px" },
+              position: "absolute",
+              inset: 0,
+              display: "flex",
               alignItems: "center",
-              borderTop: i === 0 ? 0 : 1,
-              borderColor: "divider",
+              justifyContent: "center",
+              pointerEvents: "none",
             }}
           >
-            <Box sx={{ minWidth: 0, gridColumn: { xs: "1 / 2", sm: "auto" } }}>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {center.label}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {center.description}
-              </Typography>
-            </Box>
-            <Typography
-              variant="body2"
-              color={line && line.units > 0 ? "text.primary" : "text.secondary"}
-              sx={{ gridRow: { xs: 2, sm: "auto" } }}
-            >
-              {formatQuantity(line?.quantity ?? 0, center.displayUnit)}
-            </Typography>
-            <Typography
-              variant="body2"
-              color={center.free ? "success.main" : "text.secondary"}
-              sx={{ gridRow: { xs: 2, sm: "auto" }, textAlign: { xs: "right", sm: "left" } }}
-            >
-              {center.free ? "Free for now" : `${formatGems(center.rate)} per ${center.displayUnit}`}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ gridRow: { xs: 1, sm: "auto" }, gridColumn: { xs: "2 / 3", sm: "auto" }, textAlign: "right" }}
-            >
-              {formatGems(line?.gems ?? 0)}
+            <Typography sx={{ fontWeight: 700, fontSize: 18, lineHeight: 1.1, textAlign: "center" }}>
+              {formatGems(current.usageGems)}
             </Typography>
           </Box>
-        );
-      })}
-    </Box>
+        </Box>
+        <Stack spacing={0.75} sx={{ minWidth: 140, flex: 1 }}>
+          {empty ? (
+            <Typography variant="body2" color="text.secondary">
+              Nothing used yet
+            </Typography>
+          ) : (
+            rows.map((r) => (
+              <Box key={r.id} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: r.color, flexShrink: 0 }} />
+                <Typography variant="body2" sx={{ flex: 1 }}>
+                  {r.label}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatGems(r.gems)}
+                </Typography>
+              </Box>
+            ))
+          )}
+        </Stack>
+      </Box>
+    </SummaryCard>
   );
 }
 
@@ -213,57 +219,53 @@ const ratePer = (id: string) => {
 };
 const gems = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} gems`;
 
-/** How billing works, in plain words, with the current prices. For a person, or for a community when `communityName` is set. */
+/** What costs gems, as a small table with the current prices. For a person, or for a community when `communityName` is set. */
 function HowBillingWorks({ overview, communityName }: { overview: BillingOverview; communityName?: string }) {
-  const paidFrom = communityName ? "the community's fund" : "your gems";
-  const items: Array<[string, string]> = [
+  const rows: Array<[string, string, string]> = [
     [
       "Files",
-      `${gems(ratePer("storage"))} for each GB you keep for a month, counted once a day, so a file you delete stops costing from the next day.${
-        communityName
-          ? " Files shared in the community's channels and its custom emoji are the community's."
-          : " Files in community channels are paid by the community, not by you."
-      }`,
+      `${gems(ratePer("storage"))} per GB a month`,
+      communityName ? "Channel files and emoji: the community" : "You (the community, in its channels)",
     ],
     [
       "Calls",
-      `${gems(ratePer("calls"))} for each GB of call audio and video.${
-        communityName
-          ? " Voice channels are paid from the fund as they are used."
-          : " In a call between people, the cost is shared evenly between everyone in it."
-      }`,
+      `${gems(ratePer("calls"))} per GB`,
+      communityName ? "Voice channels: the community" : "Shared evenly by everyone in the call",
     ],
-    ["Recipe scans", `${gems(ratePer("recipe_scans"))} for each recipe you read from a photo.`],
-    [
-      "Free every month",
-      `${formatWholeGems(overview.current.freeTierGems)} of everything above is free each month. It doesn't carry over to the next month.`,
-    ],
-    [
-      "When it's charged",
-      `Beyond the free allowance, the month's total is taken from ${paidFrom} on the 1st of the next month, rounded up to a whole gem once.`,
-    ],
-    [
-      "If there aren't enough gems",
-      `New uploads, calls and scans pause until ${communityName ? "someone donates" : "you add gems"}. Nothing is ever deleted, and ${
-        communityName ? "everyone" : "you"
-      } can still open, download and delete ${communityName ? "their" : "your"} files.`,
-    ],
+    ["Recipe scans", `${gems(ratePer("recipe_scans"))} each`, communityName ? "The person scanning" : "You"],
+    ["Free each month", formatWholeGems(overview.current.freeTierGems), "Doesn't roll over"],
   ];
   return (
-    <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
-      <SectionLabel>How billing works</SectionLabel>
-      <Stack spacing={1.5}>
-        {items.map(([title, text]) => (
-          <Box key={title}>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {title}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {text}
-            </Typography>
-          </Box>
-        ))}
-      </Stack>
+    <Box component="section" sx={{ ...cardSx, overflow: "hidden" }}>
+      <Typography
+        component="h2"
+        variant="subtitle1"
+        sx={{ fontWeight: 600, px: 2.5, py: 2, borderBottom: 1, borderColor: "divider" }}
+      >
+        How billing works
+      </Typography>
+      <Table size="small" aria-label="What costs gems">
+        <TableHead>
+          <TableRow>
+            <TableCell>What</TableCell>
+            <TableCell>Costs</TableCell>
+            <TableCell>Paid by</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map(([what, cost, who]) => (
+            <TableRow key={what}>
+              <TableCell sx={{ fontWeight: 500 }}>{what}</TableCell>
+              <TableCell>{cost}</TableCell>
+              <TableCell sx={{ color: "text.secondary" }}>{who}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <Typography variant="body2" color="text.secondary" sx={{ px: 2.5, py: 1.75 }}>
+        Charged on the 1st of next month beyond the free allowance, from {communityName ? "the fund" : "your gems"}. If
+        it runs out, new uploads, calls and scans pause. Nothing is deleted.
+      </Typography>
     </Box>
   );
 }
@@ -272,44 +274,24 @@ interface BillingViewProps {
   overview: BillingOverview;
   /** The third summary card: your gems, or the community's fund. */
   balanceCard: ReactNode;
-  /** Who pays beyond the free allowance, for the wording: "your gems" or "the fund". */
-  paidFrom: string;
+  /** Who pays beyond the free allowance (not shown any more; the table says it). */
+  paidFrom?: string;
   /** "Trail Crew", for the notice; omitted for your own bill. */
   communityName?: string;
   /** Extra sections after the costs (a community's fund history). */
   children?: ReactNode;
 }
 
-export default function BillingView({ overview, balanceCard, paidFrom, communityName, children }: BillingViewProps) {
-  const { current } = overview;
+export default function BillingView({ overview, balanceCard, communityName, children }: BillingViewProps) {
   return (
     <Stack spacing={2.5}>
-      {overview.everythingFree ? (
-        <Alert severity="info" variant="outlined">
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            Everything is free right now
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {communityName
-              ? `Nothing is charged to ${communityName}. If that changes, the price shows here first and the community gets a free allowance every month.`
-              : "Nothing is charged. When something starts to cost gems, you'll see its price here first, and you'll always get a free allowance each month."}
-          </Typography>
-        </Alert>
-      ) : null}
-
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" } }}>
-        <SummaryCard label="This month so far">
-          <Typography sx={bigNumberSx}>{formatGems(current.usageGems)}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            On track for {overview.projectedGems > 0 ? "about " : ""}
-            {formatGems(overview.projectedGems)} this month
-          </Typography>
-        </SummaryCard>
-        <FreeAllowance overview={overview} paidFrom={paidFrom} />
-        {balanceCard}
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.4fr) minmax(0, 1fr)" } }}>
+        <MonthCost overview={overview} />
+        <Stack spacing={2}>
+          <FreeAllowance overview={overview} />
+          {balanceCard}
+        </Stack>
       </Box>
-
-      <CostRows overview={overview} />
       {children}
       <Statements overview={overview} />
       <HowBillingWorks overview={overview} communityName={communityName} />

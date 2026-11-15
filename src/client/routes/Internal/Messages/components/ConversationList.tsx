@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Badge, Box, Button, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
+import { Badge, Box, Button, IconButton, InputAdornment, List, TextField, Tooltip, Typography } from "@mui/material";
+import StatusMenu from "../../../../components/presence/StatusMenu";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
@@ -120,6 +121,9 @@ export default function ConversationList({ selectedId, onSelect, onNewChat }: Co
           </IconButton>
         </Tooltip>
       </Box>
+      <List disablePadding sx={{ px: 1 }}>
+        <StatusMenu />
+      </List>
       <Box sx={{ px: 2, pb: 1 }}>
         <TextField
           size="small"

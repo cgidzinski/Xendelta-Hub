@@ -1,35 +1,24 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { Box, Button, IconButton, Typography } from "@mui/material";
+import { Box, IconButton, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { format } from "date-fns";
 import { useSnackbar } from "notistack";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import SectionLabel from "../../../components/ui/SectionLabel";
-import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
-import {
-  downloadStorageFile,
-  openOriginalStorageFile,
-  useStorageActions,
-  useStorageFile,
-  useStorageFileText,
-} from "../../../hooks/storage/useStorage";
+import { openOriginalStorageFile, useStorageFile, useStorageFileText } from "../../../hooks/storage/useStorage";
 import { formatFileSize } from "../../../utils/fileUtils";
 import FilePreview from "../XenDrive/components/FilePreview";
 import SourceChips from "./components/SourceChips";
 import { KIND_LABEL, fileKindOf } from "../XenDrive/lib/fileKind";
 
-/** One app-stored file: a preview, the download, and its details. */
+/** One app-stored file: a preview and its details. It can be looked at here, not downloaded or deleted. */
 export default function StorageFile() {
   const { fileId } = useParams<{ fileId: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const confirm = useConfirm();
   const { data, isLoading, isError, error, refetch } = useStorageFile(fileId);
-  const { deleteFile } = useStorageActions();
 
   const file = data?.file;
   const kind = file ? fileKindOf(file.mimeType) : "file";
@@ -44,32 +33,6 @@ export default function StorageFile() {
     } catch (e) {
       enqueueSnackbar((e as Error).message || "Couldn't open the original", { variant: "error" });
     }
-  };
-
-  const download = async () => {
-    if (!file) return;
-    try {
-      await downloadStorageFile(file._id);
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't download the file", { variant: "error" });
-    }
-  };
-
-  const remove = async () => {
-    if (!file) return;
-    const ok = await confirm({
-      title: "Delete this file?",
-      message: `"${file.name}" will be deleted for good.`,
-      confirmLabel: "Delete file",
-    });
-    if (!ok) return;
-    deleteFile.mutate(file._id, {
-      onSuccess: () => {
-        enqueueSnackbar("File deleted", { variant: "success" });
-        navigate("/internal/storage");
-      },
-      onError: (e: Error) => enqueueSnackbar(e.message || "Couldn't delete the file", { variant: "error" }),
-    });
   };
 
   if (isError) {
@@ -96,27 +59,6 @@ export default function StorageFile() {
         <Typography variant="h6" component="h1" noWrap sx={{ flex: 1, fontWeight: 500 }}>
           {file.name}
         </Typography>
-        <Button
-          startIcon={<FileDownloadOutlinedIcon />}
-          onClick={download}
-          sx={{ display: { xs: "none", sm: "inline-flex" } }}
-        >
-          Download
-        </Button>
-        <IconButton aria-label="Download" onClick={download} sx={{ display: { sm: "none" } }}>
-          <FileDownloadOutlinedIcon />
-        </IconButton>
-        <Button
-          color="error"
-          startIcon={<DeleteOutlineIcon />}
-          onClick={remove}
-          sx={{ display: { xs: "none", sm: "inline-flex" } }}
-        >
-          Delete
-        </Button>
-        <IconButton aria-label="Delete" color="error" onClick={remove} sx={{ display: { sm: "none" } }}>
-          <DeleteOutlineIcon />
-        </IconButton>
       </Box>
 
       <Box
@@ -139,7 +81,6 @@ export default function StorageFile() {
           previewUrl={data?.previewUrl ?? null}
           posterUrl={data?.posterUrl}
           textResult={isText ? textData : null}
-          onDownload={download}
           onOpenOriginal={kind === "image" ? openOriginal : undefined}
         />
       </Box>

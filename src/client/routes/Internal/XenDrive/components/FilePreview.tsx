@@ -21,7 +21,8 @@ interface FilePreviewProps {
   posterUrl?: string | null;
   /** The first slice of a text-like file, when there is one. */
   textResult?: TextPreviewResult | null;
-  onDownload: () => void;
+  /** Offered for a file that can't be shown here; omitted where files can only be looked at (the storage viewer). */
+  onDownload?: () => void;
   /** Opens the original at full size (images show a smaller rendition in the page). */
   onOpenOriginal?: () => void;
 }
@@ -151,9 +152,11 @@ export default function FilePreview({
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", p: 3 }}>
       <FileTypeIcon mimeType={mimeType} size={96} />
       <Typography sx={{ mt: 2, fontWeight: 500 }}>No preview for this kind of file</Typography>
-      <Button sx={{ mt: 1.5 }} variant="contained" startIcon={<FileDownloadOutlinedIcon />} onClick={onDownload}>
-        Download
-      </Button>
+      {onDownload && (
+        <Button sx={{ mt: 1.5 }} variant="contained" startIcon={<FileDownloadOutlinedIcon />} onClick={onDownload}>
+          Download
+        </Button>
+      )}
     </Box>
   );
 }

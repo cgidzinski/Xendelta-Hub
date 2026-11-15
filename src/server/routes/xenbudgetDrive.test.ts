@@ -102,7 +102,7 @@ describe("XenBudget photos in XenDrive", () => {
     expect(apps.apps[0].groups[0].label).toBe("Home");
   });
 
-  it("a photo can be removed from the item or from the storage viewer", async () => {
+  it("a photo is removed from its item, never from the storage viewer", async () => {
     const { owner, uid, b, itemId, photos, urls } = await setup();
     await photos(3);
     const [first] = await urls();
@@ -111,8 +111,8 @@ describe("XenBudget photos in XenDrive", () => {
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
 
     const file = await FileRecord.findOne({ uploadedBy: uid });
-    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token))).status).toBe(200);
-    expect(await urls()).toHaveLength(1);
+    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(owner.token))).status).toBe(404);
+    expect(await urls()).toHaveLength(2);
   });
 
   it("deleting the item or the book deletes its photos", async () => {
