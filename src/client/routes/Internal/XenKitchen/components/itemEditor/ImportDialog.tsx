@@ -22,6 +22,10 @@ import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import { MAX_RECIPE_SCAN_PHOTOS } from "@shared/xenkitchen/kitchen";
+import { COST_CENTERS, billedRate, formatGems } from "@shared/billing";
+
+/** What reading one recipe photo (or a few pages of one recipe) costs, from the live price. */
+const SCAN_GEMS = billedRate(COST_CENTERS.find((c) => c.id === "recipe_scans")!);
 import ResponsiveDialog from "../../../../../components/ui/ResponsiveDialog";
 import { RADIUS } from "../../../../../theme";
 import {
@@ -251,7 +255,8 @@ export function ImportDialog({ open, mode = "url", initialUrl, onClose, onImport
         <Stack spacing={1.5}>
           <Typography variant="body2" color="text.secondary">
             A recipe card or a screenshot, or up to {MAX_RECIPE_SCAN_PHOTOS} pages of a cookbook in order. The words are
-            read off them for you to check before saving.
+            read off them for you to check before saving. Reading uses about {formatGems(SCAN_GEMS)} from your free
+            allowance for the month.
           </Typography>
           <Box
             onDragOver={(e) => {

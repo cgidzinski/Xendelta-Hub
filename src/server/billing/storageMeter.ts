@@ -2,7 +2,8 @@ import { Types } from "mongoose";
 import { FileRecord } from "../models/fileRecord";
 import { MeterRun } from "../models/meterRun";
 import { recordUsage } from "./usage";
-import { communityAccount, userAccount } from "./ledger";
+import { HOUSE, communityAccount, userAccount } from "./ledger";
+import { privateStore } from "../storage";
 import { assertCanSpend, type BillableAccount } from "./settlement";
 import { payerFor, type Payer } from "../utils/fileRecords";
 
@@ -35,6 +36,23 @@ async function bytesByPayer(day: string, today: string, now: Date) {
   ]);
 }
 
+/**
+ * What the house itself stores, for the admin report (#373): the public pictures it pays for (avatars, group pictures, blog
+ * images) as `public_assets`, and the database backups as `backups`. Nobody is billed for these; they are recorded so the
+ * report can set what they cost beside what the provider charged. Thumbnails are small and aren't counted.
+ */
+async function meterHouse(day: string, today: string, now: Date, at: Date): Promise<void> {
+  const asOf = day === today ? now : endOfDay(day);
+  const [row] = await FileRecord.aggregate<{ bytes: number }>([
+    { $match: { "payer.type": "house", createdAt: { $lte: asOf } } },
+    { $group: { _id: null, bytes: { $sum: { $ifNull: ["$size", 0] } } } },
+  ]);
+  await recordUsage(HOUSE, "public_assets", row?.bytes ?? 0, at);
+  const backups = await privateStore.list("db-backups/").catch(() => []);
+  const bytes = backups.filter((o) => !o.lastModified || o.lastModified <= asOf).reduce((n, o) => n + o.size, 0);
+  await recordUsage(HOUSE, "backups", bytes, at);
+}
+
 /** Meter one day, once. Returns false when it had already been claimed. */
 async function meterDay(day: string, today: string, now: Date): Promise<boolean> {
   await MeterRun.init();
@@ -54,6 +72,7 @@ async function meterDay(day: string, today: string, now: Date): Promise<boolean>
     accounts += 1;
     units += row.bytes;
   }
+  await meterHouse(day, today, now, at);
   await MeterRun.updateOne({ meter: METER, day }, { $set: { accounts, units, finishedAt: new Date() } });
   return true;
 }
