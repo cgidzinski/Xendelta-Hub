@@ -3,7 +3,7 @@ import { FileRecord } from "../models/fileRecord";
 import { MeterRun } from "../models/meterRun";
 import { billingEnforced, recordUsage } from "./usage";
 import { communityAccount, userAccount } from "./ledger";
-import type { BillableAccount } from "./settlement";
+import { assertCanSpend, type BillableAccount } from "./settlement";
 import { payerFor, type Payer } from "../utils/fileRecords";
 
 // The storage meter (#370, docs/billing.md): every day, the bytes each payer's files take up are added to that payer's
@@ -95,12 +95,12 @@ const billable = (payer: Payer): BillableAccount | null =>
 export async function assertCanStore(userId: string, source?: { app: string; ref: string } | null): Promise<void> {
   if (!billingEnforced()) return;
   const account = billable(await payerFor(userId, source));
-  if (account) await (await import("./settlement")).assertCanSpend(account); // loaded only when enforcing
+  if (account) await assertCanSpend(account);
 }
 
 /** The same check for a payer already known (an emoji's community). */
 export async function assertPayerCanStore(payer: Payer): Promise<void> {
   if (!billingEnforced()) return;
   const account = billable(payer);
-  if (account) await (await import("./settlement")).assertCanSpend(account);
+  if (account) await assertCanSpend(account);
 }
