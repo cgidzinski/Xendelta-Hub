@@ -1,20 +1,20 @@
 /**
- * Files an app stores for a person (photos on an expense, a note, a recipe) are real XenDrive files, tagged with
- * `source: { app, ref }` (utils/driveSources.ts). They live in the private bucket, belong to the uploader, show up
- * under XenDrive > From apps, and are deleted like any file. Apps call these helpers instead of `uploadToStorage`.
+ * Files an app stores for a person (photos on an expense, a note, a recipe, a chat attachment) are FileRecords in the
+ * private bucket (models/fileRecord.ts): `space: { app, ref }` (utils/driveSources.ts), uploaded by and paid for by the
+ * person, listed in the storage viewer and deleted like any file. They are not XenDrive items. Apps call these helpers
+ * instead of `uploadToStorage`.
  *
  * Whether a file counts toward the owner's quota is the app's call for that `ref` (`DriveSourceApp.counts`).
  */
 
 import { privateStore, publicStore, type ObjectStore } from "../storage";
-import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
-import { FileRecord } from "../models/fileRecord";
+import { FileRecord, type FileRecordDocument } from "../models/fileRecord";
 import { AppError } from "./http";
 import { assertDriveSource, driveSourceApp, type DriveSource } from "./driveSources";
 import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storageUtils";
 import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
 import { thumbKey, thumbStatusFor, thumbnailUrlFor } from "./xendriveThumbs";
-import { forgetFileRecords, recordDriveFile } from "./fileRecords";
+import { payerFor } from "./fileRecords";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -31,7 +31,7 @@ export async function storeAppFiles(
   userId: string,
   source: DriveSource,
   files: AppFileInput[],
-): Promise<XenDriveFileDocument[]> {
+): Promise<FileRecordDocument[]> {
   if (files.length === 0) return [];
   await assertDriveSource(userId, source);
 
@@ -54,25 +54,23 @@ export async function storeAppFiles(
   }
 
   try {
-    const made = (await Promise.all(
+    return await Promise.all(
       files.map((f, i) =>
-        XenDriveFile.create({
-          owner_id: userId,
-          folder_id: null,
-          name: f.name,
-          storage_path: paths[i],
-          mimeType: f.mimeType,
+        FileRecord.create({
+          bucket: "private",
+          key: paths[i],
           size: f.buffer.length,
+          mimeType: f.mimeType,
+          name: f.name,
+          uploadedBy: userId,
+          payer: payerFor(userId, source),
+          space: { app: source.app, ref: source.ref },
           counted,
           thumbStatus: thumbStatusFor(f.mimeType),
-          source: { app: source.app, ref: source.ref },
         }),
       ),
-    )) as unknown as XenDriveFileDocument[];
-    await Promise.all(made.map((doc) => recordDriveFile(doc)));
-    return made;
+    );
   } catch (error) {
-    await XenDriveFile.deleteMany({ storage_path: { $in: paths } });
     await FileRecord.deleteMany({ bucket: "private", key: { $in: paths } });
     await deleteBytes(paths);
     throw error;
@@ -91,7 +89,7 @@ export async function copyAppFiles(
   userId: string,
   source: DriveSource,
   origins: AppFileOrigin[],
-): Promise<XenDriveFileDocument[]> {
+): Promise<FileRecordDocument[]> {
   if (origins.length === 0) return [];
   await assertDriveSource(userId, source);
 
@@ -99,15 +97,17 @@ export async function copyAppFiles(
     origins.map(async (origin) => {
       try {
         if ("fileId" in origin) {
-          const doc = await XenDriveFile.findById(origin.fileId, "storage_path name mimeType size thumb").lean();
-          if (!doc) return null;
+          const doc = await FileRecord.findById(origin.fileId).lean();
+          if (!doc || doc.bucket !== "private") return null;
           return {
             store: privateStore as ObjectStore,
-            key: doc.storage_path,
+            key: doc.key,
             name: doc.name,
             mimeType: doc.mimeType,
             size: doc.size ?? 0,
-            thumb: doc.thumb ?? null,
+            thumb: doc.thumbKey
+              ? { path: doc.thumbKey, width: doc.thumbWidth ?? 0, height: doc.thumbHeight ?? 0 }
+              : null,
           };
         }
         const info = await publicStore.head(origin.publicPath);
@@ -137,7 +137,7 @@ export async function copyAppFiles(
     if (!quota.canUpload) throw new AppError(413, quota.message ?? "Not enough storage");
   }
 
-  const copies: XenDriveFileDocument[] = [];
+  const copies: FileRecordDocument[] = [];
   for (const from of sources) {
     const path = storageKeyFor(userId, source, generateXendriveFilename(from.name));
     try {
@@ -162,19 +162,21 @@ export async function copyAppFiles(
     }
 
     try {
-      const copy = (await XenDriveFile.create({
-        owner_id: userId,
-        folder_id: null,
-        name: from.name,
-        storage_path: path,
-        mimeType: from.mimeType,
+      const copy = await FileRecord.create({
+        bucket: "private",
+        key: path,
         size: from.size,
+        mimeType: from.mimeType,
+        name: from.name,
+        uploadedBy: userId,
+        payer: payerFor(userId, source),
+        space: { app: source.app, ref: source.ref },
         counted,
-        thumb,
+        thumbKey: thumb?.path,
+        thumbWidth: thumb?.width,
+        thumbHeight: thumb?.height,
         thumbStatus,
-        source: { app: source.app, ref: source.ref },
-      })) as unknown as XenDriveFileDocument;
-      await recordDriveFile(copy);
+      });
       copies.push(copy);
     } catch (error) {
       await deleteBytes([path]);
@@ -189,13 +191,9 @@ export async function copyAppFiles(
 export async function removeAppFiles(fileIds: Array<string | { toString(): string }>): Promise<void> {
   const ids = fileIds.map(String);
   if (ids.length === 0) return;
-  const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path thumb").lean();
-  await XenDriveFile.deleteMany({ _id: { $in: ids } });
-  await forgetFileRecords(ids);
-  await deleteBytes([
-    ...files.map((f) => f.storage_path),
-    ...files.map((f) => f.thumb?.path).filter((p): p is string => !!p),
-  ]);
+  const files = await FileRecord.find({ _id: { $in: ids } }).lean();
+  await FileRecord.deleteMany({ _id: { $in: ids } });
+  await deleteBytes(files.flatMap((f) => [f.key, f.thumbKey, f.previewKey].filter((p): p is string => !!p)));
 }
 
 /** Short-lived links for these files, by id. Files that no longer exist are left out. */
@@ -205,8 +203,8 @@ export async function signedUrlsFor(
 ): Promise<Map<string, string>> {
   const ids = fileIds.map(String);
   if (ids.length === 0) return new Map();
-  const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path").lean();
-  const urls = await Promise.all(files.map((f) => generateSignedUrl(f.storage_path, minutes)));
+  const files = await FileRecord.find({ _id: { $in: ids } }, "key").lean();
+  const urls = await Promise.all(files.map((f) => generateSignedUrl(f.key, minutes)));
   return new Map(files.map((f, i) => [String(f._id), urls[i]]));
 }
 
@@ -214,8 +212,8 @@ export async function signedUrlsFor(
 export async function thumbnailUrlsFor(fileIds: Array<string | { toString(): string }>): Promise<Map<string, string>> {
   const ids = fileIds.map(String);
   if (ids.length === 0) return new Map();
-  const files = await XenDriveFile.find({ _id: { $in: ids } }, "storage_path thumb").lean();
-  const urls = await Promise.all(files.map((f) => (f.thumb?.path ? thumbnailUrlFor(f.storage_path) : null)));
+  const files = await FileRecord.find({ _id: { $in: ids } }, "key thumbKey").lean();
+  const urls = await Promise.all(files.map((f) => (f.thumbKey ? thumbnailUrlFor(f.key) : null)));
   return new Map(files.map((f, i) => [String(f._id), urls[i]]).filter(([, u]) => u != null) as Array<[string, string]>);
 }
 

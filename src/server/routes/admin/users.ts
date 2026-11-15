@@ -15,7 +15,7 @@ import {
 } from "../../utils/validation";
 import { User } from "../../models/user";
 import { GemPurchase } from "../../models/gemPurchase";
-import { XenDriveFile } from "../../models/xendriveFile";
+import { FileRecord } from "../../models/fileRecord";
 import { XenLink } from "../../models/xenlink";
 import { Notification } from "../../models/notification";
 import { authenticateToken } from "../../middleware/auth";
@@ -118,8 +118,8 @@ export function registerAdminUserRoutes(app: express.Application) {
         { $match: { user: user._id, status: "completed" } },
         { $group: { _id: null, count: { $sum: 1 }, gems: { $sum: "$gems" } } },
       ]),
-      XenDriveFile.aggregate<{ size: number }>([
-        { $match: { owner_id: user._id, "source.app": { $exists: true } } },
+      FileRecord.aggregate<{ size: number }>([
+        { $match: { bucket: "private", uploadedBy: user._id, "space.app": { $ne: "xendrive" } } },
         { $group: { _id: null, size: { $sum: { $ifNull: ["$size", 0] } } } },
       ]),
     ]);

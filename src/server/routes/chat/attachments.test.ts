@@ -61,12 +61,14 @@ describe("chat uploads", () => {
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
 
-    const stored = await mongoose.model("XenDriveFile").findById(fileId).lean<any>();
-    expect(stored.source).toEqual({ app: "chat", ref: chatId });
-    expect(stored.folder_id).toBeNull();
+    // Only a record: an attachment is not a XenDrive item.
+    const stored = await mongoose.model("FileRecord").findById(fileId).lean<any>();
+    expect(stored.space).toEqual({ app: "chat", ref: chatId });
+    expect(stored.payer).toEqual({ type: "user", id: String(a.user._id) });
     expect(stored.counted).toBe(true);
+    expect(await mongoose.model("XenDriveFile").countDocuments({ _id: fileId })).toBe(0);
     // Stored in chat's own folder, under the conversation (docs/storage.md), not the sender's XenDrive folder.
-    expect(stored.storage_path).toMatch(new RegExp(`^chat/${chatId}/`));
+    expect(stored.key).toMatch(new RegExp(`^chat/${chatId}/`));
 
     // Hidden from My Drive, search and recent.
     const browse = (query: string) => request(t.app).get(`/api/xendrive/browse${query}`).set(as(a.token));
@@ -136,7 +138,7 @@ describe("chat uploads", () => {
 
     const del = await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(a.token));
     expect(del.status).toBe(200);
-    expect(await mongoose.model("XenDriveFile").countDocuments({ _id: fileId })).toBe(0);
+    expect(await mongoose.model("FileRecord").countDocuments({ _id: fileId })).toBe(0);
     expect(deleted.length).toBeGreaterThan(0); // the bytes went too
   });
 });

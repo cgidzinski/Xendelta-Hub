@@ -41,11 +41,21 @@ describe("admin actions clean up storage", () => {
     pub.add("recipaint-assets/mini.jpg");
     priv.add(`xendrive/${uid}/notes.pdf`);
     priv.add(`chat/c1/voice.webm`);
-    const files = mongoose.connection.collection("xendrivefiles");
-    await files.insertMany([
-      { owner_id: uid, storage_path: `xendrive/${uid}/notes.pdf`, name: "notes.pdf" },
-      { owner_id: uid, storage_path: "chat/c1/voice.webm", name: "voice.webm", source: { app: "chat", ref: "c1" } },
-    ]);
+    const { createDriveFile } = await import("../../testing/files.js");
+    const mime = "application/octet-stream";
+    await createDriveFile({
+      owner_id: uid,
+      storage_path: `xendrive/${uid}/notes.pdf`,
+      name: "notes.pdf",
+      mimeType: mime,
+    });
+    await createDriveFile({
+      owner_id: uid,
+      storage_path: "chat/c1/voice.webm",
+      name: "voice.webm",
+      mimeType: mime,
+      source: { app: "chat", ref: "c1" },
+    });
     await mongoose.connection.collection("xendrivefolders").insertOne({ owner_id: uid, name: "Docs" });
     const { Recipe } = await import("../../models/recipe.js");
     await Recipe.create({
@@ -57,7 +67,8 @@ describe("admin actions clean up storage", () => {
 
     const res = await request(t.app).delete(`/api/admin/users/${uid}`).set(auth()).send({ confirm: "leaver" });
     expect(res.status).toBe(200);
-    expect(await files.countDocuments({ owner_id: uid })).toBe(0);
+    expect(await mongoose.connection.collection("xendrivefiles").countDocuments({ owner_id: uid })).toBe(0);
+    expect(await mongoose.connection.collection("filerecords").countDocuments({ uploadedBy: uid })).toBe(0);
     expect(await mongoose.connection.collection("xendrivefolders").countDocuments({ owner_id: uid })).toBe(0);
     expect(priv.size).toBe(0);
     expect(pub.has("avatar/leaver.jpg")).toBe(false);

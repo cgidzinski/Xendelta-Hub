@@ -1,17 +1,13 @@
-import mongoose from "mongoose";
 import { BACKUP_NAME_PATTERN } from "@shared/admin";
-import { RECIPAINT_ASSET_FOLDER, thumbGcsPathFor } from "@shared/recipaint/assetUrls";
-import { privateStore, publicKeyFromUrl, publicStore, type ObjectInfo, type ObjectStore } from "../storage";
+import { FileRecord } from "../models/fileRecord";
+import { privateStore, publicStore, type ObjectInfo, type ObjectStore } from "../storage";
 
-// Finds stored objects nothing in the database points at (npm run storage:orphans; docs/storage.md), and database
-// records whose object is missing. Read-only unless `removeOrphans` is called.
+// Finds stored objects that have no FileRecord (npm run storage:orphans; docs/storage.md), and records whose object is
+// missing. Read-only unless `removeOrphans` is called.
 //
-//   private bucket: an object is used when a XenDrive file's storage_path is its key, when it's that file's thumbnail
-//                   (thumbs/<storage_path>.webp), when any other document still holds its path as a plain value (a photo
-//                   on an expense that was never converted to a XenDrive file), or when it's a database backup.
-//   public bucket:  an object is used when any document anywhere holds its public link (an avatar, a recipe image, a
-//                   link inside a blog post's text...), a custom emoji's storagePath is its key, or it's the thumbnail of
-//                   a Recipaint image that is used.
+// Every object the app stores has a record (models/fileRecord.ts): the file itself, its thumbnail and its preview.
+// An object no record names, other than a database backup, is an orphan: an upload that was never saved, or what a
+// crash left behind. Nothing is read from other collections, so nothing a document points at can be deleted.
 
 /** Objects younger than this are never orphans: their record may not be saved yet (an upload in progress). */
 export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -19,94 +15,41 @@ export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 export interface OrphanReport {
   private: { total: number; orphans: ObjectInfo[] };
   public: { total: number; orphans: ObjectInfo[] };
-  /** XenDrive files whose object isn't in the bucket. Reported only; never deleted. */
-  missing: Array<{ id: string; storage_path: string }>;
-}
-
-const URL_IN_TEXT = /https?:\/\/[^\s"'()<>\]]+/g;
-
-/** Strings that can be an object key: a path with a folder, nothing long enough to be text. */
-const looksLikeKey = (s: string) => s.includes("/") && s.length < 512 && !s.includes(" ") && !s.startsWith("http");
-
-/** Every public object key the database refers to (and every plain path it holds, for the private bucket's check). */
-async function keysInUse(): Promise<{ publicKeys: Set<string>; paths: Set<string> }> {
-  const db = mongoose.connection.db;
-  if (!db) throw new Error("Not connected to the database");
-  const keys = new Set<string>();
-  const paths = new Set<string>();
-  const visit = (value: unknown): void => {
-    if (typeof value === "string") {
-      if (looksLikeKey(value)) paths.add(value);
-      if (!value.includes("http")) return;
-      for (const url of value.match(URL_IN_TEXT) ?? []) {
-        const key = publicKeyFromUrl(url);
-        if (key) keys.add(key);
-      }
-    } else if (Array.isArray(value)) {
-      value.forEach(visit);
-    } else if (value && typeof value === "object" && !(value instanceof Date) && !Buffer.isBuffer(value)) {
-      if ((value as { _bsontype?: string })._bsontype) return; // an ObjectId or another BSON value
-      Object.values(value).forEach(visit);
-    }
-  };
-  for (const { name } of await db.listCollections({}, { nameOnly: true }).toArray()) {
-    if (name.startsWith("system.")) continue;
-    for await (const doc of db.collection(name).find({})) visit(doc);
-  }
-  for await (const emoji of db.collection("customemojis").find({}, { projection: { storagePath: 1 } })) {
-    if (typeof emoji.storagePath === "string") keys.add(emoji.storagePath);
-  }
-  // A Recipaint image that is used keeps its thumbnail.
-  for (const key of [...keys]) {
-    if (key.startsWith(`${RECIPAINT_ASSET_FOLDER}/`) && !key.startsWith(`${RECIPAINT_ASSET_FOLDER}/thumbs/`)) {
-      keys.add(thumbGcsPathFor(key.slice(key.lastIndexOf("/") + 1)));
-    }
-  }
-  return { publicKeys: keys, paths };
+  /** Records whose object isn't in its bucket. Reported only; never deleted. */
+  missing: Array<{ id: string; bucket: "private" | "public"; key: string }>;
 }
 
 const isFresh = (o: ObjectInfo, now: number) => !!o.lastModified && now - o.lastModified.getTime() < ORPHAN_GRACE_MS;
 
 export async function findOrphans(now: Date = new Date()): Promise<OrphanReport> {
-  const db = mongoose.connection.db;
-  if (!db) throw new Error("Not connected to the database");
-  const files = await db
-    .collection("xendrivefiles")
-    .find({}, { projection: { storage_path: 1 } })
-    .toArray();
-  const privatePaths = new Set(files.map((f) => String(f.storage_path)));
-  // A XenDrive file keeps its thumbnail and preview rendition (utils/xendriveThumbs.ts).
-  const thumbKeys = new Set([...privatePaths].map((p) => `thumbs/${p}.webp`));
-  const previewKeys = new Set([...privatePaths].map((p) => `previews/${p}.webp`));
+  const [privateObjects, publicObjects] = await Promise.all([privateStore.list(""), publicStore.list("")]);
+  const present = {
+    private: new Set(privateObjects.map((o) => o.key)),
+    public: new Set(publicObjects.map((o) => o.key)),
+  };
+  const used = { private: new Set<string>(), public: new Set<string>() };
+  const missing: OrphanReport["missing"] = [];
 
-  const [privateObjects, publicObjects, { publicKeys, paths }] = await Promise.all([
-    privateStore.list(""),
-    publicStore.list(""),
-    keysInUse(),
-  ]);
-  const privateKeys = new Set(privateObjects.map((o) => o.key));
+  for await (const r of FileRecord.find({}, "bucket key thumbKey previewKey").lean().cursor()) {
+    used[r.bucket].add(r.key);
+    if (r.thumbKey) used[r.bucket].add(r.thumbKey);
+    if (r.previewKey) used[r.bucket].add(r.previewKey);
+    if (!present[r.bucket].has(r.key)) missing.push({ id: String(r._id), bucket: r.bucket, key: r.key });
+  }
   const t = now.getTime();
 
   return {
     private: {
       total: privateObjects.length,
       orphans: privateObjects.filter(
-        (o) =>
-          !privatePaths.has(o.key) &&
-          !paths.has(o.key) &&
-          !thumbKeys.has(o.key) &&
-          !previewKeys.has(o.key) &&
-          !BACKUP_NAME_PATTERN.test(o.key) &&
-          !isFresh(o, t),
+        (o) => !used.private.has(o.key) && !BACKUP_NAME_PATTERN.test(o.key) && !isFresh(o, t),
       ),
     },
     public: {
       total: publicObjects.length,
-      orphans: publicObjects.filter((o) => !publicKeys.has(o.key) && !isFresh(o, t)),
+      orphans: publicObjects.filter((o) => !used.public.has(o.key) && !isFresh(o, t)),
     },
-    missing: files
-      .filter((f) => !privateKeys.has(String(f.storage_path)))
-      .map((f) => ({ id: String(f._id), storage_path: String(f.storage_path) })),
+    missing,
   };
 }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import request from "supertest";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { AppError } from "../utils/http";
-import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
 
 // Importing a recipe from a web address: the routes, the item's source link and the photo copied from the page. The
 // fetching itself (which addresses are allowed) is tested in utils/safeFetch.test.ts; here it is replaced by canned pages.
@@ -197,7 +197,7 @@ describe("adding the page's photo to an item", () => {
     expect(res.body.data.item.images).toHaveLength(1);
     expect(res.body.data.item.images[0].url).toMatch(/^https:\/\/example\.test\/signed\/xenkitchen\//); // the app's own folder
     expect(priv.size).toBe(1);
-    const files = await XenDriveFile.find({ "source.app": "xenkitchen", "source.ref": id });
+    const files = await FileRecord.find({ "space.app": "xenkitchen", "space.ref": id });
     expect(files).toHaveLength(1);
     expect(files[0].counted).toBe(false);
     expect(files[0].name).toBe("pancakes.webp");

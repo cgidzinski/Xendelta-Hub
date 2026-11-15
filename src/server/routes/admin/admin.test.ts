@@ -78,8 +78,8 @@ describe("users", () => {
     expect(admins.body.data.items.map((u: any) => u.username)).toEqual(["amy_list"]);
 
     // near their limit: bob stored 0.95 GB of the 1 GB free tier
-    const File = mongoose.model("XenDriveFile");
-    await File.create({
+    const { createDriveFile } = await import("../../testing/files.js");
+    await createDriveFile({
       owner_id: c.user._id,
       name: "big.bin",
       storage_path: "x/big",
@@ -111,7 +111,8 @@ describe("users", () => {
 
   it("shows one person with their storage, items and purchases", async () => {
     const u = await createUser({ username: "detail_user", gems: 250, xendrive: { spaceAllowed: 2 * 1024 ** 3 } });
-    await mongoose.model("XenDriveFile").create({
+    const { createDriveFile } = await import("../../testing/files.js");
+    await createDriveFile({
       owner_id: u.user._id,
       name: "a.png",
       storage_path: "x/a",
@@ -243,9 +244,9 @@ describe("overview, storage and money", () => {
 
   it("reports storage by app, the largest drives and housekeeping", async () => {
     const u = await createUser({ username: "storage_big" });
-    const File = mongoose.model("XenDriveFile");
-    await File.create({ owner_id: u.user._id, name: "a", storage_path: "s/a", mimeType: "x/y", size: 4000 });
-    await File.create({
+    const { createDriveFile } = await import("../../testing/files.js");
+    await createDriveFile({ owner_id: u.user._id, name: "a", storage_path: "s/a", mimeType: "x/y", size: 4000 });
+    await createDriveFile({
       owner_id: u.user._id,
       name: "b",
       storage_path: "s/b",
@@ -253,7 +254,7 @@ describe("overview, storage and money", () => {
       size: 1000,
       source: { app: "chat", ref: "r" },
     });
-    await File.create({
+    await createDriveFile({
       owner_id: new mongoose.Types.ObjectId(),
       name: "orphan",
       storage_path: "s/o",

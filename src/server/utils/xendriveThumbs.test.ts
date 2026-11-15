@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import { startTestApp, type TestApp } from "../testing/testApp";
 import { memoryStores } from "../storage";
 import { XenDriveFile } from "../models/xendriveFile";
+import { FileRecord } from "../models/fileRecord";
+import { createDriveFile } from "../testing/files";
 import {
   generateThumbnail,
   processPendingThumbnails,
@@ -27,6 +29,19 @@ const PNG = Buffer.from(
   "base64",
 );
 
+/** A file waiting for its thumbnail: a record, plus the XenDrive item that points at it. */
+const makeFile = async (name: string, size: number) => {
+  const file = await createDriveFile({
+    owner_id: new mongoose.Types.ObjectId(),
+    name,
+    storage_path: `xendrive/u1/${name}`,
+    mimeType: "image/png",
+    size,
+  });
+  await FileRecord.updateOne({ _id: file._id }, { $set: { thumbStatus: "pending" } });
+  return file as unknown as { _id: unknown; storage_path: string };
+};
+
 describe("xendriveThumbs", () => {
   it("says which files get a thumbnail", () => {
     expect(thumbStatusFor("image/png")).toBe("pending");
@@ -48,30 +63,20 @@ describe("xendriveThumbs", () => {
   });
 
   it("marks a file ready once made, and failed when generation fails (the file keeps working)", async () => {
-    const good = await XenDriveFile.create({
-      owner_id: new mongoose.Types.ObjectId(),
-      name: "a.png",
-      storage_path: "xendrive/u1/a.png",
-      mimeType: "image/png",
-      size: PNG.length,
-      thumbStatus: "pending",
-    });
+    const good = await makeFile("a.png", PNG.length);
     await memoryStores().privateStore.put(good.storage_path, PNG, { contentType: "image/png" });
 
-    const bad = await XenDriveFile.create({
-      owner_id: new mongoose.Types.ObjectId(),
-      name: "b.png",
-      storage_path: "xendrive/u1/b.png",
-      mimeType: "image/png",
-      size: 4,
-      thumbStatus: "pending",
-    });
+    const bad = await makeFile("b.png", 4);
     await memoryStores().privateStore.put(bad.storage_path, Buffer.from("nope"), { contentType: "image/png" });
 
     await processPendingThumbnails(10);
-    expect((await XenDriveFile.findById(good._id))!.thumbStatus).toBe("ready");
+    const record = (await FileRecord.findById(good._id))!;
+    expect(record.thumbStatus).toBe("ready");
+    expect(record.thumbKey).toBe(thumbKey(good.storage_path));
+    expect(record.previewKey).toBe(`previews/${good.storage_path}.webp`);
+    // The XenDrive item gets the thumbnail copied onto it.
     expect((await XenDriveFile.findById(good._id))!.thumb?.path).toBe(thumbKey(good.storage_path));
-    expect((await XenDriveFile.findById(bad._id))!.thumbStatus).toBe("failed");
+    expect((await FileRecord.findById(bad._id))!.thumbStatus).toBe("failed");
   });
 
   it("signs a stable thumbnail link for the whole 6-hour window", async () => {

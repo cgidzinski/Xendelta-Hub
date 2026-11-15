@@ -1,6 +1,6 @@
 import express = require("express");
 import { User } from "../../models/user";
-import { XenDriveFile } from "../../models/xendriveFile";
+import { FileRecord } from "../../models/fileRecord";
 import { XenDriveUploadSession } from "../../models/xendriveUploadSession";
 import { authenticateToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
@@ -21,13 +21,14 @@ export function registerAdminStorageRoutes(app: express.Application) {
       User.find({}, "username avatar xendrive").lean(),
       usageForAll(),
       storageByApp(),
-      XenDriveFile.aggregate<{ _id: unknown; bytes: number }>([
-        { $match: { "source.app": { $exists: true } } },
-        { $group: { _id: "$owner_id", bytes: { $sum: { $ifNull: ["$size", 0] } } } },
+      FileRecord.aggregate<{ _id: unknown; bytes: number }>([
+        { $match: { bucket: "private", "space.app": { $ne: "xendrive" } } },
+        { $group: { _id: "$uploadedBy", bytes: { $sum: { $ifNull: ["$size", 0] } } } },
       ]),
       XenDriveUploadSession.countDocuments({ created_at: { $lt: new Date(Date.now() - ABANDONED_AFTER_MS) } }),
-      XenDriveFile.aggregate<{ n: number }>([
-        { $lookup: { from: "users", localField: "owner_id", foreignField: "_id", as: "owner" } },
+      FileRecord.aggregate<{ n: number }>([
+        { $match: { bucket: "private" } },
+        { $lookup: { from: "users", localField: "uploadedBy", foreignField: "_id", as: "owner" } },
         { $match: { owner: { $size: 0 } } },
         { $count: "n" },
       ]),

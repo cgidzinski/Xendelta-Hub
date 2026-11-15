@@ -10,7 +10,7 @@
 require("dotenv").config({ quiet: true });
 
 import mongoose from "mongoose";
-import { XenDriveFile } from "../src/server/models/xendriveFile";
+import { FileRecord } from "../src/server/models/fileRecord";
 import { processPendingThumbnails } from "../src/server/utils/xendriveThumbs";
 
 const BATCH = 50;
@@ -22,8 +22,8 @@ async function main() {
   console.log(`\nDatabase: ${mongoose.connection.db!.databaseName}\n`);
 
   // New uploads are already marked pending; older rows predate the field and start at "none".
-  const marked = await XenDriveFile.updateMany(
-    { thumbStatus: "none", mimeType: { $regex: /^image\// } },
+  const marked = await FileRecord.updateMany(
+    { bucket: "private", thumbStatus: "none", mimeType: { $regex: /^image\// } },
     { $set: { thumbStatus: "pending" } },
   );
   console.log(`Images waiting for a thumbnail: ${marked.modifiedCount}`);

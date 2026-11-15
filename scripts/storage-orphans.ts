@@ -1,5 +1,5 @@
 /**
- * Find stored files nothing in the database uses, and delete them (docs/storage.md).
+ * Find stored files no file record names, and delete them (docs/storage.md).
  *
  *   npm run storage:orphans              dry run: lists what would be deleted, changes nothing
  *   npm run storage:orphans -- --delete  deletes them
@@ -9,7 +9,7 @@
  * unless --force is added after checking the dry run.
  *
  * Reads MONGODB_URI and the R2 settings like the server. Files newer than a day are never touched (an upload may still
- * be in progress). Database records whose file is missing are listed, never deleted.
+ * be in progress). File records whose object is missing are listed, never deleted.
  */
 require("dotenv").config({ quiet: true });
 
@@ -49,8 +49,8 @@ async function main() {
     for (const o of part.orphans) console.log(`    ${o.key}  ${size(o.size)}`);
   }
   if (report.missing.length) {
-    console.log(`\nXenDrive files whose stored file is missing (not changed): ${report.missing.length}`);
-    for (const m of report.missing) console.log(`  ${m.id}  ${m.storage_path}`);
+    console.log(`\nFile records whose stored file is missing (not changed): ${report.missing.length}`);
+    for (const m of report.missing) console.log(`  ${m.id}  ${m.bucket}/${m.key}`);
   }
 
   const total = report.private.orphans.length + report.public.orphans.length;

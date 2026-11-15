@@ -27,9 +27,17 @@ const fileRecordSchema = new Schema({
     type: new Schema({ app: { type: String, required: true }, ref: { type: String } }, { _id: false }),
     required: true,
   },
-  // The renditions kept beside the file (object keys in the same bucket), deleted with it.
+  // The renditions kept beside the file (object keys in the same bucket), deleted with it. `thumbWidth`/`thumbHeight`
+  // say how to lay a grid out; `thumbStatus` tracks the background job (utils/xendriveThumbs.ts): pending until made,
+  // ready once stored, none when the kind doesn't get one, failed when generation failed (the file shows its icon).
   thumbKey: { type: String },
   previewKey: { type: String },
+  thumbWidth: { type: Number },
+  thumbHeight: { type: Number },
+  thumbStatus: { type: String, enum: ["pending", "ready", "none", "failed"], default: "none" },
+  // Does it count toward the owner's storage quota? Chat attachments and direct uploads do; the photo apps' files are
+  // exempt for now. Goes away with the quota (#362), when every file is billed to its payer.
+  counted: { type: Boolean, default: true },
 });
 
 fileRecordSchema.index({ bucket: 1, key: 1 }, { unique: true });
@@ -37,6 +45,8 @@ fileRecordSchema.index({ bucket: 1, key: 1 }, { unique: true });
 fileRecordSchema.index({ "payer.type": 1, "payer.id": 1 });
 // The storage viewer: one person's files for one app, newest first.
 fileRecordSchema.index({ uploadedBy: 1, "space.app": 1, createdAt: -1 });
+// The thumbnail job.
+fileRecordSchema.index({ thumbStatus: 1 }, { partialFilterExpression: { thumbStatus: "pending" } });
 
 export type FileRecordAttrs = InferSchemaType<typeof fileRecordSchema>;
 export type FileRecordDocument = HydratedDocument<FileRecordAttrs>;

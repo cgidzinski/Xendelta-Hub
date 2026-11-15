@@ -5,7 +5,8 @@ import { driveSourceApp } from "../utils/driveSources";
 import { generateSignedUrl } from "../utils/storageUtils";
 import { isTextPreviewable, readTextPreview } from "../utils/fileText";
 import { previewUrlFor, thumbnailUrlFor } from "../utils/xendriveThumbs";
-import { XenDriveFile, type XenDriveFileDocument } from "../models/xendriveFile";
+import { FileRecord, type FileRecordDocument } from "../models/fileRecord";
+import { removeAppFiles } from "../utils/appFiles";
 import {
   storageAppFilesQuerySchema,
   storageFileIdParamSchema,
@@ -22,21 +23,24 @@ import {
 const PREVIEWABLE = /^(image\/|application\/pdf$|video\/|audio\/)/;
 const PREVIEW_MINUTES = 60;
 
-const serializeStorageFile = (file: XenDriveFileDocument | any) => ({
+const serializeStorageFile = (file: FileRecordDocument | any) => ({
   _id: file._id.toString(),
   name: file.name,
   mimeType: file.mimeType,
   size: file.size,
   createdAt: file.createdAt.toISOString(),
-  source: file.source?.app
-    ? { app: file.source.app as string, label: driveSourceApp(file.source.app)?.label ?? file.source.app }
+  source: file.space?.app
+    ? { app: file.space.app as string, label: driveSourceApp(file.space.app)?.label ?? file.space.app }
     : null,
   counted: file.counted !== false,
 });
 
+/** What apps stored (everything private that isn't a file uploaded straight to XenDrive). */
+const appFiles = (userId: string) => ({ bucket: "private", uploadedBy: userId, "space.app": { $ne: "xendrive" } });
+
 /** One of the caller's app-stored files, or a 404 (a stranger's file looks the same as a missing one). */
 async function ownAppFile(fileId: string, userId: string) {
-  const file = await XenDriveFile.findOne({ _id: fileId, owner_id: userId, "source.app": { $exists: true } }).exec();
+  const file = await FileRecord.findOne({ _id: fileId, ...appFiles(userId) }).exec();
   if (!file) throw new AppError(404, "File not found");
   return file;
 }
@@ -45,21 +49,21 @@ async function ownAppFile(fileId: string, userId: string) {
 const appFilesHandler = async function (req: express.Request, res: express.Response) {
   const userId = callerId(req);
   const only = req.query.app as string | undefined;
-  const files = await XenDriveFile.find({ owner_id: userId, "source.app": only ?? { $exists: true } })
+  const files = await FileRecord.find({ ...appFiles(userId), ...(only ? { "space.app": only } : {}) })
     .sort({ createdAt: -1 })
     .limit(2000)
     .exec();
 
-  const byApp = new Map<string, Map<string, XenDriveFileDocument[]>>();
+  const byApp = new Map<string, Map<string, FileRecordDocument[]>>();
   for (const f of files) {
-    const appKey = f.source!.app!;
-    const ref = f.source!.ref ?? "";
-    const refs = byApp.get(appKey) ?? new Map<string, XenDriveFileDocument[]>();
+    const appKey = f.space.app;
+    const ref = f.space.ref ?? "";
+    const refs = byApp.get(appKey) ?? new Map<string, FileRecordDocument[]>();
     refs.set(ref, [...(refs.get(ref) ?? []), f]);
     byApp.set(appKey, refs);
   }
 
-  const sum = (list: XenDriveFileDocument[]) => list.reduce((n, f) => n + (f.size ?? 0), 0);
+  const sum = (list: FileRecordDocument[]) => list.reduce((n, f) => n + (f.size ?? 0), 0);
   const apps = await Promise.all(
     [...byApp.entries()].map(async ([appKey, refs]) => {
       const definition = driveSourceApp(appKey);
@@ -92,13 +96,13 @@ module.exports = function (app: express.Application) {
       const isImage = file.mimeType.startsWith("image/");
       const isVideo = file.mimeType.startsWith("video/");
       const previewUrl = isImage
-        ? file.thumb?.path
-          ? await previewUrlFor(file.storage_path)
-          : await generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
+        ? file.thumbKey
+          ? await previewUrlFor(file.key)
+          : await generateSignedUrl(file.key, PREVIEW_MINUTES)
         : PREVIEWABLE.test(file.mimeType)
-          ? await generateSignedUrl(file.storage_path, PREVIEW_MINUTES)
+          ? await generateSignedUrl(file.key, PREVIEW_MINUTES)
           : null;
-      const posterUrl = isVideo && file.thumb?.path ? await thumbnailUrlFor(file.storage_path) : null;
+      const posterUrl = isVideo && file.thumbKey ? await thumbnailUrlFor(file.key) : null;
       return res.json({ status: true, data: { file: serializeStorageFile(file), previewUrl, posterUrl } });
     },
   );
@@ -111,7 +115,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const file = await ownAppFile(req.params.fileId as string, callerId(req));
       if (!isTextPreviewable(file.mimeType)) throw new AppError(404, "No text preview for this kind of file");
-      return res.json({ status: true, data: await readTextPreview(file.storage_path) });
+      return res.json({ status: true, data: await readTextPreview(file.key) });
     },
   );
 
@@ -123,7 +127,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const file = await ownAppFile(req.params.fileId as string, callerId(req));
       const url = await generateSignedUrl(
-        file.storage_path,
+        file.key,
         15, // minutes
         req.query.download === "1" ? { downloadName: file.name } : {},
       );
@@ -143,12 +147,9 @@ module.exports = function (app: express.Application) {
           400,
           "This file belongs to another app and doesn't use your storage, so it can't be deleted here",
         );
-      // The pre-delete hook removes the stored bytes too.
-      await XenDriveFile.findByIdAndDelete(file.id);
+      await removeAppFiles([file.id]);
       // An app that stored the file lets go of it (a photo on an expense), so it doesn't show a broken image.
-      if (file.source?.app) {
-        await driveSourceApp(file.source.app)?.onRemoved?.(file.source.ref ?? "", [file.id]);
-      }
+      await driveSourceApp(file.space.app)?.onRemoved?.(file.space.ref ?? "", [file.id]);
       return res.json({ status: true, message: "File deleted successfully" });
     },
   );
