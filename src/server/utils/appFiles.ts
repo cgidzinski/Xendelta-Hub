@@ -15,6 +15,7 @@ import { deleteFromStorage, generateSignedUrl, uploadToStorage } from "./storage
 import { checkQuota, generateXendriveFilename, storageKeyFor } from "./xendriveUtils";
 import { thumbKey, thumbStatusFor, thumbnailUrlFor } from "./xendriveThumbs";
 import { payerFor } from "./fileRecords";
+import { assertCanStore } from "../billing/storageMeter";
 
 export interface AppFileInput {
   buffer: Buffer;
@@ -34,6 +35,7 @@ export async function storeAppFiles(
 ): Promise<FileRecordDocument[]> {
   if (files.length === 0) return [];
   await assertDriveSource(userId, source);
+  await assertCanStore(userId, source);
 
   const counted = (await driveSourceApp(source.app)?.counts(source.ref)) ?? true;
   if (counted) {
@@ -93,6 +95,7 @@ export async function copyAppFiles(
 ): Promise<FileRecordDocument[]> {
   if (origins.length === 0) return [];
   await assertDriveSource(userId, source);
+  await assertCanStore(userId, source);
 
   const found = await Promise.all(
     origins.map(async (origin) => {

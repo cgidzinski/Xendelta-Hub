@@ -19,22 +19,22 @@ const someone = () => ledger.userAccount(new mongoose.Types.ObjectId());
 describe("recordUsage", () => {
   it("adds up usage per center within a month", async () => {
     const account = someone();
-    await usage.recordUsage(account, "downloads", 100);
-    await usage.recordUsage(account, "downloads", 50);
+    await usage.recordUsage(account, "calls", 100);
+    await usage.recordUsage(account, "calls", 50);
     await usage.recordUsage(account, "storage", 7);
     const lines = await usage.usageFor(account);
     expect(lines.sort((a, b) => a.center.localeCompare(b.center))).toEqual([
-      { center: "downloads", units: 150 },
+      { center: "calls", units: 150 },
       { center: "storage", units: 7 },
     ]);
   });
 
   it("keeps months apart", async () => {
     const account = someone();
-    await usage.recordUsage(account, "downloads", 10, new Date(Date.UTC(2026, 9, 31, 23)));
-    await usage.recordUsage(account, "downloads", 20, new Date(Date.UTC(2026, 10, 1, 1)));
-    expect(await usage.usageFor(account, "2026-10")).toEqual([{ center: "downloads", units: 10 }]);
-    expect(await usage.usageFor(account, "2026-11")).toEqual([{ center: "downloads", units: 20 }]);
+    await usage.recordUsage(account, "calls", 10, new Date(Date.UTC(2026, 9, 31, 23)));
+    await usage.recordUsage(account, "calls", 20, new Date(Date.UTC(2026, 10, 1, 1)));
+    expect(await usage.usageFor(account, "2026-10")).toEqual([{ center: "calls", units: 10 }]);
+    expect(await usage.usageFor(account, "2026-11")).toEqual([{ center: "calls", units: 20 }]);
   });
 
   it("keeps people, communities and the house apart", async () => {
@@ -51,8 +51,8 @@ describe("recordUsage", () => {
     const account = someone();
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     await usage.recordUsage(account, "nope" as any, 5);
-    await usage.recordUsage(account, "downloads", 0);
-    await usage.recordUsage(account, "downloads", Number.NaN);
+    await usage.recordUsage(account, "calls", 0);
+    await usage.recordUsage(account, "calls", Number.NaN);
     expect(await usage.usageFor(account)).toEqual([]);
     log.mockRestore();
   });

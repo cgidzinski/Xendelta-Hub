@@ -1,3 +1,4 @@
+import { assertCanStore } from "../billing/storageMeter";
 import express = require("express");
 import { escapeRegex } from "@shared/regex";
 import { Types } from "mongoose";
@@ -206,6 +207,9 @@ module.exports = function (app: express.Application) {
       } catch {
         throw new AppError(404, "Folder not found");
       }
+
+      // Whoever pays to store it must be able to (nothing is checked in shadow mode, billing/storageMeter.ts).
+      await assertCanStore(userId, source);
 
       // Only a file that counts toward the person's storage needs room for it (an app's files are exempt for now).
       const counts = source ? ((await driveSourceApp(source.app)?.counts(source.ref)) ?? true) : true;

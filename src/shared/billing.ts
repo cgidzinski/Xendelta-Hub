@@ -1,7 +1,7 @@
 // Gem billing (docs/billing.md): every cost center, what it costs, and how a month's usage becomes a bill.
 //
-// Every center starts free (rate 0). Each one gets its rules and rate in its own discussion (#370 XenDrive, #371 Calls,
-// #372 Recipe scanning, #373 House costs) and is then switched on here. Usage is stored as whole units (bytes,
+// A center starts free (rate 0). Each one gets its rules and rate in its own discussion (#370 Storage, #371 Calls,
+// #372 Recipe scanning, #373 House costs) and is then switched on here (storage is on, in shadow mode). Usage is stored as whole units (bytes,
 // byte-days, scans); gems are worked out from them, so nothing drifts from adding up tiny fractions.
 //
 // Not cost centers, ever: text chat, the database and server CPU. The hub is self-hosted, so they cost nothing per user.
@@ -41,21 +41,11 @@ export const COST_CENTERS = [
     unit: "byte_day",
     displayUnit: "GB-month",
     unitsPerDisplayUnit: GB * DAYS_PER_MONTH,
-    costRate: 0,
+    // Cloudflare R2: $0.015 per GB-month = 15 gems at 1,000 gems to the dollar. Downloads and uploads are free on R2, so
+    // there is no downloads center (#370).
+    costRate: 15,
     payer: "account",
-    status: "free",
-    provider: "cloud_storage",
-  },
-  {
-    id: "downloads",
-    label: "Downloads",
-    description: "Files downloaded or opened, including through your share links.",
-    unit: "byte",
-    displayUnit: "GB",
-    unitsPerDisplayUnit: GB,
-    costRate: 0,
-    payer: "account",
-    status: "free",
+    status: "metered",
     provider: "cloud_storage",
   },
   {
