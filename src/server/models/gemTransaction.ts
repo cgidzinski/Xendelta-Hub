@@ -6,7 +6,6 @@ import mongoose, { Schema, type HydratedDocument, type InferSchemaType } from "m
 export const GEM_ACCOUNT_TYPES = ["user", "community", "house"] as const;
 
 export const GEM_TRANSACTION_KINDS = [
-  "opening_balance", // the balance a person had when the ledger started
   "gem_purchase", // a gem pack was paid for
   "shop_purchase", // an item bought with gems
   "shop_refund", // a Shop purchase that failed after it was paid
@@ -15,7 +14,6 @@ export const GEM_TRANSACTION_KINDS = [
   "admin_adjustment", // an admin correction or refund
   "donation", // a member chipped in to a community's fund
   "bill", // a monthly bill paid to the house
-  "rescale", // balances multiplied when the gem's value changed (#376: 200 → 1,000 gems to the dollar)
 ] as const;
 
 const accountSchema = new Schema(

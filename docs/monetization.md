@@ -26,7 +26,7 @@ thinking is not lost. Only the "built" section exists in code today.
   the balance.
 - **Buying gems.** `src/shared/monetization.ts` lists the packs (5,000 / 11,000 / 30,000 / 65,000 gems for $5 / $10 /
   $25 / $50, so 1,000 gems to the dollar plus a bonus on the bigger packs). Gems were 200 to the dollar until #376,
-  which multiplied every balance, pack and price by 5 (migration `1795200000000-gems-x5`). Checkout goes through a payment
+  which multiplied packs and prices by 5 and reset everyone's gems and inventory (migration `1795200000000-gems-reset`). Checkout goes through a payment
   provider interface (`src/server/payments/`). Only a **dummy provider** exists: it takes no money and would credit
   the gems at once, so **buying gems is switched off everywhere** (`getPaymentProvider()` returns null; the Shop shows
   "Buying gems is not available yet"). Every purchase is recorded in `GemPurchase` (the audit trail of gems bought).

@@ -39,8 +39,8 @@ finishes every pending row older than a minute; the `$ne` guards make each side 
 - `debitPush` lets a purchase add its inventory item in the same write as the debit, so a crash can't take the gems
   without the item. It is stored on the row so the sweep pushes it too.
 - Amounts are whole gems (at least 1). Fractions only exist in usage and statements, and are rounded up before paying.
-- The migration `1795100000000-gem-ledger-opening-balances` records each person's balance at the start as an
-  `opening_balance` from the house, so the history adds up from day one.
+- The ledger starts from zero: the migration `1795200000000-gems-reset` (#376) set every balance and fund to 0 and
+  cleared every inventory, so every gem since is in the history.
 
 To move gems, call `transfer({ from, to, amount, kind, idempotencyKey })` with `userAccount(id)`,
 `communityAccount(id)` or `HOUSE`. Pick a key that names the movement (`gem-purchase:<purchaseId>`,
