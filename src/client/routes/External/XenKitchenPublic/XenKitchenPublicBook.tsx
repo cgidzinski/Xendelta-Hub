@@ -90,7 +90,9 @@ export default function XenKitchenPublicBook() {
               <BookCover book={data.book} size={{ xs: 72, sm: 96 }} />
               <Box sx={{ minWidth: 0 }}>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <CategoryIconView icon={data.book.icon} sx={{ color: data.book.color, fontSize: 28 }} />
+                  {!data.book.cover_url && (
+                    <CategoryIconView icon={data.book.icon} sx={{ color: data.book.color, fontSize: 28 }} />
+                  )}
                   <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
                     {data.book.name}
                   </Typography>

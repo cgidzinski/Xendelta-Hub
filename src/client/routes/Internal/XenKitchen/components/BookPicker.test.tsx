@@ -49,14 +49,21 @@ describe("the recipe book picker", () => {
     expect(html).not.toContain("New book");
   });
 
-  it("lists All recipes, every book and New book when open, and marks the current book", () => {
+  it("lists New book, All recipes and every book when open, and marks the current book", () => {
     const html = render(<BookStrip books={books} value="b2" open onChange={() => {}} onClose={() => {}} />);
-    const order = ["All recipes", "Home", "Baking", "New book"].map((label) => html.indexOf(label));
+    const order = ["New book", "All recipes", "Home", "Baking"].map((label) => html.indexOf(label));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain("https://example.test/cover.webp");
     // Only the current book is marked.
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
+  });
+
+  it("shows the cover photo beside the title when the book has one, and the icon when it doesn't", () => {
+    const withCover = render(<BookPickerButton books={books} value="b1" open={false} onToggle={() => {}} />);
+    expect(withCover).toContain("https://example.test/cover.webp");
+    const without = render(<BookPickerButton books={books} value="b2" open={false} onToggle={() => {}} />);
+    expect(without).not.toContain("<img");
   });
 
   it("names the page All recipes when no book is chosen", () => {

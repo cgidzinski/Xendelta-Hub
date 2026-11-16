@@ -40,7 +40,11 @@ export function BookPickerButton({ books, value, open, onToggle }: TriggerProps)
       aria-expanded={open}
       aria-controls="kitchen-book-strip"
     >
-      {current ? (
+      {current?.cover_url ? (
+        <Box sx={{ mr: 1, display: "flex" }}>
+          <BookCover book={current} size={32} />
+        </Box>
+      ) : current ? (
         <CategoryIconView icon={current.icon} sx={{ color: current.color, mr: 1, fontSize: 28 }} />
       ) : (
         <LibraryBooksIcon sx={{ mr: 1, fontSize: 28, opacity: 0.8 }} />
@@ -181,6 +185,24 @@ export function BookStrip({ books, value, open, onChange, onClose }: StripProps)
           }}
           sx={{ display: "flex", gap: 2, overflowX: "auto", py: 1, px: 0.5, mb: 1.5, scrollbarWidth: "none" }}
         >
+          <Tile label="New book" onClick={() => setNewOpen(true)}>
+            <Box
+              sx={{
+                width: TILE,
+                height: TILE,
+                border: 1,
+                borderStyle: "dashed",
+                borderColor: (t) => alpha(t.palette.text.secondary, 0.6),
+                borderRadius: RADIUS.md,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "text.secondary",
+              }}
+            >
+              <AddIcon />
+            </Box>
+          </Tile>
           <Tile label="All recipes" selected={value === "all"} onClick={() => pick("all")}>
             <Box
               sx={{
@@ -203,24 +225,6 @@ export function BookStrip({ books, value, open, onChange, onClose }: StripProps)
               <BookCover book={b} size={TILE} />
             </Tile>
           ))}
-          <Tile label="New book" onClick={() => setNewOpen(true)}>
-            <Box
-              sx={{
-                width: TILE,
-                height: TILE,
-                border: 1,
-                borderStyle: "dashed",
-                borderColor: (t) => alpha(t.palette.text.secondary, 0.6),
-                borderRadius: RADIUS.md,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "text.secondary",
-              }}
-            >
-              <AddIcon />
-            </Box>
-          </Tile>
         </Box>
       </Collapse>
 
