@@ -83,9 +83,8 @@ const handle = (fn: (req: Request, res: Response) => Promise<unknown>) => fn;
 const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
 
 const IMAGE_MAX_EDGE = 1600;
-/** A book cover is a 3:4 portrait. */
-const COVER_WIDTH = 600;
-const COVER_HEIGHT = 800;
+/** A book cover is a square. */
+const COVER_SIZE = 600;
 // Importing makes this server fetch a page for the caller, so it is limited per person (not per address).
 const importLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -515,7 +514,7 @@ module.exports = function (app: any) {
     }),
   );
 
-  // The cover picture: one per book, cropped to a 3:4 portrait so every cover is the same shape. Editors may change it.
+  // The cover picture: one per book, cropped to a square so every cover is the same shape. Editors may change it.
   app.put(
     "/api/xenkitchen/books/:id/cover",
     authenticateToken,
@@ -530,7 +529,7 @@ module.exports = function (app: any) {
       try {
         buffer = await sharp(file.buffer)
           .rotate()
-          .resize(COVER_WIDTH, COVER_HEIGHT, { fit: "cover", position: "attention" })
+          .resize(COVER_SIZE, COVER_SIZE, { fit: "cover", position: "attention" })
           .webp({ quality: 82 })
           .toBuffer();
       } catch {

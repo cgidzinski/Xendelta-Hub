@@ -83,7 +83,7 @@ export default function XenKitchenPublicBook() {
         {data && (
           <>
             <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-              <BookCover book={data.book} width={{ xs: 72, sm: 96 }} />
+              <BookCover book={data.book} size={{ xs: 72, sm: 96 }} />
               <Box sx={{ minWidth: 0 }}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <CategoryIconView icon={data.book.icon} sx={{ color: data.book.color, fontSize: 28 }} />

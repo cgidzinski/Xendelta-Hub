@@ -7,7 +7,7 @@ import { memoryStores } from "../storage";
 import { FileRecord } from "../models/fileRecord";
 import { XenKitchenBook } from "../models/xenKitchen";
 
-// A recipe book's cover: a private XenDrive file in its own folder, cropped to 3:4, changed by editors, shown through a
+// A recipe book's cover: a private XenDrive file in its own folder, cropped to square, changed by editors, shown through a
 // signed link on the books list and on a shared book, and removed with the book. Real routes, models and Mongo.
 const priv = bucketView("private");
 vi.mock("../utils/storageUtils.js", async (importOriginal) => ({
@@ -62,7 +62,7 @@ describe("XenKitchen book covers", () => {
     expect((await books(owner))[0].cover_url).toBeNull();
   });
 
-  it("stores a 3:4 cover in the book's own folder, shown by signed link", async () => {
+  it("stores a square cover in the book's own folder, shown by signed link", async () => {
     const { owner, bookId, putCover, books } = await setup();
     const res = await putCover(owner);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
@@ -76,7 +76,7 @@ describe("XenKitchen book covers", () => {
     expect(files[0].space?.ref).toBe(bookId);
     const stored = memoryStores().privateStore.objects.get(files[0].key)!.body as Buffer;
     const meta = await sharp(stored).metadata();
-    expect([meta.width, meta.height, meta.format]).toEqual([600, 800, "webp"]);
+    expect([meta.width, meta.height, meta.format]).toEqual([600, 600, "webp"]);
   });
 
   it("replaces the cover and removes the old file", async () => {

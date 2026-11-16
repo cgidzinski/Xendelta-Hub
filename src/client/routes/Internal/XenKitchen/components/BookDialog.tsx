@@ -121,7 +121,7 @@ export default function BookDialog({ book, open, onClose, initialTab = "general"
   );
 }
 
-/** The book's cover picture with Add, Change and Remove. Owners and editors only; the server crops it to 3:4. */
+/** The book's cover picture with Add, Change and Remove. Owners and editors only; the server crops it to a square. */
 function CoverEditor({ book }: { book: KitchenBook }) {
   const { enqueueSnackbar } = useSnackbar();
   const setCover = useSetKitchenBookCover();
@@ -151,11 +151,11 @@ function CoverEditor({ book }: { book: KitchenBook }) {
 
   return (
     <Stack direction="row" spacing={2} alignItems="center">
-      <BookCover book={book} width={84} />
+      <BookCover book={book} size={84} />
       <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="subtitle2">Cover</Typography>
         <Typography variant="body2" color="text.secondary">
-          A photo for the front of the book. It's cropped to a portrait.
+          A photo for the front of the book. It's cropped to a square.
         </Typography>
         <Stack direction="row" spacing={1}>
           <Button size="small" variant="outlined" disabled={busy} onClick={() => input.current?.click()}>
