@@ -4,6 +4,7 @@ import { Box, Button, Chip, Container, InputAdornment, Stack, TextField, Typogra
 import { alpha, useTheme } from "@mui/material/styles";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import SearchIcon from "@mui/icons-material/Search";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import { useTitle } from "../../../hooks/useTitle";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
@@ -13,6 +14,8 @@ import { usePublicKitchenBook } from "../../../hooks/xenkitchen/useKitchen";
 import ItemCard from "../../Internal/XenKitchen/components/ItemCard";
 import { CategoryIconView } from "../../Internal/XenKitchen/components/kitchenIcons";
 import BookCover from "../../Internal/XenKitchen/components/BookCover";
+import { ExportBookDialog } from "../../Internal/XenKitchen/components/ExportBookDialog";
+import { cookbookParams } from "../../Internal/XenKitchen/components/cookbook";
 import { BRAND_NAME } from "@shared/brand";
 
 /** Read-only browse of a whole book behind /k/b/:token. Works signed out. */
@@ -24,6 +27,7 @@ export default function XenKitchenPublicBook() {
   const { data, isLoading, isError, error, refetch } = usePublicKitchenBook(token);
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
+  const [exporting, setExporting] = useState(false);
   useTitle(data?.book.name || "XenKitchen");
 
   const items = useMemo(() => {
@@ -96,6 +100,14 @@ export default function XenKitchenPublicBook() {
                     {data.book.description}
                   </Typography>
                 )}
+                <Button
+                  size="small"
+                  startIcon={<PictureAsPdfIcon />}
+                  onClick={() => setExporting(true)}
+                  sx={{ mt: 1, ml: -1 }}
+                >
+                  Save as PDF
+                </Button>
               </Box>
             </Stack>
 
@@ -151,6 +163,15 @@ export default function XenKitchenPublicBook() {
           </>
         )}
       </Container>
+      {exporting && data && (
+        <ExportBookDialog
+          bookName={data.book.name}
+          categories={data.categories}
+          items={data.items}
+          onClose={() => setExporting(false)}
+          onExport={(options) => navigate(`/k/b/${token}/print?${cookbookParams(options)}`)}
+        />
+      )}
     </Box>
   );
 }
