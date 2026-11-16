@@ -12,6 +12,7 @@ import EmptyState from "../../../components/ui/EmptyState";
 import { usePublicKitchenBook } from "../../../hooks/xenkitchen/useKitchen";
 import ItemCard from "../../Internal/XenKitchen/components/ItemCard";
 import { CategoryIconView } from "../../Internal/XenKitchen/components/kitchenIcons";
+import BookCover from "../../Internal/XenKitchen/components/BookCover";
 import { BRAND_NAME } from "@shared/brand";
 
 /** Read-only browse of a whole book behind /k/b/:token. Works signed out. */
@@ -81,17 +82,22 @@ export default function XenKitchenPublicBook() {
         )}
         {data && (
           <>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 0.5 }}>
-              <CategoryIconView icon={data.book.icon} sx={{ color: data.book.color, fontSize: 32 }} />
-              <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                {data.book.name}
-              </Typography>
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+              <BookCover book={data.book} width={{ xs: 72, sm: 96 }} />
+              <Box sx={{ minWidth: 0 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CategoryIconView icon={data.book.icon} sx={{ color: data.book.color, fontSize: 28 }} />
+                  <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
+                    {data.book.name}
+                  </Typography>
+                </Stack>
+                {data.book.description && (
+                  <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                    {data.book.description}
+                  </Typography>
+                )}
+              </Box>
             </Stack>
-            {data.book.description && (
-              <Typography color="text.secondary" sx={{ mb: 2 }}>
-                {data.book.description}
-              </Typography>
-            )}
 
             <Box sx={{ display: "flex", gap: 1, overflowX: "auto", mb: 2, pb: 0.5 }}>
               <Chip label="All categories" onClick={() => setCategory("")} variant={category ? "outlined" : "filled"} />

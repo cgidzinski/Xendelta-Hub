@@ -13,7 +13,13 @@ import { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { uploadXenKitchenImages } from "../config/multer";
 import { MAX_XENKITCHEN_IMAGES } from "../constants";
 import { storeAppFiles, copyAppFiles, removeAppFiles } from "../utils/appFiles";
-import { XENKITCHEN_SOURCE, removeKitchenPhotos, withPhotoUrls } from "../utils/xenKitchenFiles";
+import {
+  XENKITCHEN_BOOK_SOURCE,
+  XENKITCHEN_SOURCE,
+  coverUrlsFor,
+  removeKitchenPhotos,
+  withPhotoUrls,
+} from "../utils/xenKitchenFiles";
 import { AppError, callerId } from "../utils/http";
 import { fetchPublicImage, fetchPublicPage } from "../utils/safeFetch";
 import { extractRecipe } from "../utils/recipeImport";
@@ -77,6 +83,9 @@ const handle = (fn: (req: Request, res: Response) => Promise<unknown>) => fn;
 const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
 
 const IMAGE_MAX_EDGE = 1600;
+/** A book cover is a 3:4 portrait. */
+const COVER_WIDTH = 600;
+const COVER_HEIGHT = 800;
 // Importing makes this server fetch a page for the caller, so it is limited per person (not per address).
 const importLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -247,6 +256,7 @@ function booksChanged(userIds: Iterable<string>) {
 async function serializeBook(book: any, uid: string) {
   const people = await usernamesFor(book.members.map((m: any) => m.user_id));
   const counts = await XenKitchenItem.countDocuments({ book_id: book._id });
+  const cover = (await coverUrlsFor([book])).get(String(book._id));
   const owner = canManage(book, uid);
   return {
     _id: String(book._id),
@@ -254,6 +264,8 @@ async function serializeBook(book: any, uid: string) {
     description: book.description || "",
     icon: book.icon,
     color: book.color,
+    cover_url: cover?.url ?? null,
+    cover_thumb_url: cover?.thumbUrl ?? null,
     my_role: roleIn(book, uid),
     item_count: counts,
     members: book.members.map((m: any) => ({
@@ -387,7 +399,13 @@ module.exports = function (app: any) {
         status: true,
         message: "OK",
         data: {
-          book: { name: book.name, description: book.description || "", color: book.color, icon: book.icon },
+          book: {
+            name: book.name,
+            description: book.description || "",
+            color: book.color,
+            icon: book.icon,
+            cover_url: (await coverUrlsFor([book])).get(String(book._id))?.url ?? null,
+          },
           categories: list.map((c) => ({
             _id: String(c._id),
             name: c.name,
@@ -497,6 +515,61 @@ module.exports = function (app: any) {
     }),
   );
 
+  // The cover picture: one per book, cropped to a 3:4 portrait so every cover is the same shape. Editors may change it.
+  app.put(
+    "/api/xenkitchen/books/:id/cover",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    uploadXenKitchenImages.single("image"),
+    handle(async (req, res) => {
+      const uid = callerId(req);
+      const book = await loadBook(req, req.params.id, "edit");
+      const file = req.file;
+      if (!file) throw new AppError(400, "No image provided");
+      let buffer: Buffer;
+      try {
+        buffer = await sharp(file.buffer)
+          .rotate()
+          .resize(COVER_WIDTH, COVER_HEIGHT, { fit: "cover", position: "attention" })
+          .webp({ quality: 82 })
+          .toBuffer();
+      } catch {
+        throw new AppError(400, `Couldn't read "${file.originalname}". Try a JPEG or PNG.`);
+      }
+      const [stored] = await storeAppFiles(uid, { app: XENKITCHEN_BOOK_SOURCE, ref: String(book._id) }, [
+        { buffer, mimeType: "image/webp", name: renamed(file.originalname, "webp") },
+      ]);
+      const previous = book.cover?.file_id;
+      book.set("cover", { file_id: stored._id });
+      try {
+        await book.save();
+      } catch (error) {
+        await removeAppFiles([stored._id]);
+        throw error;
+      }
+      if (previous) await removeAppFiles([previous]);
+      bookChanged(book);
+      booksChanged(book.members.map((m: any) => m.user_id));
+      res.json({ status: true, message: "Saved", data: { book: await serializeBook(book.toObject(), uid) } });
+    }),
+  );
+
+  app.delete(
+    "/api/xenkitchen/books/:id/cover",
+    authenticateToken,
+    validateParams(xenKitchenIdParamSchema),
+    handle(async (req, res) => {
+      const book = await loadBook(req, req.params.id, "edit");
+      const previous = book.cover?.file_id;
+      book.set("cover", undefined);
+      await book.save();
+      if (previous) await removeAppFiles([previous]);
+      bookChanged(book);
+      booksChanged(book.members.map((m: any) => m.user_id));
+      res.json({ status: true, message: "Saved", data: { book: await serializeBook(book.toObject(), callerId(req)) } });
+    }),
+  );
+
   app.delete(
     "/api/xenkitchen/books/:id",
     authenticateToken,
@@ -510,6 +583,7 @@ module.exports = function (app: any) {
       await XenKitchenCategory.deleteMany({ book_id: book._id }).exec();
       await book.deleteOne();
       await removeKitchenPhotos(items.flatMap((i: any) => i.images || []));
+      if (book.cover?.file_id) await removeAppFiles([book.cover.file_id]);
       await ensureBooks(uid);
       booksChanged(people);
       res.json({ status: true, message: "Book deleted" });

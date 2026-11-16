@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Avatar,
   Box,
@@ -39,7 +39,9 @@ import {
   bookShareUrlFor,
   useAddKitchenBookMembers,
   useDeleteKitchenBook,
+  useRemoveKitchenBookCover,
   useRemoveKitchenBookMember,
+  useSetKitchenBookCover,
   useSetKitchenBookRole,
   useShareKitchenBook,
   useUpdateKitchenBook,
@@ -47,6 +49,9 @@ import {
   type KitchenBook,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { AppearancePicker } from "./CategoryDialog";
+import BookCover from "./BookCover";
+import UploadProgress from "../../../../components/ui/UploadProgress";
+import { useUploadProgress } from "../../../../hooks/useUploadProgress";
 import UserName from "../../../../components/user/UserName";
 
 export const ROLE_LABELS: Record<BookRole, { label: string; help: string }> = {
@@ -116,6 +121,68 @@ export default function BookDialog({ book, open, onClose, initialTab = "general"
   );
 }
 
+/** The book's cover picture with Add, Change and Remove. Owners and editors only; the server crops it to 3:4. */
+function CoverEditor({ book }: { book: KitchenBook }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const setCover = useSetKitchenBookCover();
+  const removeCover = useRemoveKitchenBookCover();
+  const { percent, onUploadProgress, reset } = useUploadProgress();
+  const input = useRef<HTMLInputElement>(null);
+  const busy = setCover.isPending || removeCover.isPending;
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      await setCover.mutateAsync({ id: book._id, file, onUploadProgress });
+      enqueueSnackbar("Cover saved", { variant: "success" });
+    } catch (e: any) {
+      enqueueSnackbar(e?.response?.data?.message ?? "Couldn't save the cover", { variant: "error" });
+    } finally {
+      reset();
+    }
+  };
+  const remove = async () => {
+    try {
+      await removeCover.mutateAsync(book._id);
+    } catch (e: any) {
+      enqueueSnackbar(e?.response?.data?.message ?? "Couldn't remove the cover", { variant: "error" });
+    }
+  };
+
+  return (
+    <Stack direction="row" spacing={2} alignItems="center">
+      <BookCover book={book} width={84} />
+      <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="subtitle2">Cover</Typography>
+        <Typography variant="body2" color="text.secondary">
+          A photo for the front of the book. It's cropped to a portrait.
+        </Typography>
+        <Stack direction="row" spacing={1}>
+          <Button size="small" variant="outlined" disabled={busy} onClick={() => input.current?.click()}>
+            {book.cover_url ? "Change cover" : "Add cover"}
+          </Button>
+          {book.cover_url && (
+            <Button size="small" color="inherit" disabled={busy} onClick={remove}>
+              Remove
+            </Button>
+          )}
+        </Stack>
+        <UploadProgress percent={percent} label="cover" />
+        <input
+          ref={input}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            void pick(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </Stack>
+    </Stack>
+  );
+}
+
 function GeneralTab({ book, onGone }: { book: KitchenBook; onGone: () => void }) {
   const { enqueueSnackbar } = useSnackbar();
   const update = useUpdateKitchenBook();
@@ -136,6 +203,7 @@ function GeneralTab({ book, onGone }: { book: KitchenBook; onGone: () => void })
   if (!owner) {
     return (
       <Stack spacing={1.5} sx={{ pt: 2 }}>
+        {book.my_role === "editor" && <CoverEditor book={book} />}
         <Typography variant="body2">{book.description || "No description."}</Typography>
         <Typography variant="body2" color="text.secondary">
           You're {book.my_role === "editor" ? "an editor" : "a viewer"} here. {ROLE_LABELS[book.my_role].help}. Only the
@@ -147,6 +215,7 @@ function GeneralTab({ book, onGone }: { book: KitchenBook; onGone: () => void })
 
   return (
     <Stack spacing={2.5} sx={{ pt: 2 }}>
+      <CoverEditor book={book} />
       <Stack direction="row" spacing={1.5} alignItems="flex-start">
         <AppearancePicker icon={book.icon} color={book.color} onChange={save} />
         <TextField
