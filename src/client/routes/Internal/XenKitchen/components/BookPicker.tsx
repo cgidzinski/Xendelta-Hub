@@ -1,14 +1,20 @@
-import { useState } from "react";
-import { Box, Button, ButtonBase, Collapse, TextField, Typography } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { useEffect, useState } from "react";
+import { Box, Button, ButtonBase, Collapse, Stack, TextField, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import { useSnackbar } from "notistack";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { RADIUS } from "../../../../theme";
-import { useCreateKitchenBook, type KitchenBook } from "../../../../hooks/xenkitchen/useKitchen";
+import { useUploadProgress } from "../../../../hooks/useUploadProgress";
+import {
+  useCreateKitchenBook,
+  useSetKitchenBookCover,
+  type KitchenBook,
+} from "../../../../hooks/xenkitchen/useKitchen";
 import BookCover from "./BookCover";
+import CoverField from "./CoverField";
 import { CategoryIconView } from "./kitchenIcons";
 
 const TILE = 72;
@@ -99,10 +105,33 @@ interface StripProps {
 
 /** A row of square book covers with the names under them. Hidden until the title is clicked; choosing a book closes it. */
 export function BookStrip({ books, value, open, onChange, onClose }: StripProps) {
+  const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const create = useCreateKitchenBook();
+  const setCover = useSetKitchenBookCover();
+  const { percent, onUploadProgress, reset } = useUploadProgress();
   const [newOpen, setNewOpen] = useState(false);
   const [name, setName] = useState("");
+  // A cover chosen before the book exists: shown from the file on this device, sent once the book is made.
+  const [cover, setCover_] = useState<File | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!cover) {
+      setCoverUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(cover);
+    setCoverUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [cover]);
+  const saving = create.isPending || setCover.isPending;
+
+  const closeNew = () => {
+    if (saving) return;
+    setNewOpen(false);
+    setName("");
+    setCover_(null);
+  };
 
   const pick = (id: string) => {
     onChange(id);
@@ -111,15 +140,34 @@ export function BookStrip({ books, value, open, onChange, onClose }: StripProps)
 
   const createBook = async () => {
     const n = name.trim();
-    if (!n) return;
+    if (!n || saving) return;
+    let bookId: string;
     try {
-      const { book } = await create.mutateAsync({ name: n });
-      setNewOpen(false);
-      setName("");
-      pick(book._id);
-      enqueueSnackbar("Book created. Add people from Share", { variant: "success" });
+      bookId = (await create.mutateAsync({ name: n })).book._id;
     } catch (e: any) {
       enqueueSnackbar(e?.response?.data?.message ?? "Couldn't create the book", { variant: "error" });
+      return;
+    }
+    // The book exists now, so a cover that can't be saved must not undo it: say so and carry on.
+    let coverSaved = true;
+    if (cover) {
+      try {
+        await setCover.mutateAsync({ id: bookId, file: cover, onUploadProgress });
+      } catch {
+        coverSaved = false;
+      } finally {
+        reset();
+      }
+    }
+    setNewOpen(false);
+    setName("");
+    setCover_(null);
+    pick(bookId);
+    if (coverSaved) enqueueSnackbar("Book created. Add people from Share", { variant: "success" });
+    else {
+      enqueueSnackbar("Book created, but the cover couldn't be saved. Add it in the book's settings.", {
+        variant: "warning",
+      });
     }
   };
 
@@ -178,13 +226,15 @@ export function BookStrip({ books, value, open, onChange, onClose }: StripProps)
 
       <ResponsiveDialog
         open={newOpen}
-        onClose={() => setNewOpen(false)}
+        onClose={closeNew}
         title="New recipe book"
         maxWidth="xs"
         actions={
           <>
-            <Button onClick={() => setNewOpen(false)}>Cancel</Button>
-            <Button variant="contained" disabled={!name.trim() || create.isPending} onClick={createBook}>
+            <Button disabled={saving} onClick={closeNew}>
+              Cancel
+            </Button>
+            <Button variant="contained" disabled={!name.trim() || saving} onClick={createBook}>
               Create
             </Button>
           </>
@@ -194,18 +244,27 @@ export function BookStrip({ books, value, open, onChange, onClose }: StripProps)
           Books are how you share: add people to a book and everything in it, including recipes added later, is shared
           with them.
         </Typography>
-        <TextField
-          autoFocus
-          fullWidth
-          label="Name"
-          placeholder="e.g. Home"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") createBook();
-          }}
-          slotProps={{ htmlInput: { maxLength: 60 } }}
-        />
+        <Stack spacing={2.5}>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Name"
+            placeholder="e.g. Home"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") createBook();
+            }}
+            slotProps={{ htmlInput: { maxLength: 60 } }}
+          />
+          <CoverField
+            preview={{ icon: "restaurant", color: theme.palette.primary.main, cover_url: coverUrl }}
+            busy={saving}
+            percent={percent}
+            onPick={setCover_}
+            onRemove={() => setCover_(null)}
+          />
+        </Stack>
       </ResponsiveDialog>
     </>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Avatar,
   Box,
@@ -49,8 +49,7 @@ import {
   type KitchenBook,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { AppearancePicker } from "./CategoryDialog";
-import BookCover from "./BookCover";
-import UploadProgress from "../../../../components/ui/UploadProgress";
+import CoverField from "./CoverField";
 import { useUploadProgress } from "../../../../hooks/useUploadProgress";
 import UserName from "../../../../components/user/UserName";
 
@@ -127,11 +126,8 @@ function CoverEditor({ book }: { book: KitchenBook }) {
   const setCover = useSetKitchenBookCover();
   const removeCover = useRemoveKitchenBookCover();
   const { percent, onUploadProgress, reset } = useUploadProgress();
-  const input = useRef<HTMLInputElement>(null);
-  const busy = setCover.isPending || removeCover.isPending;
 
-  const pick = async (file: File | undefined) => {
-    if (!file) return;
+  const pick = async (file: File) => {
     try {
       await setCover.mutateAsync({ id: book._id, file, onUploadProgress });
       enqueueSnackbar("Cover saved", { variant: "success" });
@@ -150,36 +146,13 @@ function CoverEditor({ book }: { book: KitchenBook }) {
   };
 
   return (
-    <Stack direction="row" spacing={2} alignItems="center">
-      <BookCover book={book} size={84} />
-      <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="subtitle2">Cover</Typography>
-        <Typography variant="body2" color="text.secondary">
-          A photo for the front of the book. It's cropped to a square.
-        </Typography>
-        <Stack direction="row" spacing={1}>
-          <Button size="small" variant="outlined" disabled={busy} onClick={() => input.current?.click()}>
-            {book.cover_url ? "Change cover" : "Add cover"}
-          </Button>
-          {book.cover_url && (
-            <Button size="small" color="inherit" disabled={busy} onClick={remove}>
-              Remove
-            </Button>
-          )}
-        </Stack>
-        <UploadProgress percent={percent} label="cover" />
-        <input
-          ref={input}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            void pick(e.target.files?.[0]);
-            e.target.value = "";
-          }}
-        />
-      </Stack>
-    </Stack>
+    <CoverField
+      preview={book}
+      busy={setCover.isPending || removeCover.isPending}
+      percent={percent}
+      onPick={pick}
+      onRemove={remove}
+    />
   );
 }
 
