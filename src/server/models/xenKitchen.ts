@@ -17,6 +17,8 @@ const bookSchema = new Schema({
   icon: { type: String, default: "restaurant", maxlength: 30 },
   color: { type: String, default: "#ff8a65", maxlength: 9 },
   members: { type: [bookMemberSchema], default: [] },
+  // The book's cover picture: a private XenDrive file (source `xenkitchen-book`, ref = this book), shown through a signed link.
+  cover: { file_id: { type: Schema.Types.ObjectId, ref: "XenDriveFile", default: undefined } },
   // Set on the starter book made automatically for this user. The unique index makes that
   // creation safe when several first-visit requests arrive at once: only one can insert.
   default_for: { type: String, default: undefined },

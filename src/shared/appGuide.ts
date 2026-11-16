@@ -304,6 +304,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenKitchen to plan the week's meals and get a shopping list.", link: "/internal/xenkitchen" },
     features: [
       "Keep recipe books, and share them with others as editors or viewers.",
+      "Give each recipe book a cover photo, and switch between your books from the page title.",
+      "Save a whole recipe book as a PDF cookbook you can print or share.",
       "Write recipes with photos, times, servings, ingredient sections and steps with timers.",
       "Import a recipe from a web address.",
       "Import a recipe from photos of it, like a recipe card or the pages of a cookbook.",
@@ -334,6 +336,14 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/xenkitchen",
       },
       { text: "Switch a recipe between metric and US units with one tap.", link: "/internal/xenkitchen" },
+      {
+        text: "Open a book's menu and choose Export as PDF to get a cookbook with a cover and a page for each recipe.",
+        link: "/internal/xenkitchen",
+      },
+      {
+        text: "Add a cover photo in a book's settings, and it shows when you pick between your books.",
+        link: "/internal/xenkitchen",
+      },
     ],
   },
   xennote: {

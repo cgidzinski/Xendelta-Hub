@@ -55,6 +55,7 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/xenkitchen/items/:id/favorite": "no body: the method (POST/DELETE) carries the intent",
   "POST /api/xenkitchen/items/:id/duplicate": "no body: copies the item named by the path",
   "POST /api/xenkitchen/items/:id/images": "multipart upload handled by multer, not JSON",
+  "PUT /api/xenkitchen/books/:id/cover": "multipart upload handled by multer, not JSON",
   "POST /api/xenkitchen/import-photo": "multipart upload handled by multer, not JSON",
   "POST /api/xenkitchen/items/:id/share": "no body: creates the share link",
   "POST /api/xenkitchen/items/:id/share/rotate": "no body: replaces the share link",
