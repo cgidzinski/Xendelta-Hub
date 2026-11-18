@@ -233,6 +233,7 @@ function HowBillingWorks({ overview, communityName }: { overview: BillingOvervie
       communityName ? "Voice channels: the community" : "Shared evenly by everyone in the call",
     ],
     ["Recipe scans", `${gems(ratePer("recipe_scans"))} each`, communityName ? "The person scanning" : "You"],
+    ["Receipt scans", `${gems(ratePer("receipt_scans"))} each`, communityName ? "The person scanning" : "You"],
     ["Free each month", formatWholeGems(overview.current.freeTierGems), "Doesn't roll over"],
   ];
   return (

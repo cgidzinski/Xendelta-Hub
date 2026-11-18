@@ -72,7 +72,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See your community's monthly bill in its settings, along with its fund and who chipped in.",
       "Give some of your gems to a friend from their profile or from a chat, with a note if you like. It is a handy way to pay someone back.",
       "Chip in gems to your community's fund so it can cover the files it stores and its voice channels.",
-      "Keep files, make calls and scan recipes with a free allowance every month. Beyond it they cost a few gems, and nothing is ever deleted if you run out.",
+      "Keep files, make calls and scan recipes and receipts with a free allowance every month. Beyond it they cost a few gems, and nothing is ever deleted if you run out.",
     ],
     tips: [
       {
@@ -219,7 +219,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     features: [
       "Create groups for trips, households or friends, and add the people in them.",
       "Add expenses with who paid, and split them equally, by exact amounts or by percentage.",
-      "Attach receipt photos to an expense.",
+      "Attach receipt photos to an expense, and read a receipt photo into line items to split between people.",
       "Use several currencies in one group, with balances kept separate for each.",
       "Record a currency exchange between two people so balances stay right.",
       "Set up recurring expenses that repeat daily, weekly, monthly or yearly, and pause them.",
@@ -233,6 +233,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     tips: [
       {
         text: "Add a photo of the receipt to an expense so everyone can see what it was for.",
+        link: "/internal/xensplit",
+      },
+      {
+        text: "After adding a receipt photo, tap Read receipt from photo, then tap who shared each line. Tax and tip are shared in proportion.",
         link: "/internal/xensplit",
       },
       {

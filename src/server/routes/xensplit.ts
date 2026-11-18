@@ -1,5 +1,12 @@
 import type { Cosmetics } from "@shared/cosmetics";
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
+import multer from "multer";
+import { rateLimit } from "express-rate-limit";
+import { userAccount } from "../billing/ledger";
+import { recordUsage } from "../billing/usage";
+import { assertCanSpend } from "../billing/settlement";
+import { photoImportEnabled, readReceiptFromImage } from "../ai/vision";
+import type { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { AppError, callerId } from "../utils/http";
 import { accessOf, canManage, canView } from "../utils/membership";
 import { roundMoneyExact } from "@shared/money";
@@ -72,9 +79,52 @@ const LOG_PAGE_SIZE = 50;
 const RATE_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const rateCache = new Map<string, { rate: number; fetchedAt: number }>();
 
+// Reading a photo costs money at the other end, so it is limited per person (not per address).
+const scanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 6,
+  keyGenerator: (req) => (req as AuthenticatedRequest).user?._id.toString() ?? "anonymous",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: false, message: "That's a lot of photos. Wait a minute and try again." },
+});
+
+/** The one receipt photo to read: too many or too big is a 400 with a sentence, not a crash. */
+const receiveReceiptPhoto = (req: Request, res: Response, next: NextFunction) =>
+  uploadXenSplitImages.single("image")(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      return next(
+        new AppError(
+          400,
+          err.code === "LIMIT_FILE_SIZE" ? "That picture is too big" : "Send one photo of the receipt at a time",
+        ),
+      );
+    }
+    next(err);
+  });
+
 module.exports = function (app: any) {
   // Apply auth middleware to all xensplit routes
   app.use("/api/xensplit", authenticateToken);
+
+  // Whether this server can read receipts from a photo (the button is left out when it can't).
+  app.get("/api/xensplit/scan-receipt/status", (_req: Request, res: Response) => {
+    res.json({ status: true, message: "", data: { receipt_scan: photoImportEnabled() } });
+  });
+
+  // Read a receipt out of one photo. Nothing is saved: the expense form shows the lines for review and a person
+  // assigns them. Billed per scan to the person scanning, found or not (billing/usage.ts).
+  app.post("/api/xensplit/scan-receipt", scanLimiter, receiveReceiptPhoto, async (req: Request, res: Response) => {
+    if (!req.file) throw new AppError(400, "Choose a photo of the receipt");
+    const payer = userAccount(callerId(req));
+    await assertCanSpend(payer);
+    const receipt = await readReceiptFromImage({ buffer: req.file.buffer, mimetype: req.file.mimetype });
+    await recordUsage(payer, "receipt_scans", 1);
+    if (!receipt) {
+      throw new AppError(422, "Couldn't find any items on that receipt. Try a sharper, upright picture of all of it.");
+    }
+    res.json({ status: true, message: "Receipt found", data: { receipt } });
+  });
 
   // GET /api/xensplit/groups - List all groups for current user
   app.get("/api/xensplit/groups", async (req: Request, res: Response) => {

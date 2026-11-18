@@ -38,7 +38,7 @@ describe("billing overview", () => {
     expect(o.current).toMatchObject({ amountDue: 0, freeTierGems: PERSON_FREE_TIER_GEMS });
     expect(o.current.lines.map((l: any) => l.center)).toEqual(["storage"]);
     // Only what an account pays for is listed, never the house's costs.
-    expect(o.centers.map((c: any) => c.id)).toEqual(["storage", "calls", "recipe_scans"]);
+    expect(o.centers.map((c: any) => c.id)).toEqual(["storage", "calls", "recipe_scans", "receipt_scans"]);
     expect(o.donationsOpen).toBeUndefined();
   });
 

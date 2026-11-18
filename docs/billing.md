@@ -58,6 +58,7 @@ Downloads and uploads are free on R2, so there is no downloads center.
 | `storage` | byte-days | GB-month | the person or community | #370 |
 | `calls` | bytes (SFU and TURN are one cost) | GB | the people in the call (split evenly), or the community for a voice channel | #371 |
 | `recipe_scans` | scans | scan | the person | #372 |
+| `receipt_scans` | scans | scan | the person | #396 |
 | `public_assets` | byte-days | GB-month | house | #373 |
 | `backups` | byte-days | GB-month | house | #373 |
 | `email` | emails | email | house | #373 |
@@ -103,6 +104,13 @@ when it is the community). Anyone who can still pay is never interrupted.
 
 A scan is **2.5 gems** (the recipe import dialog says so before you read a photo) (2 at cost, a few photos of one recipe) on the month's bill, counted once the model has run whether or
 not it found a recipe. It is refused first (402) when the free allowance is used up and the gems can't cover it.
+
+### Receipt scans (`routes/xensplit.ts`, #396)
+
+`POST /api/xensplit/scan-receipt` reads one photo of a receipt into lines, tax, tip and total (`readReceiptFromImage` in
+`ai/vision.ts`, parsed by `utils/receiptImport.ts`). It is billed exactly like a recipe scan: **2.5 gems**, counted once the
+model has run whether or not it found any lines, and refused first (402) when the allowance is used up. Nothing is saved: the
+expense form shows the lines for a person to assign (`ReceiptScanDialog`, `receiptSplit.ts`).
 
 ### Free allowance
 

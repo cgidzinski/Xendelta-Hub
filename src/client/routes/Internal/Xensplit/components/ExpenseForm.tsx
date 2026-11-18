@@ -34,6 +34,9 @@ import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
 import UserName from "../../../../components/user/UserName";
+import ReceiptScanDialog, { type ReceiptResult } from "./ReceiptScanDialog";
+import { useReceiptScanEnabled } from "../../../../hooks/xensplit/useReceiptScan";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 
 const MAX_IMAGES = 10;
 
@@ -167,6 +170,8 @@ export default function ExpenseForm({
   seriesWasInactive = false,
 }: ExpenseFormProps) {
   const [step, setStep] = React.useState(0);
+  const receiptScanEnabled = useReceiptScanEnabled();
+  const [scanOpen, setScanOpen] = React.useState(false);
   const recurringOn = recurringMode !== "off" && isRecurring;
   // Editing the bounds of an ended series restarts it — the warning below the
   // Active switch tells the user what that means
@@ -178,6 +183,23 @@ export default function ExpenseForm({
   const objectUrlsRef = useRef<string[]>([]);
   // Tracks split boxes the user has typed in, so untouched boxes can absorb the remainder
   const editedSplitIdsRef = useRef<Set<string>>(new Set());
+
+  // Fill the form from a read receipt: each person's share becomes an exact amount.
+  const applyReceipt = (r: ReceiptResult) => {
+    const people = members.filter((m) => r.owed[m.user_id] !== undefined);
+    if (r.title) onTitleChange(r.title);
+    onAmountChange(String(r.amount));
+    onCurrencyChange(r.currency);
+    if (r.date) onDateChange(new Date(`${r.date}T12:00:00`));
+    onSplitTypeChange("exact");
+    onParticipantsChange(
+      people.map((m) => ({ _id: m.user_id, username: m.username, avatar: m.avatar, cosmetics: m.cosmetics })),
+    );
+    onExactSplitsChange(Object.fromEntries(people.map((m) => [m.user_id, String(r.owed[m.user_id])])));
+    // Every box already has its value, so a later edit must not treat any as "untouched" and overwrite it.
+    editedSplitIdsRef.current = new Set(people.map((m) => m.user_id));
+    setScanOpen(false);
+  };
 
   const numAmount = parseFloat(amount) || 0;
   const CategoryIconComponent = getCategoryIcon(category);
@@ -893,6 +915,20 @@ export default function ExpenseForm({
 
                 {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
               </Box>
+              {receiptScanEnabled && images.length > 0 && (
+                <Button size="small" startIcon={<ReceiptLongIcon />} sx={{ mt: 1 }} onClick={() => setScanOpen(true)}>
+                  Read receipt from photo
+                </Button>
+              )}
+              <ReceiptScanDialog
+                open={scanOpen}
+                photo={images[0] ?? null}
+                members={members}
+                currency={currency}
+                currencyOptions={currencyOptions}
+                onClose={() => setScanOpen(false)}
+                onApply={applyReceipt}
+              />
             </Box>
           )}
         </Box>

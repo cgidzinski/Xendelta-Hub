@@ -8,5 +8,6 @@ export const xensplitKeys = {
   balances: (groupId: string | undefined) => [...xensplitKeys.all, "balances", groupId] as const,
   expenseImageUrls: (groupId: string | undefined, expenseId?: string) =>
     [...xensplitKeys.all, "expense-image-urls", groupId, expenseId] as const,
+  receiptScanStatus: () => [...xensplitKeys.all, "receipt-scan-status"] as const,
   rate: (from: string, to: string) => [...xensplitKeys.all, "rate", from, to] as const,
 };

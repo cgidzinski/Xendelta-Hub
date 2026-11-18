@@ -1,7 +1,7 @@
 // Gem billing (docs/billing.md): every cost center, what it costs, and how a month's usage becomes a bill.
 //
 // A center starts free (rate 0). Each one gets its rules and rate in its own discussion (#370 Storage, #371 Calls,
-// #372 Recipe scanning, #373 House costs) and is then switched on here (storage, calls and recipe scans are on). Usage is stored as whole units (bytes,
+// #372 Recipe scanning, #373 House costs) and is then switched on here (storage, calls, recipe scans and receipt scans are on). Usage is stored as whole units (bytes,
 // byte-days, scans); gems are worked out from them, so nothing drifts from adding up tiny fractions.
 //
 // Not cost centers, ever: text chat, the database and server CPU. The hub is self-hosted, so they cost nothing per user.
@@ -69,6 +69,19 @@ export const COST_CENTERS = [
     displayUnit: "scan",
     unitsPerDisplayUnit: 1,
     // Workers AI vision (llama-4-scout): about two gems a scan at cost, before the margin: a photo or three on one recipe.
+    costRate: 2,
+    payer: "account",
+    status: "metered",
+    provider: "cloudflare_ai",
+  },
+  {
+    id: "receipt_scans",
+    label: "Receipt scans",
+    description: "Receipts read from a photo in XenSplit.",
+    unit: "scan",
+    displayUnit: "scan",
+    unitsPerDisplayUnit: 1,
+    // The same Workers AI vision model as recipe scans, but one photo and a short answer: priced the same, to keep it simple.
     costRate: 2,
     payer: "account",
     status: "metered",
