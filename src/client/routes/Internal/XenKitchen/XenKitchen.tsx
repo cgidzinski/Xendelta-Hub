@@ -26,6 +26,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import CloseIcon from "@mui/icons-material/Close";
 import SettingsIcon from "@mui/icons-material/Settings";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import DriveFileMoveIcon from "@mui/icons-material/DriveFileMove";
@@ -72,7 +73,9 @@ import FilterPanel from "./components/FilterPanel";
 import CategoryDialog from "./components/CategoryDialog";
 import ItemEditor from "./components/ItemEditor";
 import { CategoryIconView } from "./components/kitchenIcons";
-import BookSwitcher, { MemberAvatars } from "./components/BookSwitcher";
+import { BookPickerButton, BookStrip } from "./components/BookPicker";
+import MemberAvatars from "./components/MemberAvatars";
+import MyExportBookDialog from "./components/ExportBookDialog";
 import BookDialog from "./components/BookDialog";
 
 const isSort = (v: unknown): v is KitchenSort => KITCHEN_SORTS.includes(v as KitchenSort);
@@ -145,6 +148,8 @@ export default function XenKitchen() {
   const filterBtn = useRef<HTMLButtonElement>(null);
   const [manageOpen, setManageOpen] = useState(false);
   const [bookMenu, setBookMenu] = useState<HTMLElement | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [bookDialog, setBookDialog] = useState<null | "general" | "people">(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -240,7 +245,7 @@ export default function XenKitchen() {
     <PageContainer>
       <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <BookSwitcher books={books} value={book} onChange={selectBook} />
+          <BookPickerButton books={books} value={book} open={pickerOpen} onToggle={() => setPickerOpen((o) => !o)} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25, minHeight: 24 }}>
             {currentBook ? (
               <>
@@ -314,11 +319,30 @@ export default function XenKitchen() {
                   </ListItemIcon>
                   Book settings
                 </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setBookMenu(null);
+                    setExporting(true);
+                  }}
+                >
+                  <ListItemIcon>
+                    <PictureAsPdfIcon fontSize="small" />
+                  </ListItemIcon>
+                  Export as PDF
+                </MenuItem>
               </Menu>
             </>
           )}
         </Stack>
       </Stack>
+
+      <BookStrip
+        books={books}
+        value={book}
+        open={pickerOpen}
+        onChange={selectBook}
+        onClose={() => setPickerOpen(false)}
+      />
 
       {/* Browse: the book's categories, then search, filters and sort, in one place */}
       <Card
@@ -591,6 +615,9 @@ export default function XenKitchen() {
           bookId={currentBook._id}
           bookName={currentBook.name}
         />
+      )}
+      {exporting && currentBook && (
+        <MyExportBookDialog bookId={currentBook._id} bookName={currentBook.name} onClose={() => setExporting(false)} />
       )}
       <BookDialog
         book={currentBook}

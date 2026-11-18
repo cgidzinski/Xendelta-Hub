@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../config/api";
 import { liveQuery } from "../liveQuery";
 import type { AppFilesResult, XenDriveFile } from "../../types/XenDriveFile";
@@ -40,33 +40,6 @@ export const useStorageFileText = (fileId: string | undefined, enabled = true) =
     retry: false,
     ...liveQuery,
   });
-
-/** Delete an app-stored file and refresh the viewer and the profile usage. */
-export const useStorageActions = () => {
-  const queryClient = useQueryClient();
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: storageKeys.all });
-    queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-  };
-
-  const deleteFile = useMutation({
-    mutationFn: (fileId: string) => api.delete(`/api/storage/files/${fileId}`),
-    onSuccess: refresh,
-  });
-
-  return { deleteFile };
-};
-
-/** Save an app-stored file to the computer under its real name. */
-export async function downloadStorageFile(fileId: string): Promise<void> {
-  const { url } = await api.get<{ url: string }>(`/api/storage/files/${fileId}/url?download=1`);
-  const link = document.createElement("a");
-  link.href = url;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-}
 
 /** Open the original file at full size in a new tab (the page shows a smaller rendition for images). */
 export async function openOriginalStorageFile(fileId: string): Promise<void> {

@@ -67,12 +67,11 @@ describe("community channel files", () => {
     expect(await storageUsedBy({ type: "community", id: communityId })).toEqual({ files: 1, bytes: 6 });
     expect(await storageUsedBy({ type: "user", id: id(me) })).toEqual({ files: 0, bytes: 0 });
 
-    // The uploader still sees and can delete their own channel file in the storage viewer.
+    // The uploader still sees their own channel file in the storage viewer (which can't delete it).
     const viewer = await request(t.app).get("/api/storage/app-files").set(as(me.token));
     expect(viewer.body.data.count).toBe(1);
-    const del = await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(me.token));
-    expect(del.status).toBe(200);
-    expect(await FileRecord.exists({ _id: fileId })).toBeNull();
+    expect((await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(me.token))).status).toBe(404);
+    expect(await FileRecord.exists({ _id: fileId })).not.toBeNull();
   });
 
   it("stay the sender's cost in a group chat", async () => {

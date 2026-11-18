@@ -39,7 +39,9 @@ import {
   bookShareUrlFor,
   useAddKitchenBookMembers,
   useDeleteKitchenBook,
+  useRemoveKitchenBookCover,
   useRemoveKitchenBookMember,
+  useSetKitchenBookCover,
   useSetKitchenBookRole,
   useShareKitchenBook,
   useUpdateKitchenBook,
@@ -47,6 +49,8 @@ import {
   type KitchenBook,
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { AppearancePicker } from "./CategoryDialog";
+import CoverField from "./CoverField";
+import { useUploadProgress } from "../../../../hooks/useUploadProgress";
 import UserName from "../../../../components/user/UserName";
 
 export const ROLE_LABELS: Record<BookRole, { label: string; help: string }> = {
@@ -116,6 +120,42 @@ export default function BookDialog({ book, open, onClose, initialTab = "general"
   );
 }
 
+/** The book's cover picture with Add, Change and Remove. Owners and editors only; the server crops it to a square. */
+function CoverEditor({ book }: { book: KitchenBook }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const setCover = useSetKitchenBookCover();
+  const removeCover = useRemoveKitchenBookCover();
+  const { percent, onUploadProgress, reset } = useUploadProgress();
+
+  const pick = async (file: File) => {
+    try {
+      await setCover.mutateAsync({ id: book._id, file, onUploadProgress });
+      enqueueSnackbar("Cover saved", { variant: "success" });
+    } catch (e: any) {
+      enqueueSnackbar(e?.response?.data?.message ?? "Couldn't save the cover", { variant: "error" });
+    } finally {
+      reset();
+    }
+  };
+  const remove = async () => {
+    try {
+      await removeCover.mutateAsync(book._id);
+    } catch (e: any) {
+      enqueueSnackbar(e?.response?.data?.message ?? "Couldn't remove the cover", { variant: "error" });
+    }
+  };
+
+  return (
+    <CoverField
+      preview={book}
+      busy={setCover.isPending || removeCover.isPending}
+      percent={percent}
+      onPick={pick}
+      onRemove={remove}
+    />
+  );
+}
+
 function GeneralTab({ book, onGone }: { book: KitchenBook; onGone: () => void }) {
   const { enqueueSnackbar } = useSnackbar();
   const update = useUpdateKitchenBook();
@@ -136,6 +176,7 @@ function GeneralTab({ book, onGone }: { book: KitchenBook; onGone: () => void })
   if (!owner) {
     return (
       <Stack spacing={1.5} sx={{ pt: 2 }}>
+        {book.my_role === "editor" && <CoverEditor book={book} />}
         <Typography variant="body2">{book.description || "No description."}</Typography>
         <Typography variant="body2" color="text.secondary">
           You're {book.my_role === "editor" ? "an editor" : "a viewer"} here. {ROLE_LABELS[book.my_role].help}. Only the
@@ -147,6 +188,7 @@ function GeneralTab({ book, onGone }: { book: KitchenBook; onGone: () => void })
 
   return (
     <Stack spacing={2.5} sx={{ pt: 2 }}>
+      <CoverEditor book={book} />
       <Stack direction="row" spacing={1.5} alignItems="flex-start">
         <AppearancePicker icon={book.icon} color={book.color} onChange={save} />
         <TextField

@@ -6,11 +6,9 @@ import { generateSignedUrl } from "../utils/storageUtils";
 import { isTextPreviewable, readTextPreview } from "../utils/fileText";
 import { previewUrlFor, thumbnailUrlFor } from "../utils/xendriveThumbs";
 import { FileRecord, type FileRecordDocument } from "../models/fileRecord";
-import { removeAppFiles } from "../utils/appFiles";
 import {
   storageAppFilesQuerySchema,
   storageFileIdParamSchema,
-  storageFileUrlQuerySchema,
   validateParams,
   validateQuery,
 } from "../utils/validation";
@@ -122,28 +120,11 @@ module.exports = function (app: express.Application) {
     "/api/storage/files/:fileId/url",
     authenticateToken,
     validateParams(storageFileIdParamSchema),
-    validateQuery(storageFileUrlQuerySchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownAppFile(req.params.fileId as string, callerId(req));
-      const url = await generateSignedUrl(
-        file.key,
-        15, // minutes
-        req.query.download === "1" ? { downloadName: file.name } : {},
-      );
+      // To look at, not to keep: the link carries no download name. (Files are removed in the app that owns them.)
+      const url = await generateSignedUrl(file.key, 15);
       return res.json({ status: true, data: { url } });
-    },
-  );
-
-  app.delete(
-    "/api/storage/files/:fileId",
-    authenticateToken,
-    validateParams(storageFileIdParamSchema),
-    async function (req: express.Request, res: express.Response) {
-      const file = await ownAppFile(req.params.fileId as string, callerId(req));
-      await removeAppFiles([file.id]);
-      // An app that stored the file lets go of it (a photo on an expense), so it doesn't show a broken image.
-      await driveSourceApp(file.space.app)?.onRemoved?.(file.space.ref ?? "", [file.id]);
-      return res.json({ status: true, message: "File deleted successfully" });
     },
   );
 };

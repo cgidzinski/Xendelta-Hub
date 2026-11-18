@@ -7,7 +7,9 @@ thinking is not lost. Only the "built" section exists in code today.
 ## Principles
 
 - **Gems are only bought** (or, later, earned from selling files). There is no free grant, no daily reward and no
-  earning tasks. New accounts start with 0 gems. This was a deliberate choice.
+  earning tasks. New accounts start with 0 gems. This was a deliberate choice. The one way to receive gems without
+  buying them is a **gift** from another person (#396): it moves gems that person already owns through the ledger
+  (`gift` transaction), so none are created. Gifts, like donations, can't be reversed.
 - **Charge for what costs money**: storage, bandwidth and AI. Cosmetics cost nothing to provide, so they can be priced
   freely.
 - **Never sell an advantage over the friends you share groups with.** XenSplit, XenBudget and XenNote are shared, so

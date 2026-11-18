@@ -70,6 +70,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Send feedback to the people who run it, and earn gems when a bug you report is fixed or an idea you suggest is built.",
       "See what you've used each month and what it costs on your Billing page, with a free allowance every month.",
       "See your community's monthly bill in its settings, along with its fund and who chipped in.",
+      "Give some of your gems to a friend from their profile or from a chat, with a note if you like. It is a handy way to pay someone back.",
       "Chip in gems to your community's fund so it can cover the files it stores and its voice channels.",
       "Keep files, make calls and scan recipes and receipts with a free allowance every month. Beyond it they cost a few gems, and nothing is ever deleted if you run out.",
     ],
@@ -308,6 +309,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenKitchen to plan the week's meals and get a shopping list.", link: "/internal/xenkitchen" },
     features: [
       "Keep recipe books, and share them with others as editors or viewers.",
+      "Give each recipe book a cover photo, and switch between your books from the page title.",
+      "Save a whole recipe book as a PDF cookbook you can print or share.",
       "Write recipes with photos, times, servings, ingredient sections and steps with timers.",
       "Import a recipe from a web address.",
       "Import a recipe from photos of it, like a recipe card or the pages of a cookbook.",
@@ -338,6 +341,14 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/xenkitchen",
       },
       { text: "Switch a recipe between metric and US units with one tap.", link: "/internal/xenkitchen" },
+      {
+        text: "Open a book's menu and choose Export as PDF to get a cookbook with a cover and a page for each recipe.",
+        link: "/internal/xenkitchen",
+      },
+      {
+        text: "Add a cover photo in a book's settings, and it shows when you pick between your books.",
+        link: "/internal/xenkitchen",
+      },
     ],
   },
   xennote: {

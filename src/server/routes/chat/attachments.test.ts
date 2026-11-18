@@ -130,7 +130,7 @@ describe("chat uploads", () => {
     expect(withFolder.status).toBe(400);
   });
 
-  it("keeps a tagged file out of XenDrive, and deletes it from the storage viewer", async () => {
+  it("keeps an app file out of XenDrive, and the storage viewer can't delete it", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
@@ -143,9 +143,9 @@ describe("chat uploads", () => {
     expect((await request(t.app).get(`/api/xendrive/files/${fileId}`).set(as(a.token))).status).toBe(404);
 
     const del = await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(a.token));
-    expect(del.status).toBe(200);
-    expect(await mongoose.model("FileRecord").countDocuments({ _id: fileId })).toBe(0);
-    expect(deleted.length).toBeGreaterThan(0); // the bytes went too
+    expect(del.status).toBe(404);
+    expect(await mongoose.model("FileRecord").countDocuments({ _id: fileId })).toBe(1);
+    expect(deleted.length).toBe(0);
   });
 });
 
@@ -176,12 +176,13 @@ describe("downloading an attachment", () => {
     expect(wrong.status).toBe(404);
   });
 
-  it("says so when the file was deleted from the storage viewer", async () => {
+  it("says so when the file is gone", async () => {
     const [a, b] = [await createUser(), await createUser()];
     const chatId = await openChat(a, [b]);
     const fileId = await uploadForChat(a, chatId);
     const msg = (await send(a, chatId, [fileId])).body.data.message;
-    await request(t.app).delete(`/api/storage/files/${fileId}`).set(as(a.token));
+    const { removeAppFiles } = await import("../../utils/appFiles.js");
+    await removeAppFiles([fileId]);
 
     const gone = await request(t.app)
       .get(`/api/chat/conversations/${chatId}/messages/${msg.seq}/attachments/${fileId}`)

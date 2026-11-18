@@ -3,7 +3,6 @@ import { objectIdSchema } from "./core";
 
 // The storage viewer (docs/storage.md): files apps stored for the person, no longer shown inside XenDrive.
 export const storageFileIdParamSchema = z.object({ fileId: objectIdSchema });
-export const storageFileUrlQuerySchema = z.object({ download: z.enum(["1"]).optional() });
 export const storageAppFilesQuerySchema = z.object({
   // One app's files, or everything when left out.
   app: z
