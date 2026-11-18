@@ -1,9 +1,11 @@
-import { Box, Card, CardActionArea, Typography, Chip, Avatar, Stack } from "@mui/material";
+import { Box, Card, CardActionArea, IconButton, Tooltip, Typography, Chip, Avatar, Stack } from "@mui/material";
+import { useSnackbar } from "notistack";
+import LinkIcon from "@mui/icons-material/Link";
 import BrushIcon from "@mui/icons-material/Brush";
 import LayersIcon from "@mui/icons-material/Layers";
 import { format } from "date-fns";
 import { RecipeSummary } from "../../../../types/Recipe";
-import { cardSx } from "../../../../components/ui/surfaceStyles";
+import { cardSx, overlayButtonSx } from "../../../../components/ui/surfaceStyles";
 import { thumbUrlFor } from "@shared/recipaint/assetUrls";
 import UserName from "../../../../components/user/UserName";
 
@@ -15,6 +17,16 @@ interface RecipeCardProps {
 export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
   const cover = recipe.showcase?.[0];
   const author = recipe.author;
+  const { enqueueSnackbar } = useSnackbar();
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/recipaint/${recipe._id}`);
+      enqueueSnackbar("Link copied to clipboard", { variant: "success" });
+    } catch {
+      enqueueSnackbar("Couldn't copy the link", { variant: "error" });
+    }
+  };
 
   return (
     <Card
@@ -22,6 +34,7 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
       sx={{
         ...cardSx,
         // Fills its grid track. It used to be pinned to 345px, which overflowed a 360px phone.
+        position: "relative",
         width: "100%",
         height: "100%",
         overflow: "hidden",
@@ -107,6 +120,18 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
           </Typography>
         </Box>
       </CardActionArea>
+      {recipe.isPublic && (
+        <Tooltip title="Copy link">
+          <IconButton
+            size="small"
+            aria-label="Copy link"
+            onClick={copyLink}
+            sx={{ position: "absolute", top: 8, left: 8, ...overlayButtonSx.dark }}
+          >
+            <LinkIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
     </Card>
   );
 }

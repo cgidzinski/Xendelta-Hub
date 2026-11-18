@@ -64,6 +64,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Make a channel private or read-only, and give people roles with the permissions you choose.",
       "Find the people you share groups, books and notebooks with, and message them.",
       "Get notifications on your phone or computer, and by email if you want them.",
+      "See how many messages and notifications are waiting, mark them all read at once, and filter them by app or unread.",
       "Send a link, some text or a photo from your phone's Share button, then save it as a note, a short link, a file or the start of an expense.",
       "Choose a light or dark look and your timezone.",
       "Create keys so your own scripts or smart-home tools can use your account.",
@@ -158,6 +159,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Make a recipe public, or keep it private.",
       "Browse public recipes from other people and make your own copy to edit.",
       "Search, filter and sort your recipes.",
+      "Copy a link to a public recipe from your list, and search other people's public recipes too.",
       "See every paint a recipe needs in one list, which works as a shopping list.",
     ],
     tips: [
@@ -179,6 +181,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See how many times a shared file or folder was downloaded.",
       "Search your drive and filter by type or link status.",
       "Switch between list and grid view, and act on several items at once.",
+      "Sort your files by name, size or date.",
       "Rename, move, download and delete files and folders.",
     ],
     tips: [
@@ -229,6 +232,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See spending by category, by member and by month.",
       "Look back through the group's activity, including deleted expenses.",
       "Start an expense from a receipt photo shared from your phone.",
+      "Copy an expense to start a similar one.",
     ],
     tips: [
       {
@@ -266,6 +270,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See recurring charges that were found for you.",
       "Back up a book to a file and restore it.",
       "Start an item from a receipt photo shared from your phone.",
+      "Copy an item to start a similar one.",
     ],
     tips: [
       { text: "Import a bank CSV and let rules sort the items into categories for you.", link: "/internal/xenbudget" },
@@ -297,6 +302,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Postpone a routine by a day, a week or more.",
       "See each routine's history with its notes and photos.",
       "Pause, edit or delete a routine.",
+      "Search your routines, filter them by category, and copy one to start a similar one.",
     ],
     tips: [
       {
@@ -370,6 +376,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a note or a notebook with a link anyone can open.",
       "Set a reminder on a note and get a notification when it is due.",
       "Search and filter by type, label or notebook.",
+      "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
     ],
     tips: [
       { text: "Tick checklist items right from the board, without opening the note.", link: "/internal/xennote" },

@@ -67,6 +67,8 @@ interface ItemFormProps {
   book: XenBudgetBook;
   /** Present when editing; absent when adding. */
   item?: XenBudgetItem | null;
+  /** When adding: start from this item's details (a duplicate). The date starts as today. */
+  template?: XenBudgetItem | null;
   onSubmit: (input: CreateItemInput) => Promise<unknown>;
   isSubmitting: boolean;
   onDelete?: () => Promise<unknown>;
@@ -84,6 +86,7 @@ export default function ItemForm({
   onClose,
   book,
   item,
+  template,
   onSubmit,
   isSubmitting,
   onDelete,
@@ -139,32 +142,33 @@ export default function ItemForm({
       seeded.current = null;
       return;
     }
-    const key = item?._id ?? "new";
+    const src = item ?? template;
+    const key = item?._id ?? (template ? `copy-${template._id}` : "new");
     if (seeded.current === key) return;
     seeded.current = key;
     setStep(0);
-    if (item) {
-      setType(item.type);
-      setAmount(String(item.amount));
-      setCurrency(item.currency);
-      setDate(dateOnlyToLocal(item.date));
-      setDescription(item.description);
-      setNotes(item.notes || "");
+    if (src) {
+      setType(src.type);
+      setAmount(String(src.amount));
+      setCurrency(src.currency);
+      setDate(item ? dateOnlyToLocal(src.date) : new Date());
+      setDescription(src.description);
+      setNotes(src.notes || "");
       // Minus the derived one: it isn't editable here, and leaving it in the value
       // would render a chip whose delete button the server would undo.
-      setFlags((item.flags || []).filter((f) => f !== FLAG_UNCATEGORISED));
-      setCategorySplitType(item.category_split_type || "equal");
+      setFlags((src.flags || []).filter((f) => f !== FLAG_UNCATEGORISED));
+      setCategorySplitType(src.category_split_type || "equal");
       setCategories(
-        (item.categories || []).map((c) => ({
+        (src.categories || []).map((c) => ({
           key: c.name,
-          value: item.category_split_type === "percent" ? String(c.percentage ?? "") : String(c.amount ?? ""),
+          value: src.category_split_type === "percent" ? String(c.percentage ?? "") : String(c.amount ?? ""),
         })),
       );
-      setShareType(item.share_type);
+      setShareType(src.share_type);
       setShares(
-        item.shares.map((s) => ({
+        src.shares.map((s) => ({
           key: s.user_id,
-          value: item.share_type === "percent" ? String(s.percentage ?? "") : String(s.amount ?? ""),
+          value: src.share_type === "percent" ? String(s.percentage ?? "") : String(s.amount ?? ""),
         })),
       );
     } else {
@@ -182,7 +186,7 @@ export default function ItemForm({
       setShares(user ? [{ key: user.id, value: "" }] : []);
       setSkipRules(false);
     }
-  }, [open, item, book, user]);
+  }, [open, item, template, book, user]);
 
   // "Uncategorised" is derived from the categories, not chosen - offering it here would
   // be a control that does nothing, since the server recomputes it on save. Anything
@@ -337,11 +341,13 @@ export default function ItemForm({
               placeholder={type === "income" ? "Paycheque" : "Groceries"}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              helperText={description.trim() ? undefined : "Say what it was for to continue."}
             />
 
             <TextField
               fullWidth
               label="Amount"
+              helperText={numericAmount > 0 ? undefined : "Enter an amount above 0 to continue."}
               value={amount}
               onChange={(e) => {
                 const clean = sanitizeAmount(e.target.value);

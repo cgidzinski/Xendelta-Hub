@@ -23,6 +23,8 @@ import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenr
 interface Props {
   open: boolean;
   routine?: Routine | null;
+  /** When creating: start from this routine's name, category, notes, schedule and steps. */
+  template?: Routine | null;
   onClose: () => void;
   onSubmit: (input: RoutineInput) => Promise<void> | void;
 }
@@ -41,7 +43,7 @@ const toDayStartIso = (d: string) => new Date(`${d}T00:00:00`).toISOString();
 const toDate = (d: string) => (d ? new Date(`${d}T12:00:00`) : null);
 const fromDate = (d: Date | null) => (d && isValid(d) ? format(d, "yyyy-MM-dd") : "");
 
-export default function RoutineDialog({ open, routine, onClose, onSubmit }: Props) {
+export default function RoutineDialog({ open, routine, template, onClose, onSubmit }: Props) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [notes, setNotes] = useState("");
@@ -57,16 +59,17 @@ export default function RoutineDialog({ open, routine, onClose, onSubmit }: Prop
 
   useEffect(() => {
     if (!open) return;
-    setName(routine?.name ?? "");
-    setCategory(routine?.category ?? "");
-    setNotes(routine?.notes ?? "");
-    setEvery(String(routine?.interval.every ?? 3));
-    setUnit(routine?.interval.unit ?? "months");
+    const from = routine ?? template;
+    setName(routine ? routine.name : template ? `${template.name} (copy)` : "");
+    setCategory(from?.category ?? "");
+    setNotes(from?.notes ?? "");
+    setEvery(String(from?.interval.every ?? 3));
+    setUnit(from?.interval.unit ?? "months");
     setStartDate(format(new Date(), "yyyy-MM-dd"));
     setAlreadyDone(true);
     setDueAt(routine ? format(new Date(routine.due_at), "yyyy-MM-dd") : "");
-    setSteps((routine?.checklist ?? []).map((c, i) => ({ key: i, _id: c._id, text: c.text })));
-  }, [open, routine]);
+    setSteps((from?.checklist ?? []).map((c, i) => ({ key: i, _id: routine ? c._id : undefined, text: c.text })));
+  }, [open, routine, template]);
 
   const everyNum = Number(every);
   const today = format(new Date(), "yyyy-MM-dd");
