@@ -29,11 +29,13 @@ const metered = (over: Partial<CostCenter> = {}): CostCenter => ({
 });
 
 describe("the registry", () => {
-  it("meters storage, calls and recipe scans, at the provider cost plus the margin", () => {
-    expect(COST_CENTERS.filter((c) => c.status === "metered").map((c) => c.id)).toEqual([
+  it("meters every center now: the three people pay for, and the three the house pays", () => {
+    expect(COST_CENTERS.every((c) => c.status === "metered")).toBe(true);
+    expect(COST_CENTERS.filter((c) => c.payer === "account").map((c) => c.id)).toEqual([
       "storage",
       "calls",
       "recipe_scans",
+      "receipt_scans",
     ]);
     expect(everythingFree()).toBe(false);
     expect(communitiesBilled()).toBe(true);
@@ -41,6 +43,7 @@ describe("the registry", () => {
     expect(billedRate(COST_CENTERS.find((c) => c.id === "storage")!)).toBe(18.75);
     expect(billedRate(COST_CENTERS.find((c) => c.id === "calls")!)).toBe(62.5); // $0.05 per GB
     expect(billedRate(COST_CENTERS.find((c) => c.id === "recipe_scans")!)).toBe(2.5);
+    expect(billedRate(COST_CENTERS.find((c) => c.id === "receipt_scans")!)).toBe(2.5);
     for (const c of COST_CENTERS.filter((c) => c.payer === "house")) expect(billedRate(c)).toBe(0);
     expect(COST_CENTERS.some((c) => (c.id as string) === "downloads")).toBe(false);
   });
@@ -119,11 +122,12 @@ describe("rounding", () => {
 
   it("shows one decimal, rounded up", () => {
     expect(formatGems(0)).toBe("0 gems");
-    expect(formatGems(0.04)).toBe("less than 0.1 gems");
-    expect(formatGems(0.1 + 0.2)).toBe("0.3 gems");
-    expect(formatGems(0.31)).toBe("0.4 gems");
+    expect(formatGems(0.04)).toBe("< 1 gem"); // a sliver
+    expect(formatGems(0.1)).toBe("1 gem"); // anything else under one gem is one
+    expect(formatGems(0.99)).toBe("1 gem");
     expect(formatGems(1)).toBe("1 gem");
-    expect(formatGems(1234.56)).toBe("1,234.6 gems");
+    expect(formatGems(1.01)).toBe("2 gems"); // whole gems, rounded up
+    expect(formatGems(1234.56)).toBe("1,235 gems");
   });
 });
 

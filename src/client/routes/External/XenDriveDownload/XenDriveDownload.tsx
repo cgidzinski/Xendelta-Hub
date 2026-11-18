@@ -15,6 +15,8 @@ import DownloadIcon from "@mui/icons-material/Download";
 import LockIcon from "@mui/icons-material/Lock";
 import { useTitle } from "../../../hooks/useTitle";
 import { formatDistanceToNow } from "date-fns";
+import { formatFileSize } from "../../../utils/fileUtils";
+import PublicJoinCard from "../components/PublicJoinCard";
 
 interface FileInfo {
   filename: string;
@@ -188,8 +190,13 @@ export default function XenDriveDownload() {
           <Box sx={{ textAlign: "center", mb: 3 }}>
             <LockIcon sx={{ fontSize: 48, color: "primary.main", mb: 2 }} />
             <Typography variant="h5" component="h1" gutterBottom>
-              {fileInfo?.isExpired ? "Link Expired" : "Download File"}
+              {fileInfo?.isExpired ? "Link Expired" : fileInfo?.filename || "Download File"}
             </Typography>
+            {!fileInfo?.isExpired && fileInfo && fileInfo.size > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {formatFileSize(fileInfo.size)}
+              </Typography>
+            )}
             {fileInfo?.isExpired && (
               <Alert severity="error" sx={{ mt: 2 }}>
                 This download link has expired.
@@ -198,7 +205,13 @@ export default function XenDriveDownload() {
           </Box>
 
           {!fileInfo?.isExpired && (
-            <Box>
+            <Box
+              component="form"
+              onSubmit={(e: React.FormEvent) => {
+                e.preventDefault();
+                if (!isDownloading && !(fileInfo?.requiresPassword && !password)) handleDownload();
+              }}
+            >
               {fileInfo?.expiry && (
                 <Alert severity="info" sx={{ mb: 2 }}>
                   This file expires in {formatDistanceToNow(new Date(fileInfo.expiry), { addSuffix: true })}.
@@ -223,10 +236,10 @@ export default function XenDriveDownload() {
                 </>
               )}
               <Button
+                type="submit"
                 variant="contained"
                 fullWidth
                 startIcon={<DownloadIcon />}
-                onClick={() => handleDownload()}
                 disabled={isDownloading || (fileInfo?.requiresPassword && !password)}
                 size="large"
               >
@@ -236,6 +249,7 @@ export default function XenDriveDownload() {
           )}
         </CardContent>
       </Card>
+      <PublicJoinCard app="xendrive" />
     </Container>
   );
 }

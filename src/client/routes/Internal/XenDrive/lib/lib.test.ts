@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fileKindOf, isPreviewable } from "./fileKind";
 import { expiryLabel, folderContentsLabel, formatModified, itemCountLabel } from "./driveFormat";
-import { applyFilters, filtersActive, matchesLink } from "./driveFilters";
+import { applyFilters, filtersActive, matchesLink, sortFiles } from "./driveFilters";
 import { nextWaiting, summarize, uploadReducer, type UploadItem } from "./uploadQueue";
 import type { XenDriveFile } from "../../../../types/XenDriveFile";
 
@@ -158,5 +158,21 @@ describe("upload queue", () => {
 
   it("an empty tray summarises to nothing running", () => {
     expect(summarize([])).toMatchObject({ total: 0, running: false, percent: 0 });
+  });
+});
+
+describe("sortFiles", () => {
+  const f = (name: string, size: number, createdAt: string) => ({ name, size, createdAt }) as XenDriveFile;
+  const list = [f("b10", 5, "2026-01-02"), f("a", 50, "2026-01-03"), f("b2", 1, "2026-01-01")];
+  const names = (sort: Parameters<typeof sortFiles>[1]) => sortFiles(list, sort).map((x) => x.name);
+
+  it("orders by date, name (numbers read as numbers) and size, without changing the input", () => {
+    expect(names("newest")).toEqual(["a", "b10", "b2"]);
+    expect(names("oldest")).toEqual(["b2", "b10", "a"]);
+    expect(names("name")).toEqual(["a", "b2", "b10"]);
+    expect(names("name-desc")).toEqual(["b10", "b2", "a"]);
+    expect(names("largest")).toEqual(["a", "b10", "b2"]);
+    expect(names("smallest")).toEqual(["b2", "b10", "a"]);
+    expect(list.map((x) => x.name)).toEqual(["b10", "a", "b2"]);
   });
 });

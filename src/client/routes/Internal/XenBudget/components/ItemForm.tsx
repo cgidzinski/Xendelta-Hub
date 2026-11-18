@@ -30,6 +30,7 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
 import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
 import { useXenBudgetItemImageUrls } from "../../../../hooks/xenbudget/useItems";
+import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useAuth } from "../../../../contexts/AuthContext";
 import type {
   XenBudgetBook,
@@ -43,6 +44,9 @@ import LabelPicker from "./LabelPicker";
 import { getCurrencySymbol } from "../currency";
 import { dateOnlyToLocal } from "../../../../utils/dateGrouping";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import { useReceiptScanEnabled, type ScannedReceipt } from "../../../../hooks/xensplit/useReceiptScan";
+import ReceiptFillDialog from "./ReceiptFillDialog";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
@@ -63,6 +67,8 @@ interface ItemFormProps {
   book: XenBudgetBook;
   /** Present when editing; absent when adding. */
   item?: XenBudgetItem | null;
+  /** When adding: start from this item's details (a duplicate). The date starts as today. */
+  template?: XenBudgetItem | null;
   onSubmit: (input: CreateItemInput) => Promise<unknown>;
   isSubmitting: boolean;
   onDelete?: () => Promise<unknown>;
@@ -80,6 +86,7 @@ export default function ItemForm({
   onClose,
   book,
   item,
+  template,
   onSubmit,
   isSubmitting,
   onDelete,
@@ -90,9 +97,19 @@ export default function ItemForm({
   isDeletingImage,
 }: ItemFormProps) {
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const isMobile = useMediaQuery("(max-width:600px)");
   const [step, setStep] = useState(0);
+  const receiptScanEnabled = useReceiptScanEnabled();
+  const [scanOpen, setScanOpen] = useState(false);
+  // Fill the description (the shop), amount (the total) and date from a read receipt.
+  const applyReceipt = (r: ScannedReceipt) => {
+    if (r.merchant) setDescription(r.merchant);
+    if (r.total > 0) setAmount(String(r.total));
+    if (r.date) setDate(new Date(`${r.date}T12:00:00`));
+    setScanOpen(false);
+  };
   const [type, setType] = useState<ItemType>("expense");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState(book.default_currency);
@@ -125,32 +142,33 @@ export default function ItemForm({
       seeded.current = null;
       return;
     }
-    const key = item?._id ?? "new";
+    const src = item ?? template;
+    const key = item?._id ?? (template ? `copy-${template._id}` : "new");
     if (seeded.current === key) return;
     seeded.current = key;
     setStep(0);
-    if (item) {
-      setType(item.type);
-      setAmount(String(item.amount));
-      setCurrency(item.currency);
-      setDate(dateOnlyToLocal(item.date));
-      setDescription(item.description);
-      setNotes(item.notes || "");
+    if (src) {
+      setType(src.type);
+      setAmount(String(src.amount));
+      setCurrency(src.currency);
+      setDate(item ? dateOnlyToLocal(src.date) : new Date());
+      setDescription(src.description);
+      setNotes(src.notes || "");
       // Minus the derived one: it isn't editable here, and leaving it in the value
       // would render a chip whose delete button the server would undo.
-      setFlags((item.flags || []).filter((f) => f !== FLAG_UNCATEGORISED));
-      setCategorySplitType(item.category_split_type || "equal");
+      setFlags((src.flags || []).filter((f) => f !== FLAG_UNCATEGORISED));
+      setCategorySplitType(src.category_split_type || "equal");
       setCategories(
-        (item.categories || []).map((c) => ({
+        (src.categories || []).map((c) => ({
           key: c.name,
-          value: item.category_split_type === "percent" ? String(c.percentage ?? "") : String(c.amount ?? ""),
+          value: src.category_split_type === "percent" ? String(c.percentage ?? "") : String(c.amount ?? ""),
         })),
       );
-      setShareType(item.share_type);
+      setShareType(src.share_type);
       setShares(
-        item.shares.map((s) => ({
+        src.shares.map((s) => ({
           key: s.user_id,
-          value: item.share_type === "percent" ? String(s.percentage ?? "") : String(s.amount ?? ""),
+          value: src.share_type === "percent" ? String(s.percentage ?? "") : String(s.amount ?? ""),
         })),
       );
     } else {
@@ -168,7 +186,7 @@ export default function ItemForm({
       setShares(user ? [{ key: user.id, value: "" }] : []);
       setSkipRules(false);
     }
-  }, [open, item, book, user]);
+  }, [open, item, template, book, user]);
 
   // "Uncategorised" is derived from the categories, not chosen - offering it here would
   // be a control that does nothing, since the server recomputes it on save. Anything
@@ -248,8 +266,14 @@ export default function ItemForm({
 
   const handleDelete = async () => {
     if (!onDelete) return;
+    const ok = await confirm({
+      title: "Delete this item?",
+      message: "It's removed from the book and its photos are deleted. This can't be undone.",
+    });
+    if (!ok) return;
     try {
       await onDelete();
+      enqueueSnackbar("Item deleted", { variant: "success" });
       onClose();
     } catch (e) {
       enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete item", { variant: "error" });
@@ -317,11 +341,13 @@ export default function ItemForm({
               placeholder={type === "income" ? "Paycheque" : "Groceries"}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              helperText={description.trim() ? undefined : "Say what it was for to continue."}
             />
 
             <TextField
               fullWidth
               label="Amount"
+              helperText={numericAmount > 0 ? undefined : "Enter an amount above 0 to continue."}
               value={amount}
               onChange={(e) => {
                 const clean = sanitizeAmount(e.target.value);
@@ -519,18 +545,37 @@ export default function ItemForm({
 
                 {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
               </Box>
+              {receiptScanEnabled && images.length > 0 && (
+                <Button size="small" startIcon={<ReceiptLongIcon />} sx={{ mt: 1 }} onClick={() => setScanOpen(true)}>
+                  Read receipt from photo
+                </Button>
+              )}
+              <ReceiptFillDialog
+                open={scanOpen}
+                photo={images[0] ?? null}
+                currency={currency}
+                onClose={() => setScanOpen(false)}
+                onApply={applyReceipt}
+              />
             </Box>
           </Stack>
         )}
       </DialogContent>
       <DialogActions>
         <Stack direction="row" spacing={1}>
+          {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
+          {/* Kept apart from Back so a thumb aiming for Back doesn't land on Delete. */}
           {item && onDelete && (
-            <Button variant="outlined" color="error" disabled={isDeleting} onClick={handleDelete}>
+            <Button
+              variant="outlined"
+              color="error"
+              disabled={isDeleting}
+              onClick={handleDelete}
+              sx={{ ml: step > 0 ? 3 : 0 }}
+            >
               Delete
             </Button>
           )}
-          {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
         </Stack>
         {(item || step === STEPS.length - 1) && (
           <Button variant="outlined" disabled={!canSubmit || isSubmitting} onClick={handleSubmit} sx={{ flexGrow: 1 }}>

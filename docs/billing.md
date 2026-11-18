@@ -58,6 +58,7 @@ Downloads and uploads are free on R2, so there is no downloads center.
 | `storage` | byte-days | GB-month | the person or community | #370 |
 | `calls` | bytes (SFU and TURN are one cost) | GB | the people in the call (split evenly), or the community for a voice channel | #371 |
 | `recipe_scans` | scans | scan | the person | #372 |
+| `receipt_scans` | scans | scan | the person | #396 |
 | `public_assets` | byte-days | GB-month | house | #373 |
 | `backups` | byte-days | GB-month | house | #373 |
 | `email` | emails | email | house | #373 |
@@ -101,8 +102,16 @@ when it is the community). Anyone who can still pay is never interrupted.
 
 ### Recipe scans (`routes/xenkitchen.ts`, #372)
 
-A scan is **2.5 gems** (2 at cost, a few photos of one recipe) on the month's bill, counted once the model has run whether or
+A scan is **2.5 gems** (the recipe import dialog says so before you read a photo) (2 at cost, a few photos of one recipe) on the month's bill, counted once the model has run whether or
 not it found a recipe. It is refused first (402) when the free allowance is used up and the gems can't cover it.
+
+### Receipt scans (`routes/xensplit.ts`, #396)
+
+`POST /api/xensplit/scan-receipt` reads one photo of a receipt into lines, tax, tip and total (`readReceiptFromImage` in
+`ai/vision.ts`, parsed by `utils/receiptImport.ts`). It is billed exactly like a recipe scan: **2.5 gems**, counted once the
+model has run whether or not it found any lines, and refused first (402) when the allowance is used up. Nothing is saved: the
+expense form shows the lines for a person to assign (`ReceiptScanDialog`, `receiptSplit.ts`). XenBudget uses the same
+route: `ReceiptFillDialog` reads one photo and fills an item's description (the shop), amount (the total) and date.
 
 ### Free allowance
 
@@ -113,8 +122,14 @@ while the hub is small: most accounts will never reach it. Change them in `src/s
 
 Avatars, group pictures and blog images are the house's, and not limited. Custom emoji are paid by where they were added: the
 community's fund for a community, the person who added it for a group chat (a group has no account of its own). Recipaint images
-are paid by the uploader. The house's own costs (email, backups, request fees) are entered by an admin from the invoices
-(`docs/billing.md` > Admin billing report).
+are paid by the uploader. The house's own costs are **measured and shown, never billed**:
+- `public_assets`: the bytes of the files the house pays for (avatars, group pictures, blog images), added daily by the same storage meter as byte-days.
+- `backups`: the bytes of the database backups in the private bucket, the same way.
+- `email`: one for each email sent (password resets and notifications), counted when it goes out.
+
+Each has a cost rate (R2: 15 gems per GB-month; email: 0.4 gems), so the admin report shows what they cost at the cost rate beside what
+the provider actually charged (entered from the invoices). Thumbnails, previews and request fees aren't measured: they are small, and
+the invoice entry catches the difference.
 
 ### The storage meter (`src/server/billing/storageMeter.ts`)
 

@@ -82,6 +82,10 @@ const XenLinkRedirect = lazyPage(() => import("./routes/External/XenLinkRedirect
 // Routes - XenKitchen
 const XenKitchenPublic = lazyPage(() => import("./routes/External/XenKitchenPublic/XenKitchenPublic"));
 const XenKitchenPublicBook = lazyPage(() => import("./routes/External/XenKitchenPublic/XenKitchenPublicBook"));
+const XenKitchenPublicBookPrint = lazyPage(
+  () => import("./routes/External/XenKitchenPublic/XenKitchenPublicBookPrint"),
+);
+const XenKitchenBookPrint = lazyPage(() => import("./routes/Internal/XenKitchen/BookPrint"));
 // Routes - XenBudget
 // Routes - Admin
 const AdminLayout = lazyPage(() => import("./routes/Admin/AdminLayout"));
@@ -176,7 +180,18 @@ const router = createBrowserRouter(
       <Route path="/recipaint/:id" element={<RecipaintPublic />} errorElement={<ErrorPage />} />
       <Route path="/k/:token" element={<XenKitchenPublic />} errorElement={<ErrorPage />} />
       <Route path="/k/b/:token" element={<XenKitchenPublicBook />} errorElement={<ErrorPage />} />
+      <Route path="/k/b/:token/print" element={<XenKitchenPublicBookPrint />} errorElement={<ErrorPage />} />
       <Route path="/k/b/:token/:itemId" element={<XenKitchenPublic />} errorElement={<ErrorPage />} />
+      {/* A cookbook to print: on its own page, without the app's menus, so they stay out of the PDF */}
+      <Route
+        path="/internal/xenkitchen/books/:bookId/print"
+        element={
+          <ProtectedRoute>
+            <XenKitchenBookPrint />
+          </ProtectedRoute>
+        }
+        errorElement={<ErrorPage />}
+      />
       {/* Internal routes - require authentication */}
       <Route
         path="/internal"

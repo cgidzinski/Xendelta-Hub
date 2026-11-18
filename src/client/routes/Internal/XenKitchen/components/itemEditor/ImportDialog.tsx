@@ -22,6 +22,10 @@ import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
 import { MAX_RECIPE_SCAN_PHOTOS } from "@shared/xenkitchen/kitchen";
+import { COST_CENTERS, billedRate, formatGems } from "@shared/billing";
+
+/** What reading one recipe photo (or a few pages of one recipe) costs, from the live price. */
+const SCAN_GEMS = billedRate(COST_CENTERS.find((c) => c.id === "recipe_scans")!);
 import ResponsiveDialog from "../../../../../components/ui/ResponsiveDialog";
 import { RADIUS } from "../../../../../theme";
 import {
@@ -60,6 +64,8 @@ export function ImportDialog({ open, mode = "url", initialUrl, onClose, onImport
   const [photos, setPhotos] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  // The camera itself, for phones: an input with `capture` goes straight to the camera instead of the file picker.
+  const cameraInput = useRef<HTMLInputElement>(null);
 
   const error = (importUrl.error ?? importPhoto.error) as (Error & { message: string }) | null;
   const busy = importUrl.isPending || importPhoto.isPending;
@@ -251,7 +257,8 @@ export function ImportDialog({ open, mode = "url", initialUrl, onClose, onImport
         <Stack spacing={1.5}>
           <Typography variant="body2" color="text.secondary">
             A recipe card or a screenshot, or up to {MAX_RECIPE_SCAN_PHOTOS} pages of a cookbook in order. The words are
-            read off them for you to check before saving.
+            read off them for you to check before saving. Reading uses about {formatGems(SCAN_GEMS)} from your free
+            allowance for the month.
           </Typography>
           <Box
             onDragOver={(e) => {
@@ -321,41 +328,78 @@ export function ImportDialog({ open, mode = "url", initialUrl, onClose, onImport
               </Box>
             ))}
             {photos.length < MAX_RECIPE_SCAN_PHOTOS && (
-              <Box
-                role="button"
-                tabIndex={0}
-                aria-label={photos.length ? "Add another page" : "Choose or take a photo"}
-                onClick={() => !busy && fileInput.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    if (!busy) fileInput.current?.click();
-                  }
-                }}
-                sx={{
-                  ...tile,
-                  // With nothing chosen yet, the add tile is the whole drop area.
-                  ...(photos.length ? {} : { gridColumn: "1 / -1", aspectRatio: "auto", minHeight: 160 }),
-                  border: "2px dashed",
-                  borderColor: "divider",
-                  cursor: busy ? "default" : "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 0.5,
-                  px: 1,
-                  textAlign: "center",
-                  color: "text.secondary",
-                  "&:hover, &:focus-visible": busy ? {} : { borderColor: "primary.main", color: "primary.main" },
-                  outline: "none",
-                }}
-              >
-                <AddPhotoAlternateOutlinedIcon fontSize={photos.length ? "medium" : "large"} />
-                <Typography variant="caption">
-                  {photos.length ? "Add a page" : "Choose or take photos, or drop them here"}
-                </Typography>
-              </Box>
+              <>
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={photos.length ? "Add another page" : "Choose or take a photo"}
+                  onClick={() => !busy && fileInput.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      if (!busy) fileInput.current?.click();
+                    }
+                  }}
+                  sx={{
+                    ...tile,
+                    // With nothing chosen yet, the add tile is the whole drop area.
+                    // On a phone the camera tile takes the right half of the row; elsewhere there is no camera tile.
+                    ...(photos.length
+                      ? {}
+                      : { gridColumn: { xs: "1 / 3", md: "1 / -1" }, aspectRatio: "auto", minHeight: 160 }),
+                    border: "2px dashed",
+                    borderColor: "divider",
+                    cursor: busy ? "default" : "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 0.5,
+                    px: 1,
+                    textAlign: "center",
+                    color: "text.secondary",
+                    "&:hover, &:focus-visible": busy ? {} : { borderColor: "primary.main", color: "primary.main" },
+                    outline: "none",
+                  }}
+                >
+                  <AddPhotoAlternateOutlinedIcon fontSize={photos.length ? "medium" : "large"} />
+                  <Typography variant="caption">
+                    {photos.length ? "Add a page" : "Choose photos, or drop them here"}
+                  </Typography>
+                </Box>
+                <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Take a photo"
+                  onClick={() => !busy && cameraInput.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      if (!busy) cameraInput.current?.click();
+                    }
+                  }}
+                  sx={{
+                    ...tile,
+                    ...(photos.length ? {} : { gridColumn: "3 / -1", aspectRatio: "auto", minHeight: 160 }),
+                    border: "2px dashed",
+                    borderColor: "divider",
+                    cursor: busy ? "default" : "pointer",
+                    display: { xs: "flex", md: "none" },
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 0.5,
+                    px: 1,
+                    textAlign: "center",
+                    color: "text.secondary",
+                    "&:hover, &:focus-visible": busy ? {} : { borderColor: "primary.main", color: "primary.main" },
+                    outline: "none",
+                  }}
+                >
+                  <PhotoCameraOutlinedIcon fontSize={photos.length ? "medium" : "large"} />
+                  <Typography variant="caption">Take a photo</Typography>
+                </Box>
+              </>
             )}
           </Box>
           <input
@@ -364,6 +408,17 @@ export function ImportDialog({ open, mode = "url", initialUrl, onClose, onImport
             hidden
             multiple
             accept="image/*"
+            onChange={(e) => {
+              addPhotos(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={cameraInput}
+            type="file"
+            hidden
+            accept="image/*"
+            capture="environment"
             onChange={(e) => {
               addPhotos(e.target.files);
               e.target.value = "";

@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { AppError } from "../utils/http";
 import { recipeFromParts, type ImportedRecipe, type RecipeParts } from "../utils/recipeImport";
+import { receiptFromParts, type ImportedReceipt } from "../utils/receiptImport";
 
 /**
  * Reading a recipe out of a photo (a recipe card, a cookbook page, a screenshot), through Cloudflare Workers AI.
@@ -84,10 +85,10 @@ function plainText(value: unknown): string {
   return typeof choice?.message?.content === "string" ? choice.message.content : "";
 }
 
-async function runModel(body: Record<string, unknown>): Promise<unknown> {
+export async function runModel(body: Record<string, unknown>): Promise<unknown> {
   const account = process.env.CLOUDFLARE_AI_ACCOUNT_ID;
   const token = process.env.CLOUDFLARE_AI_TOKEN;
-  if (!account || !token) throw new AppError(503, "Reading a recipe from a photo isn't set up here");
+  if (!account || !token) throw new AppError(503, "Reading a photo isn't set up here");
 
   const model = process.env.CLOUDFLARE_AI_VISION_MODEL || DEFAULT_MODEL;
   let response: Response;
@@ -100,12 +101,12 @@ async function runModel(body: Record<string, unknown>): Promise<unknown> {
     });
   } catch (e) {
     // Only the connection can be at fault: the address carries the account id, never the token.
-    console.error("Recipe scan failed to reach Workers AI:", e instanceof Error ? e.name : "error");
-    throw new AppError(502, "Couldn't reach the recipe reader. Try again in a moment.");
+    console.error("Photo scan failed to reach Workers AI:", e instanceof Error ? e.name : "error");
+    throw new AppError(502, "Couldn't reach the photo reader. Try again in a moment.");
   }
   if (!response.ok) {
     console.error(`Workers AI answered ${response.status} for ${model}`);
-    throw new AppError(502, "The recipe reader is busy. Try again in a moment.");
+    throw new AppError(502, "The photo reader is busy. Try again in a moment.");
   }
 
   const payload = (await response.json().catch(() => null)) as { result?: unknown } | null;
@@ -124,8 +125,8 @@ interface PhotoParts {
   wordsOnly: boolean;
 }
 
-/** The fields one photo gives, or null when the model saw nothing in it. */
-async function partsFromPhoto({ buffer, mimetype }: RecipePhoto): Promise<PhotoParts | null> {
+/** A photo shrunk and wrapped as the `image_url` part the model reads. */
+async function modelImage({ buffer, mimetype }: RecipePhoto) {
   if (!mimetype.startsWith("image/")) throw new AppError(400, "That file isn't a picture");
 
   // Downscaled and re-encoded first: the model reads text just as well from this, and this is what the cost is based on.
@@ -140,7 +141,12 @@ async function partsFromPhoto({ buffer, mimetype }: RecipePhoto): Promise<PhotoP
     // Most likely a HEIC this server can't decode. Safari converts to JPEG on upload, so this is rare.
     throw new AppError(400, "Couldn't read that picture. Try a JPEG or PNG.");
   }
-  const image = { type: "image_url", image_url: { url: `data:image/webp;base64,${small.toString("base64")}` } };
+  return { type: "image_url", image_url: { url: `data:image/webp;base64,${small.toString("base64")}` } };
+}
+
+/** The fields one photo gives, or null when the model saw nothing in it. */
+async function partsFromPhoto(photo: RecipePhoto): Promise<PhotoParts | null> {
+  const image = await modelImage(photo);
 
   const structured = await runModel({
     messages: [{ role: "user", content: [{ type: "text", text: STRUCTURE_PROMPT }, image] }],
@@ -199,4 +205,43 @@ export async function readRecipeFromImages(photos: RecipePhoto[]): Promise<Impor
   const pages = (await Promise.all(photos.map(partsFromPhoto))).filter((p): p is PhotoParts => p !== null);
   if (pages.length === 0) return null;
   return recipeFromParts(mergePhotoParts(pages));
+}
+
+const RECEIPT_SCHEMA = {
+  type: "object",
+  properties: {
+    merchant: { type: "string" },
+    date: { type: "string" },
+    currency: { type: "string" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { name: { type: "string" }, amount: { type: "string" } },
+        required: ["name", "amount"],
+      },
+    },
+    tax: { type: "string" },
+    tip: { type: "string" },
+    total: { type: "string" },
+  },
+  required: ["merchant", "date", "currency", "items", "tax", "tip", "total"],
+};
+
+const RECEIPT_PROMPT =
+  "This picture is a receipt. Copy it into JSON: merchant, date (YYYY-MM-DD), currency (a 3-letter code if shown), " +
+  "items (every purchased line as a name and its price, as printed), tax, tip and total. Do not list subtotal, tax, " +
+  "tip, total, change or payment lines as items. Use only what the picture says: an empty string when something is " +
+  "missing. Do not invent items or prices.";
+
+/** A receipt read from a photo of it, or null when the photo holds none. Nothing is saved. */
+export async function readReceiptFromImage(photo: RecipePhoto): Promise<ImportedReceipt | null> {
+  const image = await modelImage(photo);
+  const answer = await runModel({
+    messages: [{ role: "user", content: [{ type: "text", text: RECEIPT_PROMPT }, image] }],
+    guided_json: RECEIPT_SCHEMA,
+    max_tokens: 2000,
+    temperature: 0.1,
+  });
+  return receiptFromParts(jsonObject(answer));
 }

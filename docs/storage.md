@@ -28,6 +28,7 @@ The buckets are laid out so they can be audited by folder: one folder per app, t
 | private | `xenroutine/<routineId>/` | "done" photos |
 | private | `xennote/<noteId>/` | note photos (per note: a note can move between notebooks) |
 | private | `xenkitchen/<itemId>/` | recipe photos (per recipe: a recipe can move between books) |
+| private | `xenkitchen-book/<bookId>/` | a recipe book's cover picture (one per book) |
 | private | `thumbs/<path>.webp` | the ~320 px WebP beside any private file that gets one (`utils/xendriveThumbs.ts`) |
 | private | `db-backups/` | database backups |
 | public | `avatar/`, `emoji/<scope>/`, `blog-assets/`, `recipaint-assets/` (+ `thumbs/`), `xensplit-group-images/` | public images |

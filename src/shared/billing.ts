@@ -1,7 +1,7 @@
 // Gem billing (docs/billing.md): every cost center, what it costs, and how a month's usage becomes a bill.
 //
 // A center starts free (rate 0). Each one gets its rules and rate in its own discussion (#370 Storage, #371 Calls,
-// #372 Recipe scanning, #373 House costs) and is then switched on here (storage, calls and recipe scans are on). Usage is stored as whole units (bytes,
+// #372 Recipe scanning, #373 House costs) and is then switched on here (storage, calls, recipe scans and receipt scans are on). Usage is stored as whole units (bytes,
 // byte-days, scans); gems are worked out from them, so nothing drifts from adding up tiny fractions.
 //
 // Not cost centers, ever: text chat, the database and server CPU. The hub is self-hosted, so they cost nothing per user.
@@ -75,15 +75,29 @@ export const COST_CENTERS = [
     provider: "cloudflare_ai",
   },
   {
+    id: "receipt_scans",
+    label: "Receipt scans",
+    description: "Receipts read from a photo in XenSplit.",
+    unit: "scan",
+    displayUnit: "scan",
+    unitsPerDisplayUnit: 1,
+    // The same Workers AI vision model as recipe scans, but one photo and a short answer: priced the same, to keep it simple.
+    costRate: 2,
+    payer: "account",
+    status: "metered",
+    provider: "cloudflare_ai",
+  },
+  {
     id: "public_assets",
     label: "Pictures and emoji",
     description: "Profile pictures, group pictures, custom emoji and other public images.",
     unit: "byte_day",
     displayUnit: "GB-month",
     unitsPerDisplayUnit: GB * DAYS_PER_MONTH,
-    costRate: 0,
+    // Cloudflare R2, like any stored file: $0.015 per GB-month. The house pays it; nobody is billed.
+    costRate: 15,
     payer: "house",
-    status: "free",
+    status: "metered",
     provider: "cloud_storage",
   },
   {
@@ -93,9 +107,10 @@ export const COST_CENTERS = [
     unit: "byte_day",
     displayUnit: "GB-month",
     unitsPerDisplayUnit: GB * DAYS_PER_MONTH,
-    costRate: 0,
+    // The same R2 storage cost, for the database backups. The house pays it.
+    costRate: 15,
     payer: "house",
-    status: "free",
+    status: "metered",
     provider: "cloud_storage",
   },
   {
@@ -105,9 +120,10 @@ export const COST_CENTERS = [
     unit: "email",
     displayUnit: "email",
     unitsPerDisplayUnit: 1,
-    costRate: 0,
+    // Resend: about $0.0004 an email beyond its free plan. The house pays it.
+    costRate: 0.4,
     payer: "house",
-    status: "free",
+    status: "metered",
     provider: "resend",
   },
 ] as const satisfies readonly CostCenter[];
@@ -117,6 +133,9 @@ export type CostCenterId = (typeof COST_CENTERS)[number]["id"];
 export const COST_CENTER_IDS = COST_CENTERS.map((c) => c.id) as CostCenterId[];
 
 /** What we charge on top of the cost rate, so the hub covers its costs. */
+/** The longest note that can go with a gift of gems. */
+export const GIFT_NOTE_MAX = 140;
+
 export const BILLING_MARGIN = 1.25;
 
 /** Gems a person can use each month without paying. Taken off the whole bill; it doesn't roll over. */
@@ -237,17 +256,14 @@ export function ceilGemsTenth(gems: number): number {
 }
 
 /**
- * Gems for people to read: one decimal, rounded up ("0.4 gems"), "less than 0.1 gems" for a sliver, whole numbers
- * without a decimal ("3 gems").
+ * Gems for people to read, whole numbers rounded up: "3 gems". A sliver (under 0.1) is "< 1 gem" and anything else under
+ * one gem is "1 gem", so a bill never shows fractions.
  */
 export function formatGems(gems: number): string {
   if (gems <= EPSILON) return "0 gems";
-  if (gems < 0.1) return "less than 0.1 gems";
-  const rounded = ceilGemsTenth(gems);
-  const text = Number.isInteger(rounded)
-    ? rounded.toLocaleString("en-US")
-    : rounded.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return `${text} ${rounded === 1 ? "gem" : "gems"}`;
+  if (gems < 0.1) return "< 1 gem";
+  const whole = Math.max(1, Math.ceil(gems - EPSILON));
+  return `${whole.toLocaleString("en-US")} ${whole === 1 ? "gem" : "gems"}`;
 }
 
 /** Whole gems for people to read ("1 gem", "1,200 gems"). */

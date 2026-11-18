@@ -1,3 +1,5 @@
+import { HOUSE } from "../billing/ledger";
+import { recordUsage } from "../billing/usage";
 import { Resend } from "resend";
 import { BRAND_NAME } from "@shared/brand";
 
@@ -47,6 +49,7 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
       return { success: false, error };
     }
 
+    await recordUsage(HOUSE, "email", 1); // one email on the house's bill (billing/usage.ts)
     return { success: true };
   } catch (error) {
     return { success: false, error };
@@ -102,6 +105,7 @@ export async function sendNotificationEmail(data: NotificationEmailData): Promis
       return { success: false, error };
     }
 
+    await recordUsage(HOUSE, "email", 1); // one email on the house's bill (billing/usage.ts)
     return { success: true };
   } catch (error) {
     return { success: false, error };

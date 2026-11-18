@@ -22,8 +22,13 @@ import BillingSummary from "../../../components/billing/BillingSummary";
 import type { XenDriveFile, XenDriveFolder } from "../../../types/XenDriveFile";
 import {
   applyFilters,
+  DRIVE_SORTS,
   filtersActive,
+  isDriveSort,
   LINK_FILTERS,
+  sortFiles,
+  sortFolders,
+  type DriveSort,
   TYPE_FILTERS,
   type LinkFilter,
   type TypeFilter,
@@ -57,6 +62,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const [mode, setMode] = useLocalStorageState<DriveViewMode>("xendrive_view", "list", isViewMode);
   const [search, setSearch] = useState("");
   const q = useDeferredValue(search).trim();
+  const [sort, setSort] = useLocalStorageState<DriveSort>("xendrive_sort", "newest", isDriveSort);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [linkFilter, setLinkFilter] = useState<LinkFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -92,10 +98,13 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   }, [folderId, view, q]);
 
   const filters = useMemo(() => ({ type: typeFilter, link: linkFilter }), [typeFilter, linkFilter]);
-  const files = useMemo(() => applyFilters(data?.files ?? [], filters), [data?.files, filters]);
+  const files = useMemo(() => sortFiles(applyFilters(data?.files ?? [], filters), sort), [data?.files, filters, sort]);
   const filtered = filtersActive(filters);
   // A folder has no type or link status, so folders step aside while a filter is on
-  const folders = useMemo(() => (filtered ? [] : (data?.folders ?? [])), [filtered, data?.folders]);
+  const folders = useMemo(
+    () => (filtered ? [] : sortFolders(data?.folders ?? [], sort)),
+    [filtered, data?.folders, sort],
+  );
   const sharingFolder = data?.folders.find((f) => f._id === sharingFolderId) ?? null;
   const sharingFile = data?.files.find((f) => f._id === sharingFileId) ?? null;
 
@@ -325,6 +334,13 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
               ),
             },
           }}
+        />
+        <FilterSelect
+          label="Sort"
+          value={sort}
+          options={DRIVE_SORTS}
+          onChange={setSort}
+          sx={{ flex: { xs: "1 1 100%", sm: "1 1 0", md: "0 0 150px" } }}
         />
         <FilterSelect
           label="Type"

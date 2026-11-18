@@ -102,6 +102,7 @@ export default function BookDetail() {
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<XenBudgetItem | null>(null);
+  const [duplicating, setDuplicating] = useState<XenBudgetItem | null>(null);
   const [previewing, setPreviewing] = useState<XenBudgetItem | null>(null);
   const [addImages, setAddImages] = useState<File[]>([]);
   // Undefined lets the server pick (the book's default, or the only one present);
@@ -124,6 +125,7 @@ export default function BookDetail() {
   // A receipt photo shared from another app opens the new-item form with the photo attached.
   useSharedReceipt(!!book, MAX_RECEIPT_IMAGES, (images) => {
     setEditing(null);
+    setDuplicating(null);
     setAddImages(images);
     setFormOpen(true);
   });
@@ -141,11 +143,13 @@ export default function BookDetail() {
     onPeriodChange: handlePeriodChange,
     onAddItem: () => {
       setEditing(null);
+      setDuplicating(null);
       setAddImages([]);
       setFormOpen(true);
     },
     onEditItem: (item) => {
       setEditing(item);
+      setDuplicating(null);
       setFormOpen(true);
     },
     onPreviewItem: (item) => setPreviewing(item),
@@ -263,6 +267,7 @@ export default function BookDetail() {
         }}
         book={book}
         item={editing}
+        template={duplicating}
         onSubmit={handleSubmit}
         isSubmitting={isCreating || isUpdatingItem}
         onDelete={editing ? () => deleteItemAsync(editing._id) : undefined}
@@ -287,6 +292,14 @@ export default function BookDetail() {
         onEdit={(it) => {
           setPreviewing(null);
           setEditing(it);
+          setDuplicating(null);
+          setFormOpen(true);
+        }}
+        onDuplicate={(it) => {
+          setPreviewing(null);
+          setEditing(null);
+          setDuplicating(it);
+          setAddImages([]);
           setFormOpen(true);
         }}
         onRemoveFlag={handleRemoveFlag}

@@ -10,6 +10,8 @@ import { deleteFromStorage } from "./storageUtils";
 import { removeAppFiles, signedUrlsFor, thumbnailUrlsFor } from "./appFiles";
 
 export const XENKITCHEN_SOURCE = "xenkitchen";
+/** A recipe book's cover picture. The ref is the book, so the file lives in `xenkitchen-book/<bookId>/`. */
+export const XENKITCHEN_BOOK_SOURCE = "xenkitchen-book";
 
 const PHOTO_URL_MINUTES = 60;
 
@@ -48,6 +50,45 @@ registerDriveSource(XENKITCHEN_SOURCE, {
     );
   },
 });
+
+registerDriveSource(XENKITCHEN_BOOK_SOURCE, {
+  label: "XenKitchen covers",
+  // May this person change the cover? An editor of the book.
+  verify: async (userId, ref) => {
+    if (!Types.ObjectId.isValid(ref)) return false;
+    const book = await XenKitchenBook.findById(ref, "members").lean();
+    return !!book && canEdit(book, userId);
+  },
+  describe: async (userId, refs) => {
+    const valid = refs.filter((r) => Types.ObjectId.isValid(r));
+    const books = valid.length
+      ? await XenKitchenBook.find({ _id: { $in: valid }, "members.user_id": userId }, "name").lean()
+      : [];
+    const names = new Map(books.map((b) => [String(b._id), b.name]));
+    return new Map(refs.map((ref) => [ref, names.get(ref) ?? "A recipe book you can't see anymore"]));
+  },
+  // The person deleted the cover from XenDrive: the book goes back to its generated cover.
+  onRemoved: async (ref, fileIds) => {
+    if (!Types.ObjectId.isValid(ref)) return;
+    await XenKitchenBook.updateOne({ _id: ref, "cover.file_id": { $in: fileIds } }, { $unset: { cover: "" } });
+  },
+});
+
+/** A book's cover as links: a signed one for the picture and a thumbnail, or nulls when it has none. */
+export async function coverUrlsFor(
+  books: Array<{ _id: unknown; cover?: { file_id?: unknown } | null }>,
+): Promise<Map<string, { url: string; thumbUrl: string | null }>> {
+  const ids = books.flatMap((b) => (b.cover?.file_id ? [String(b.cover.file_id)] : []));
+  if (ids.length === 0) return new Map();
+  const [urls, thumbs] = await Promise.all([signedUrlsFor(ids, PHOTO_URL_MINUTES), thumbnailUrlsFor(ids)]);
+  const out = new Map<string, { url: string; thumbUrl: string | null }>();
+  for (const b of books) {
+    const id = b.cover?.file_id ? String(b.cover.file_id) : "";
+    const url = id ? urls.get(id) : undefined;
+    if (url) out.set(String(b._id), { url, thumbUrl: thumbs.get(id) ?? null });
+  }
+  return out;
+}
 
 type Photo = { file_id?: unknown; gcs_path?: string | null };
 

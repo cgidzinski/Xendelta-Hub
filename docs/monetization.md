@@ -7,7 +7,9 @@ thinking is not lost. Only the "built" section exists in code today.
 ## Principles
 
 - **Gems are only bought** (or, later, earned from selling files). There is no free grant, no daily reward and no
-  earning tasks. New accounts start with 0 gems. This was a deliberate choice.
+  earning tasks. New accounts start with 0 gems. This was a deliberate choice. The one way to receive gems without
+  buying them is a **gift** from another person (#396): it moves gems that person already owns through the ledger
+  (`gift` transaction), so none are created. Gifts, like donations, can't be reversed.
 - **Charge for what costs money**: storage, bandwidth and AI. Cosmetics cost nothing to provide, so they can be priced
   freely.
 - **Never sell an advantage over the friends you share groups with.** XenSplit, XenBudget and XenNote are shared, so
@@ -55,32 +57,20 @@ between leaves a pending purchase whose retry finds the same transfer (`docs/bil
 
 ## Decided, not built yet
 
-### Membership tiers (Free / Plus / Pro)
+### Membership tiers (Free / Plus / Pro): dropped
 
-| | Free | Plus | Pro |
-|---|---|---|---|
-| Price by card | none | $5 a month | $10 a month |
-| 30-day pass in gems | none | 5,000 gems | 10,000 gems |
-| XenDrive storage (total) | 1 GB | 50 GB | 250 GB |
-| Largest single file | 2 GB | 2 GB | 5 GB |
-| Password-protected folder links | no | yes | yes |
-| Active file listings | 3 | 10 | 50 |
-| House fee on file sales | 20% | 20% | 10% |
-| Badge | none | Plus | Pro |
+Not building this. It was designed when storage was a quota to rent (a 1 GB free tier, 50 GB Plus, 250 GB Pro, plus 30-day
+gem passes and GB vouchers). Pay-as-you-go billing (#362, #387; `docs/billing.md`) replaced the whole premise: there is no
+storage quota, no voucher and no tier. Everyone gets a free monthly allowance in gems, and what is beyond it is paid per use
+(storage per GB-month, calls per GB, scans per scan), from the person's gems or a community's fund. Nothing is ever deleted
+when gems run out.
 
-- **No gems come from a tier.** No Family plan.
-- Each tier is paid either **monthly by card** or as a **30-day pass bought with gems**. Passes stack.
-- Storage becomes rented through tiers, so the permanent GB vouchers would be retired (ones already owned still work).
-- Rules worked out:
-  - A card subscription and passes are mutually exclusive on one account. While a card is active and not cancelling,
-    passes cannot be bought; change the plan instead. Passes bought after cancelling start when the paid period ends.
-  - A higher tier pauses a lower one: buying Pro while Plus has days left starts Pro now and pushes the remaining Plus
-    days back until Pro ends. No days are lost.
-  - Tier checks are by date (`proUntil`, `plusUntil`), so nothing has to run when a tier lapses.
-  - A lapse deletes nothing and makes nothing more public: files stay but uploads stop while over quota; protected
-    folder links stay protected but cannot be created or edited; listings over the limit stay live but no new ones
-    can be created; earlier buyers keep their access.
-  - A notification goes out 3 days before a pass-only membership ends.
+Two things from the old design are still open questions, to settle on their own if they come back:
+
+- **A subscription.** If a flat monthly plan is ever wanted, it would be a way to pay for the same usage (or a bigger
+  allowance), not a storage quota. The "no gems come from a tier" rule would still hold.
+- **A tier badge or perks** (password-protected folder links, more file listings, a lower house fee on sales) would be
+  cosmetics or limits on their own, decided when they are wanted.
 
 ### Cosmetics everywhere
 
@@ -114,7 +104,7 @@ few files it lists get an avatar string rather than the person, and must be move
 ### Selling XenDrive files
 
 - Any user can list a file or folder for a price in gems (10 to 100,000). Buyers must be signed in. The seller gets
-  the price minus the house fee (see the tiers table). Gems are moved, not created, so the "only bought" rule holds.
+  the price minus a house fee (20% was the figure planned with the tiers; it is to be decided now they are dropped). Gems are moved, not created, so the "only bought" rule holds.
 - **One rule for whether something can be downloaded** (`canDownload`). A file that is listed, or sits inside a listed
   folder, can only be downloaded by its owner or a buyer. Without this, a listed file could be downloaded free through
   its own share link or through a public link to its parent folder.
@@ -162,23 +152,10 @@ The dummy provider works for admins only on a production server, so players cann
   and hold gems, which changes how share links work today.
 - **Stripe Connect payouts** for sale earnings only, after a holding period.
 - **Cover images** for listings.
-- **Gems to keep files stored or shared (ongoing cost).** Storage and public links cost money every month, so
-  charge for them over time instead of only at purchase. Sketch: files you store beyond your free allowance, and
-  links you keep shared, cost gems on a schedule (for example per GB per month, accrued daily or hourly by a
-  background sweep). This is the "charge for what costs money" principle applied to the real cost, and it fits
-  with the per-download fee above. Questions to settle before building it:
-  - **What happens at zero gems.** Never delete anything. Likely order: warn well ahead, then pause uploads and
-    shared links, then read-only, with the owner always able to download or free space. A grace period before any of it.
-  - **What the free allowance covers.** The free 1 GB stays free. Plans (Plus and Pro) would include an allowance;
-    gems pay for what is beyond it.
-  - **What shared means.** Sharing a file or folder publicly costs extra, owned by whoever shares it. Links with an
-    expiry could cost less. A link inside a paid listing (selling files) is the seller's cost to cover.
-  - **The 1 GB vouchers.** Today they add space for good. Under rent, either they stay permanent (a one-off
-    purchase of capacity, with only usage beyond it rented) or they become a prepaid amount of storage-time.
-  - **A ledger first.** Metered spending is many small debits, so the crash-safe gem ledger above is a
-    prerequisite, along with a clear statement in the shop of what a month of storage will cost.
-  - **Consumer fairness.** Spending bought currency automatically over time needs a visible running cost, a way to
-    stop it, and a heads-up when the balance will run out.
+- **Gems to keep files stored or shared (ongoing cost): built** as pay-as-you-go billing (#350, #362, #387; see
+  `docs/billing.md`). Storage is metered daily into byte-days and billed per GB-month beyond a free monthly allowance, and
+  nothing is ever deleted when gems run out. Still undecided: a separate cost for keeping a file shared publicly, and a
+  per-download fee (above), which would make downloaders sign in and hold gems.
 
 ## Other options considered
 
@@ -219,9 +196,8 @@ Each should become its own issue.
 
 ## Suggested order of follow-up issues
 
-1. Membership tiers and gem passes (including the ledger).
-2. Cosmetics everywhere (shared `UserAvatar` and `UserName`).
-3. Selling XenDrive files.
-4. Stripe provider and webhooks, then Stripe Connect payouts.
-5. The first AI feature on `chargeFeature`.
-6. XenDrive hardening (the defects above).
+1. Cosmetics everywhere (shared `UserAvatar` and `UserName`).
+2. Selling XenDrive files.
+3. Stripe provider and webhooks, then Stripe Connect payouts.
+4. The first AI feature on `chargeFeature`.
+5. XenDrive hardening (the defects above).

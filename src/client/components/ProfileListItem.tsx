@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { ListItem, ListItemButton, ListItemAvatar, ListItemText, Avatar, Typography, Box } from "@mui/material";
+import { ListItem, ListItemButton, ListItemAvatar, ListItemText, Avatar, Box } from "@mui/material";
 import { UserProfile } from "../hooks/user/useUserProfile";
-import { formatFileSize } from "../utils/fileUtils";
 import UserName from "./user/UserName";
 
 interface ProfileListItemProps {
@@ -32,9 +31,6 @@ export default function ProfileListItem({ profile, onNavigate, isSelected }: Pro
             </ListItemAvatar>
             <ListItemText primary={<UserName user={profile} />} secondary={profile?.email} />
           </Box>
-          <Typography variant="body2" color="text.secondary" textAlign="start">
-            {profile?.xendrive?.fileCount} Files · {formatFileSize(profile?.xendrive?.spaceUsed || 0)}
-          </Typography>
         </Box>
       </ListItemButton>
     </ListItem>

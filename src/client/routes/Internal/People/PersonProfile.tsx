@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Box, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
@@ -17,6 +18,8 @@ import EmptyState from "../../../components/ui/EmptyState";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import UserName from "../../../components/user/UserName";
 import UserAvatar from "../../../components/user/UserAvatar";
+import { GemIcon } from "../../../components/icons/GemIcon";
+import GiftGemsDialog from "../../../components/billing/GiftGemsDialog";
 
 /** Anyone's public profile: who they are, the spaces you share, and a way to message them. */
 export default function PersonProfile() {
@@ -25,6 +28,7 @@ export default function PersonProfile() {
   const { enqueueSnackbar } = useSnackbar();
   const { startChat } = useChatActions();
   const { data, isLoading, isError } = useProfile(userId);
+  const [giving, setGiving] = useState(false);
   useTitle(data?.user.username ?? "Profile");
 
   const goBack = () => navigate("/internal/people");
@@ -87,14 +91,19 @@ export default function PersonProfile() {
               Edit profile
             </Button>
           ) : (
-            <Button
-              variant="contained"
-              startIcon={<ChatBubbleOutlineIcon />}
-              onClick={message}
-              disabled={startChat.isPending}
-            >
-              Message
-            </Button>
+            <>
+              <Button variant="outlined" startIcon={<GemIcon />} onClick={() => setGiving(true)}>
+                Give gems
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<ChatBubbleOutlineIcon />}
+                onClick={message}
+                disabled={startChat.isPending}
+              >
+                Message
+              </Button>
+            </>
           )
         }
       />
@@ -126,6 +135,7 @@ export default function PersonProfile() {
           )}
         </SectionCard>
       )}
+      {!isSelf && <GiftGemsDialog open={giving} onClose={() => setGiving(false)} person={user} />}
     </PageContainer>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { AxiosProgressEvent } from "axios";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
@@ -22,6 +23,9 @@ export interface KitchenBook {
   description: string;
   icon: string;
   color: string;
+  /** A signed link to the cover picture, or null (the book then gets a generated cover). */
+  cover_url: string | null;
+  cover_thumb_url: string | null;
   my_role: BookRole;
   item_count: number;
   members: KitchenBookMember[];
@@ -379,7 +383,7 @@ export const useClonePublicKitchenItem = () =>
   );
 
 export interface PublicBook {
-  book: { name: string; description: string; color: string; icon: string };
+  book: { name: string; description: string; color: string; icon: string; cover_url: string | null };
   categories: Array<Pick<KitchenCategory, "_id" | "name" | "icon" | "color" | "layout">>;
   items: KitchenItem[];
 }
@@ -441,6 +445,17 @@ export const useUpdateKitchenBook = () =>
     async (v: { id: string; patch: Partial<Pick<KitchenBook, "name" | "icon" | "color" | "description">> }) =>
       bookData(await apiClient.put(`${base}/books/${v.id}`, v.patch)),
   );
+
+/** Set or replace a book's cover picture. The server crops it to 3:4. */
+export const useSetKitchenBookCover = () =>
+  useKitchenMutation(async (v: { id: string; file: File; onUploadProgress?: (e: AxiosProgressEvent) => void }) => {
+    const form = new FormData();
+    form.append("image", v.file);
+    return bookData(await apiClient.put(`${base}/books/${v.id}/cover`, form, { onUploadProgress: v.onUploadProgress }));
+  });
+
+export const useRemoveKitchenBookCover = () =>
+  useKitchenMutation(async (id: string) => bookData(await apiClient.delete(`${base}/books/${id}/cover`)));
 
 export const useDeleteKitchenBook = () =>
   useKitchenMutation(async (id: string) => (await apiClient.delete(`${base}/books/${id}`)).data);

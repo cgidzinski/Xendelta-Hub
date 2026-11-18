@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import mongoose from "mongoose";
 import { startTestApp, type TestApp } from "../testing/testApp";
+import { memoryStores } from "../storage";
 
 // Loaded after the test app starts, so the environment it sets is in place before the billing code is imported.
 let t: TestApp;
@@ -47,7 +48,7 @@ const file = (
   });
 
 describe("the storage meter", () => {
-  it("adds each payer's stored bytes as a day of byte-days, and leaves the house out", async () => {
+  it("adds each payer's stored bytes as a day of byte-days, and records the house's separately", async () => {
     const [u, c] = [new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId()];
     await file("a", 3 * GB, { type: "user", id: String(u) });
     await file("b", 1 * GB, { type: "user", id: String(u) });
@@ -58,9 +59,22 @@ describe("the storage meter", () => {
     expect(done).toEqual(["2026-11-15"]);
     expect(await usageFor(userAccount(u), "2026-11")).toEqual([{ center: "storage", units: 4 * GB }]);
     expect(await usageFor(communityAccount(c), "2026-11")).toEqual([{ center: "storage", units: 2 * GB }]);
-    expect(await usageFor({ type: "house" }, "2026-11")).toEqual([]);
+    // The house's own file is recorded (for the admin report) but nobody is billed for it.
+    expect(await usageFor({ type: "house" }, "2026-11")).toEqual([{ center: "public_assets", units: 9 * GB }]);
     // It matches what the payer is paying for.
     expect(await storageUsedBy({ type: "user", id: String(u) })).toEqual({ files: 2, bytes: 4 * GB });
+  });
+
+  it("records the database backups on the house account", async () => {
+    memoryStores().privateStore.objects.set("db-backups/a.ndjson.gz", {
+      body: Buffer.alloc(1000),
+      contentType: "application/gzip",
+      lastModified: new Date("2026-11-01T00:00:00Z"),
+    });
+    await runStorageMeter(new Date("2026-11-15T10:00:00Z"));
+    const lines = await usageFor({ type: "house" }, "2026-11");
+    expect(lines).toContainEqual({ center: "backups", units: 1000 });
+    memoryStores().privateStore.objects.delete("db-backups/a.ndjson.gz");
   });
 
   it("meters a day once, and catches up the days a stopped server missed", async () => {

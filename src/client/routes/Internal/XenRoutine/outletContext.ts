@@ -4,4 +4,6 @@ import type { Routine } from "../../../hooks/xenroutine/useRoutines";
 export interface XenRoutineOutletContext {
   openCreate: () => void;
   openEdit: (routine: Routine) => void;
+  /** A new routine that starts as a copy of this one. */
+  openDuplicate: (routine: Routine) => void;
 }

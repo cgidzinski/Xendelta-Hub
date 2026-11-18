@@ -1,4 +1,4 @@
-import type { XenDriveFile } from "../../../../types/XenDriveFile";
+import type { XenDriveFile, XenDriveFolder } from "../../../../types/XenDriveFile";
 import { fileKindOf, type FileKind } from "./fileKind";
 
 // The Type and Link chips above the list. They narrow what is already on screen.
@@ -52,3 +52,48 @@ export function applyFilters(
 /** Filters only narrow files: a folder has no type or link status of its own, so folders hide while one is on. */
 export const filtersActive = (filters: { type: TypeFilter; link: LinkFilter }) =>
   filters.type !== "all" || filters.link !== "all";
+
+export type DriveSort = "newest" | "oldest" | "name" | "name-desc" | "largest" | "smallest";
+
+export const DRIVE_SORTS: Array<{ value: DriveSort; label: string }> = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "name", label: "Name A–Z" },
+  { value: "name-desc", label: "Name Z–A" },
+  { value: "largest", label: "Largest" },
+  { value: "smallest", label: "Smallest" },
+];
+
+export const isDriveSort = (v: unknown): v is DriveSort => DRIVE_SORTS.some((s) => s.value === v);
+
+const byName = (a: { name: string }, b: { name: string }) =>
+  a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+const time = (iso: string) => new Date(iso).getTime() || 0;
+
+/** Files in the chosen order. Returns a new array. */
+export function sortFiles(files: XenDriveFile[], sort: DriveSort): XenDriveFile[] {
+  const out = [...files];
+  switch (sort) {
+    case "newest":
+      return out.sort((a, b) => time(b.createdAt) - time(a.createdAt));
+    case "oldest":
+      return out.sort((a, b) => time(a.createdAt) - time(b.createdAt));
+    case "name":
+      return out.sort(byName);
+    case "name-desc":
+      return out.sort((a, b) => byName(b, a));
+    case "largest":
+      return out.sort((a, b) => (b.size || 0) - (a.size || 0));
+    case "smallest":
+      return out.sort((a, b) => (a.size || 0) - (b.size || 0));
+  }
+}
+
+/** Folders follow the order where it means something for them (name, date); by size they stay A-Z, since they have no size. */
+export function sortFolders(folders: XenDriveFolder[], sort: DriveSort): XenDriveFolder[] {
+  const out = [...folders];
+  if (sort === "newest") return out.sort((a, b) => time(b.created_at) - time(a.created_at));
+  if (sort === "oldest") return out.sort((a, b) => time(a.created_at) - time(b.created_at));
+  if (sort === "name-desc") return out.sort((a, b) => byName(b, a));
+  return out.sort(byName);
+}

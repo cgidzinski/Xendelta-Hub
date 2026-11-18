@@ -110,7 +110,7 @@ describe("XenKitchen photos in XenDrive", () => {
     expect((await item()).images).toHaveLength(2);
   });
 
-  it("a photo can be deleted in the storage viewer, and deleting the item removes the rest", async () => {
+  it("a photo can't be deleted in the storage viewer, and deleting the item removes the rest", async () => {
     const { me, uid, itemId, photos, item } = await setup();
     const up = await photos(3);
     const first = up.body.data.item.images[0]._id;
@@ -120,8 +120,8 @@ describe("XenKitchen photos in XenDrive", () => {
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(2);
 
     const file = await FileRecord.findOne({ uploadedBy: uid });
-    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(me.token))).status).toBe(200);
-    expect((await item()).images).toHaveLength(1);
+    expect((await request(t.app).delete(`/api/storage/files/${file!._id}`).set(auth(me.token))).status).toBe(404);
+    expect((await item()).images).toHaveLength(2);
 
     expect((await request(t.app).delete(`/api/xenkitchen/items/${itemId}`).set(auth(me.token))).status).toBe(200);
     expect(await FileRecord.countDocuments({ uploadedBy: uid })).toBe(0);

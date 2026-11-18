@@ -54,19 +54,27 @@ export default function XenRoutine() {
   }, [profile?.timezone, settings?.browser_timezone, browserTz]);
 
   const [editing, setEditing] = useState<Routine | null>(null);
+  const [template, setTemplate] = useState<Routine | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const current = TABS.find((t) => pathname.endsWith(`/${t.value}`))?.value ?? "overview";
 
   const openCreate = () => {
     setEditing(null);
+    setTemplate(null);
     setDialogOpen(true);
   };
   const openEdit = (routine: Routine) => {
     setEditing(routine);
+    setTemplate(null);
     setDialogOpen(true);
   };
-  const outletContext: XenRoutineOutletContext = { openCreate, openEdit };
+  const openDuplicate = (routine: Routine) => {
+    setEditing(null);
+    setTemplate(routine);
+    setDialogOpen(true);
+  };
+  const outletContext: XenRoutineOutletContext = { openCreate, openEdit, openDuplicate };
 
   const submit = async (input: Parameters<typeof createRoutine.mutateAsync>[0]) => {
     try {
@@ -131,7 +139,13 @@ export default function XenRoutine() {
       </Fab>
 
       <ReminderSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <RoutineDialog open={dialogOpen} routine={editing} onClose={() => setDialogOpen(false)} onSubmit={submit} />
+      <RoutineDialog
+        open={dialogOpen}
+        routine={editing}
+        template={template}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={submit}
+      />
     </PageContainer>
   );
 }

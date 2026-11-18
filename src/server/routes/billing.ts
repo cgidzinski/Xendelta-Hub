@@ -1,7 +1,8 @@
 import express = require("express");
 import { authenticateToken } from "../middleware/auth";
 import { callerId } from "../utils/http";
-import { validateParams, communityParamSchema } from "../utils/validation";
+import { validate, validateParams, communityParamSchema, giftGemsSchema } from "../utils/validation";
+import { giftGems } from "../billing/gifts";
 import { loadCommunity } from "../communities/service";
 import { billingOverview } from "../billing/overview";
 import { communityAccount, userAccount } from "../billing/ledger";
@@ -11,6 +12,18 @@ module.exports = function (app: express.Application) {
   app.get("/api/billing/me", authenticateToken, async (req: express.Request, res: express.Response) => {
     res.json({ status: true, message: "", data: await billingOverview(userAccount(callerId(req))) });
   });
+
+  // Give gems to another person. Whole gems, never to yourself, and it can't be taken back.
+  app.post(
+    "/api/billing/gift",
+    authenticateToken,
+    validate(giftGemsSchema),
+    async (req: express.Request, res: express.Response) => {
+      const { toUserId, gems, note, requestId } = giftGemsSchema.parse(req.body);
+      const result = await giftGems(callerId(req), toUserId, gems, note || undefined, requestId);
+      res.json({ status: true, message: "Gems sent", data: result });
+    },
+  );
 
   // Any member can see the community's bill; anyone else gets 404.
   app.get(

@@ -45,6 +45,16 @@ function parsePaging(req: express.Request): { limit: number; offset: number } {
   return { limit, offset };
 }
 
+/** Match a recipe's title, description or paints against ?search. Empty search matches everything. */
+function searchFilter(raw: unknown) {
+  if (typeof raw !== "string" || !raw.trim()) return {};
+  const escaped = raw.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = { $regex: escaped, $options: "i" };
+  return {
+    $or: [{ title: regex }, { description: regex }, { "steps.paints.name": regex }, { "steps.paints.brand": regex }],
+  };
+}
+
 /**
  * Fetch a page of recipe summaries: newest first, with `steps` replaced by a `stepCount`.
  * List views only need the count, and a recipe's steps carry every step's image array -
@@ -71,18 +81,10 @@ module.exports = function (app: express.Application) {
   // Get all recipes for authenticated user
   app.get("/api/recipaint", authenticateToken, async function (req: express.Request, res: express.Response) {
     const userId = callerId(req);
-    const search = req.query.search as string;
+    const search = req.query.search;
     const { limit, offset } = parsePaging(req);
 
-    const query: any = { owner: new ObjectId(userId) };
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { "steps.paints.name": { $regex: search, $options: "i" } },
-        { "steps.paints.brand": { $regex: search, $options: "i" } },
-      ];
-    }
+    const query: any = { owner: new ObjectId(userId), ...searchFilter(search) };
 
     const recipes = await findRecipeSummaries(query, limit, offset);
 
@@ -97,7 +99,11 @@ module.exports = function (app: express.Application) {
     const userId = callerId(req);
     const { limit, offset } = parsePaging(req);
 
-    const recipes = await findRecipeSummaries({ isPublic: true, owner: { $ne: new ObjectId(userId) } }, limit, offset);
+    const recipes = await findRecipeSummaries(
+      { isPublic: true, owner: { $ne: new ObjectId(userId) }, ...searchFilter(req.query.search) },
+      limit,
+      offset,
+    );
 
     return res.json({
       status: true,
