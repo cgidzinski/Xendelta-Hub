@@ -222,7 +222,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     features: [
       "Create groups for trips, households or friends, and add the people in them.",
       "Add expenses with who paid, and split them equally, by exact amounts or by percentage.",
-      "Attach receipt photos to an expense, and read a receipt photo into line items to split between people.",
+      "Attach receipt photos to an expense, and scan a receipt photo into line items to split between people.",
       "Use several currencies in one group, with balances kept separate for each.",
       "Record a currency exchange between two people so balances stay right.",
       "Set up recurring expenses that repeat daily, weekly, monthly or yearly, and pause them.",
@@ -240,7 +240,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/xensplit",
       },
       {
-        text: "After adding a receipt photo, tap Read receipt from photo, then tap who shared each line. Tax and tip are shared in proportion.",
+        text: "When you add an expense, tap Scan a receipt at the top, then tap who shared each line. Tax and tip are shared in proportion.",
         link: "/internal/xensplit",
       },
       {

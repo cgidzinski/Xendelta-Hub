@@ -172,6 +172,8 @@ export default function ExpenseForm({
   const [step, setStep] = React.useState(0);
   const receiptScanEnabled = useReceiptScanEnabled();
   const [scanOpen, setScanOpen] = React.useState(false);
+  const [scanPhoto, setScanPhoto] = React.useState<File | null>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
   const recurringOn = recurringMode !== "off" && isRecurring;
   // Editing the bounds of an ended series restarts it — the warning below the
   // Active switch tells the user what that means
@@ -303,6 +305,26 @@ export default function ExpenseForm({
     e.target.value = "";
   }
 
+  // Scan a receipt from the start: reuse a photo that is already attached, or ask for one (it is attached too, so it
+  // is kept on the expense). The result fills in the title, total, date and who owes what.
+  function startReceiptScan() {
+    if (images[0]) {
+      setScanPhoto(images[0]);
+      setScanOpen(true);
+    } else {
+      scanInputRef.current?.click();
+    }
+  }
+
+  function handleScanPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (canAddMoreImages) onImagesChange([...images, file]);
+    setScanPhoto(file);
+    setScanOpen(true);
+  }
+
   function handleRemoveNewImage(index: number) {
     const removed = images[index];
     // Find and revoke the object URL for this file
@@ -341,6 +363,35 @@ export default function ExpenseForm({
       {/* Step 1: Details */}
       {step === 0 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, position: "relative" }}>
+          {receiptScanEnabled && !isEditing && (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                flexWrap: "wrap",
+                border: 1,
+                borderColor: "divider",
+                borderRadius: 1,
+                p: 1.5,
+                bgcolor: "action.hover",
+              }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
+                Have a receipt? Scan it to fill in the title, total and who had what.
+              </Typography>
+              <Button variant="outlined" size="small" startIcon={<ReceiptLongIcon />} onClick={startReceiptScan}>
+                Scan a receipt
+              </Button>
+              <input
+                ref={scanInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={handleScanPhoto}
+              />
+            </Box>
+          )}
           <Box sx={{ display: "flex", alignItems: "center" }}>
             <TextField
               fullWidth
@@ -915,24 +966,20 @@ export default function ExpenseForm({
 
                 {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
               </Box>
-              {receiptScanEnabled && images.length > 0 && (
-                <Button size="small" startIcon={<ReceiptLongIcon />} sx={{ mt: 1 }} onClick={() => setScanOpen(true)}>
-                  Read receipt from photo
-                </Button>
-              )}
-              <ReceiptScanDialog
-                open={scanOpen}
-                photo={images[0] ?? null}
-                members={members}
-                currency={currency}
-                currencyOptions={currencyOptions}
-                onClose={() => setScanOpen(false)}
-                onApply={applyReceipt}
-              />
             </Box>
           )}
         </Box>
       )}
+
+      <ReceiptScanDialog
+        open={scanOpen}
+        photo={scanPhoto}
+        members={members}
+        currency={currency}
+        currencyOptions={currencyOptions}
+        onClose={() => setScanOpen(false)}
+        onApply={applyReceipt}
+      />
 
       <UploadProgress percent={uploadPercent} label="photos" />
 
