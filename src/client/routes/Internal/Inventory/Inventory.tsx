@@ -10,6 +10,8 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import { useTitle } from "../../../hooks/useTitle";
 import { InventoryItem, useInventory } from "../../../hooks/user/useInventory";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
+import { GemIcon } from "../../../components/icons/GemIcon";
+import GiftGemsDialog from "../../../components/billing/GiftGemsDialog";
 import AccountCard from "./components/AccountCard";
 import InventoryCard from "./components/InventoryCard";
 import InventoryFilter, { type InventoryView } from "./components/InventoryFilter";
@@ -24,6 +26,7 @@ export default function Inventory() {
   const { profile } = useUserProfile();
   const { inventory, isLoading, isError, error, refetch, redeemItem, trashItem, wearItem } = useInventory();
   const [view, setView] = useState<InventoryView>("all");
+  const [giving, setGiving] = useState(false);
   // The item a request is in flight for, so only its card shows as busy.
   const [pendingId, setPendingId] = useState<string | null>(null);
 
@@ -61,7 +64,14 @@ export default function Inventory() {
       <PageHeader
         title="Inventory"
         subtitle="Your account and the items you own"
-        actions={<Button onClick={() => navigate("/internal/shop")}>Open the Shop</Button>}
+        actions={
+          <>
+            <Button startIcon={<GemIcon />} onClick={() => setGiving(true)}>
+              Give gems
+            </Button>
+            <Button onClick={() => navigate("/internal/shop")}>Open the Shop</Button>
+          </>
+        }
       />
 
       <Grid container spacing={3} alignItems="flex-start">
@@ -125,6 +135,7 @@ export default function Inventory() {
           )}
         </Grid>
       </Grid>
+      <GiftGemsDialog open={giving} onClose={() => setGiving(false)} />
     </PageContainer>
   );
 }
