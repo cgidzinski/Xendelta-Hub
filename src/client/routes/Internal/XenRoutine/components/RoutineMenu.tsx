@@ -30,12 +30,13 @@ interface Props {
   /** Overview cards get the quick actions; the Routines tab gets the management ones. */
   variant: "overview" | "routines";
   onEdit?: (routine: Routine) => void;
+  onDuplicate?: (routine: Routine) => void;
   /** Postponing moves the real due date, so projected future occurrences don't offer it. */
   allowPostpone?: boolean;
 }
 
 /** The ⋮ button for a routine, with its menu and every dialog the menu can open. */
-export default function RoutineMenu({ routine, variant, onEdit, allowPostpone = true }: Props) {
+export default function RoutineMenu({ routine, variant, onEdit, onDuplicate, allowPostpone = true }: Props) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const { user } = useAuth();
@@ -90,6 +91,16 @@ export default function RoutineMenu({ routine, variant, onEdit, allowPostpone = 
             }}
           >
             Edit
+          </MenuItem>
+        )}
+        {variant === "routines" && onDuplicate && (
+          <MenuItem
+            onClick={() => {
+              closeMenu();
+              onDuplicate(routine);
+            }}
+          >
+            Duplicate
           </MenuItem>
         )}
         <MenuItem

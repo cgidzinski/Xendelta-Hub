@@ -34,6 +34,7 @@ import { useState, useRef } from "react";
 import ProfileListItem from "../ProfileListItem";
 import GemBalance from "../GemBalance";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
+import { useChatUnread } from "../../hooks/chat/useChat";
 import { useUserNotifications, Notification } from "../../hooks/user/useUserNotifications";
 import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
@@ -107,6 +108,7 @@ export default function BaseNavBar({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
+  const { count: unreadChats } = useChatUnread();
 
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
@@ -350,7 +352,7 @@ export default function BaseNavBar({
                   sx={{ width: 50, height: 50 }}
                   onClick={() => navigate(messagesPath)}
                 >
-                  <Badge badgeContent={profile?.unread_messages ? 1 : 0} color="error" variant="dot">
+                  <Badge badgeContent={unreadChats} color="error" max={99}>
                     <ChatBubbleOutlineIcon />
                   </Badge>
                 </IconButton>
@@ -362,7 +364,7 @@ export default function BaseNavBar({
                   sx={{ width: 50, height: 50, p: 0 }}
                   onClick={handleNotificationClick}
                 >
-                  <Badge badgeContent={profile?.has_new_notifications ? 1 : 0} color="error" variant="dot">
+                  <Badge badgeContent={profile?.unread_notification_count ?? 0} color="error" max={99}>
                     <NotificationsIcon />
                   </Badge>
                 </IconButton>

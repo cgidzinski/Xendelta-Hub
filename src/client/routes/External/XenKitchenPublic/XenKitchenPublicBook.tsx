@@ -6,6 +6,7 @@ import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import SearchIcon from "@mui/icons-material/Search";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import { useTitle } from "../../../hooks/useTitle";
+import PublicJoinCard from "../components/PublicJoinCard";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -162,6 +163,7 @@ export default function XenKitchenPublicBook() {
                 description={q ? "Try another search." : "This book is empty."}
               />
             )}
+            <PublicJoinCard app="xenkitchen" />
           </>
         )}
       </Container>

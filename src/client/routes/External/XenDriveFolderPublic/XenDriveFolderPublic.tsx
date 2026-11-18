@@ -21,6 +21,7 @@ import ViewListIcon from "@mui/icons-material/ViewList";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import { format } from "date-fns";
 import { useTitle } from "../../../hooks/useTitle";
+import PublicJoinCard from "../components/PublicJoinCard";
 import { usePublicFolder, usePublicFolderInfo } from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import FileTypeIcon from "../../Internal/XenDrive/components/FileTypeIcon";
@@ -372,6 +373,7 @@ export default function XenDriveFolderPublic() {
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 4, textAlign: "center" }}>
           Shared from XenDrive. You can look and download; you can't change anything.
         </Typography>
+        <PublicJoinCard app="xendrive" />
       </Container>
     </Box>
   );

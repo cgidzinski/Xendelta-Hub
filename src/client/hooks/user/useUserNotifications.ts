@@ -113,6 +113,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
         }
         return oldProfileData;
       });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() }); // refresh the unread count
     };
 
     const handleNotificationUpdate = (data: { notificationId: string; update: any }) => {
@@ -179,6 +180,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
           return oldData;
         });
       }
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() }); // refresh the unread count
     };
 
     socket.on("notification:new", handleNewNotification);
@@ -206,6 +208,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
   const { mutate: markAllAsRead, isPending: isMarkingAsRead } = useMutation({
     mutationFn: markAllNotificationsAsRead,
     onSuccess: (updatedNotifications) => {
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() }); // refresh the unread count
       // Update the notifications cache with the updated data
       queryClient.setQueryData(userNotificationKeys.notifications(), updatedNotifications);
 
@@ -229,6 +232,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
   const { mutate: markSingleNotificationAsRead, isPending: isMarkingNotificationAsRead } = useMutation({
     mutationFn: markNotificationAsRead,
     onSuccess: (updatedNotification: Notification) => {
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() }); // refresh the unread count
       // Update the notifications cache with the updated notification
       queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
@@ -264,6 +268,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
   const { mutate: dismissSingleNotification, isPending: isDismissing } = useMutation({
     mutationFn: dismissUserNotification,
     onSuccess: (notificationId: string) => {
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() }); // refresh the unread count
       queryClient.setQueryData(userNotificationKeys.notifications(), (oldData: Notification[] | undefined) => {
         if (!oldData) return oldData;
         const remaining = oldData.filter((n) => n._id !== notificationId);
@@ -282,6 +287,7 @@ export const useUserNotifications = (): UseUserNotificationsReturn => {
     mutationFn: clearUserNotifications,
     onSuccess: () => {
       queryClient.setQueryData(userNotificationKeys.notifications(), []);
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() }); // refresh the unread count
       queryClient.setQueryData(userProfileKeys.profile(), (oldData: any) => {
         if (oldData) return { ...oldData, unread_notifications: false };
         return oldData;

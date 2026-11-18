@@ -35,6 +35,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
 import GroupRemoveIcon from "@mui/icons-material/GroupRemove";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -477,6 +478,13 @@ export default function GroupDetail() {
     setSelectedExpense(expense);
     edit.reset(draftFromExpense(expense, group.members, findSeriesForGenesis(expense._id)));
     setShowEditExpenseModal(true);
+  };
+
+  // A new expense that starts as a copy of this one (today's date, no photos, not recurring).
+  const handleDuplicateExpense = (expense: XenSplitExpense) => {
+    add.reset({ ...draftFromExpense(expense, group.members), date: new Date(), onHold: false });
+    setShowViewExpenseModal(false);
+    setShowAddExpenseModal(true);
   };
 
   const openAddExpenseModal = () => {
@@ -1075,7 +1083,18 @@ export default function GroupDetail() {
                   )}
                 </DialogContent>
 
-                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                <DialogActions sx={{ px: 3, pb: 2.5, flexWrap: "wrap", rowGap: 1 }}>
+                  {e.deleted_at == null && !e.recurring_id && (
+                    <Button
+                      fullWidth
+                      variant="text"
+                      startIcon={<ContentCopyIcon />}
+                      onClick={() => handleDuplicateExpense(e)}
+                      sx={{ flex: "1 1 100%" }}
+                    >
+                      Duplicate
+                    </Button>
+                  )}
                   {/* A deleted expense cannot be edited - the server rejects it - so offer
                     nothing but the route back. */}
                   {e.deleted_at != null ? (

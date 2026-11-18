@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -32,12 +33,21 @@ interface ItemPreviewModalProps {
   book: XenBudgetBook;
   item: XenBudgetItem | null;
   onEdit: (item: XenBudgetItem) => void;
+  onDuplicate?: (item: XenBudgetItem) => void;
   /** Removes one flag from the item without opening the edit form. */
   onRemoveFlag: (item: XenBudgetItem, flagName: string) => Promise<void>;
 }
 
 /** Read-only preview of an item, opened before the edit form. */
-export default function ItemPreviewModal({ open, onClose, book, item, onEdit, onRemoveFlag }: ItemPreviewModalProps) {
+export default function ItemPreviewModal({
+  open,
+  onClose,
+  book,
+  item,
+  onEdit,
+  onDuplicate,
+  onRemoveFlag,
+}: ItemPreviewModalProps) {
   const isMobile = useMediaQuery("(max-width:600px)");
   const { data: imageUrls } = useXenBudgetItemImageUrls(book._id, item?._id, item?.images?.length ?? 0);
   // Which flag is being removed right now — disables the chips while the save is in flight.
@@ -77,6 +87,13 @@ export default function ItemPreviewModal({ open, onClose, book, item, onEdit, on
                 the preview is short enough that a full-width button at the bottom was a
                 scroll away from the item it edits on a phone. */}
         <Stack direction="row" alignItems="center" spacing={0.5}>
+          {item && onDuplicate && (
+            <Tooltip title="Duplicate">
+              <IconButton onClick={() => onDuplicate(item)} size="small" aria-label="Duplicate item">
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           {item && (
             <Tooltip title="Edit">
               <IconButton onClick={() => onEdit(item)} size="small" aria-label="Edit item">
