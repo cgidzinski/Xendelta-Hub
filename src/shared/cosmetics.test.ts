@@ -1,12 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { BADGES, FRAMES, NAME_COLOURS, isWorn, slotOf, wornFrame, wornNameColour } from "./cosmetics";
+import {
+  BADGES,
+  COSMETIC_ITEMS,
+  FRAMES,
+  NAME_COLOURS,
+  isWorn,
+  slotOf,
+  wornBadge,
+  wornFrame,
+  wornNameColour,
+} from "./cosmetics";
 
 describe("cosmetics", () => {
   it("colours are theme palette paths, never colour literals", () => {
     for (const c of [...Object.values(FRAMES), ...Object.values(NAME_COLOURS)]) {
-      expect(c.token).toMatch(/^[a-z]+\.(main|light|dark)$/);
+      expect(c.token).toMatch(/^[a-z]+\.[a-z]+$/);
       expect(Number.isInteger(c.price) && c.price >= 1500 && c.price <= 6000).toBe(true);
     }
+  });
+
+  it("badges have a known shape, a theme colour and a whole-number price", () => {
+    for (const b of Object.values(BADGES)) {
+      expect(["star", "heart", "bolt", "leaf"]).toContain(b.icon);
+      expect(b.token).toMatch(/^[a-z]+\.[a-z]+$/);
+      expect(Number.isInteger(b.price) && b.price > 0).toBe(true);
+    }
+    expect(wornBadge({ badge: "heart-badge" })?.icon).toBe("heart");
+    expect(wornBadge({ badge: "retired-badge" })).toBeUndefined();
+    expect(COSMETIC_ITEMS.map((c) => c.key)).toEqual([
+      ...Object.keys(BADGES),
+      ...Object.keys(FRAMES),
+      ...Object.keys(NAME_COLOURS),
+    ]);
   });
 
   it("every item key is unique across slots and maps to its slot", () => {

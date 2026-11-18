@@ -12,8 +12,6 @@ import { join, relative } from "node:path";
 const ROOT = join(__dirname);
 
 const NOT_YET: Record<string, string> = {
-  "components/calls/CallTile.tsx": "gets an avatar string, not the person",
-  "components/ProfileListItem.tsx": "gets an avatar url, not the person",
   "routes/Internal/Settings/components/AvatarUploadSection.tsx":
     "shows an upload preview, not someone's public picture",
 };

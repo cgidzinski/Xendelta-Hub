@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { ListItem, ListItemButton, ListItemAvatar, ListItemText, Avatar, Box } from "@mui/material";
+import { ListItem, ListItemButton, ListItemAvatar, ListItemText, Box } from "@mui/material";
 import { UserProfile } from "../hooks/user/useUserProfile";
 import UserName from "./user/UserName";
+import UserAvatar from "./user/UserAvatar";
 
 interface ProfileListItemProps {
   onNavigate?: () => void;
@@ -21,13 +22,13 @@ export default function ProfileListItem({ profile, onNavigate, isSelected }: Pro
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", flexDirection: "row", gap: 1 }}>
             <ListItemAvatar>
-              <Avatar
+              <UserAvatar
                 key={avatarUrl || profile?._id} // Force re-render when avatar URL changes
-                src={avatarUrl}
+                user={profile}
                 sx={{ width: 48, height: 48, borderRadius: 2 }}
               >
                 {profile?.username?.charAt(0).toUpperCase()}
-              </Avatar>
+              </UserAvatar>
             </ListItemAvatar>
             <ListItemText primary={<UserName user={profile} />} secondary={profile?.email} />
           </Box>

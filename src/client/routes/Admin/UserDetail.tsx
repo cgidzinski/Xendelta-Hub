@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { COSMETIC_ITEMS } from "@shared/cosmetics";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -28,7 +29,8 @@ import { dateTime, shortDate } from "./adminFormat";
 import UserAvatar from "../../components/user/UserAvatar";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.25 } as const;
-const ITEM_OPTIONS = [{ value: "golden-badge", label: "Golden Badge" }];
+// Every cosmetic, so a new badge, frame or colour can be given without touching this screen.
+const ITEM_OPTIONS = COSMETIC_ITEMS.map((c) => ({ value: c.key, label: c.label }));
 const CHANNELS: Array<{ value: NotifyChannel; label: string; note: string }> = [
   { value: "inapp", label: "In the app", note: "Shows in their notification list" },
   { value: "socket", label: "Live", note: "A toast if the app is open" },

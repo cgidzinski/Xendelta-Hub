@@ -1,5 +1,6 @@
 import { Box, Typography, type SxProps, type Theme } from "@mui/material";
-import { FRAMES, NAME_COLOURS } from "@shared/cosmetics";
+import { BADGES, FRAMES, NAME_COLOURS } from "@shared/cosmetics";
+import { BADGE_ICONS } from "./badgeIcons";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
 import UserAvatar from "./UserAvatar";
 import UserName from "./UserName";
@@ -19,6 +20,11 @@ interface ItemPictureProps {
  */
 export default function ItemPicture({ itemKey, image, alt = "", sx }: ItemPictureProps) {
   const { profile } = useUserProfile();
+  const badge = BADGES[itemKey];
+  if (badge && !image) {
+    const Icon = BADGE_ICONS[badge.icon];
+    return <Icon titleAccess={badge.label} sx={{ fontSize: 64, color: badge.token }} />;
+  }
   if (itemKey in FRAMES) {
     return (
       <UserAvatar

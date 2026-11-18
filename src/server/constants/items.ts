@@ -1,7 +1,7 @@
 import { Item } from "../types/item";
 import { HOUSE, transfer, userAccount } from "../billing/ledger";
 import { GEM_PACKS } from "@shared/monetization";
-import { FRAMES, NAME_COLOURS, type CosmeticSlot } from "@shared/cosmetics";
+import { BADGES, FRAMES, NAME_COLOURS, type CosmeticSlot } from "@shared/cosmetics";
 
 // Gem packs are items too. They never reach an inventory (the Shop adds them with addToInventory: false); the
 // definition is what the Shop shows. The picture is drawn by the client, which knows the gem icon.
@@ -31,8 +31,26 @@ const colourItems = (
     ]),
   );
 
+// The Golden Badge has its own entry (and picture) below; the other badges are drawn by the client like frames.
+const EXTRA_BADGE_ITEMS: Record<string, Item> = Object.fromEntries(
+  Object.entries(BADGES)
+    .filter(([key]) => key !== "golden-badge")
+    .map(([key, b]) => [
+      key,
+      {
+        key,
+        name: b.label,
+        description: "A small badge shown next to your name wherever people see it",
+        image: "",
+        redeemable: false,
+        cosmetic: { slot: "badge" as const },
+      },
+    ]),
+);
+
 export const ITEMS: Record<string, Item> = {
   ...GEM_PACK_ITEMS,
+  ...EXTRA_BADGE_ITEMS,
   ...colourItems(FRAMES, "frame", (l) => `A ${l.toLowerCase()} ring around your picture wherever people see it`),
   ...colourItems(
     NAME_COLOURS,

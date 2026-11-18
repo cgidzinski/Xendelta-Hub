@@ -89,7 +89,10 @@ them, so adding a colour is one line. `cosmeticsOf` and the user model carry all
 work per slot. The client draws a frame with `UserAvatar` (`components/user/UserAvatar.tsx`: an outline on the avatar
 itself, so it also works inside an `AvatarGroup`) and a name colour with `UserName`. `ItemPicture` previews frames and
 colours on you in the Shop and Inventory. `userAvatarLint.test.ts` fails on a raw `<Avatar>` showing a user's picture; the
-few files it lists get an avatar string rather than the person, and must be moved over one by one.
+files it lists must be moved over one by one (none are left now). Badges follow the same pattern: `BADGES` holds a label,
+a shape (`star`, `heart`, `bolt`, `leaf`, drawn by `components/user/badgeIcons.ts`), a theme colour and a price. For sale
+now: three small badges at 3,000 gems (the Golden Badge stays 25,000), and Sky, Silver, Emerald, Rose and Gold frames and
+name colours (1,500 to 6,000). `COSMETIC_ITEMS` lists them all, and the admin "give item" dropdown is built from it.
 
 
 - Badges, avatar frames and name colours, sold in the Shop for gems (about 1,500 to 6,000) and equipped from
