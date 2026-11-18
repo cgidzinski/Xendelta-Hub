@@ -1,11 +1,16 @@
 import { useEffect, useRef } from "react";
-import { Avatar, Box, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
+import type { Cosmetics } from "@shared/cosmetics";
+import UserAvatar from "../user/UserAvatar";
+import UserName from "../user/UserName";
 
 interface Props {
   name: string;
   avatar?: string;
+  /** What they wear, so their frame and name colour show here too. */
+  cosmetics?: Cosmetics;
   /** The picture to show (a camera or a screen). Without it, the person's avatar. */
   stream?: MediaStream | null;
   muted?: boolean;
@@ -17,7 +22,7 @@ interface Props {
 }
 
 /** One person in the call: their video (or avatar), their name, whether they are muted, and a ring when they are talking. */
-export default function CallTile({ name, avatar, stream, muted, speaking, self, screen }: Props) {
+export default function CallTile({ name, avatar, cosmetics, stream, muted, speaking, self, screen }: Props) {
   const video = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (video.current) video.current.srcObject = stream ?? null;
@@ -61,9 +66,9 @@ export default function CallTile({ name, avatar, stream, muted, speaking, self, 
           }}
         />
       ) : (
-        <Avatar src={avatar || undefined} sx={{ width: 72, height: 72, fontSize: 28 }}>
+        <UserAvatar user={{ avatar, cosmetics }} sx={{ width: 72, height: 72, fontSize: 28 }}>
           {name[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
       )}
       <Box
         sx={{
@@ -83,7 +88,7 @@ export default function CallTile({ name, avatar, stream, muted, speaking, self, 
         {screen && <ScreenShareIcon sx={{ fontSize: 14 }} aria-hidden />}
         {muted && <MicOffIcon sx={{ fontSize: 14 }} color="error" aria-hidden />}
         <Typography variant="caption" noWrap>
-          {self ? "You" : name}
+          {self ? "You" : <UserName user={{ username: name, cosmetics }} />}
           {screen ? "'s screen" : ""}
         </Typography>
       </Box>

@@ -1,5 +1,5 @@
 import { Box } from "@mui/material";
-import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import { BADGE_ICONS } from "./badgeIcons";
 import { wornBadge, wornNameColour, type Cosmetics } from "@shared/cosmetics";
 
 interface UserNameProps {
@@ -18,8 +18,9 @@ export default function UserName({ user, fallback = "" }: UserNameProps) {
   const name = user?.username || fallback;
   const badge = wornBadge(user?.cosmetics);
   const colour = wornNameColour(user?.cosmetics);
+  const BadgeIcon = badge ? BADGE_ICONS[badge.icon] : null;
   if (!badge && !colour) return <>{name}</>;
-  if (!badge)
+  if (!badge || !BadgeIcon)
     return (
       <Box component="span" sx={{ color: colour?.token }}>
         {name}
@@ -31,7 +32,7 @@ export default function UserName({ user, fallback = "" }: UserNameProps) {
       <Box component="span" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", color: colour?.token }}>
         {name}
       </Box>
-      <StarRoundedIcon titleAccess={badge.label} sx={{ fontSize: "1.15em", color: "warning.main", flexShrink: 0 }} />
+      <BadgeIcon titleAccess={badge.label} sx={{ fontSize: "1.15em", color: badge.token, flexShrink: 0 }} />
     </Box>
   );
 }

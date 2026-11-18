@@ -14,13 +14,28 @@ export interface Cosmetics {
 
 export type CosmeticSlot = keyof Cosmetics;
 
-/** Badges that exist, by item key. The client picks the icon; this is the part both sides must agree on. */
-export const BADGES: Record<string, { label: string }> = {
-  "golden-badge": { label: "Golden Badge" },
+/** The shapes a badge can take. The client draws each one with an icon of its own. */
+export type BadgeIcon = "star" | "heart" | "bolt" | "leaf";
+
+export interface Badge {
+  label: string;
+  icon: BadgeIcon;
+  /** A theme palette path, never a colour literal. */
+  token: string;
+  /** Shop price in gems. */
+  price: number;
+}
+
+/** Badges that exist, by item key. The client picks the icon from `icon`; this is the part both sides must agree on. */
+export const BADGES: Record<string, Badge> = {
+  "golden-badge": { label: "Golden Badge", icon: "star", token: "warning.main", price: 25000 },
+  "heart-badge": { label: "Heart Badge", icon: "heart", token: "error.main", price: 3000 },
+  "bolt-badge": { label: "Bolt Badge", icon: "bolt", token: "info.main", price: 3000 },
+  "leaf-badge": { label: "Leaf Badge", icon: "leaf", token: "success.main", price: 3000 },
 };
 
 /** The badge someone is wearing, or undefined if they wear none (or one we no longer know). */
-export function wornBadge(cosmetics: Cosmetics | null | undefined): { key: string; label: string } | undefined {
+export function wornBadge(cosmetics: Cosmetics | null | undefined): (Badge & { key: string }) | undefined {
   const key = cosmetics?.badge;
   return key && BADGES[key] ? { key, ...BADGES[key] } : undefined;
 }
@@ -31,6 +46,7 @@ const COLOURS = {
   emerald: { label: "Emerald", token: "success.main" },
   rose: { label: "Rose", token: "error.main" },
   gold: { label: "Gold", token: "warning.main" },
+  silver: { label: "Silver", token: "text.secondary" },
 } as const;
 
 export interface ColourCosmetic {
@@ -41,7 +57,7 @@ export interface ColourCosmetic {
   price: number;
 }
 
-const PRICES: Record<keyof typeof COLOURS, number> = { sky: 1500, emerald: 2500, rose: 4000, gold: 6000 };
+const PRICES: Record<keyof typeof COLOURS, number> = { sky: 1500, silver: 1500, emerald: 2500, rose: 4000, gold: 6000 };
 
 const colourItems = (prefix: string, noun: string): Record<string, ColourCosmetic> =>
   Object.fromEntries(
@@ -84,3 +100,10 @@ export function isWorn(cosmetics: Cosmetics | null | undefined, itemKey: string)
   const slot = slotOf(itemKey);
   return !!slot && cosmetics?.[slot] === itemKey;
 }
+
+/** Every cosmetic that exists, with the slot it fills: what an admin can give, and what the Shop sells. */
+export const COSMETIC_ITEMS: { key: string; label: string; slot: CosmeticSlot }[] = [
+  ...Object.entries(BADGES).map(([key, b]) => ({ key, label: b.label, slot: "badge" as const })),
+  ...Object.entries(FRAMES).map(([key, c]) => ({ key, label: c.label, slot: "frame" as const })),
+  ...Object.entries(NAME_COLOURS).map(([key, c]) => ({ key, label: c.label, slot: "nameColour" as const })),
+];

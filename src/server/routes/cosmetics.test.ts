@@ -3,6 +3,8 @@ import request from "supertest";
 import mongoose from "mongoose";
 import { startTestApp, createUser, type TestApp } from "../testing/testApp";
 import { ITEMS } from "../constants/items";
+import { SHOP_ITEMS } from "../constants/shopItems";
+import { COSMETIC_ITEMS } from "@shared/cosmetics";
 import { cosmeticsOf, PUBLIC_USER_FIELDS } from "../utils/publicUser";
 
 // Wearing a cosmetic: equip and unequip, what happens when the item goes away, and that the choice reaches the
@@ -180,5 +182,23 @@ describe("frames and name colours", () => {
     await equip(wearer.token, await give(wearer.user._id, "name-gold"));
     const res = await request(t.app).get(`/api/users/${wearer.user._id}`).set(auth(viewer.token));
     expect(res.body.data.user.cosmetics).toEqual({ nameColour: "name-gold" });
+  });
+});
+
+describe("the cosmetics that exist", () => {
+  it("are all items, all for sale, and each fills the slot it says", () => {
+    const forSale = new Set(SHOP_ITEMS.map((s) => s.itemKey));
+    for (const c of COSMETIC_ITEMS) {
+      expect(ITEMS[c.key], `${c.key} is an item`).toBeDefined();
+      expect(ITEMS[c.key].cosmetic?.slot, `${c.key} slot`).toBe(c.slot);
+      expect(forSale.has(c.key), `${c.key} is in the Shop`).toBe(true);
+    }
+  });
+
+  it("a badge other than the golden one can be worn", async () => {
+    const { user, token } = await createUser();
+    const id = await give(user._id, "heart-badge");
+    expect((await equip(token, id)).status).toBe(200);
+    expect((await reload(user._id)).cosmetics.badge).toBe("heart-badge");
   });
 });

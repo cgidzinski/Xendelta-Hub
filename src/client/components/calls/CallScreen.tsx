@@ -11,6 +11,7 @@ import CallEndIcon from "@mui/icons-material/CallEnd";
 import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCall } from "../../contexts/CallContext";
+import { useUserProfile } from "../../hooks/user/useUserProfile";
 import { useChatCall } from "../../hooks/calls/useChatCall";
 import { useSpeaking } from "../../hooks/calls/useSpeaking";
 import { callClock, canShareScreen, gridColumns } from "../../utils/callMedia";
@@ -54,6 +55,7 @@ export default function CallScreen() {
   const theme = useTheme();
   const narrow = useMediaQuery(theme.breakpoints.down("sm"));
   const { user } = useAuth();
+  const { profile } = useUserProfile();
   const call = useCall();
   const { active, remote, local, muted, cameraOn, screenOn } = call;
   const chat = useChatCall(active?.conversationId);
@@ -76,6 +78,7 @@ export default function CallScreen() {
       self
       name={user.username ?? "You"}
       avatar={user.avatar}
+      cosmetics={profile?.cosmetics}
       stream={cameraOn ? local.stream : null}
       muted={muted}
       speaking={speaking.has(user.id) && !muted}
@@ -85,6 +88,7 @@ export default function CallScreen() {
         key={p.userId}
         name={people.get(p.userId)?.username ?? "Someone"}
         avatar={people.get(p.userId)?.avatar}
+        cosmetics={people.get(p.userId)?.cosmetics}
         stream={p.cameraOn ? remote.get(p.userId)?.video : null}
         muted={p.muted}
         speaking={speaking.has(p.userId)}
