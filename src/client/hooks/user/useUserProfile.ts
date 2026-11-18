@@ -18,6 +18,8 @@ export interface UserProfile {
   gems: number;
   unread_messages: boolean;
   unread_notifications: boolean;
+  /** How many notifications are unread (the navbar badge). */
+  unread_notification_count: number;
   has_new_notifications: boolean;
   pinnedApps: string[];
   /** Preferred IANA zone; "" means follow the browser. */

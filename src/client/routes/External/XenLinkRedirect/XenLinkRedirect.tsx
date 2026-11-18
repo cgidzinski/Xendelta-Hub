@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Container, Typography, Box, Button, CircularProgress, Alert, Card, CardContent } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
+import PublicJoinCard from "../components/PublicJoinCard";
 import { XenLink } from "../../../hooks/xenlink/useXenlink";
 import { normalizeDestination } from "@shared/xenlink";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -70,6 +71,9 @@ export default function XenLinkRedirect() {
     }
   };
 
+  // Only for showing where it goes; the button still re-checks the address the server answers with.
+  const destination = link?.url ? normalizeDestination(link.url) : null;
+
   if (isLoading) {
     return (
       <Container maxWidth="sm" sx={{ py: 8 }}>
@@ -88,12 +92,17 @@ export default function XenLinkRedirect() {
             <Typography variant="h5" component="h1" gutterBottom>
               XenLink
             </Typography>
-            <Typography variant="body2" component="h1" gutterBottom>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
               Tiny URL
             </Typography>
             {link?.name && !error && (
               <Typography variant="subtitle1" sx={{ fontWeight: 600, wordBreak: "break-word", mb: 1 }}>
                 {link.name}
+              </Typography>
+            )}
+            {destination && !error && (
+              <Typography variant="body2" color="text.secondary" sx={{ wordBreak: "break-all" }}>
+                Goes to {destination}
               </Typography>
             )}
             {error && (
@@ -119,6 +128,7 @@ export default function XenLinkRedirect() {
           </Box>
         </CardContent>
       </Card>
+      <PublicJoinCard app="xenlink" />
     </Container>
   );
 }

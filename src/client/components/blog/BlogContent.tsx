@@ -8,6 +8,7 @@ import {
   Chip,
   CircularProgress,
   Alert,
+  Button,
   Link,
   Box,
   Pagination,
@@ -55,6 +56,8 @@ interface BlogContentProps {
   onPostClick: (slug: string) => void;
   pagination?: PaginationInfo;
   onPageChange?: (page: number) => void;
+  /** When given, the error state offers a "Try again" button. */
+  onRetry?: () => void;
 }
 
 export default function BlogContent({
@@ -64,6 +67,7 @@ export default function BlogContent({
   onPostClick,
   pagination,
   onPageChange,
+  onRetry,
 }: BlogContentProps) {
   return (
     <Container maxWidth="lg" sx={{ py: 2, flex: 1 }}>
@@ -72,7 +76,17 @@ export default function BlogContent({
           <CircularProgress />
         </Box>
       ) : error ? (
-        <Alert severity="error" sx={{ mb: 4 }}>
+        <Alert
+          severity="error"
+          sx={{ mb: 4 }}
+          action={
+            onRetry && (
+              <Button color="inherit" size="small" onClick={onRetry}>
+                Try again
+              </Button>
+            )
+          }
+        >
           {error}
         </Alert>
       ) : posts.length === 0 ? (

@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { Alert, Box, CircularProgress, Container, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
+import PublicJoinCard from "../components/PublicJoinCard";
 import { usePublicNote, usePublicNotebook } from "../../../hooks/xennote/useXenNote";
 import NoteCard from "../../Internal/XenNote/components/NoteCard";
 
@@ -40,6 +41,9 @@ export function XenNotePublicNote() {
     <Frame>
       <Box sx={{ maxWidth: 560, mx: "auto" }}>
         <NoteCard note={note} />
+      </Box>
+      <Box sx={{ maxWidth: 560, mx: "auto" }}>
+        <PublicJoinCard app="xennote" />
       </Box>
     </Frame>
   );
@@ -89,6 +93,7 @@ export function XenNotePublicNotebook() {
           You are reading a shared notebook. You cannot change it, and you cannot see who else is in it.
         </Typography>
       </Box>
+      <PublicJoinCard app="xennote" />
     </Frame>
   );
 }

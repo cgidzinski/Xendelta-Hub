@@ -5,6 +5,7 @@ import BrushIcon from "@mui/icons-material/Brush";
 import { useSnackbar } from "notistack";
 import { useTheme, alpha } from "@mui/material/styles";
 import { useTitle } from "../../../hooks/useTitle";
+import PublicJoinCard from "../components/PublicJoinCard";
 import { usePublicRecipaintRecipe, useCloneRecipe } from "../../../hooks/recipaint/useRecipaint";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useRecipeProgress } from "../../../hooks/recipaint/useRecipeProgress";
@@ -139,6 +140,7 @@ export default function RecipaintPublic() {
                 {cloneLabel}
               </Button>
             </Card>
+            <PublicJoinCard app="recipaint" />
           </>
         )}
       </Container>

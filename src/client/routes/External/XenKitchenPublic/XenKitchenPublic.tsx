@@ -5,6 +5,7 @@ import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import LibraryAddIcon from "@mui/icons-material/LibraryAdd";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
+import PublicJoinCard from "../components/PublicJoinCard";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -112,6 +113,7 @@ export default function XenKitchenPublic() {
                 </Button>
               }
             />
+            <PublicJoinCard app="xenkitchen" />
           </>
         )}
       </Container>

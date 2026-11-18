@@ -2,6 +2,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Box } from "@mui/material";
 import LandingHeader from "../../../components/LandingHeader";
 import BlogContent from "../../../components/blog/BlogContent";
+import { useTitle } from "../../../hooks/useTitle";
+import PublicFooter from "../components/PublicFooter";
 import { useBlog } from "../../../hooks/blog/useBlog";
 
 export default function Blog() {
@@ -9,7 +11,8 @@ export default function Blog() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "10");
-  const { posts, pagination, isLoading, isError, error } = useBlog({ page, limit });
+  useTitle("Blog");
+  const { posts, pagination, isLoading, isError, error, refetch } = useBlog({ page, limit });
 
   const handlePostClick = (slug: string) => {
     navigate(`/blog/${slug}`);
@@ -39,7 +42,9 @@ export default function Blog() {
         onPostClick={handlePostClick}
         pagination={pagination}
         onPageChange={handlePageChange}
+        onRetry={() => refetch()}
       />
+      <PublicFooter />
     </Box>
   );
 }
