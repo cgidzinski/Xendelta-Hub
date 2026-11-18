@@ -11,7 +11,6 @@ import SectionLabel from "../../../../components/ui/SectionLabel";
 import CustomEmojiManager from "../../../../components/emoji/CustomEmojiManager";
 import UserName from "../../../../components/user/UserName";
 import PersonLink from "../../../../components/user/PersonLink";
-import GiftGemsDialog from "../../../../components/billing/GiftGemsDialog";
 
 interface DetailsPanelProps {
   conversation: ChatConversation;
@@ -28,7 +27,6 @@ export default function DetailsPanel({ conversation, meId, onAddPeople, onLeft }
   const confirm = useConfirm();
   const [name, setName] = useState(conversation.name ?? "");
   const [menu, setMenu] = useState<{ el: HTMLElement; userId: string } | null>(null);
-  const [giftTo, setGiftTo] = useState<{ _id: string; username: string } | null>(null);
   const iAmOwner = conversation.members.find((m) => m.user_id === meId)?.role === "owner";
 
   useEffect(() => setName(conversation.name ?? ""), [conversation._id, conversation.name]);
@@ -123,7 +121,7 @@ export default function DetailsPanel({ conversation, meId, onAddPeople, onLeft }
                 {you ? " (you)" : ""}
               </Typography>
               {m.role === "owner" && <Chip size="small" variant="outlined" label="Owner" />}
-              {!you && person && (
+              {iAmOwner && !you && (
                 <IconButton
                   size="small"
                   aria-label={`Options for ${person?.username ?? "member"}`}
@@ -170,36 +168,22 @@ export default function DetailsPanel({ conversation, meId, onAddPeople, onLeft }
       <Menu anchorEl={menu?.el} open={!!menu} onClose={() => setMenu(null)}>
         <MenuItem
           onClick={() => {
-            const person = conversation.people.find((p) => p._id === menu?.userId);
-            if (person) setGiftTo(person);
+            if (menu) void handOver(menu.userId);
             setMenu(null);
           }}
         >
-          Give gems
+          Make owner
         </MenuItem>
-        {iAmOwner && (
-          <MenuItem
-            onClick={() => {
-              if (menu) void handOver(menu.userId);
-              setMenu(null);
-            }}
-          >
-            Make owner
-          </MenuItem>
-        )}
-        {iAmOwner && (
-          <MenuItem
-            sx={{ color: "error.main" }}
-            onClick={() => {
-              if (menu) void remove(menu.userId);
-              setMenu(null);
-            }}
-          >
-            Remove from chat
-          </MenuItem>
-        )}
+        <MenuItem
+          sx={{ color: "error.main" }}
+          onClick={() => {
+            if (menu) void remove(menu.userId);
+            setMenu(null);
+          }}
+        >
+          Remove from chat
+        </MenuItem>
       </Menu>
-      {giftTo && <GiftGemsDialog open onClose={() => setGiftTo(null)} person={giftTo} />}
     </Box>
   );
 }
