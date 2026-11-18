@@ -110,7 +110,8 @@ not it found a recipe. It is refused first (402) when the free allowance is used
 `POST /api/xensplit/scan-receipt` reads one photo of a receipt into lines, tax, tip and total (`readReceiptFromImage` in
 `ai/vision.ts`, parsed by `utils/receiptImport.ts`). It is billed exactly like a recipe scan: **2.5 gems**, counted once the
 model has run whether or not it found any lines, and refused first (402) when the allowance is used up. Nothing is saved: the
-expense form shows the lines for a person to assign (`ReceiptScanDialog`, `receiptSplit.ts`).
+expense form shows the lines for a person to assign (`ReceiptScanDialog`, `receiptSplit.ts`). XenBudget uses the same
+route: `ReceiptFillDialog` reads one photo and fills an item's description (the shop), amount (the total) and date.
 
 ### Free allowance
 

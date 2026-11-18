@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Stack, TextField, Typography } from "@mui/material";
 import { formatMoney } from "@shared/money";
-import { COST_CENTERS, billedRate, formatGems } from "@shared/billing";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
-import { useScanReceipt, type ScannedReceipt } from "../../../../hooks/xensplit/useReceiptScan";
+import {
+  RECEIPT_SCAN_PRICE as SCAN_PRICE,
+  useScanReceipt,
+  type ScannedReceipt,
+} from "../../../../hooks/xensplit/useReceiptScan";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { splitReceipt } from "../receiptSplit";
 
@@ -31,9 +34,6 @@ interface ReceiptScanDialogProps {
   onClose: () => void;
   onApply: (result: ReceiptResult) => void;
 }
-
-const scanCenter = COST_CENTERS.find((c) => c.id === "receipt_scans");
-const SCAN_PRICE = formatGems(scanCenter ? billedRate(scanCenter) : 0);
 
 /**
  * Read a receipt photo into lines, then say who had what. Nothing is charged until the person presses Read receipt;
