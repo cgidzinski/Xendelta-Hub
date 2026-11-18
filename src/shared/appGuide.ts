@@ -227,7 +227,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Record settlements, with a prompt to pay by e-transfer.",
       "See a map of who owes what to whom, simplified or direct.",
       "See spending by category, by member and by month.",
-      "Look back through the group's activity and restore deleted expenses.",
+      "Look back through the group's activity, including deleted expenses.",
       "Start an expense from a receipt photo shared from your phone.",
     ],
     tips: [

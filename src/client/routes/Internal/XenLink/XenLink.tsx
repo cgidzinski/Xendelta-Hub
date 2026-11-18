@@ -17,6 +17,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import { useTitle } from "../../../hooks/useTitle";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import LinkIcon from "@mui/icons-material/Link";
 import {
   useCreateXenLink,
@@ -39,6 +40,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 export default function XenDrive() {
   useTitle("XenLink");
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const [search, setSearch] = useState("");
   const [EditLinkDialogOpen, setEditLinkDialogOpen] = useState(false);
 
@@ -49,6 +51,21 @@ export default function XenDrive() {
   const { mutateAsync: updateXenLink, isPending: isUpdating } = useUpdateXenLink();
   const { mutateAsync: createXenLink } = useCreateXenLink();
   const { mutateAsync: deleteXenLink } = useDeleteXenLink();
+
+  const handleDeleteLink = async () => {
+    const ok = await confirm({
+      title: "Delete this link?",
+      message: `"${selectedLink.name}" will stop working for anyone who has it, and its click stats are lost.`,
+    });
+    if (!ok) return;
+    try {
+      await deleteXenLink(selectedLink._id || "");
+      enqueueSnackbar("Link deleted", { variant: "success" });
+      handleCloseEditLinkDialog();
+    } catch (e) {
+      enqueueSnackbar(e instanceof Error ? e.message : "Couldn't delete the link", { variant: "error" });
+    }
+  };
 
   const shareUrl = useMemo(() => {
     if (selectedLink?.slug) {
@@ -206,14 +223,7 @@ export default function XenDrive() {
           <Box sx={{ display: "flex", gap: 2, justifyContent: "space-between", width: "100%" }}>
             <Box>
               {selectedLink._id && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  onClick={() => {
-                    deleteXenLink(selectedLink._id || "");
-                    handleCloseEditLinkDialog();
-                  }}
-                >
+                <Button variant="contained" color="error" onClick={handleDeleteLink}>
                   <DeleteIcon />
                   Delete
                 </Button>
