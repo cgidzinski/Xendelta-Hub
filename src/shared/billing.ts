@@ -117,6 +117,9 @@ export type CostCenterId = (typeof COST_CENTERS)[number]["id"];
 export const COST_CENTER_IDS = COST_CENTERS.map((c) => c.id) as CostCenterId[];
 
 /** What we charge on top of the cost rate, so the hub covers its costs. */
+/** The longest note that can go with a gift of gems. */
+export const GIFT_NOTE_MAX = 140;
+
 export const BILLING_MARGIN = 1.25;
 
 /** Gems a person can use each month without paying. Taken off the whole bill; it doesn't roll over. */

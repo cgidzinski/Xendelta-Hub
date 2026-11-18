@@ -13,6 +13,7 @@ export const GEM_TRANSACTION_KINDS = [
   "feedback_reward", // an admin rewarded feedback
   "admin_adjustment", // an admin correction or refund
   "donation", // a member chipped in to a community's fund
+  "gift", // a person gave gems to another person
   "bill", // a monthly bill paid to the house
 ] as const;
 
