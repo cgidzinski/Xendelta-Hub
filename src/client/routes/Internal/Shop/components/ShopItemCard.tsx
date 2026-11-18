@@ -12,9 +12,8 @@ interface ShopItemCardProps {
 /** One item for sale: picture, name, two-line description and the price in gems. */
 export default function ShopItemCard({ item, onSelect }: ShopItemCardProps) {
   return (
-    <Card variant="outlined" sx={{ ...cardSx, height: "100%", opacity: 0.55, filter: "grayscale(1)" }}>
+    <Card variant="outlined" sx={{ ...cardSx, height: "100%" }}>
       <CardActionArea
-        disabled
         onClick={() => onSelect(item)}
         sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "stretch" }}
       >
@@ -35,7 +34,6 @@ export default function ShopItemCard({ item, onSelect }: ShopItemCardProps) {
             alt={item.item.name}
             sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
-          <Chip label="Out of stock" size="small" sx={{ position: "absolute", top: 8, right: 8 }} />
           {item.addToInventory === false && (
             <Chip label="Instant" color="success" size="small" sx={{ position: "absolute", top: 8, left: 8 }} />
           )}
