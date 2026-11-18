@@ -183,9 +183,13 @@ export default function XenKitchen() {
       message: "Their photos are deleted too. This can't be undone.",
     });
     if (!ok) return;
-    await bulkDelete.mutateAsync([...selected]);
-    enqueueSnackbar("Deleted", { variant: "success" });
-    setSelected(new Set());
+    try {
+      await bulkDelete.mutateAsync([...selected]);
+      enqueueSnackbar("Deleted", { variant: "success" });
+      setSelected(new Set());
+    } catch {
+      enqueueSnackbar("Couldn't delete those", { variant: "error" });
+    }
   };
 
   const activeCategory = categories.find((c) => c._id === filters.category);

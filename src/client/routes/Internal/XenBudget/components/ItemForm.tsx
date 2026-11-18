@@ -30,6 +30,7 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { useSnackbar } from "notistack";
 import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
 import { useXenBudgetItemImageUrls } from "../../../../hooks/xenbudget/useItems";
+import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useAuth } from "../../../../contexts/AuthContext";
 import type {
   XenBudgetBook,
@@ -93,6 +94,7 @@ export default function ItemForm({
   isDeletingImage,
 }: ItemFormProps) {
   const { enqueueSnackbar } = useSnackbar();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const isMobile = useMediaQuery("(max-width:600px)");
   const [step, setStep] = useState(0);
@@ -260,8 +262,14 @@ export default function ItemForm({
 
   const handleDelete = async () => {
     if (!onDelete) return;
+    const ok = await confirm({
+      title: "Delete this item?",
+      message: "It's removed from the book and its photos are deleted. This can't be undone.",
+    });
+    if (!ok) return;
     try {
       await onDelete();
+      enqueueSnackbar("Item deleted", { variant: "success" });
       onClose();
     } catch (e) {
       enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete item", { variant: "error" });
@@ -549,12 +557,19 @@ export default function ItemForm({
       </DialogContent>
       <DialogActions>
         <Stack direction="row" spacing={1}>
+          {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
+          {/* Kept apart from Back so a thumb aiming for Back doesn't land on Delete. */}
           {item && onDelete && (
-            <Button variant="outlined" color="error" disabled={isDeleting} onClick={handleDelete}>
+            <Button
+              variant="outlined"
+              color="error"
+              disabled={isDeleting}
+              onClick={handleDelete}
+              sx={{ ml: step > 0 ? 3 : 0 }}
+            >
               Delete
             </Button>
           )}
-          {step > 0 && <Button onClick={() => setStep((s) => s - 1)}>Back</Button>}
         </Stack>
         {(item || step === STEPS.length - 1) && (
           <Button variant="outlined" disabled={!canSubmit || isSubmitting} onClick={handleSubmit} sx={{ flexGrow: 1 }}>

@@ -54,7 +54,7 @@ export default function Recipaint() {
     isLoading: isLoadingPublic,
     isError: isErrorPublic,
     error: errorPublic,
-  } = usePublicRecipes();
+  } = usePublicRecipes(debouncedSearch || undefined);
   const createRecipe = useCreateRecipe();
 
   const visibleRecipes = useMemo(() => applyRecipeFilters(recipes, filter, sort), [recipes, filter, sort]);

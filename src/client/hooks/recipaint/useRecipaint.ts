@@ -42,7 +42,7 @@ export const recipaintKeys = {
   list: (search?: string) => [...recipaintKeys.lists(), { search }] as const,
   details: () => [...recipaintKeys.all, "detail"] as const,
   detail: (id: string) => [...recipaintKeys.details(), id] as const,
-  public: () => [...recipaintKeys.all, "public"] as const,
+  public: (search?: string) => [...recipaintKeys.all, "public", { search }] as const,
   publicDetails: () => [...recipaintKeys.all, "publicDetail"] as const,
   publicDetail: (id: string) => [...recipaintKeys.publicDetails(), id] as const,
 };
@@ -58,12 +58,10 @@ const fetchRecipes = async (search?: string): Promise<RecipeSummary[]> => {
   return (await api.get<RecipesResponse>("/api/recipaint", { params })).recipes;
 };
 
-const fetchPublicRecipes = async (): Promise<RecipeSummary[]> => {
-  return (
-    await api.get<RecipesResponse>("/api/recipaint/public", {
-      params: { limit: PUBLIC_RECIPES_LIMIT },
-    })
-  ).recipes;
+const fetchPublicRecipes = async (search?: string): Promise<RecipeSummary[]> => {
+  const params: Record<string, string | number> = { limit: PUBLIC_RECIPES_LIMIT };
+  if (search) params.search = search;
+  return (await api.get<RecipesResponse>("/api/recipaint/public", { params })).recipes;
 };
 
 const fetchRecipe = async (id: string): Promise<Recipe> => {
@@ -117,11 +115,12 @@ export const useRecipaint = (search?: string) => {
   };
 };
 
-export const usePublicRecipes = () => {
+export const usePublicRecipes = (search?: string) => {
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: recipaintKeys.public(),
-    queryFn: fetchPublicRecipes,
+    queryKey: recipaintKeys.public(search),
+    queryFn: () => fetchPublicRecipes(search),
     staleTime: 2 * 60 * 1000, // 2 minutes
+    placeholderData: (previousData) => previousData,
     retry: (failureCount, error) => {
       if (error.message.includes("Unauthorized")) {
         return false;
