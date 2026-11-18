@@ -234,6 +234,7 @@ function HowBillingWorks({ overview, communityName }: { overview: BillingOvervie
       }`,
     ],
     ["Recipe scans", `${gems(ratePer("recipe_scans"))} for each recipe you read from a photo.`],
+    ["Receipt scans", `${gems(ratePer("receipt_scans"))} for each receipt you read from a photo.`],
     [
       "Free every month",
       `${formatWholeGems(overview.current.freeTierGems)} of everything above is free each month. It doesn't carry over to the next month.`,

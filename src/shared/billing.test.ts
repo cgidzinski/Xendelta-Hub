@@ -34,6 +34,7 @@ describe("the registry", () => {
       "storage",
       "calls",
       "recipe_scans",
+      "receipt_scans",
     ]);
     expect(everythingFree()).toBe(false);
     expect(communitiesBilled()).toBe(true);
@@ -41,6 +42,7 @@ describe("the registry", () => {
     expect(billedRate(COST_CENTERS.find((c) => c.id === "storage")!)).toBe(18.75);
     expect(billedRate(COST_CENTERS.find((c) => c.id === "calls")!)).toBe(62.5); // $0.05 per GB
     expect(billedRate(COST_CENTERS.find((c) => c.id === "recipe_scans")!)).toBe(2.5);
+    expect(billedRate(COST_CENTERS.find((c) => c.id === "receipt_scans")!)).toBe(2.5);
     for (const c of COST_CENTERS.filter((c) => c.payer === "house")) expect(billedRate(c)).toBe(0);
     expect(COST_CENTERS.some((c) => (c.id as string) === "downloads")).toBe(false);
   });
