@@ -1,6 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../../config/api";
+import { COST_CENTERS, billedRate, formatGems } from "@shared/billing";
 import { xensplitKeys } from "./keys";
+
+const scanCenter = COST_CENTERS.find((c) => c.id === "receipt_scans");
+/** What one receipt scan costs, as people read it ("2.5 gems"). */
+export const RECEIPT_SCAN_PRICE = formatGems(scanCenter ? billedRate(scanCenter) : 0);
 
 /** A receipt as the server read it: what a person reviews before splitting it. Amounts are in dollars. */
 export interface ScannedReceipt {

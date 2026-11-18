@@ -43,6 +43,9 @@ import LabelPicker from "./LabelPicker";
 import { getCurrencySymbol } from "../currency";
 import { dateOnlyToLocal } from "../../../../utils/dateGrouping";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import { useReceiptScanEnabled, type ScannedReceipt } from "../../../../hooks/xensplit/useReceiptScan";
+import ReceiptFillDialog from "./ReceiptFillDialog";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
 import { EXPENSE_COLOR, INCOME_COLOR } from "../../../../components/ui/chartColors";
@@ -93,6 +96,15 @@ export default function ItemForm({
   const { user } = useAuth();
   const isMobile = useMediaQuery("(max-width:600px)");
   const [step, setStep] = useState(0);
+  const receiptScanEnabled = useReceiptScanEnabled();
+  const [scanOpen, setScanOpen] = useState(false);
+  // Fill the description (the shop), amount (the total) and date from a read receipt.
+  const applyReceipt = (r: ScannedReceipt) => {
+    if (r.merchant) setDescription(r.merchant);
+    if (r.total > 0) setAmount(String(r.total));
+    if (r.date) setDate(new Date(`${r.date}T12:00:00`));
+    setScanOpen(false);
+  };
   const [type, setType] = useState<ItemType>("expense");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState(book.default_currency);
@@ -519,6 +531,18 @@ export default function ItemForm({
 
                 {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
               </Box>
+              {receiptScanEnabled && images.length > 0 && (
+                <Button size="small" startIcon={<ReceiptLongIcon />} sx={{ mt: 1 }} onClick={() => setScanOpen(true)}>
+                  Read receipt from photo
+                </Button>
+              )}
+              <ReceiptFillDialog
+                open={scanOpen}
+                photo={images[0] ?? null}
+                currency={currency}
+                onClose={() => setScanOpen(false)}
+                onApply={applyReceipt}
+              />
             </Box>
           </Stack>
         )}

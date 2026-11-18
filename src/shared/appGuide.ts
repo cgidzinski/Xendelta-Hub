@@ -255,7 +255,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenBudget to see where your money goes.", link: "/internal/xenbudget" },
     features: [
       "Keep budget books you share with other people.",
-      "Log money in and out with a date, amount, note and receipt photos.",
+      "Log money in and out with a date, amount, note and receipt photos, and read a receipt photo to fill in the shop, total and date.",
       "Sort items with categories and flags, and share an item between people.",
       "Search, filter and review items by period, category, flag or person.",
       "Set budgets per category, with shared and per-person limits and a projection of where you will end up.",
@@ -271,6 +271,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       { text: "Import a bank CSV and let rules sort the items into categories for you.", link: "/internal/xenbudget" },
       {
         text: "Add a photo of a receipt to an item, or share it from your phone straight into a book.",
+        link: "/internal/xenbudget",
+      },
+      {
+        text: "After adding a receipt photo to an item, tap Read receipt from photo to fill in the description, amount and date.",
         link: "/internal/xenbudget",
       },
       {
