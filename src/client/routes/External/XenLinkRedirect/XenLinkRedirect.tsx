@@ -15,7 +15,7 @@ export default function XenLinkRedirect() {
   const [going, setGoing] = useState(false);
   const [link, setLink] = useState<XenLink | null>(null);
 
-  useTitle("Tiny URL - XenLink");
+  useTitle("Short link - XenLink");
 
   useEffect(() => {
     if (!slug) {
@@ -93,7 +93,7 @@ export default function XenLinkRedirect() {
               XenLink
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              Tiny URL
+              Short link
             </Typography>
             {link?.name && !error && (
               <Typography variant="subtitle1" sx={{ fontWeight: 600, wordBreak: "break-word", mb: 1 }}>

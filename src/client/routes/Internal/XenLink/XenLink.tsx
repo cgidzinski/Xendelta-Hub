@@ -77,7 +77,7 @@ export default function XenDrive() {
   const handleCopyUrl = () => {
     if (shareUrl) {
       navigator.clipboard.writeText(shareUrl);
-      enqueueSnackbar("URL copied to clipboard", { variant: "success" });
+      enqueueSnackbar("Link copied to clipboard", { variant: "success" });
     }
   };
 
@@ -156,7 +156,7 @@ export default function XenDrive() {
 
             <TextField
               fullWidth
-              label="URL"
+              label="Destination"
               value={selectedLink?.url || ""}
               onChange={(e) => setSelectedLink((prev) => (prev ? { ...prev, url: e.target.value } : emptyXenLink))}
             />
@@ -268,6 +268,7 @@ export default function XenDrive() {
       )}
 
       <LinkList
+        search={search}
         links={links}
         handleLinkClick={(id) => {
           setSelectedLink(links.find((link) => link._id === id) || emptyXenLink);

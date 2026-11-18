@@ -17,9 +17,19 @@ interface LinkListProps {
   isError?: boolean;
   error?: Error | null;
   onRetry?: () => void;
+  /** The current search; when it finds nothing the empty state says so instead of inviting a first link. */
+  search?: string;
 }
 
-export default function LinkList({ links, handleLinkClick, isLoading, isError, error, onRetry }: LinkListProps) {
+export default function LinkList({
+  links,
+  handleLinkClick,
+  isLoading,
+  isError,
+  error,
+  onRetry,
+  search,
+}: LinkListProps) {
   const { enqueueSnackbar } = useSnackbar();
 
   const handleCopyUrl = (e: React.MouseEvent, link: XenLink) => {
@@ -28,7 +38,7 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
       const baseUrl = window.location.origin;
       const shareUrl = `${baseUrl}/x/${link.slug}`;
       navigator.clipboard.writeText(shareUrl);
-      enqueueSnackbar("URL copied to clipboard", { variant: "success" });
+      enqueueSnackbar("Link copied to clipboard", { variant: "success" });
     }
   };
 
@@ -41,6 +51,9 @@ export default function LinkList({ links, handleLinkClick, isLoading, isError, e
   }
 
   if (!links || links.length === 0) {
+    if (search) {
+      return <EmptyState icon={<LinkIcon />} title="No links match" description={`Nothing found for "${search}".`} />;
+    }
     return <EmptyState icon={<LinkIcon />} title="No links yet" description="Create your first link to get started." />;
   }
 

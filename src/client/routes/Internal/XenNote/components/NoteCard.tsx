@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Avatar,
   Box,
@@ -7,20 +8,27 @@ import {
   Chip,
   IconButton,
   LinearProgress,
+  ListItemIcon,
+  Menu,
+  MenuItem,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { formatDistanceToNowStrict } from "date-fns";
-import { alpha } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import LinkIcon from "@mui/icons-material/Link";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import type { PublicXenNote, XenNote } from "../../../../types/XenNote";
 import { checklistProgress, hostOf } from "../noteDraft";
 import NoteMarkdown from "./NoteMarkdown";
-import { noteSurfaceSx } from "../noteColors";
+import { NOTE_COLORS } from "@shared/xennote/notes";
+import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
 import { formatReminder } from "../reminders";
 
 interface NoteCardProps {
@@ -33,6 +41,10 @@ interface NoteCardProps {
   resolveTitle?: (title: string) => string | null;
   /** Open a note a [[link]] points to. */
   onOpenLinked?: (id: string) => void;
+  /** Quick actions from the card, so a note doesn't have to be opened to archive, recolour or delete it. */
+  onArchive?: () => void;
+  onColor?: (color: XenNote["color"]) => void;
+  onDelete?: () => void;
 }
 
 const MAX_LINES = 8;
@@ -88,7 +100,12 @@ export default function NoteCard({
   onTogglePin,
   resolveTitle,
   onOpenLinked,
+  onArchive,
+  onColor,
+  onDelete,
 }: NoteCardProps) {
+  const theme = useTheme();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const full = "can_edit" in note ? note : null;
   const pinned = full?.pinned ?? false;
   const editable = !!full?.can_edit;
@@ -102,7 +119,7 @@ export default function NoteCard({
       {hasPhotos && <PhotoMosaic images={note.images} />}
       <Box sx={{ p: 2, pb: 2 }}>
         {note.title && (
-          <Typography sx={{ fontWeight: 600, mb: 0.5, wordBreak: "break-word", pr: editable ? 3 : 0 }}>
+          <Typography sx={{ fontWeight: 600, mb: 0.5, wordBreak: "break-word", pr: editable ? 8 : 0 }}>
             {note.title}
           </Typography>
         )}
@@ -255,6 +272,79 @@ export default function NoteCard({
             {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
           </IconButton>
         </Tooltip>
+      )}
+      {editable && (onArchive || onColor || onDelete) && (
+        <>
+          <Tooltip title="More">
+            <IconButton
+              size="small"
+              aria-label="More actions"
+              onClick={(e) => setMenuAnchor(e.currentTarget)}
+              sx={{
+                position: "absolute",
+                top: 6,
+                right: 38,
+                zIndex: 1,
+                bgcolor: hasPhotos ? (t) => alpha(t.palette.background.paper, 0.75) : undefined,
+                color: "text.secondary",
+              }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Menu open={!!menuAnchor} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
+            {onColor && (
+              <Box sx={{ display: "flex", gap: 1, px: 2, py: 1 }} role="group" aria-label="Note colour">
+                {NOTE_COLORS.map((c) => (
+                  <IconButton
+                    key={c}
+                    size="small"
+                    aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
+                    aria-pressed={full?.color === c}
+                    onClick={() => {
+                      onColor(c);
+                      setMenuAnchor(null);
+                    }}
+                    sx={{
+                      width: 24,
+                      height: 24,
+                      bgcolor: swatchColor(theme, c) ?? "background.paper",
+                      border: 2,
+                      borderColor: full?.color === c ? "text.primary" : "divider",
+                    }}
+                  />
+                ))}
+              </Box>
+            )}
+            {onArchive && (
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  onArchive();
+                }}
+              >
+                <ListItemIcon>
+                  <ArchiveOutlinedIcon fontSize="small" />
+                </ListItemIcon>
+                {full?.archived ? "Unarchive" : "Archive"}
+              </MenuItem>
+            )}
+            {onDelete && (
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  onDelete();
+                }}
+                sx={{ color: "error.main" }}
+              >
+                <ListItemIcon sx={{ color: "inherit" }}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </ListItemIcon>
+                Delete
+              </MenuItem>
+            )}
+          </Menu>
+        </>
       )}
     </Card>
   );
