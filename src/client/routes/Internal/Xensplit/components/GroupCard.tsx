@@ -1,8 +1,9 @@
 import { formatMoney } from "@shared/money";
 import { useNavigate } from "react-router-dom";
-import { Card, CardActionArea, CardContent, Typography, Box, Avatar, AvatarGroup, Chip } from "@mui/material";
+import { Card, CardActionArea, CardContent, Typography, Box, AvatarGroup, Chip } from "@mui/material";
 import GroupAvatar from "./GroupAvatar";
 import type { XenSplit } from "../../../../hooks/xensplit/types";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 function getUserNetBalance(group: XenSplit, userId: string): { [currency: string]: number } {
   const balances: { [currency: string]: number } = {};
@@ -102,9 +103,9 @@ export function GroupCard({ group, userId }: GroupCardProps) {
                   }}
                 >
                   {group.members.map((member) => (
-                    <Avatar key={member.user_id} src={member.avatar || undefined} sx={{}}>
+                    <UserAvatar key={member.user_id} user={member} sx={{}}>
                       {member.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                   ))}
                 </AvatarGroup>
               </Box>

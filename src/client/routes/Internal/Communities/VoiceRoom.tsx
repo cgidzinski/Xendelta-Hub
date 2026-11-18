@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Avatar, Badge, Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
+import { Badge, Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
 import { alpha, type Theme } from "@mui/material/styles";
 import MenuIcon from "@mui/icons-material/Menu";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
@@ -10,6 +10,7 @@ import type { Community, CommunityChannel } from "@shared/communities";
 import EmptyState from "../../../components/ui/EmptyState";
 import { useCall } from "../../../contexts/CallContext";
 import { useChatCall } from "../../../hooks/calls/useChatCall";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 interface Props {
   community: Community;
@@ -122,9 +123,9 @@ export default function VoiceRoom({
                           },
                         }}
                       >
-                        <Avatar src={person?.avatar || undefined} sx={{ width: 56, height: 56, mx: "auto" }}>
+                        <UserAvatar user={person} sx={{ width: 56, height: 56, mx: "auto" }}>
                           {person?.username[0]?.toUpperCase()}
-                        </Avatar>
+                        </UserAvatar>
                       </Badge>
                       <Typography variant="caption" noWrap sx={{ display: "block", mt: 0.5 }}>
                         {person?.username ?? "Someone"}

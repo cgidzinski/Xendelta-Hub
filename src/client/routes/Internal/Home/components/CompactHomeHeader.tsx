@@ -1,4 +1,4 @@
-import { Box, Avatar, Typography, Skeleton } from "@mui/material";
+import { Box, Typography, Skeleton } from "@mui/material";
 import { GemIcon } from "../../../../components/icons/GemIcon";
 import { GEM_COLOR } from "../../../../theme";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
@@ -6,6 +6,7 @@ import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import { useInbox } from "../../../../hooks/user/useInbox";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 function StatItem({ icon, value, active }: { icon: React.ReactNode; value: number; active?: boolean }) {
   return (
@@ -51,7 +52,7 @@ export default function CompactHomeHeader() {
     >
       {/* Identity */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0 }}>
-        <Avatar src={profile?.avatar} alt={profile?.username} sx={{ width: 36, height: 36, flexShrink: 0 }} />
+        <UserAvatar user={profile} alt={profile?.username} sx={{ width: 36, height: 36, flexShrink: 0 }} />
         <Typography variant="h6" noWrap sx={{ minWidth: 0, fontWeight: 600 }}>
           Welcome back, <UserName user={profile} />!
         </Typography>

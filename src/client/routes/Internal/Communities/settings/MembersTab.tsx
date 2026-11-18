@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Avatar,
   Box,
   Button,
   Checkbox,
@@ -28,6 +27,7 @@ import SectionCard from "../../../../components/ui/SectionCard";
 import { canManageRoleClient, rankOf } from "../../../../utils/communityRoles";
 import { roleTextColor } from "../communityUi";
 import InvitePeopleDialog from "./InvitePeopleDialog";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 const failure = (e: any, fallback: string) => e?.response?.data?.message || e?.message || fallback;
 const joined = (iso: string) =>
@@ -160,9 +160,9 @@ export default function MembersTab({ community }: { community: Community }) {
                 isOwner);
             return (
               <Box key={m.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
-                <Avatar src={person?.avatar || undefined} sx={{ width: 36, height: 36 }}>
+                <UserAvatar user={person} sx={{ width: 36, height: 36 }}>
                   {person?.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography noWrap variant="body2" sx={{ fontWeight: 500 }}>
                     {person?.username ?? "Someone"}
@@ -223,9 +223,9 @@ export default function MembersTab({ community }: { community: Community }) {
             <Stack divider={<Box sx={{ borderTop: 1, borderColor: "divider" }} />}>
               {pending.map((invite) => (
                 <Box key={invite.person._id} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
-                  <Avatar src={invite.person.avatar || undefined} sx={{ width: 36, height: 36 }}>
+                  <UserAvatar user={invite.person} sx={{ width: 36, height: 36 }}>
                     {invite.person.username[0]?.toUpperCase()}
-                  </Avatar>
+                  </UserAvatar>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography noWrap variant="body2" sx={{ fontWeight: 500 }}>
                       {invite.person.username}

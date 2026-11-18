@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Avatar, Box, Button, Chip, IconButton, Menu, MenuItem, TextField, Typography } from "@mui/material";
+import { Box, Button, Chip, IconButton, Menu, MenuItem, TextField, Typography } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import VolumeOffOutlinedIcon from "@mui/icons-material/VolumeOffOutlined";
 import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
@@ -11,6 +11,7 @@ import SectionLabel from "../../../../components/ui/SectionLabel";
 import CustomEmojiManager from "../../../../components/emoji/CustomEmojiManager";
 import UserName from "../../../../components/user/UserName";
 import PersonLink from "../../../../components/user/PersonLink";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface DetailsPanelProps {
   conversation: ChatConversation;
@@ -113,9 +114,9 @@ export default function DetailsPanel({ conversation, meId, onAddPeople, onLeft }
           const you = m.user_id === meId;
           return (
             <Box key={m.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.25, py: 0.75 }}>
-              <Avatar src={person?.avatar || undefined} sx={{ width: 36, height: 36 }}>
+              <UserAvatar user={person} sx={{ width: 36, height: 36 }}>
                 {person?.username[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Typography noWrap sx={{ flex: 1, minWidth: 0 }}>
                 {person ? <PersonLink user={person} fallback="Former member" /> : <UserName fallback="Former member" />}
                 {you ? " (you)" : ""}

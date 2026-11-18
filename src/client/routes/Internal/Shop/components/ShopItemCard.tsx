@@ -1,4 +1,5 @@
 import { Box, Card, CardActionArea, Chip, Typography } from "@mui/material";
+import ItemPicture from "../../../../components/user/ItemPicture";
 import GemAmount from "../../../../components/GemAmount";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import type { ShopItem } from "../../../../hooks/user/useShop";
@@ -28,9 +29,9 @@ export default function ShopItemCard({ item, onSelect }: ShopItemCardProps) {
             p: 2,
           }}
         >
-          <Box
-            component="img"
-            src={item.item.image}
+          <ItemPicture
+            itemKey={item.itemKey}
+            image={item.item.image}
             alt={item.item.name}
             sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
           />

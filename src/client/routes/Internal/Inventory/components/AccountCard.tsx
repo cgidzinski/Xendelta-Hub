@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { Avatar, Box, Button, Divider, Typography } from "@mui/material";
+import { Box, Button, Divider, Typography } from "@mui/material";
 import GemAmount from "../../../../components/GemAmount";
 import SectionLabel from "../../../../components/ui/SectionLabel";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import type { UserProfile } from "../../../../hooks/user/useUserProfile";
 import BillingSummary from "../../../../components/billing/BillingSummary";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface AccountCardProps {
   profile: UserProfile | undefined;
@@ -20,7 +21,7 @@ export default function AccountCard({ profile }: AccountCardProps) {
   return (
     <Box sx={{ ...cardSx }}>
       <Box sx={{ p: 2.5, display: "flex", alignItems: "center", gap: 2 }}>
-        <Avatar src={profile?.avatar} alt={profile?.username} sx={{ width: 64, height: 64 }} />
+        <UserAvatar user={profile} alt={profile?.username} sx={{ width: 64, height: 64 }} />
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
             <UserName user={profile} />

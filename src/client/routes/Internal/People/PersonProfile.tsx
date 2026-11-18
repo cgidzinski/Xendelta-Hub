@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Box, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
+import { Box, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
@@ -17,6 +17,7 @@ import SectionCard from "../../../components/ui/SectionCard";
 import EmptyState from "../../../components/ui/EmptyState";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import UserName from "../../../components/user/UserName";
+import UserAvatar from "../../../components/user/UserAvatar";
 import { GemIcon } from "../../../components/icons/GemIcon";
 import GiftGemsDialog from "../../../components/billing/GiftGemsDialog";
 
@@ -70,9 +71,9 @@ export default function PersonProfile() {
         onBack={goBack}
         backLabel="Back to people"
         leading={
-          <Avatar src={user.avatar || undefined} sx={{ width: 56, height: 56, mr: 0.5 }}>
+          <UserAvatar user={user} sx={{ width: 56, height: 56, mr: 0.5 }}>
             {user.username[0]?.toUpperCase()}
-          </Avatar>
+          </UserAvatar>
         }
         title={<UserName user={user} />}
         subtitle={

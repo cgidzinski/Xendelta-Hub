@@ -1,19 +1,11 @@
-import {
-  Avatar,
-  Box,
-  InputAdornment,
-  Stack,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from "@mui/material";
+import { Box, InputAdornment, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import type { ShareType, XenBudgetMember, XenBudgetLabel } from "../../../../hooks/xenbudget/types";
 import { formatCurrency, getCurrencySymbol } from "../currency";
 import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import { resolveLabelColor } from "./LabelChip";
 import LabelPicker from "./LabelPicker";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 export interface SplitDraft {
   key: string;
@@ -187,9 +179,9 @@ export default function WeightedSplitEditor({
                   transition: "all 0.2s",
                 }}
               >
-                <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                <UserAvatar user={m} sx={{ width: 24, height: 24, fontSize: 12 }}>
                   {m.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Typography variant="caption">
                   <UserName user={m} />
                 </Typography>
@@ -249,9 +241,9 @@ export default function WeightedSplitEditor({
                 const draft = selected.find((s) => s.key === m.user_id);
                 return (
                   <Stack key={m.user_id} direction="row" alignItems="center" spacing={1}>
-                    <Avatar src={m.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
+                    <UserAvatar user={m} sx={{ width: 26, height: 26, fontSize: 12 }}>
                       {m.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                       <UserName user={m} />
                     </Typography>
@@ -269,9 +261,9 @@ export default function WeightedSplitEditor({
                 const m = mode.members.find((mm) => mm.user_id === draft.key);
                 return (
                   <Stack key={draft.key} direction="row" alignItems="center" spacing={1}>
-                    <Avatar src={m?.avatar || undefined} sx={{ width: 26, height: 26, fontSize: 12 }}>
+                    <UserAvatar user={m} sx={{ width: 26, height: 26, fontSize: 12 }}>
                       {m?.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Typography variant="body2" sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
                       <UserName user={m} fallback={draft.key} />
                     </Typography>

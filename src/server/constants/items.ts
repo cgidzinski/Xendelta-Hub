@@ -1,6 +1,7 @@
 import { Item } from "../types/item";
 import { HOUSE, transfer, userAccount } from "../billing/ledger";
 import { GEM_PACKS } from "@shared/monetization";
+import { FRAMES, NAME_COLOURS, type CosmeticSlot } from "@shared/cosmetics";
 
 // Gem packs are items too. They never reach an inventory (the Shop adds them with addToInventory: false); the
 // definition is what the Shop shows. The picture is drawn by the client, which knows the gem icon.
@@ -17,8 +18,27 @@ const GEM_PACK_ITEMS: Record<string, Item> = Object.fromEntries(
   ]),
 );
 
+// Frames and name colours are drawn by the client (a ring, a coloured name), so they have no picture of their own.
+const colourItems = (
+  source: typeof FRAMES,
+  slot: CosmeticSlot,
+  describe: (label: string) => string,
+): Record<string, Item> =>
+  Object.fromEntries(
+    Object.entries(source).map(([key, c]) => [
+      key,
+      { key, name: c.label, description: describe(c.label), image: "", redeemable: false, cosmetic: { slot } },
+    ]),
+  );
+
 export const ITEMS: Record<string, Item> = {
   ...GEM_PACK_ITEMS,
+  ...colourItems(FRAMES, "frame", (l) => `A ${l.toLowerCase()} ring around your picture wherever people see it`),
+  ...colourItems(
+    NAME_COLOURS,
+    "nameColour",
+    (l) => `Your name in ${l.toLowerCase().replace(" name", "")} wherever people see it`,
+  ),
   // Retired when points became gems (#180); kept so vouchers people already hold still redeem.
   "1000-gem-voucher": {
     key: "1000-gem-voucher",

@@ -5,6 +5,7 @@ import { User } from "../models/user";
 import { Notification } from "../models/notification";
 import { ITEMS } from "../constants/items";
 import { unequipIfNotOwned } from "../utils/cosmetics";
+import { cosmeticsOf } from "../utils/publicUser";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { uploadAvatarFile } from "../utils/mediaUtils";
@@ -69,7 +70,7 @@ module.exports = function (app: express.Application) {
           avatar: user.avatar || "/avatars/default-avatar.png",
           roles: (user.roles || []).map((role: string) => role.toLowerCase()),
           gems: user.gems || 0,
-          cosmetics: user.cosmetics?.badge ? { badge: user.cosmetics.badge } : {},
+          cosmetics: cosmeticsOf(user) ?? {},
           unread_messages: hasUnreadMessages,
           unread_notifications: hasUnreadNotifications,
           unread_notification_count: unreadNotificationsCount,

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Avatar, Box, Checkbox, Chip, CircularProgress, InputAdornment, TextField, Typography } from "@mui/material";
+import { Box, Checkbox, Chip, CircularProgress, InputAdornment, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { usePeopleOptions, type SearchedUser } from "../hooks/people/usePeople";
 import { useAuth } from "../contexts/AuthContext";
 import UserName from "./user/UserName";
 import SectionLabel from "./ui/SectionLabel";
+import UserAvatar from "./user/UserAvatar";
 
 interface PeoplePickerProps {
   value: SearchedUser[];
@@ -53,9 +54,9 @@ export default function PeoplePicker({ value, onChange, excludeIds = [], autoFoc
         onChange={() => toggle(person)}
         slotProps={{ input: { "aria-label": `Select ${person.username}` } }}
       />
-      <Avatar src={person.avatar || undefined} sx={{ width: 36, height: 36 }}>
+      <UserAvatar user={person} sx={{ width: 36, height: 36 }}>
         {person.username[0]?.toUpperCase()}
-      </Avatar>
+      </UserAvatar>
       <Typography variant="body1" noWrap>
         <UserName user={person} />
       </Typography>
@@ -70,7 +71,7 @@ export default function PeoplePicker({ value, onChange, excludeIds = [], autoFoc
             <Chip
               key={p._id}
               size="small"
-              avatar={<Avatar src={p.avatar || undefined}>{p.username[0]?.toUpperCase()}</Avatar>}
+              avatar={<UserAvatar user={p}>{p.username[0]?.toUpperCase()}</UserAvatar>}
               label={<UserName user={p} />}
               onDelete={() => toggle(p)}
             />

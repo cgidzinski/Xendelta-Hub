@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Avatar,
   CircularProgress,
   InputAdornment,
   List,
@@ -23,6 +22,7 @@ import EmptyState from "../../../components/ui/EmptyState";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import UserName from "../../../components/user/UserName";
 import { cardSx } from "../../../components/ui/surfaceStyles";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 const sharedLine = (person: SearchedUser) => {
   const known = person as Partial<KnownPerson>;
@@ -42,7 +42,7 @@ export default function People() {
     <ListItem key={person._id} disablePadding>
       <ListItemButton onClick={() => navigate(`/internal/people/${person._id}`)}>
         <ListItemAvatar>
-          <Avatar src={person.avatar || undefined}>{person.username[0]?.toUpperCase()}</Avatar>
+          <UserAvatar user={person}>{person.username[0]?.toUpperCase()}</UserAvatar>
         </ListItemAvatar>
         <ListItemText primary={<UserName user={person} />} secondary={sharedLine(person) || undefined} />
       </ListItemButton>

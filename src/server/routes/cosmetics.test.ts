@@ -137,5 +137,48 @@ describe("what other people see", () => {
     expect(cosmeticsOf({ cosmetics: {} })).toBeUndefined();
     expect(cosmeticsOf(null)).toBeUndefined();
     expect(cosmeticsOf({ cosmetics: { badge: "golden-badge" } })).toEqual({ badge: "golden-badge" });
+    expect(cosmeticsOf({ cosmetics: { frame: "frame-sky", nameColour: "name-gold" } })).toEqual({
+      frame: "frame-sky",
+      nameColour: "name-gold",
+    });
+  });
+});
+
+describe("frames and name colours", () => {
+  it("each fills its own slot, and wearing another in the same slot replaces it", async () => {
+    const { user, token } = await createUser();
+    const frame = await give(user._id, "frame-sky");
+    const otherFrame = await give(user._id, "frame-gold");
+    const colour = await give(user._id, "name-rose");
+
+    expect((await equip(token, frame)).status).toBe(200);
+    expect((await equip(token, colour)).status).toBe(200);
+    expect((await reload(user._id)).cosmetics).toMatchObject({ frame: "frame-sky", nameColour: "name-rose" });
+
+    expect((await equip(token, otherFrame)).status).toBe(200);
+    expect((await reload(user._id)).cosmetics).toMatchObject({ frame: "frame-gold", nameColour: "name-rose" });
+
+    const profile = await request(t.app).get("/api/user/profile").set(auth(token));
+    expect(profile.body.data.user.cosmetics).toEqual({ frame: "frame-gold", nameColour: "name-rose" });
+
+    expect((await unequip(token, colour)).status).toBe(200);
+    expect((await reload(user._id)).cosmetics?.nameColour).toBeUndefined();
+    expect((await reload(user._id)).cosmetics.frame).toBe("frame-gold");
+  });
+
+  it("are taken off when the last copy is trashed", async () => {
+    const { user, token } = await createUser();
+    const id = await give(user._id, "frame-emerald");
+    await equip(token, id);
+    await request(t.app).delete(`/api/user/inventory/${id}`).set(auth(token));
+    expect((await reload(user._id)).cosmetics?.frame).toBeUndefined();
+  });
+
+  it("reach other people with the rest of the public info", async () => {
+    const wearer = await createUser();
+    const viewer = await createUser();
+    await equip(wearer.token, await give(wearer.user._id, "name-gold"));
+    const res = await request(t.app).get(`/api/users/${wearer.user._id}`).set(auth(viewer.token));
+    expect(res.body.data.user.cosmetics).toEqual({ nameColour: "name-gold" });
   });
 });

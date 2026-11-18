@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
-import { Avatar, Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
+import { Box, Button, Card, Link, MenuItem, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
 import InsightsIcon from "@mui/icons-material/Insights";
 import SavingsIcon from "@mui/icons-material/Savings";
 import type { BookDetailContext } from "./BookDetail";
@@ -29,6 +29,7 @@ import { INCOME_COLOR } from "../../../components/ui/chartColors";
 import { cardSx, sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
 import UserName from "../../../components/user/UserName";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 // Past a dozen the pip row is no longer countable at a glance, and the figure beside
 // it already says the same thing.
@@ -228,9 +229,9 @@ export default function BookOverview() {
               .map((person) => (
                 <Box key={person.user_id}>
                   <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                    <Avatar src={person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 11 }}>
+                    <UserAvatar user={person} sx={{ width: 22, height: 22, fontSize: 11 }}>
                       {person.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Typography variant="body2" sx={{ flexGrow: 1 }} noWrap>
                       <UserName user={person} />
                     </Typography>

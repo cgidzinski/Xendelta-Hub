@@ -80,7 +80,16 @@ someone else's screen selects `PUBLIC_USER_FIELDS` (`server/utils/publicUser.ts`
 serializers pass it on, so the badge arrives wherever a member or participant does. The client draws it with
 `UserName` (`components/user/UserName.tsx`) next to the name. Trashing or admin-removing the last copy takes it off
 (`utils/cosmetics.ts`). Names in plain strings (tooltips, aria-labels, joined lists, chart labels inside SVG) stay
-text. Frames and name colours are not built; they need the shared avatar component below.
+text.
+
+**Frames and name colours (#396).** `Cosmetics` (`shared/cosmetics.ts`) now has `frame` and `nameColour` slots next to
+`badge`. `FRAMES` and `NAME_COLOURS` hold a label, a **theme palette path** (`"warning.main"`, never a colour literal)
+and a price (1,500 to 6,000 gems); `server/constants/items.ts` and `shopItems.ts` build the items and Shop entries from
+them, so adding a colour is one line. `cosmeticsOf` and the user model carry all three slots, and equip/unequip already
+work per slot. The client draws a frame with `UserAvatar` (`components/user/UserAvatar.tsx`: an outline on the avatar
+itself, so it also works inside an `AvatarGroup`) and a name colour with `UserName`. `ItemPicture` previews frames and
+colours on you in the Shop and Inventory. `userAvatarLint.test.ts` fails on a raw `<Avatar>` showing a user's picture; the
+few files it lists get an avatar string rather than the person, and must be moved over one by one.
 
 
 - Badges, avatar frames and name colours, sold in the Shop for gems (about 1,500 to 6,000) and equipped from

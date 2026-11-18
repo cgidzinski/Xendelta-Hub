@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
+import UserAvatar from "../../../../components/user/UserAvatar";
 import { useSnackbar } from "notistack";
 import {
   Box,
   Typography,
   Button,
-  Avatar,
   Dialog,
   DialogContent,
   DialogActions,
@@ -39,9 +39,9 @@ export function PersonStack({
 }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.25, minWidth: 0, flex: 1 }}>
-      <Avatar src={avatar || undefined} sx={{ width: 34, height: 34 }}>
+      <UserAvatar user={{ avatar, cosmetics }} sx={{ width: 34, height: 34 }}>
         {name[0]?.toUpperCase() ?? "?"}
-      </Avatar>
+      </UserAvatar>
       <Typography
         variant="caption"
         noWrap

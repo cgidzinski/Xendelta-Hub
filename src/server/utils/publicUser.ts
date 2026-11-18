@@ -9,6 +9,10 @@ export const publicUserFields = (...extra: string[]): string => [PUBLIC_USER_FIE
 
 /** What someone wears, for a wire shape: just the slots they fill, or undefined (omitted from the JSON) if none. */
 export function cosmeticsOf(user: any): Cosmetics | undefined {
-  const badge = user?.cosmetics?.badge;
-  return badge ? { badge } : undefined;
+  const worn: Cosmetics = {};
+  for (const slot of ["badge", "frame", "nameColour"] as const) {
+    const key = user?.cosmetics?.[slot];
+    if (key) worn[slot] = key;
+  }
+  return Object.keys(worn).length > 0 ? worn : undefined;
 }

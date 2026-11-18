@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Avatar,
   AvatarGroup,
   Box,
   Dialog,
@@ -26,6 +25,7 @@ import { formatDateOnly } from "../../../../utils/dateGrouping";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { FLAG_UNCATEGORISED } from "../../../../constants/xenbudget";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ItemPreviewModalProps {
   open: boolean;
@@ -241,9 +241,9 @@ export default function ItemPreviewModal({
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                     <AvatarGroup max={5}>
                       {people.map((m) => (
-                        <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
+                        <UserAvatar key={m.user_id} user={m} alt={m.username}>
                           {m.username[0]?.toUpperCase()}
-                        </Avatar>
+                        </UserAvatar>
                       ))}
                     </AvatarGroup>
                     <Typography variant="body2" color="text.secondary">

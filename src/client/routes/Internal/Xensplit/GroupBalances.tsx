@@ -1,9 +1,10 @@
 import { useOutletContext } from "react-router-dom";
-import { Box, Typography, Avatar } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import type { GroupDetailContext } from "./GroupDetail";
 import { xsCardSx } from "./components/rowStyles";
 import { formatCurrency } from "../../../utils/currencyUtils";
 import UserName from "../../../components/user/UserName";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 export default function GroupBalances() {
   const { balancesData } = useOutletContext<GroupDetailContext>();
@@ -48,9 +49,9 @@ export default function GroupBalances() {
                   columnGap: 1.5,
                 }}
               >
-                <Avatar src={balance.user.avatar || undefined} sx={{ width: 40, height: 40 }}>
+                <UserAvatar user={balance.user} sx={{ width: 40, height: 40 }}>
                   {balance.user.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                   <UserName user={balance.user} />
                 </Typography>

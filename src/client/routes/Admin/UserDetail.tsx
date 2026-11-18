@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
-  Avatar,
   Box,
   Button,
   Checkbox,
@@ -26,6 +25,7 @@ import { formatFileSize } from "../../utils/fileUtils";
 import StatusChip from "./components/StatusChip";
 import TypedConfirmDialog from "./components/TypedConfirmDialog";
 import { dateTime, shortDate } from "./adminFormat";
+import UserAvatar from "../../components/user/UserAvatar";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.25 } as const;
 const ITEM_OPTIONS = [{ value: "golden-badge", label: "Golden Badge" }];
@@ -418,9 +418,9 @@ export default function UserDetail() {
       </Typography>
 
       <Box sx={{ ...card, display: "flex", alignItems: "center", gap: 2, mb: 2, flexWrap: "wrap" }}>
-        <Avatar src={user.avatar} sx={{ width: 64, height: 64 }}>
+        <UserAvatar user={user} sx={{ width: 64, height: 64 }}>
           {user.username[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
         <Box sx={{ flex: 1, minWidth: 200 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>

@@ -15,6 +15,7 @@ import { cardSx } from "../../../../components/ui/surfaceStyles";
 import { useCommunityBilling, useCommunityFund, useDonate } from "../../../../hooks/billing/useBilling";
 import { useUserProfile } from "../../../../hooks/user/useUserProfile";
 import { initialsOf } from "../communityUi";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -101,9 +102,9 @@ function HistoryRow({ entry, first }: { entry: FundHistoryEntry; first: boolean 
       }}
     >
       {entry.kind === "donation" ? (
-        <Avatar src={entry.by?.avatar} alt="" sx={{ width: 32, height: 32, fontSize: 13 }}>
+        <UserAvatar user={entry.by} alt="" sx={{ width: 32, height: 32, fontSize: 13 }}>
           {initialsOf(entry.by?.username ?? "?")}
-        </Avatar>
+        </UserAvatar>
       ) : (
         <Avatar sx={{ width: 32, height: 32, bgcolor: "action.selected", color: "text.secondary" }}>
           <ReceiptLongOutlinedIcon sx={{ fontSize: 16 }} />

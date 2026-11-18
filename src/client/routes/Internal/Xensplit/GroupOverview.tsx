@@ -1,8 +1,9 @@
 import EmptyState from "../../../components/ui/EmptyState";
+import UserAvatar from "../../../components/user/UserAvatar";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import { Box, Typography, Button, Switch, Avatar, ToggleButtonGroup, ToggleButton } from "@mui/material";
+import { Box, Typography, Button, Switch, ToggleButtonGroup, ToggleButton } from "@mui/material";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
@@ -192,8 +193,8 @@ export default function GroupOverview() {
     const { from, to } = settleNames(s);
     const fromMember = getMember(s.from);
     const toMember = getMember(s.to);
-    const fromAvatar = s.from === user.id ? user.avatar : fromMember?.avatar;
-    const toAvatar = s.to === user.id ? user.avatar : toMember?.avatar;
+    const fromPerson = s.from === user.id ? user : fromMember;
+    const toPerson = s.to === user.id ? user : toMember;
     const fromInitial = (s.from === user.id ? user.username : (fromMember?.username ?? "?"))[0]?.toUpperCase() ?? "?";
     const toInitial = (s.to === user.id ? user.username : (toMember?.username ?? "?"))[0]?.toUpperCase() ?? "?";
     return (
@@ -212,8 +213,8 @@ export default function GroupOverview() {
         }}
       >
         <Box sx={{ position: "relative", width: 40, height: 40 }}>
-          <Avatar
-            src={fromAvatar || undefined}
+          <UserAvatar
+            user={fromPerson}
             sx={{
               position: "absolute",
               top: 0,
@@ -225,9 +226,9 @@ export default function GroupOverview() {
             }}
           >
             {fromInitial}
-          </Avatar>
-          <Avatar
-            src={toAvatar || undefined}
+          </UserAvatar>
+          <UserAvatar
+            user={toPerson}
             sx={{
               position: "absolute",
               bottom: 0,
@@ -238,7 +239,7 @@ export default function GroupOverview() {
             }}
           >
             {toInitial}
-          </Avatar>
+          </UserAvatar>
           <Box
             sx={{
               position: "absolute",

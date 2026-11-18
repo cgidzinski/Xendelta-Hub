@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Avatar, Box, Button, IconButton, Link, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
+import UserAvatar from "../../../../components/user/UserAvatar";
+import { Box, Button, IconButton, Link, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ReplyIcon from "@mui/icons-material/Reply";
 import PushPinIcon from "@mui/icons-material/PushPin";
@@ -417,12 +418,12 @@ export default function MessageBubble(props: MessageBubbleProps) {
           }),
         }}
       >
-        <Avatar
-          src={showSender ? sender?.avatar || undefined : undefined}
+        <UserAvatar
+          user={showSender ? sender : undefined}
           sx={{ width: 36, height: 36, visibility: showSender ? "visible" : "hidden" }}
         >
           {sender?.username[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {showSender && (
             <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, flexWrap: "wrap" }}>
@@ -623,12 +624,12 @@ export default function MessageBubble(props: MessageBubbleProps) {
       sx={{ display: "flex", gap: 1, alignItems: "flex-end", justifyContent: mine ? "flex-end" : "flex-start" }}
     >
       {!mine && (
-        <Avatar
-          src={showSender ? sender?.avatar || undefined : undefined}
+        <UserAvatar
+          user={showSender ? sender : undefined}
           sx={{ width: 28, height: 28, visibility: showSender ? "visible" : "hidden" }}
         >
           {sender?.username[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
       )}
 
       <Box

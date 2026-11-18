@@ -7,6 +7,7 @@ import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import ErrorDisplay from "../../../components/ErrorDisplay";
+import { isWorn } from "@shared/cosmetics";
 import { useTitle } from "../../../hooks/useTitle";
 import { InventoryItem, useInventory } from "../../../hooks/user/useInventory";
 import { useUserProfile } from "../../../hooks/user/useUserProfile";
@@ -126,7 +127,7 @@ export default function Inventory() {
                     onRedeem={(i) => withPending(i, () => redeemItem(i._id))}
                     onTrash={handleTrash}
                     onWear={(i, wear) => withPending(i, () => wearItem(i._id, wear))}
-                    worn={profile?.cosmetics?.badge === item.itemKey}
+                    worn={isWorn(profile?.cosmetics, item.itemKey)}
                     busy={pendingId === item._id}
                   />
                 </Grid>

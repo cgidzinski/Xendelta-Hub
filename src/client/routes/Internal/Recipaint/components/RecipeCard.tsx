@@ -1,4 +1,4 @@
-import { Box, Card, CardActionArea, IconButton, Tooltip, Typography, Chip, Avatar, Stack } from "@mui/material";
+import { Box, Card, CardActionArea, IconButton, Tooltip, Typography, Chip, Stack } from "@mui/material";
 import { useSnackbar } from "notistack";
 import LinkIcon from "@mui/icons-material/Link";
 import BrushIcon from "@mui/icons-material/Brush";
@@ -8,6 +8,7 @@ import { RecipeSummary } from "../../../../types/Recipe";
 import { cardSx, overlayButtonSx } from "../../../../components/ui/surfaceStyles";
 import { thumbUrlFor } from "@shared/recipaint/assetUrls";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface RecipeCardProps {
   recipe: RecipeSummary;
@@ -100,9 +101,9 @@ export default function RecipeCard({ recipe, onClick }: RecipeCardProps) {
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: "auto", pt: 0.5, minWidth: 0 }}>
             {author && (
               <>
-                <Avatar src={author.avatar} alt={author.username} sx={{ width: 20, height: 20, fontSize: 11 }}>
+                <UserAvatar user={author} alt={author.username} sx={{ width: 20, height: 20, fontSize: 11 }}>
                   {author.username.charAt(0).toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ minWidth: 0 }}>
                   <UserName user={author} />
                 </Typography>

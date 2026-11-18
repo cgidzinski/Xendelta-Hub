@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Avatar, Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
 import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import { CHAT_THREAD_ARCHIVE_DAYS, type ChatPerson } from "@shared/chat";
 import { plainMessageText } from "@shared/messageText";
@@ -7,6 +7,7 @@ import EmptyState from "../ui/EmptyState";
 import { useThreads } from "../../hooks/chat/useThread";
 import { isArchivedThread } from "../../utils/chatCache";
 import { listTime, type PeopleLookup } from "../../routes/Internal/Messages/chatUi";
+import UserAvatar from "../user/UserAvatar";
 
 interface Props {
   conversationId: string;
@@ -55,9 +56,9 @@ export default function ThreadsButton({ conversationId, lookup, onOpen }: Props)
           "&:hover, &:focus-visible": { bgcolor: "action.hover" },
         }}
       >
-        <Avatar src={who?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 13 }}>
+        <UserAvatar user={who} sx={{ width: 28, height: 28, fontSize: 13 }}>
           {who?.username[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             variant="body2"

@@ -1,6 +1,7 @@
-import { Avatar, Box } from "@mui/material";
+import { Box } from "@mui/material";
 import type { ChatConversation } from "@shared/chat";
 import { PresenceBadge } from "../../../../components/presence/PresenceDot";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ChatAvatarProps {
   conversation: Pick<ChatConversation, "people" | "name">;
@@ -16,9 +17,9 @@ export default function ChatAvatar({ conversation, meId, size = 44 }: ChatAvatar
   if (others.length <= 1 && !conversation.name) {
     return (
       <PresenceBadge userId={others[0]?._id} size={Math.max(8, Math.round(size / 4))}>
-        <Avatar src={others[0]?.avatar || undefined} sx={{ width: size, height: size, flexShrink: 0 }}>
+        <UserAvatar user={others[0]} sx={{ width: size, height: size, flexShrink: 0 }}>
           {letter}
-        </Avatar>
+        </UserAvatar>
       </PresenceBadge>
     );
   }
@@ -27,8 +28,8 @@ export default function ChatAvatar({ conversation, meId, size = 44 }: ChatAvatar
   const [first, second] = others.length > 0 ? others : conversation.people;
   return (
     <Box sx={{ position: "relative", width: size, height: size, flexShrink: 0 }} aria-hidden>
-      <Avatar
-        src={first?.avatar || undefined}
+      <UserAvatar
+        user={first}
         sx={{
           position: "absolute",
           top: 0,
@@ -40,9 +41,9 @@ export default function ChatAvatar({ conversation, meId, size = 44 }: ChatAvatar
         }}
       >
         {first?.username[0]?.toUpperCase()}
-      </Avatar>
-      <Avatar
-        src={second?.avatar || undefined}
+      </UserAvatar>
+      <UserAvatar
+        user={second}
         sx={{
           position: "absolute",
           bottom: 0,
@@ -54,7 +55,7 @@ export default function ChatAvatar({ conversation, meId, size = 44 }: ChatAvatar
         }}
       >
         {second?.username[0]?.toUpperCase() ?? "+"}
-      </Avatar>
+      </UserAvatar>
     </Box>
   );
 }

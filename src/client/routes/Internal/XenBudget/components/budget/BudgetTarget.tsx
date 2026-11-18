@@ -1,6 +1,7 @@
-import { Avatar, Box, Stack, Typography, alpha } from "@mui/material";
+import { Box, Stack, Typography, alpha } from "@mui/material";
 import GroupsIcon from "@mui/icons-material/Groups";
 import type { XenBudgetMember } from "../../../../../hooks/xenbudget/types";
+import UserAvatar from "../../../../../components/user/UserAvatar";
 
 interface BudgetTargetProps {
   /** Omit for the shared limit; pass a member id for a per-person one. */
@@ -47,9 +48,9 @@ export default function BudgetTarget({ personId, personName, members, size = 20,
   const name = member?.username || personName || "Unknown";
   return (
     <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minWidth: 0 }}>
-      <Avatar src={member?.avatar || undefined} sx={{ width: size, height: size, fontSize: size * 0.5, flexShrink: 0 }}>
+      <UserAvatar user={member} sx={{ width: size, height: size, fontSize: size * 0.5, flexShrink: 0 }}>
         {name[0]?.toUpperCase()}
-      </Avatar>
+      </UserAvatar>
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" noWrap>
           {name}

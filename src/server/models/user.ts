@@ -74,6 +74,8 @@ const userSchema = new Schema({
   // What the person wears, per slot, as item keys (shared/cosmetics.ts). Sent with their public info.
   cosmetics: {
     badge: { type: String },
+    frame: { type: String },
+    nameColour: { type: String },
   },
   notificationsLastCheckedAt: { type: Date },
   notificationPrefs: {

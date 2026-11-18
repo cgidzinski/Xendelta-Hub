@@ -16,7 +16,6 @@ import {
   Container,
   Typography,
   Button,
-  Avatar,
   AvatarGroup,
   Tabs,
   Tab,
@@ -76,6 +75,7 @@ import type {
 import UserName from "../../../components/user/UserName";
 import { MAX_RECEIPT_IMAGES } from "../Share/receipt";
 import { useSharedReceipt } from "../Share/useSharedReceipt";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -583,9 +583,9 @@ export default function GroupDetail() {
                 }}
               >
                 {group.members.map((m) => (
-                  <Avatar key={m.user_id} src={m.avatar || undefined}>
+                  <UserAvatar key={m.user_id} user={m}>
                     {m.username[0]?.toUpperCase()}
-                  </Avatar>
+                  </UserAvatar>
                 ))}
               </AvatarGroup>
             </Box>
@@ -978,9 +978,9 @@ export default function GroupDetail() {
                       mb: 1.5,
                     }}
                   >
-                    <Avatar src={payer?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
+                    <UserAvatar user={payer} sx={{ width: 32, height: 32, flexShrink: 0 }}>
                       {payer?.username?.[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>
                         Paid by
@@ -1023,9 +1023,9 @@ export default function GroupDetail() {
                           const member = group.members.find((m) => m.user_id === split.user_id);
                           return (
                             <Box key={split.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                              <Avatar src={member?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 11 }}>
+                              <UserAvatar user={member} sx={{ width: 28, height: 28, fontSize: 11 }}>
                                 {member?.username?.[0]?.toUpperCase()}
-                              </Avatar>
+                              </UserAvatar>
                               <Typography variant="body2" sx={{ flexGrow: 1 }}>
                                 <UserName user={member} fallback="?" />
                               </Typography>

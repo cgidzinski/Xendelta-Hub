@@ -2,11 +2,12 @@ import { formatDistance } from "date-fns";
 import { Box, Button, Card, IconButton, Typography } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/DeleteOutline";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import { BADGES } from "@shared/cosmetics";
+import { slotOf } from "@shared/cosmetics";
+import ItemPicture from "../../../../components/user/ItemPicture";
 import type { InventoryItem } from "../../../../hooks/user/useInventory";
 
 /** Cosmetics are worn rather than redeemed. */
-export const isWearable = (itemKey: string) => itemKey in BADGES;
+export const isWearable = (itemKey: string) => slotOf(itemKey) !== undefined;
 
 interface InventoryCardProps {
   item: InventoryItem;
@@ -38,10 +39,9 @@ export default function InventoryCard({ item, onRedeem, onTrash, onWear, worn, b
           p: 2,
         }}
       >
-        <Box
-          component="img"
-          src={item.image}
-          alt=""
+        <ItemPicture
+          itemKey={item.itemKey}
+          image={item.image}
           sx={{
             maxWidth: "100%",
             maxHeight: "100%",

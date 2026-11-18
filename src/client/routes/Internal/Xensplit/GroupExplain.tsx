@@ -1,16 +1,8 @@
 import SectionLabel from "../../../components/ui/SectionLabel";
+import UserAvatar from "../../../components/user/UserAvatar";
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  Avatar,
-  IconButton,
-  ToggleButtonGroup,
-  ToggleButton,
-  Divider,
-  SwipeableDrawer,
-} from "@mui/material";
+import { Box, Typography, IconButton, ToggleButtonGroup, ToggleButton, Divider, SwipeableDrawer } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import EastIcon from "@mui/icons-material/East";
@@ -248,9 +240,9 @@ function PersonRow({
 }) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-      <Avatar src={avatar || undefined} sx={{ width: 36, height: 36 }}>
+      <UserAvatar user={{ avatar, cosmetics }} sx={{ width: 36, height: 36 }}>
         {name[0]?.toUpperCase()}
-      </Avatar>
+      </UserAvatar>
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" sx={{ fontWeight: 700, textTransform: "capitalize" }} noWrap>
           <UserName user={{ username: name, cosmetics }} />

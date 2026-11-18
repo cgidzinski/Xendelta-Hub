@@ -2,17 +2,7 @@ import EmptyState from "../../../components/ui/EmptyState";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { Fragment, useMemo, useState } from "react";
 import { useOutletContext, useNavigate, useParams } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  Button,
-  Avatar,
-  Divider,
-  ToggleButtonGroup,
-  ToggleButton,
-  IconButton,
-  Tooltip,
-} from "@mui/material";
+import { Box, Typography, Button, Divider, ToggleButtonGroup, ToggleButton, IconButton, Tooltip } from "@mui/material";
 import EastIcon from "@mui/icons-material/East";
 import HubIcon from "@mui/icons-material/Hub";
 import AddIcon from "@mui/icons-material/Add";
@@ -29,6 +19,7 @@ import CreateSettlementDialog from "./components/CreateSettlementDialog";
 import { calculateBalances, calculateMinimumTransfers } from "@shared/xensplit/balances";
 import { rewindBefore, excludedSettlementIds, settlementsNewestFirst } from "@shared/xensplit/rewind";
 import UserName from "../../../components/user/UserName";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 const listGridSx = {
   display: "grid",
@@ -312,18 +303,18 @@ export default function GroupSettlements() {
                     sx={{ ...cardSx, ...(isRewound ? { cursor: "default" } : {}) }}
                   >
                     {/* row 1: avatars + amount */}
-                    <Avatar src={s.fromUser.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>
+                    <UserAvatar user={s.fromUser} sx={{ width: 38, height: 38, mx: "auto" }}>
                       {s.fromUser.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Typography
                       variant="subtitle2"
                       sx={{ fontWeight: 700, whiteSpace: "nowrap", alignSelf: "center", color: arrowColor }}
                     >
                       {formatCurrency(s.amount, s.currency)}
                     </Typography>
-                    <Avatar src={s.toUser.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>
+                    <UserAvatar user={s.toUser} sx={{ width: 38, height: 38, mx: "auto" }}>
                       {s.toUser.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     {/* row 2: names + arrow */}
                     <Typography variant="caption" noWrap sx={{ textTransform: "capitalize", color: "text.secondary" }}>
                       <UserName user={s.fromUser} />
@@ -400,9 +391,9 @@ export default function GroupSettlements() {
                           }}
                         >
                           {/* row 1: avatars + amount */}
-                          <Avatar src={fromMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>
+                          <UserAvatar user={fromMember} sx={{ width: 38, height: 38, mx: "auto" }}>
                             {fromMember?.username[0]?.toUpperCase()}
-                          </Avatar>
+                          </UserAvatar>
                           <Box
                             sx={{
                               display: "flex",
@@ -423,9 +414,9 @@ export default function GroupSettlements() {
                               {formatCurrency(s.amount, s.currency)}
                             </Typography>
                           </Box>
-                          <Avatar src={toMember?.avatar || undefined} sx={{ width: 38, height: 38, mx: "auto" }}>
+                          <UserAvatar user={toMember} sx={{ width: 38, height: 38, mx: "auto" }}>
                             {toMember?.username[0]?.toUpperCase()}
-                          </Avatar>
+                          </UserAvatar>
                           {/* row 2: names + arrow */}
                           <Typography
                             variant="caption"

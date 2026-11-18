@@ -1,8 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import UserAvatar from "../../../components/user/UserAvatar";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Avatar,
   AvatarGroup,
   Box,
   Button,
@@ -347,9 +347,9 @@ export default function XenNote() {
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                 <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
                   {openBook.members.map((m) => (
-                    <Avatar key={m.user_id} alt={m.username} src={m.avatar ?? undefined}>
+                    <UserAvatar key={m.user_id} user={m}>
                       {m.username.slice(0, 1).toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                   ))}
                 </AvatarGroup>
                 {openBook.share?.enabled && (
