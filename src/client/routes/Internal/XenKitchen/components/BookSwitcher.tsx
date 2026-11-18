@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Avatar,
   AvatarGroup,
   Box,
   Button,
@@ -23,15 +22,16 @@ import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
 import { useSnackbar } from "notistack";
 import { useCreateKitchenBook, type KitchenBook } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView } from "./kitchenIcons";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 export function MemberAvatars({ book, size = 22 }: { book: KitchenBook; size?: number }) {
   if (book.members.length < 2) return null;
   return (
     <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: size, height: size, fontSize: size * 0.5 } }}>
       {book.members.map((m) => (
-        <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
+        <UserAvatar key={m.user_id} user={m} alt={m.username}>
           {m.username[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
       ))}
     </AvatarGroup>
   );

@@ -16,7 +16,6 @@ import { shortcodeBeforeCaret, suggestCustom, suggestShortcodes } from "../../..
 import { CustomEmojiImage } from "../../../../components/emoji/EmojiText";
 import { emojiToken, type CustomEmoji } from "@shared/emoji";
 import type { ChatAttachment, ChatPerson, ChatVoice } from "@shared/chat";
-import { Avatar } from "@mui/material";
 import {
   mentionBeforeCaret,
   mentionLabel,
@@ -30,6 +29,7 @@ import { CHAT_BODY_MAX } from "@shared/chat";
 import type { LocalMessage } from "../../../../utils/chatCache";
 import { useTypingSender } from "../../../../hooks/chat/useTyping";
 import { nameFor, type PeopleLookup } from "../chatUi";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ComposerProps {
   conversationId: string;
@@ -140,9 +140,9 @@ export default function Composer({
           label: `@${name}`,
           glyph:
             choice.kind === "person" ? (
-              <Avatar src={choice.person.avatar || undefined} sx={{ width: 22, height: 22, fontSize: 12 }}>
+              <UserAvatar user={choice.person} sx={{ width: 22, height: 22, fontSize: 12 }}>
                 {name[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
             ) : (
               "@"
             ),

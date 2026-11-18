@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Box, Typography, Chip, Avatar, Stack, Card, Button } from "@mui/material";
+import { Box, Typography, Chip, Stack, Card, Button } from "@mui/material";
 import LinkIcon from "@mui/icons-material/Link";
 import { Link } from "react-router-dom";
 import { Recipe } from "../../../../types/Recipe";
@@ -10,6 +10,7 @@ import RecipeSteps from "./RecipeSteps";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { aggregatePaints } from "@shared/recipaint/paints";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface RecipeViewProps {
   recipe: Recipe;
@@ -83,9 +84,9 @@ export default function RecipeView({
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3, flexWrap: "wrap", rowGap: 1 }}>
         {author && (
           <Stack direction="row" alignItems="center" spacing={1}>
-            <Avatar src={author.avatar} alt={author.username} sx={{ width: 28, height: 28, fontSize: 13 }}>
+            <UserAvatar user={author} alt={author.username} sx={{ width: 28, height: 28, fontSize: 13 }}>
               {author.username.charAt(0).toUpperCase()}
-            </Avatar>
+            </UserAvatar>
             <Typography variant="body2" color="text.secondary">
               Created by{" "}
               <strong>

@@ -1,4 +1,5 @@
 import { Box, Button, Divider, Typography } from "@mui/material";
+import ItemPicture from "../../../../components/user/ItemPicture";
 import GemAmount from "../../../../components/GemAmount";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
@@ -56,7 +57,7 @@ export default function BuyItemDialog({ item, balance, isBuying, onClose, onBuy,
       {item && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 2, display: "flex", justifyContent: "center" }}>
-            <Box component="img" src={item.item.image} alt="" sx={{ height: 120, objectFit: "contain" }} />
+            <ItemPicture itemKey={item.itemKey} image={item.item.image} sx={{ height: 120, objectFit: "contain" }} />
           </Box>
           <Typography variant="body2" color="text.secondary">
             {item.item.description}

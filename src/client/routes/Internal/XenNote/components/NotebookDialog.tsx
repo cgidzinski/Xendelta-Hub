@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   IconButton,
@@ -26,6 +25,7 @@ import { notebookShareUrl, useXenNoteActions } from "../../../../hooks/xennote/u
 import type { NoteRole, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, swatchColor } from "../noteColors";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface NotebookDialogProps {
   /** The notebook to manage; null starts a new one. */
@@ -294,9 +294,9 @@ export default function NotebookDialog({
               const self = m.user_id === user?.id;
               return (
                 <Box key={m.user_id} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                  <Avatar src={m.avatar ?? undefined} sx={{ width: 32, height: 32 }}>
+                  <UserAvatar user={m} sx={{ width: 32, height: 32 }}>
                     {m.username.charAt(0).toUpperCase()}
-                  </Avatar>
+                  </UserAvatar>
                   <Typography sx={{ flex: 1 }} noWrap>
                     <UserName user={m} />
                     {self ? " (you)" : ""}

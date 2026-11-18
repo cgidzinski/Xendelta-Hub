@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
-  Avatar,
   Box,
   Button,
   Card,
@@ -32,6 +31,7 @@ import { CategoryChip, FlagChip } from "../components/LabelChip";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import EmptyState from "../../../../components/ui/EmptyState";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 export default function TaggingSection() {
   const { book } = useOutletContext<BookDetailContext>();
@@ -142,7 +142,7 @@ export default function TaggingSection() {
           variant="outlined"
           label={<UserName user={member} fallback="member" />}
           avatar={
-            member?.avatar ? <Avatar src={member.avatar} sx={{ width: 16, height: 16, fontSize: 10 }} /> : undefined
+            member?.avatar ? <UserAvatar user={member} sx={{ width: 16, height: 16, fontSize: 10 }} /> : undefined
           }
           sx={{ height: 20, fontSize: 11 }}
         />,

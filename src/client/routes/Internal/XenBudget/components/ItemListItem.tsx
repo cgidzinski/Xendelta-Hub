@@ -1,4 +1,4 @@
-import { Avatar, AvatarGroup, Box, Stack, Typography, alpha } from "@mui/material";
+import { AvatarGroup, Box, Stack, Typography, alpha } from "@mui/material";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -8,6 +8,7 @@ import { formatCurrency } from "../currency";
 import { CategoryChip, FlagChip } from "./LabelChip";
 import { xbCardSx, xbBadgeSx, xbOffBudgetRowSx } from "./rowStyles";
 import { FLAG_OFF_BUDGET } from "../../../../constants/xenbudget";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ItemListItemProps {
   item: XenBudgetItem;
@@ -83,9 +84,9 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
 
       <AvatarGroup max={3} sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 11 } }}>
         {people.map((m) => (
-          <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
+          <UserAvatar key={m.user_id} user={m} alt={m.username}>
             {m.username[0]?.toUpperCase()}
-          </Avatar>
+          </UserAvatar>
         ))}
       </AvatarGroup>
 

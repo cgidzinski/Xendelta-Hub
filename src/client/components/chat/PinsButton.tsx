@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Avatar, Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import { useSnackbar } from "notistack";
@@ -8,6 +8,7 @@ import { plainMessageText } from "@shared/messageText";
 import EmptyState from "../ui/EmptyState";
 import { useChatActions, usePins } from "../../hooks/chat/useChat";
 import { clock, dayLabel, type PeopleLookup } from "../../routes/Internal/Messages/chatUi";
+import UserAvatar from "../user/UserAvatar";
 
 interface Props {
   conversationId: string;
@@ -83,9 +84,9 @@ export default function PinsButton({ conversationId, lookup, canPin }: Props) {
                     alignItems: "flex-start",
                   }}
                 >
-                  <Avatar src={who?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 13 }}>
+                  <UserAvatar user={who} sx={{ width: 28, height: 28, fontSize: 13 }}>
                     {who?.username[0]?.toUpperCase()}
-                  </Avatar>
+                  </UserAvatar>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       {who?.username ?? "Former member"} · {dayLabel(m.createdAt)}, {clock(m.createdAt)}

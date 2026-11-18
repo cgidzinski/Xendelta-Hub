@@ -70,6 +70,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Send feedback to the people who run it, and earn gems when a bug you report is fixed or an idea you suggest is built.",
       "See what you've used each month and what it costs on your Billing page, with a free allowance every month.",
       "See your community's monthly bill in its settings, along with its fund and who chipped in.",
+      "Buy avatar frames and name colours in the Shop, then wear them from your Inventory so everyone sees them.",
       "Chip in gems to your community's fund so it can cover the files it stores and its voice channels.",
       "Keep files, make calls and scan recipes with a free allowance every month. Beyond it they cost a few gems, and nothing is ever deleted if you run out.",
     ],

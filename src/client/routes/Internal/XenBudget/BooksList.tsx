@@ -12,7 +12,6 @@ import {
   TextField,
   Typography,
   AvatarGroup,
-  Avatar,
 } from "@mui/material";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import AddIcon from "@mui/icons-material/Add";
@@ -26,6 +25,7 @@ import ListSkeleton from "../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 export default function BooksList() {
   useTitle("XenBudget");
@@ -93,9 +93,9 @@ export default function BooksList() {
                   </Box>
                   <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
                     {book.members.map((m) => (
-                      <Avatar key={m.user_id} src={m.avatar || undefined} alt={m.username}>
+                      <UserAvatar key={m.user_id} user={m} alt={m.username}>
                         {m.username[0]?.toUpperCase()}
-                      </Avatar>
+                      </UserAvatar>
                     ))}
                   </AvatarGroup>
                 </Stack>

@@ -1,5 +1,5 @@
 import { Link as RouterLink } from "react-router-dom";
-import { Avatar, Box, Link, Typography } from "@mui/material";
+import { Box, Link, Typography } from "@mui/material";
 import PageHeader from "../../components/ui/PageHeader";
 import ErrorDisplay from "../../components/ErrorDisplay";
 import ListSkeleton from "../../components/ui/ListSkeleton";
@@ -9,6 +9,7 @@ import { formatFileSize } from "../../utils/fileUtils";
 import DataTable, { type Column } from "./components/DataTable";
 import StatCard from "./components/StatCard";
 import type { AdminStorageReport } from "@shared/admin";
+import UserAvatar from "../../components/user/UserAvatar";
 
 const card = { border: 1, borderColor: "divider", borderRadius: 2, p: 2.25 } as const;
 type Person = AdminStorageReport["top"][number];
@@ -24,9 +25,9 @@ export default function Storage() {
       header: "Person",
       render: (p) => (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Avatar src={p.avatar} sx={{ width: 30, height: 30 }}>
+          <UserAvatar user={p} sx={{ width: 30, height: 30 }}>
             {p.username[0]?.toUpperCase()}
-          </Avatar>
+          </UserAvatar>
           <Link component={RouterLink} to={`/admin/users/${p._id}`} underline="hover" color="text.primary">
             {p.username}
           </Link>

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Avatar,
   Box,
   Button,
   Card,
@@ -48,6 +47,7 @@ import {
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { AppearancePicker } from "./CategoryDialog";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 export const ROLE_LABELS: Record<BookRole, { label: string; help: string }> = {
   owner: { label: "Owner", help: "Manages people, the public link, and can delete the book" },
@@ -363,9 +363,9 @@ function PeopleTab({ book, onGone }: { book: KitchenBook; onGone: () => void }) 
               }
             >
               <ListItemAvatar>
-                <Avatar src={m.avatar || undefined} sx={{ width: 36, height: 36 }}>
+                <UserAvatar user={m} sx={{ width: 36, height: 36 }}>
                   {m.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
               </ListItemAvatar>
               <ListItemText
                 primary={

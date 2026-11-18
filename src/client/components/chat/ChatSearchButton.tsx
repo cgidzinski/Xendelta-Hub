@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Avatar,
   Box,
   Button,
   CircularProgress,
@@ -23,6 +22,7 @@ import ResponsiveDialog from "../ui/ResponsiveDialog";
 import { useAuth } from "../../contexts/AuthContext";
 import { useChatSearch, useConversations } from "../../hooks/chat/useChat";
 import { dayLabel, clock, type PeopleLookup } from "../../routes/Internal/Messages/chatUi";
+import UserAvatar from "../user/UserAvatar";
 
 type Scope = "chat" | "community" | "all";
 
@@ -261,9 +261,9 @@ function SearchDialog({
                       "&:hover, &:focus-visible": { bgcolor: (t) => alpha(t.palette.primary.main, 0.08) },
                     }}
                   >
-                    <Avatar src={who?.avatar || undefined} sx={{ width: 30, height: 30, fontSize: 13 }}>
+                    <UserAvatar user={who} sx={{ width: 30, height: 30, fontSize: 13 }}>
                       {who?.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                         <b>{who?.username ?? "Former member"}</b> · {whereOf(r)} · {dayLabel(r.message.createdAt)},{" "}

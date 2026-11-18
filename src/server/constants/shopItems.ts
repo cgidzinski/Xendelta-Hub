@@ -1,5 +1,6 @@
 import { ShopItem } from "../types/shopItem";
 import { GEM_PACKS } from "@shared/monetization";
+import { FRAMES, NAME_COLOURS } from "@shared/cosmetics";
 
 // Each item has exactly one price: `price` in gems, or `priceCents` in money (the gem packs). Both must be positive
 // integers (shop.test.ts pins that: a negative price once paid the buyer). Legacy items in constants/items.ts are
@@ -15,8 +16,13 @@ const GEM_PACK_SHOP_ITEMS: ShopItem[] = GEM_PACKS.map((pack) => ({
   addToInventory: false,
 }));
 
+const COSMETIC_SHOP_ITEMS: ShopItem[] = [...Object.entries(FRAMES), ...Object.entries(NAME_COLOURS)].map(
+  ([key, c]) => ({ id: key, itemKey: key, price: c.price, category: "Cosmetics" }),
+);
+
 export const SHOP_ITEMS: ShopItem[] = [
   ...GEM_PACK_SHOP_ITEMS,
+  ...COSMETIC_SHOP_ITEMS,
   {
     id: "3",
     itemKey: "golden-badge",

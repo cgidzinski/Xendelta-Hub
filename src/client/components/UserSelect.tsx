@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Autocomplete, TextField, Avatar, Box, Typography, CircularProgress } from "@mui/material";
+import { Autocomplete, TextField, Box, Typography, CircularProgress } from "@mui/material";
 import { usePeopleOptions, SearchedUser, SEARCH_MIN_LENGTH } from "../hooks/people/usePeople";
 import { useAuth } from "../contexts/AuthContext";
 import UserName from "./user/UserName";
+import UserAvatar from "./user/UserAvatar";
 
 interface UserSelectProps {
   value: SearchedUser[];
@@ -61,9 +62,9 @@ export function UserSelect({
       isOptionEqualToValue={(option, val) => option._id === val._id}
       renderOption={(props, option) => (
         <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
-          <Avatar src={option.avatar || undefined} sx={{ width: 32, height: 32 }}>
+          <UserAvatar user={option} sx={{ width: 32, height: 32 }}>
             {option.username[0]?.toUpperCase()}
-          </Avatar>
+          </UserAvatar>
           <Typography variant="body2">
             <UserName user={option} />
           </Typography>
@@ -101,9 +102,9 @@ export function UserSelect({
               py: 0.5,
             }}
           >
-            <Avatar src={option.avatar || undefined} sx={{ width: 20, height: 20, fontSize: 10 }}>
+            <UserAvatar user={option} sx={{ width: 20, height: 20, fontSize: 10 }}>
               {option.username[0]?.toUpperCase()}
-            </Avatar>
+            </UserAvatar>
             <Typography variant="caption">
               <UserName user={option} />
             </Typography>

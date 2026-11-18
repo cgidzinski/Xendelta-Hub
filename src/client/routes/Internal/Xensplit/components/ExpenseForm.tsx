@@ -34,6 +34,7 @@ import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsBadgeSx } from "./rowStyles";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 const MAX_IMAGES = 10;
 
@@ -409,9 +410,9 @@ export default function ExpenseForm({
                     transition: "all 0.2s",
                   }}
                 >
-                  <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                  <UserAvatar user={member} sx={{ width: 24, height: 24, fontSize: 12 }}>
                     {member.username[0]?.toUpperCase()}
-                  </Avatar>
+                  </UserAvatar>
                   <Typography variant="caption">
                     <UserName user={member} />
                   </Typography>
@@ -496,9 +497,9 @@ export default function ExpenseForm({
                       transition: "all 0.2s",
                     }}
                   >
-                    <Avatar src={member.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+                    <UserAvatar user={member} sx={{ width: 24, height: 24, fontSize: 12 }}>
                       {member.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Typography variant="caption">
                       <UserName user={member} />
                     </Typography>
@@ -562,9 +563,9 @@ export default function ExpenseForm({
                       mb: 1,
                     }}
                   >
-                    <Avatar src={p.avatar || undefined} sx={{ width: 28, height: 28 }}>
+                    <UserAvatar user={p} sx={{ width: 28, height: 28 }}>
                       {p.username[0]?.toUpperCase()}
-                    </Avatar>
+                    </UserAvatar>
                     <Typography variant="body2" noWrap>
                       <UserName user={p} />
                     </Typography>

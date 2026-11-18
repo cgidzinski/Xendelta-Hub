@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import {
-  Avatar,
   Box,
   Button,
   Dialog,
@@ -32,6 +31,7 @@ import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels";
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import PersonLink from "../../../../components/user/PersonLink";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 export default function GeneralSection() {
   const {
@@ -150,9 +150,9 @@ export default function GeneralSection() {
                 }
               >
                 <ListItemAvatar>
-                  <Avatar src={m.avatar || undefined} sx={{ width: 32, height: 32 }}>
+                  <UserAvatar user={m} sx={{ width: 32, height: 32 }}>
                     {m.username[0]?.toUpperCase()}
-                  </Avatar>
+                  </UserAvatar>
                 </ListItemAvatar>
                 <ListItemText
                   primary={<PersonLink user={m} />}

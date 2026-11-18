@@ -4,7 +4,6 @@ import {
   Box,
   Typography,
   Button,
-  Avatar,
   Dialog,
   DialogContent,
   DialogActions,
@@ -39,6 +38,7 @@ import {
 } from "../../../../utils/currencyUtils";
 import { MemberSelect } from "./MemberSelect";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface CreateExchangeDialogProps {
   open: boolean;
@@ -434,9 +434,9 @@ export default function CreateExchangeDialog({
                 py: 1.5,
               }}
             >
-              <Avatar src={partyA?.avatar || undefined} sx={{ width: 32, height: 32 }}>
+              <UserAvatar user={partyA} sx={{ width: 32, height: 32 }}>
                 {partyA?.username[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                   <UserName user={partyA} />
@@ -482,9 +482,9 @@ export default function CreateExchangeDialog({
                 py: 1.5,
               }}
             >
-              <Avatar src={partyB?.avatar || undefined} sx={{ width: 32, height: 32 }}>
+              <UserAvatar user={partyB} sx={{ width: 32, height: 32 }}>
                 {partyB?.username[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                   <UserName user={partyB} />
@@ -526,9 +526,9 @@ export default function CreateExchangeDialog({
             <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
               {/* Party A side */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 2.5, py: 2 }}>
-                <Avatar src={partyA?.avatar || undefined} sx={{ width: 40, height: 40 }}>
+                <UserAvatar user={partyA} sx={{ width: 40, height: 40 }}>
                   {partyA?.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     <UserName user={partyA} />
@@ -558,9 +558,9 @@ export default function CreateExchangeDialog({
 
               {/* Party B side */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 2.5, py: 2 }}>
-                <Avatar src={partyB?.avatar || undefined} sx={{ width: 40, height: 40 }}>
+                <UserAvatar user={partyB} sx={{ width: 40, height: 40 }}>
                   {partyB?.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     <UserName user={partyB} />

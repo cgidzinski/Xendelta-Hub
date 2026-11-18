@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Avatar,
   Button,
   Chip,
   Dialog,
@@ -19,6 +18,7 @@ import { UserSelect } from "../../../../components/UserSelect";
 import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import type { Routine } from "../../../../hooks/xenroutine/useRoutines";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface Props {
   open: boolean;
@@ -72,9 +72,9 @@ export default function ShareDialog({ open, routine, onClose, onAdd, onRemove }:
               }
             >
               <ListItemAvatar>
-                <Avatar src={m.avatar || undefined} sx={{ width: 32, height: 32 }}>
+                <UserAvatar user={m} sx={{ width: 32, height: 32 }}>
                   {m.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
               </ListItemAvatar>
               <ListItemText primary={<UserName user={m} />} />
             </ListItem>

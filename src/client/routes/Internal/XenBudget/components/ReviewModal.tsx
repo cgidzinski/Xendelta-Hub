@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { roundMoney } from "@shared/money";
 import {
-  Avatar,
   AvatarGroup,
   Box,
   Button,
@@ -44,6 +43,7 @@ import { CategoryChip, FlagChip } from "./LabelChip";
 import WeightedSplitEditor, { type SplitDraft } from "./WeightedSplitEditor";
 import RuleForm from "./RuleForm";
 import { xbCardSx, xbBadgeSx } from "./rowStyles";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 // The system "Needs review" flag — mirrors FLAG_NEEDS_REVIEW server-side
 // (src/server/constants/xenbudget.ts). Flags travel by name, not id.
@@ -400,9 +400,9 @@ export default function ReviewModal({ open, onClose, book }: ReviewModalProps) {
                   <Stack direction="row" alignItems="center" spacing={0.75}>
                     <AvatarGroup max={3} sx={{ "& .MuiAvatar-root": { width: 20, height: 20, fontSize: 10 } }}>
                       {people.map((p) => (
-                        <Avatar key={p.member.user_id} src={p.member.avatar || undefined} alt={p.member.username}>
+                        <UserAvatar key={p.member.user_id} user={p.member} alt={p.member.username}>
                           {p.member.username[0]?.toUpperCase()}
-                        </Avatar>
+                        </UserAvatar>
                       ))}
                     </AvatarGroup>
                     <Typography variant="caption" color="text.secondary" sx={{ minWidth: 0 }} noWrap>

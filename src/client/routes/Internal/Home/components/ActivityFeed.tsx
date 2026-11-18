@@ -1,5 +1,5 @@
 import { Fragment, useRef } from "react";
-import { Avatar, Box, Button, Card, Chip, IconButton, Menu, MenuItem, Typography } from "@mui/material";
+import { Box, Button, Card, Chip, IconButton, Menu, MenuItem, Typography } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +11,7 @@ import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import SectionLabel from "../../../../components/ui/SectionLabel";
 import DidYouKnow from "./DidYouKnow";
 import { useFeed, useFeedPrefs, useNewFeedCount } from "../../../../hooks/feed/useFeed";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 const appLabel = (key: string) => APPS_REGISTRY.find((a) => a.key === key)?.label ?? key;
 
@@ -70,9 +71,9 @@ function EntryRow({ entry }: { entry: FeedEntry }) {
         "&:first-of-type": { borderTop: 0 },
       }}
     >
-      <Avatar src={entry.actor?.avatar ?? undefined} alt={entry.actor?.username} sx={{ width: 36, height: 36 }}>
+      <UserAvatar user={entry.actor} alt={entry.actor?.username} sx={{ width: 36, height: 36 }}>
         {entry.actor?.username?.charAt(0).toUpperCase()}
-      </Avatar>
+      </UserAvatar>
       <Box
         component="button"
         type="button"

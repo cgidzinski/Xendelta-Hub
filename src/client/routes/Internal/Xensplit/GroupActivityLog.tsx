@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import UserAvatar from "../../../components/user/UserAvatar";
 import { Navigate, useOutletContext } from "react-router-dom";
 import { Box, Typography, Avatar, Button, CircularProgress } from "@mui/material";
 import RepeatIcon from "@mui/icons-material/Repeat";
@@ -21,8 +22,7 @@ export default function GroupActivityLog() {
     const members = new Map(group.members.map((m) => [m.user_id, m.username]));
     return (id: string) => users[id]?.username ?? members.get(id) ?? "Former member";
   }, [group.members, users]);
-  const avatarOf = (id: string) =>
-    users[id]?.avatar ?? group.members.find((m) => m.user_id === id)?.avatar ?? undefined;
+  const personOf = (id: string) => users[id] ?? group.members.find((m) => m.user_id === id);
 
   const days = useMemo(() => groupByDay(entries, (e) => e.created_at), [entries]);
 
@@ -72,9 +72,9 @@ export default function GroupActivityLog() {
                       }}
                     >
                       {entry.actor_id ? (
-                        <Avatar src={avatarOf(entry.actor_id)} sx={{ width: 32, height: 32, fontSize: 14 }}>
+                        <UserAvatar user={personOf(entry.actor_id)} sx={{ width: 32, height: 32, fontSize: 14 }}>
                           {actor[0]?.toUpperCase()}
-                        </Avatar>
+                        </UserAvatar>
                       ) : (
                         <Avatar sx={{ width: 32, height: 32, bgcolor: "action.selected", color: "text.secondary" }}>
                           <RepeatIcon sx={{ fontSize: 18 }} />

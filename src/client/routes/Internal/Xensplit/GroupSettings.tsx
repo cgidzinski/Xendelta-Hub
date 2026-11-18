@@ -1,17 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import {
-  Box,
-  Typography,
-  Button,
-  Avatar,
-  IconButton,
-  FormControl,
-  Select,
-  MenuItem,
-  Switch,
-  Divider,
-} from "@mui/material";
+import { Box, Typography, Button, IconButton, FormControl, Select, MenuItem, Switch, Divider } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
@@ -29,6 +18,7 @@ import {
 } from "../../../utils/currencyUtils";
 import SecondaryCurrenciesSelect from "./components/SecondaryCurrenciesSelect";
 import PersonLink from "../../../components/user/PersonLink";
+import UserAvatar from "../../../components/user/UserAvatar";
 
 export default function GroupSettings() {
   const {
@@ -260,9 +250,9 @@ export default function GroupSettings() {
                   columnGap: 1.5,
                 }}
               >
-                <Avatar src={member.avatar || undefined} sx={{ width: 40, height: 40 }}>
+                <UserAvatar user={member} sx={{ width: 40, height: 40 }}>
                   {member.username[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
                     <PersonLink user={member} />

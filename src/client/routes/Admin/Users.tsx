@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Avatar, Box, InputAdornment, MenuItem, TextField, Typography } from "@mui/material";
+import { Box, InputAdornment, MenuItem, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import type { AdminUserRow, UserFilter, UserSort } from "@shared/admin";
 import PageHeader from "../../components/ui/PageHeader";
@@ -13,6 +13,7 @@ import DataTable, { Pager, type Column } from "./components/DataTable";
 import FilterChips from "./components/FilterChips";
 import StatusChip from "./components/StatusChip";
 import { shortDate } from "./adminFormat";
+import UserAvatar from "../../components/user/UserAvatar";
 
 const FILTERS: Array<{ value: UserFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -64,9 +65,9 @@ export default function Users() {
       header: "Person",
       render: (u) => (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-          <Avatar src={u.avatar} sx={{ width: 36, height: 36 }}>
+          <UserAvatar user={u} sx={{ width: 36, height: 36 }}>
             {u.username[0]?.toUpperCase()}
-          </Avatar>
+          </UserAvatar>
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontWeight: 500 }} noWrap>
               <UserName user={u} />

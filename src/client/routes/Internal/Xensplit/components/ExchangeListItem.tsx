@@ -1,14 +1,4 @@
-import {
-  Box,
-  Typography,
-  Avatar,
-  Dialog,
-  DialogContent,
-  DialogActions,
-  Button,
-  IconButton,
-  Divider,
-} from "@mui/material";
+import { Box, Typography, Dialog, DialogContent, DialogActions, Button, IconButton, Divider } from "@mui/material";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
@@ -25,6 +15,7 @@ import {
 import type { XenSplitExchange, XenSplitMember } from "../../../../hooks/xensplit/types";
 import { xsCardSx } from "./rowStyles";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ExchangeListItemProps {
   exchange: XenSplitExchange;
@@ -83,18 +74,18 @@ export default function ExchangeListItem({
       >
         {/* Overlapping avatars with SwapHoriz badge — mirrors settlement row */}
         <Box sx={{ position: "relative", width: 40, height: 40 }}>
-          <Avatar
-            src={partyA?.avatar || undefined}
+          <UserAvatar
+            user={partyA}
             sx={{ position: "absolute", top: 0, left: 0, width: 26, height: 26, fontSize: "0.6875rem", zIndex: 1 }}
           >
             {partyA?.username?.[0]?.toUpperCase() ?? "?"}
-          </Avatar>
-          <Avatar
-            src={partyB?.avatar || undefined}
+          </UserAvatar>
+          <UserAvatar
+            user={partyB}
             sx={{ position: "absolute", bottom: 0, right: 0, width: 26, height: 26, fontSize: "0.6875rem" }}
           >
             {partyB?.username?.[0]?.toUpperCase() ?? "?"}
-          </Avatar>
+          </UserAvatar>
           <Box
             sx={{
               position: "absolute",
@@ -193,9 +184,9 @@ export default function ExchangeListItem({
           {/* Party A leg */}
           <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Avatar src={partyA?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
+              <UserAvatar user={partyA} sx={{ width: 32, height: 32, flexShrink: 0 }}>
                 {partyA?.username?.[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                   Party A owes Party B
@@ -213,9 +204,9 @@ export default function ExchangeListItem({
           {/* Party B leg */}
           <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.25, mb: 1.5 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Avatar src={partyB?.avatar || undefined} sx={{ width: 32, height: 32, flexShrink: 0 }}>
+              <UserAvatar user={partyB} sx={{ width: 32, height: 32, flexShrink: 0 }}>
                 {partyB?.username?.[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                   Party B owes Party A

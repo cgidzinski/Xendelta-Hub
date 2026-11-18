@@ -1,10 +1,11 @@
-import { Avatar, Box, Button, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import type { Community } from "@shared/communities";
 import type { Theme } from "@mui/material/styles";
 import { memberGroups, roleTextColor } from "../communityUi";
 import { PresenceBadge } from "../../../../components/presence/PresenceDot";
 import { usePresence } from "../../../../hooks/presence/usePresence";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 /** Who is in the community, in sections: the owner, each role, then everyone else. */
 export default function MembersPanel({ community, onInvite }: { community: Community; onInvite?: () => void }) {
@@ -34,9 +35,9 @@ export default function MembersPanel({ community, onInvite }: { community: Commu
         }}
       >
         <PresenceBadge userId={id} size={9}>
-          <Avatar src={person?.avatar || undefined} sx={{ width: 28, height: 28, fontSize: 13 }}>
+          <UserAvatar user={person} sx={{ width: 28, height: 28, fontSize: 13 }}>
             {person?.username[0]?.toUpperCase()}
-          </Avatar>
+          </UserAvatar>
         </PresenceBadge>
         <Box sx={{ minWidth: 0 }}>
           <Typography

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Avatar,
   Box,
   Button,
   Checkbox,
@@ -38,6 +37,7 @@ import {
   type FilterGroup,
 } from "./itemFilterOptions";
 import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ItemFilterSelectProps {
   options: string[];
@@ -253,9 +253,9 @@ function OptionContent({
     const member = members.find((m) => m.user_id === option.slice(PERSON_PREFIX.length));
     return (
       <Stack direction="row" alignItems="center" spacing={0.75}>
-        <Avatar src={member?.avatar || undefined} alt={member?.username} sx={{ width: 20, height: 20, fontSize: 10 }}>
+        <UserAvatar user={member} alt={member?.username} sx={{ width: 20, height: 20, fontSize: 10 }}>
           {member?.username[0]?.toUpperCase()}
-        </Avatar>
+        </UserAvatar>
         <Typography variant="body2">{label}</Typography>
       </Stack>
     );

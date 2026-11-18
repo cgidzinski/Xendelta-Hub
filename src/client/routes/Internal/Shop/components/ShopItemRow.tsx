@@ -1,4 +1,5 @@
 import { Box, Card, CardActionArea, Typography } from "@mui/material";
+import ItemPicture from "../../../../components/user/ItemPicture";
 import GemAmount from "../../../../components/GemAmount";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 import type { ShopItem } from "../../../../hooks/user/useShop";
@@ -30,10 +31,9 @@ export default function ShopItemRow({ item, onSelect }: ShopItemRowProps) {
             p: 1,
           }}
         >
-          <Box
-            component="img"
-            src={item.item.image}
-            alt=""
+          <ItemPicture
+            itemKey={item.itemKey}
+            image={item.item.image}
             sx={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
           />
         </Box>

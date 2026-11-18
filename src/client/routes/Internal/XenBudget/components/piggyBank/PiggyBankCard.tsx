@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Avatar,
   Box,
   Button,
   ButtonBase,
@@ -33,6 +32,7 @@ import { INCOME_COLOR } from "../../../../../components/ui/chartColors";
 import { formatCurrency } from "../../currency";
 import { bankCaption, bankProgress } from "./piggyBankProgress";
 import ContributionList from "./ContributionList";
+import UserAvatar from "../../../../../components/user/UserAvatar";
 
 interface PiggyBankCardProps {
   bank: XenBudgetPiggyBank;
@@ -178,9 +178,9 @@ export default function PiggyBankCard({
                 key={p.user_id}
                 title={`${member?.username ?? "Someone"} · ${formatCurrency(p.amount, bank.currency)}`}
               >
-                <Avatar src={member?.avatar || undefined} sx={{ width: 20, height: 20, fontSize: 10 }}>
+                <UserAvatar user={member} sx={{ width: 20, height: 20, fontSize: 10 }}>
                   {(member?.username ?? "?")[0]?.toUpperCase()}
-                </Avatar>
+                </UserAvatar>
               </Tooltip>
             );
           })}

@@ -7,13 +7,13 @@ import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TagIcon from "@mui/icons-material/Tag";
 import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
 import MicOffIcon from "@mui/icons-material/MicOff";
-import { Avatar } from "@mui/material";
 import { useCall } from "../../../../contexts/CallContext";
 import { useChatCall } from "../../../../hooks/calls/useChatCall";
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
 import type { Community, CommunityChannel } from "@shared/communities";
 import { RADIUS } from "../../../../theme";
 import { groupChannels, hasCommunityPermission } from "../../../../utils/communityChat";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface ChannelSidebarProps {
   community: Community;
@@ -132,9 +132,9 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
             key={p.userId}
             sx={{ display: "flex", alignItems: "center", gap: 1, height: 28, color: "text.secondary" }}
           >
-            <Avatar src={person?.avatar || undefined} sx={{ width: 20, height: 20, fontSize: 11 }}>
+            <UserAvatar user={person} sx={{ width: 20, height: 20, fontSize: 11 }}>
               {person?.username[0]?.toUpperCase()}
-            </Avatar>
+            </UserAvatar>
             <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>
               {person?.username ?? "Someone"}
             </Typography>

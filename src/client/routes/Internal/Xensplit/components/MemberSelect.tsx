@@ -1,7 +1,8 @@
-import { Box, Typography, Avatar, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
+import { Box, Typography, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
 import type { XenSplitMember } from "../../../../hooks/xensplit/types";
 import { STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import UserName from "../../../../components/user/UserName";
+import UserAvatar from "../../../../components/user/UserAvatar";
 
 interface MemberSelectProps {
   members: XenSplitMember[];
@@ -28,9 +29,9 @@ export function MemberSelect({ members, label, value, excludeId, onChange }: Mem
           if (!m) return "";
           return (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+              <UserAvatar user={m} sx={{ width: 24, height: 24, fontSize: 12 }}>
                 {m.username[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Typography variant="body2">
                 <UserName user={m} />
               </Typography>
@@ -41,9 +42,9 @@ export function MemberSelect({ members, label, value, excludeId, onChange }: Mem
         {options.map((m) => (
           <MenuItem key={m.user_id} value={m.user_id}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Avatar src={m.avatar || undefined} sx={{ width: 24, height: 24, fontSize: 12 }}>
+              <UserAvatar user={m} sx={{ width: 24, height: 24, fontSize: 12 }}>
                 {m.username[0]?.toUpperCase()}
-              </Avatar>
+              </UserAvatar>
               <Typography variant="body2">
                 <UserName user={m} />
               </Typography>
