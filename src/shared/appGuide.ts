@@ -65,7 +65,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Find the people you share groups, books and notebooks with, and message them.",
       "Get notifications on your phone or computer, and by email if you want them.",
       "See how many messages and notifications are waiting, mark them all read at once, and filter them by app or unread.",
-      "Move around with the Tab key and open chats, notifications and stored files with Enter or Space.",
+      "Move around with the Tab key and open chats, notifications, files, folders and expenses with Enter or Space.",
       "Send a link, some text or a photo from your phone's Share button, then save it as a note, a short link, a file or the start of an expense.",
       "Choose a light or dark look and your timezone.",
       "Create keys so your own scripts or smart-home tools can use your account.",
