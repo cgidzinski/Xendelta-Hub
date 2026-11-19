@@ -1,49 +1,19 @@
 import type { Cosmetics } from "@shared/cosmetics";
-import { formatMoney } from "@shared/money";
 import UploadProgress from "../../../../components/ui/UploadProgress";
 import React, { useEffect, useRef } from "react";
-import PWAImageCapture from "../../../../pwa/components/PWAImageCapture";
-import {
-  Box,
-  Typography,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Avatar,
-  InputAdornment,
-  Stepper,
-  Step,
-  StepLabel,
-  IconButton,
-  CircularProgress,
-  alpha,
-  Switch,
-  Collapse,
-} from "@mui/material";
-import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
-import RepeatIcon from "@mui/icons-material/Repeat";
-import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
-import CloseIcon from "@mui/icons-material/Close";
+import { Box, Button, Stepper, Step, StepLabel } from "@mui/material";
 import { SearchedUser } from "../../../../hooks/people/usePeople";
 import type { XenSplitExpenseImage, RecurringFrequency } from "../../../../hooks/xensplit/types";
-import { getCurrencySymbol, sanitizeAmount, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
-import { EXPENSE_CATEGORIES } from "../../../../constants/xensplit";
-import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
-import { xsBadgeSx } from "./rowStyles";
-import UserName from "../../../../components/user/UserName";
-import UserAvatar from "../../../../components/user/UserAvatar";
+import { sanitizeAmount } from "../../../../utils/currencyUtils";
 import ReceiptScanDialog, { type ReceiptResult } from "./ReceiptScanDialog";
 import { useReceiptScanEnabled } from "../../../../hooks/xensplit/useReceiptScan";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-
-const MAX_IMAGES = 10;
+import ExpenseDetailsStep from "./ExpenseDetailsStep";
+import ExpenseSplitStep from "./ExpenseSplitStep";
+import ExpenseMiscStep, { MAX_IMAGES } from "./ExpenseMiscStep";
 
 const STEPS = ["Details", "Split", "Misc"];
 
-interface ExpenseFormProps {
+export interface ExpenseFormProps {
   title: string;
   onTitleChange: (v: string) => void;
   notes: string;
@@ -105,15 +75,6 @@ interface ExpenseFormProps {
   /** The series was not running when the dialog opened (paused or ended). */
   seriesWasInactive?: boolean;
 }
-
-const FREQUENCY_OPTIONS: { value: RecurringFrequency; label: string }[] = [
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "biweekly", label: "Biweekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-  { value: "yearly", label: "Yearly" },
-];
 
 export default function ExpenseForm({
   title,
@@ -205,7 +166,6 @@ export default function ExpenseForm({
   };
 
   const numAmount = parseFloat(amount) || 0;
-  const CategoryIconComponent = getCategoryIcon(category);
 
   // Fills the untouched split boxes with an even share of the remainder when a box is edited.
   const handleSplitChange = (id: string, raw: string, type: "exact" | "percent") => {
@@ -363,613 +323,92 @@ export default function ExpenseForm({
 
       {/* Step 1: Details */}
       {step === 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, position: "relative" }}>
-          {receiptScanEnabled && !isEditing && (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                flexWrap: "wrap",
-                border: 1,
-                borderColor: "divider",
-                borderRadius: 1,
-                p: 1.5,
-                bgcolor: "action.hover",
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
-                Have a receipt? Scan it to fill in the title, total and who had what.
-              </Typography>
-              <Button variant="outlined" size="small" startIcon={<ReceiptLongIcon />} onClick={startReceiptScan}>
-                Scan a receipt
-              </Button>
-              <input
-                ref={scanInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={handleScanPhoto}
-              />
-            </Box>
-          )}
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <TextField
-              fullWidth
-              margin="dense"
-              label="Title"
-              value={title}
-              onChange={(e) => onTitleChange(e.target.value)}
-            />
-          </Box>
-
-          <Box sx={{ display: "flex", gap: 2 }}>
-            <FormControl sx={{ flex: 1 }}>
-              <InputLabel>Currency</InputLabel>
-              <Select
-                value={currency}
-                label="Currency"
-                onChange={(e) => onCurrencyChange(e.target.value)}
-                MenuProps={STABLE_CURRENCY_MENU_PROPS}
-              >
-                {currencyOptions.map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c} ({getCurrencySymbol(c)})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Amount"
-              value={amount}
-              onChange={(e) => {
-                const v = sanitizeAmount(e.target.value);
-                if (v !== null) onAmountChange(v);
-              }}
-              onBlur={() => {
-                const n = parseFloat(amount);
-                if (!isNaN(n)) onAmountChange(n.toFixed(2));
-              }}
-              slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-              sx={{ flex: 1 }}
-            />
-          </Box>
-
-          <DateTimePicker
-            label={recurringOn ? "Starts" : "Date & Time"}
-            value={date}
-            onChange={(d) => d && onDateChange(d)}
-            disabled={recurringMode === "editSeries"}
-            slotProps={{
-              textField: {
-                fullWidth: true,
-                helperText:
-                  recurringMode === "editSeries"
-                    ? "Locked while recurring — cancel recurrence to change it"
-                    : undefined,
-              },
-            }}
-          />
-
-          <Box>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Paid by
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {members.map((member) => (
-                <Box
-                  key={member.user_id}
-                  onClick={() => {
-                    onPaidByChange(paidBy === member.user_id ? "" : member.user_id);
-                    onPaidByUserChange?.({
-                      _id: member.user_id,
-                      username: member.username,
-                      avatar: member.avatar ?? null,
-                      cosmetics: member.cosmetics,
-                    });
-                  }}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    px: 2,
-                    py: 1,
-                    borderRadius: 2,
-                    cursor: "pointer",
-                    bgcolor: "action.hover",
-                    color: "text.primary",
-                    border: paidBy === member.user_id ? "2px solid" : "2px solid transparent",
-                    borderColor: paidBy === member.user_id ? "primary.main" : "transparent",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  <UserAvatar user={member} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                    {member.username[0]?.toUpperCase()}
-                  </UserAvatar>
-                  <Typography variant="caption">
-                    <UserName user={member} />
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        </Box>
+        <ExpenseDetailsStep
+          {...{
+            title,
+            onTitleChange,
+            currency,
+            onCurrencyChange,
+            currencyOptions,
+            amount,
+            onAmountChange,
+            date,
+            onDateChange,
+            members,
+            paidBy,
+            onPaidByChange,
+            onPaidByUserChange,
+            isEditing,
+            recurringOn,
+            recurringMode,
+            receiptScanEnabled,
+            startReceiptScan,
+            scanInputRef,
+            handleScanPhoto,
+          }}
+        />
       )}
 
       {/* Step 2: Split */}
       {step === 1 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <FormControl fullWidth>
-            <InputLabel>Split type</InputLabel>
-            <Select
-              value={splitType}
-              label="Split type"
-              onChange={(e) => onSplitTypeChange(e.target.value as "equal" | "exact" | "percent")}
-            >
-              <MenuItem value="equal">Equal</MenuItem>
-              <MenuItem value="exact">Exact amounts</MenuItem>
-              <MenuItem value="percent">By percentage</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-              <Typography variant="subtitle2">Participants</Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() =>
-                  selectedParticipants.length === members.length
-                    ? onParticipantsChange([])
-                    : onParticipantsChange(
-                        members.map((m) => ({
-                          _id: m.user_id,
-                          username: m.username,
-                          avatar: m.avatar ?? null,
-                          cosmetics: m.cosmetics,
-                        })),
-                      )
-                }
-              >
-                {selectedParticipants.length === members.length ? "Clear" : "Everyone"}
-              </Button>
-            </Box>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {members.map((member) => {
-                const isSelected = selectedParticipants.some((p) => p._id === member.user_id);
-                return (
-                  <Box
-                    key={member.user_id}
-                    onClick={() => {
-                      if (isSelected) {
-                        onParticipantsChange(selectedParticipants.filter((p) => p._id !== member.user_id));
-                      } else {
-                        onParticipantsChange([
-                          ...selectedParticipants,
-                          {
-                            _id: member.user_id,
-                            username: member.username,
-                            avatar: member.avatar ?? null,
-                            cosmetics: member.cosmetics,
-                          },
-                        ]);
-                      }
-                    }}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      px: 2,
-                      py: 1,
-                      borderRadius: 2,
-                      cursor: "pointer",
-                      bgcolor: "action.hover",
-                      color: "text.primary",
-                      border: isSelected ? "2px solid" : "2px solid transparent",
-                      borderColor: isSelected ? "primary.main" : "transparent",
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    <UserAvatar user={member} sx={{ width: 24, height: 24, fontSize: 12 }}>
-                      {member.username[0]?.toUpperCase()}
-                    </UserAvatar>
-                    <Typography variant="caption">
-                      <UserName user={member} />
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </Box>
-          </Box>
-
-          {selectedParticipants.length > 0 && (
-            <Box>
-              {splitType === "equal" ? (
-                numAmount > 0 && (
-                  <Typography variant="caption" color="text.secondary">
-                    {formatMoney(numAmount / selectedParticipants.length, currency, { locale: null })} each
-                  </Typography>
-                )
-              ) : (
-                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="subtitle2">{splitType === "exact" ? "Exact amounts" : "Percentages"}</Typography>
-                  {splitType === "exact" && (
-                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                      <Typography
-                        variant="caption"
-                        color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "error"}
-                      >
-                        Total: {totalExact.toFixed(2)} / {numAmount.toFixed(2)}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color={Math.abs(totalExact - numAmount) < 0.01 ? "success" : "text.secondary"}
-                      >
-                        Remainder: {(numAmount - totalExact).toFixed(2)}
-                      </Typography>
-                    </Box>
-                  )}
-                  {splitType === "percent" && (
-                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                      <Typography variant="caption" color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "error"}>
-                        Total: {totalPercent === 0 ? "0" : totalPercent.toFixed(2)}% / 100%
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color={Math.abs(totalPercent - 100) < 0.01 ? "success" : "text.secondary"}
-                      >
-                        Remainder: {(100 - totalPercent).toFixed(2)}%
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              )}
-              {splitType !== "equal" &&
-                selectedParticipants.map((p) => (
-                  <Box
-                    key={p._id}
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: "28px auto 1fr",
-                      alignItems: "center",
-                      columnGap: 2,
-                      mb: 1,
-                    }}
-                  >
-                    <UserAvatar user={p} sx={{ width: 28, height: 28 }}>
-                      {p.username[0]?.toUpperCase()}
-                    </UserAvatar>
-                    <Typography variant="body2" noWrap>
-                      <UserName user={p} />
-                    </Typography>
-                    {splitType === "percent" ? (
-                      <TextField
-                        size="small"
-                        value={percentSplits[p._id] || ""}
-                        onChange={(e) => handleSplitChange(p._id, e.target.value, "percent")}
-                        onBlur={() => {
-                          const n = parseFloat(percentSplits[p._id]);
-                          if (!isNaN(n)) onPercentSplitsChange({ ...percentSplits, [p._id]: n.toFixed(2) });
-                        }}
-                        slotProps={{
-                          htmlInput: { inputMode: "decimal" },
-                          input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-                        }}
-                        sx={{}}
-                      />
-                    ) : (
-                      <TextField
-                        size="small"
-                        value={exactSplits[p._id] || ""}
-                        onChange={(e) => handleSplitChange(p._id, e.target.value, "exact")}
-                        onBlur={() => {
-                          const n = parseFloat(exactSplits[p._id]);
-                          if (!isNaN(n)) onExactSplitsChange({ ...exactSplits, [p._id]: n.toFixed(2) });
-                        }}
-                        slotProps={{ htmlInput: { inputMode: "decimal" } }}
-                        sx={{}}
-                      />
-                    )}
-                  </Box>
-                ))}
-            </Box>
-          )}
-        </Box>
+        <ExpenseSplitStep
+          {...{
+            splitType,
+            onSplitTypeChange,
+            selectedParticipants,
+            members,
+            onParticipantsChange,
+            numAmount,
+            currency,
+            totalExact,
+            totalPercent,
+            percentSplits,
+            handleSplitChange,
+            onPercentSplitsChange,
+            exactSplits,
+            onExactSplitsChange,
+          }}
+        />
       )}
 
       {/* Step 3: Misc */}
       {step === 2 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {holdMode !== "hidden" && (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                px: 2,
-                py: 1.25,
-                borderRadius: 2,
-                border: "1px solid",
-                borderColor: onHold ? "warning.main" : "divider",
-                bgcolor: (t) => (onHold ? alpha(t.palette.warning.main, 0.08) : "transparent"),
-                opacity: recurringOn ? 0.5 : 1,
-                transition: "all 0.2s",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                <PauseCircleOutlineIcon sx={{ fontSize: 22, color: onHold ? "warning.main" : "text.secondary" }} />
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                    On Hold
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                    {recurringOn
-                      ? "Not available for recurring expenses — pause the schedule instead"
-                      : holdMode === "oneWay" && onHold
-                        ? "Removing hold is permanent — cannot be re-applied"
-                        : "Exclude from balance calculations"}
-                  </Typography>
-                </Box>
-              </Box>
-              <Switch
-                checked={onHold}
-                onChange={(e) => onOnHoldChange(e.target.checked)}
-                disabled={recurringOn || (holdMode === "oneWay" && !onHold)}
-                color="warning"
-                size="small"
-              />
-            </Box>
-          )}
-          {recurringMode !== "off" && (
-            <Box
-              sx={{
-                px: 2,
-                py: 1.25,
-                borderRadius: 2,
-                border: "1px solid",
-                borderColor: recurringOn ? "secondary.main" : "divider",
-                bgcolor: (t) => (recurringOn ? alpha(t.palette.secondary.main, 0.08) : "transparent"),
-                transition: "all 0.2s",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-                  <RepeatIcon sx={{ fontSize: 22, color: recurringOn ? "secondary.main" : "text.secondary" }} />
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                      Recurring
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.3, display: "block" }}>
-                      {recurringMode === "editSeries" && !isRecurring
-                        ? "Will stop recurring when saved — existing expenses are kept"
-                        : "Automatically re-add this expense on a schedule"}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Switch
-                  checked={isRecurring}
-                  onChange={(e) => {
-                    onIsRecurringChange?.(e.target.checked);
-                    if (e.target.checked) onOnHoldChange(false); // hold is per-expense; recurring series use Pause
-                  }}
-                  color="secondary"
-                  size="small"
-                />
-              </Box>
-              <Collapse in={recurringOn}>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Repeats</InputLabel>
-                    <Select
-                      value={frequency}
-                      label="Repeats"
-                      onChange={(e) => onFrequencyChange?.(e.target.value as RecurringFrequency)}
-                      disabled={recurringMode === "editSeries"}
-                    >
-                      {FREQUENCY_OPTIONS.map((f) => (
-                        <MenuItem key={f.value} value={f.value}>
-                          {f.label}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <DateTimePicker
-                    label="Ends (optional)"
-                    value={recurringEndDate}
-                    onChange={(d) => {
-                      onRecurringEndDateChange?.(d);
-                      autoResumeOnBoundsEdit();
-                    }}
-                    slotProps={{ textField: { fullWidth: true, size: "small" }, field: { clearable: true } }}
-                  />
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Max occurrences (optional)"
-                    value={maxOccurrences}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9]/g, "");
-                      onMaxOccurrencesChange?.(v);
-                      autoResumeOnBoundsEdit();
-                    }}
-                    slotProps={{ htmlInput: { inputMode: "numeric" } }}
-                    helperText="Total number of expenses, including the first"
-                  />
-                  {recurringMode === "editSeries" && (
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                          {seriesActive ? "Active" : seriesEnded ? "Ended" : "Paused"}
-                        </Typography>
-                        {seriesActive && seriesWasInactive ? (
-                          <Typography
-                            variant="caption"
-                            sx={{ lineHeight: 1.3, display: "block", color: "warning.main" }}
-                          >
-                            Saving restarts the schedule — occurrences missed since it stopped will be added
-                          </Typography>
-                        ) : (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ lineHeight: 1.3, display: "block" }}
-                          >
-                            {seriesActive
-                              ? "Occurrences are being created on schedule"
-                              : seriesEnded
-                                ? "Extend the end date or count to restart"
-                                : "Resuming will backfill any missed occurrences"}
-                          </Typography>
-                        )}
-                      </Box>
-                      <Switch
-                        checked={seriesActive}
-                        onChange={(e) => onSeriesActiveChange?.(e.target.checked)}
-                        color="secondary"
-                        size="small"
-                      />
-                    </Box>
-                  )}
-                </Box>
-              </Collapse>
-            </Box>
-          )}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Avatar sx={{ ...xsBadgeSx, bgcolor: alpha(getCategoryColor(category), 0.15), lineHeight: 1 }}>
-              <CategoryIconComponent sx={{ fontSize: 22, color: getCategoryColor(category) }} />
-            </Avatar>
-            <FormControl fullWidth>
-              <InputLabel>Category (optional)</InputLabel>
-              <Select value={category} label="Category (optional)" onChange={(e) => onCategoryChange(e.target.value)}>
-                <MenuItem value="">
-                  <em>None</em>
-                </MenuItem>
-                {EXPENSE_CATEGORIES.map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-          <TextField
-            fullWidth
-            label="Notes"
-            value={notes}
-            onChange={(e) => onNotesChange(e.target.value.slice(0, 1000))}
-            multiline
-            rows={2}
-            inputProps={{ maxLength: 1000 }}
-            helperText={`${notes.length}/1000`}
-          />
-
-          {hidePhotos ? (
-            <Typography variant="caption" color="text.secondary">
-              Photos can be added once the first expense is created on the start date.
-            </Typography>
-          ) : (
-            <Box>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-                <Typography variant="subtitle2">
-                  Photos ({totalImageCount} / {MAX_IMAGES})
-                </Typography>
-                <Box sx={{ flex: 1 }} />
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                  10MB max
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                {/* Existing images (from DB) */}
-                {existingImages.map((img) => {
-                  const urlEntry = existingImageUrls.find((u) => u._id === img._id);
-                  return (
-                    <Box key={img._id} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
-                      {urlEntry ? (
-                        <Box
-                          component="img"
-                          src={urlEntry.thumbUrl ?? urlEntry.signedUrl}
-                          sx={{
-                            width: 80,
-                            height: 80,
-                            objectFit: "cover",
-                            borderRadius: 1,
-                            display: "block",
-                          }}
-                        />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: 80,
-                            height: 80,
-                            bgcolor: "action.hover",
-                            borderRadius: 1,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <CircularProgress size={20} />
-                        </Box>
-                      )}
-                      <IconButton
-                        size="small"
-                        disabled={isDeletingImage}
-                        onClick={() => onDeleteExistingImage?.(img._id)}
-                        sx={{
-                          position: "absolute",
-                          top: 2,
-                          right: 2,
-                          bgcolor: "rgba(0,0,0,0.55)",
-                          color: "white",
-                          p: 0.25,
-                          "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-                        }}
-                      >
-                        <CloseIcon sx={{ fontSize: 14 }} />
-                      </IconButton>
-                    </Box>
-                  );
-                })}
-
-                {/* New images (pending upload) */}
-                {previewUrls.map((url, index) => (
-                  <Box key={url} sx={{ position: "relative", width: 80, height: 80, flexShrink: 0 }}>
-                    <Box
-                      component="img"
-                      src={url}
-                      sx={{
-                        width: 80,
-                        height: 80,
-                        objectFit: "cover",
-                        borderRadius: 1,
-                        display: "block",
-                        opacity: 0.8,
-                      }}
-                    />
-                    <IconButton
-                      size="small"
-                      onClick={() => handleRemoveNewImage(index)}
-                      sx={{
-                        position: "absolute",
-                        top: 2,
-                        right: 2,
-                        bgcolor: "rgba(0,0,0,0.55)",
-                        color: "white",
-                        p: 0.25,
-                        "&:hover": { bgcolor: "rgba(0,0,0,0.75)" },
-                      }}
-                    >
-                      <CloseIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Box>
-                ))}
-
-                {canAddMoreImages && <PWAImageCapture onChange={handleFileChange} />}
-              </Box>
-            </Box>
-          )}
-        </Box>
+        <ExpenseMiscStep
+          {...{
+            holdMode,
+            onHold,
+            recurringOn,
+            onOnHoldChange,
+            recurringMode,
+            isRecurring,
+            onIsRecurringChange,
+            frequency,
+            onFrequencyChange,
+            recurringEndDate,
+            onRecurringEndDateChange,
+            autoResumeOnBoundsEdit,
+            maxOccurrences,
+            onMaxOccurrencesChange,
+            seriesActive,
+            seriesEnded,
+            seriesWasInactive,
+            onSeriesActiveChange,
+            category,
+            onCategoryChange,
+            notes,
+            onNotesChange,
+            hidePhotos,
+            totalImageCount,
+            existingImages,
+            existingImageUrls,
+            isDeletingImage,
+            onDeleteExistingImage,
+            previewUrls,
+            handleRemoveNewImage,
+            canAddMoreImages,
+            handleFileChange,
+          }}
+        />
       )}
 
       <ReceiptScanDialog
