@@ -62,6 +62,15 @@ export const xenDriveFolderShareSettingsSchema = z.object({
   expiry: z.string().max(64).nullish(),
 });
 
+// Move files and folders into a folder (null = the top level). Up to 200 of each at a time.
+export const xenDriveMoveSchema = z
+  .object({
+    fileIds: z.array(objectIdSchema).max(200).default([]),
+    folderIds: z.array(objectIdSchema).max(200).default([]),
+    targetFolderId: objectIdSchema.nullable(),
+  })
+  .refine((v) => v.fileIds.length + v.folderIds.length > 0, "Pick something to move");
+
 export const xenDriveFolderCreateSchema = z.object({
   name: z.string().trim().min(1, "Folder name is required").max(100, "Folder name too long"),
   parentId: objectIdSchema.nullish(),

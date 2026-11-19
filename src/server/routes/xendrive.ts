@@ -19,6 +19,7 @@ import {
   xenDriveFolderTokenFileParamSchema,
   xenDriveFolderTokenParamSchema,
   xenDriveInitiateSchema,
+  xenDriveMoveSchema,
   xenDrivePublicFolderQuerySchema,
   xenDriveSettingsSchema,
   xenDriveShareTokenParamSchema,
@@ -42,6 +43,7 @@ import {
   deleteFolderTree,
   depthOf,
   folderStats,
+  heightOf,
   isInside,
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
@@ -387,6 +389,57 @@ module.exports = function (app: express.Application) {
 
       const folder = await XenDriveFolder.create({ owner_id: userId, parent_id: parentId, name });
       return res.json({ status: true, message: "Folder created", data: { folder: serializeFolder(folder) } });
+    },
+  );
+
+  // Move files and folders into another folder (or the top level). Checked as a whole first, so a clash or a loop
+  // refuses the lot instead of moving half of them.
+  app.post(
+    "/api/xendrive/move",
+    authenticateToken,
+    validate(xenDriveMoveSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = callerId(req);
+      const { fileIds, folderIds, targetFolderId } = xenDriveMoveSchema.parse(req.body);
+      const target = targetFolderId ?? null;
+      if (target) await ownFolder(target, userId);
+
+      const folders = await XenDriveFolder.find({ _id: { $in: folderIds }, owner_id: userId }).exec();
+      const files = await XenDriveFile.find({ _id: { $in: fileIds }, owner_id: userId }).exec();
+      const sameParent = (id: unknown) => (id ? String(id) : null) === target;
+      const foldersToMove = folders.filter((f) => !sameParent(f.parent_id));
+
+      const targetDepth = await depthOf(target);
+      const names = new Set<string>();
+      for (const folder of foldersToMove) {
+        // Into itself or something inside it would cut it off from the tree.
+        if (target && (await isInside(target, folder.id))) {
+          throw new AppError(400, `"${folder.name}" can't be moved into itself or a folder inside it`);
+        }
+        if (targetDepth + (await heightOf(folder.id)) > MAX_FOLDER_DEPTH) {
+          throw new AppError(400, `Folders can only be nested ${MAX_FOLDER_DEPTH} levels deep`);
+        }
+        const lower = folder.name.toLowerCase();
+        if (names.has(lower)) throw new AppError(409, `Two of the folders are called "${folder.name}"`);
+        names.add(lower);
+        await assertNameFree(userId, target, folder.name, folder.id);
+      }
+
+      const filesToMove = files.filter((f) => (f.folder_id ? String(f.folder_id) : null) !== target);
+      if (filesToMove.length > 0) {
+        await XenDriveFile.updateMany({ _id: { $in: filesToMove.map((f) => f._id) } }, { $set: { folder_id: target } });
+      }
+      if (foldersToMove.length > 0) {
+        await XenDriveFolder.updateMany(
+          { _id: { $in: foldersToMove.map((f) => f._id) } },
+          { $set: { parent_id: target } },
+        );
+      }
+      return res.json({
+        status: true,
+        message: "Moved",
+        data: { files: filesToMove.length, folders: foldersToMove.length },
+      });
     },
   );
 

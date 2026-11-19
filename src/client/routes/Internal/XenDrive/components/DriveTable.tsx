@@ -6,7 +6,7 @@ import type { XenDriveFile, XenDriveFolder } from "../../../../types/XenDriveFil
 import { formatFileSize } from "../../../../utils/fileUtils";
 import { formatModified, itemCountLabel } from "../lib/driveFormat";
 import { KIND_LABEL, fileKindOf } from "../lib/fileKind";
-import { useFolderDrop } from "../lib/useFileDrop";
+import { itemDragProps, useFolderDrop, type DraggedItems } from "../lib/useFileDrop";
 import type { ActionTarget } from "./ItemActions";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
@@ -20,6 +20,10 @@ export interface DriveListHandlers {
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onDropFiles: (folderId: string, files: File[]) => void;
+  /** What a drag of this row carries: everything selected when the row is selected, otherwise just the row. */
+  dragItems: (kind: "file" | "folder", id: string) => DraggedItems;
+  /** Files or folders from this drive dropped onto a folder. */
+  onDropItems: (folderId: string, items: DraggedItems) => void;
 }
 
 /*
@@ -79,7 +83,11 @@ const NoLink = () => (
 );
 
 function FolderRow({ folder, h }: { folder: XenDriveFolder; h: DriveListHandlers }) {
-  const drop = useFolderDrop((files) => h.onDropFiles(folder._id, files));
+  const drop = useFolderDrop(
+    folder._id,
+    (files) => h.onDropFiles(folder._id, files),
+    (items) => h.onDropItems(folder._id, items),
+  );
   const selected = h.selected.has(folder._id);
   const linkChip = folder.shared && (
     <Chip size="small" variant="outlined" color="primary" icon={<LinkIcon sx={{ fontSize: 14 }} />} label="Link on" />
@@ -88,6 +96,7 @@ function FolderRow({ folder, h }: { folder: XenDriveFolder; h: DriveListHandlers
     <Box
       className="row"
       {...drop.props}
+      {...itemDragProps(() => h.dragItems("folder", folder._id))}
       onClick={() => h.onOpenFolder(folder)}
       sx={[
         { cursor: "pointer", "&:hover": { bgcolor: "action.hover" } },
@@ -147,6 +156,7 @@ function FileRow({ file, h }: { file: XenDriveFile; h: DriveListHandlers }) {
   return (
     <Box
       className="row"
+      {...itemDragProps(() => h.dragItems("file", file._id))}
       onClick={() => h.onOpenFile(file)}
       sx={[
         { cursor: "pointer", "&:hover": { bgcolor: "action.hover" } },

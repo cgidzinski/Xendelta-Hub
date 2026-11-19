@@ -228,6 +228,11 @@ export const useXendriveActions = () => {
       api.put<{ folder: XenDriveFolder }>(`/api/xendrive/folders/${v.folderId}/share/settings`, v.settings),
     onSuccess: refresh,
   });
+  const moveItems = useMutation({
+    mutationFn: (v: { fileIds: string[]; folderIds: string[]; targetFolderId: string | null }) =>
+      api.post<{ files: number; folders: number }>("/api/xendrive/move", v),
+    onSuccess: refresh,
+  });
   const deleteFile = useMutation({
     mutationFn: (fileId: string) => api.delete(`/api/xendrive/files/${fileId}`),
     onSuccess: refresh,
@@ -249,6 +254,7 @@ export const useXendriveActions = () => {
     createFolder,
     renameFolder,
     deleteFolder,
+    moveItems,
     shareFolder,
     updateFolderShare,
     deleteFile,
