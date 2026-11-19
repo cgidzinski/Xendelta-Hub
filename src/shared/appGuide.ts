@@ -384,6 +384,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set a reminder on a note and get a notification when it is due.",
       "Search and filter by type, label or notebook.",
       "Bring back a deleted note from the Trash within 30 days.",
+      "See how a note used to read and put an earlier version back, from its last 20.",
       "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
       "Select several notes to archive, recolour, label, move or delete them together.",
     ],

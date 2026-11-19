@@ -99,7 +99,28 @@ noteSchema.pre("save", function (next) {
   next();
 });
 
+// A note's earlier content, kept so a change can be looked at and undone (utils/xenNoteVersions.ts). One row is how the
+// note stood at `at` (when it was last saved before the edit that replaced it), written by `by`. `captured_at` is when
+// the row was made, and rows go away a year later (or with their note).
+const noteVersionSchema = new Schema({
+  note_id: { type: Schema.Types.ObjectId, required: true, index: true },
+  at: { type: Date, required: true },
+  by: { type: String, default: null },
+  type: { type: String, enum: NOTE_TYPES, default: "text" },
+  title: { type: String, default: "" },
+  body: { type: String, default: "" },
+  checklist: { type: [checklistItemSchema], default: [] },
+  link: {
+    url: { type: String, default: "" },
+    title: { type: String, default: "" },
+    description: { type: String, default: "" },
+  },
+  captured_at: { type: Date, default: Date.now, expires: 365 * 86_400 },
+});
+noteVersionSchema.index({ note_id: 1, captured_at: -1 });
+
 export type XenNotebookAttrs = InferSchemaType<typeof notebookSchema>;
 export type XenNoteAttrs = InferSchemaType<typeof noteSchema>;
 export const XenNotebook = mongoose.model("XenNotebook", notebookSchema);
 export const XenNote = mongoose.model("XenNote", noteSchema);
+export const XenNoteVersion = mongoose.model("XenNoteVersion", noteVersionSchema);

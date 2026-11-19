@@ -8,6 +8,8 @@ import type {
   XenNoteCounts,
   TrashedXenNote,
   XenNoteInput,
+  XenNoteVersionFull,
+  XenNoteVersionSummary,
   XenNotebook,
 } from "../../types/XenNote";
 import { useSocketInvalidate } from "../useSocketEvent";
@@ -48,6 +50,35 @@ export const useXenNoteCounts = () =>
     queryFn: () => api.get<XenNoteCounts>("/api/xennote/counts"),
     ...liveQuery,
   });
+
+/** The earlier versions of a note, newest first. Only fetched while `noteId` is set. */
+export const useXenNoteVersions = (noteId: string | undefined) =>
+  useQuery({
+    queryKey: xennoteKeys.versions(noteId ?? ""),
+    queryFn: async () =>
+      (await api.get<{ versions: XenNoteVersionSummary[] }>(`/api/xennote/notes/${noteId}/versions`)).versions,
+    enabled: !!noteId,
+    staleTime: 0,
+  });
+
+/** One earlier version in full. Only fetched while both ids are set. */
+export const useXenNoteVersion = (noteId: string | undefined, versionId: string | undefined) =>
+  useQuery({
+    queryKey: xennoteKeys.version(noteId ?? "", versionId ?? ""),
+    queryFn: async () =>
+      (await api.get<{ version: XenNoteVersionFull }>(`/api/xennote/notes/${noteId}/versions/${versionId}`)).version,
+    enabled: !!noteId && !!versionId,
+  });
+
+/** Put an earlier version back (what the note says now is kept as a version first). */
+export const useRestoreXenNoteVersion = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { noteId: string; versionId: string }) =>
+      api.post(`/api/xennote/notes/${v.noteId}/versions/${v.versionId}/restore`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: xennoteKeys.all }),
+  });
+};
 
 /** The notes this person deleted in the last 30 days. */
 export const useXenNoteTrash = () =>

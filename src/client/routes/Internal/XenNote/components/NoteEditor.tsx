@@ -57,6 +57,8 @@ import type { XenNote, XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
 import NoteMarkdown from "./NoteMarkdown";
 import NoteReminderMenu from "./NoteReminderMenu";
+import NoteHistoryDialog from "./NoteHistoryDialog";
+import HistoryIcon from "@mui/icons-material/History";
 import {
   changeType,
   draftFromNote,
@@ -140,6 +142,7 @@ export default function NoteEditor({
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [reminderAnchor, setReminderAnchor] = useState<HTMLElement | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   // What the server holds for this note right now (photos and the link change it outside the draft).
   const [live, setLive] = useState<XenNote | null>(note);
@@ -970,6 +973,18 @@ export default function NoteEditor({
           Public link
         </MenuItem>
         <MenuItem
+          sx={{ display: live ? "flex" : "none" }}
+          onClick={() => {
+            setMoreAnchor(null);
+            setHistoryOpen(true);
+          }}
+        >
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
+          History
+        </MenuItem>
+        <MenuItem
           onClick={() => {
             setMoreAnchor(null);
             remove();
@@ -982,6 +997,18 @@ export default function NoteEditor({
           Delete
         </MenuItem>
       </Menu>
+
+      <NoteHistoryDialog
+        open={historyOpen}
+        noteId={live?._id ?? null}
+        canRestore={!readOnly}
+        onClose={() => setHistoryOpen(false)}
+        // The note is different now, so the editor closes and the board shows it as it stands.
+        onRestored={() => {
+          setHistoryOpen(false);
+          onClose();
+        }}
+      />
 
       <NoteReminderMenu
         anchor={reminderAnchor}
