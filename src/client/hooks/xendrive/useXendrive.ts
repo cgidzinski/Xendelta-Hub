@@ -206,14 +206,38 @@ export const usePublicFolder = (
   useQuery({
     queryKey: xendriveKeys.publicFolder(token ?? "", folderId, password),
     queryFn: () => {
-      const query = new URLSearchParams();
-      if (folderId) query.set("folder", folderId);
-      if (password) query.set("password", password);
-      const qs = query.toString();
-      return api.get<PublicFolderView>(`/api/xendrive/public/folder/${token}${qs ? `?${qs}` : ""}`);
+      // The password goes in a header, not the address (history, logs and referrers would keep it).
+      const qs = folderId ? `?folder=${encodeURIComponent(folderId)}` : "";
+      return api.get<PublicFolderView>(`/api/xendrive/public/folder/${token}${qs}`, {
+        headers: password ? { "X-Share-Password": password } : undefined,
+      });
     },
     enabled: !!token && enabled,
     retry: false,
+  });
+
+/** What the shared-folder page needs to show one file in place. Only fetched while a file is open. */
+export interface PublicFilePreview {
+  name: string;
+  mimeType: string;
+  size: number;
+  previewUrl: string | null;
+  posterUrl: string | null;
+  text: { text: string; truncated: boolean } | null;
+}
+
+export const usePublicFilePreview = (token: string | undefined, fileId: string | undefined, password?: string) =>
+  useQuery({
+    queryKey: [...xendriveKeys.publicFolderInfo(token ?? ""), "preview", fileId, ...(password ? [password] : [])],
+    queryFn: () =>
+      api.get<PublicFilePreview>(`/api/xendrive/public/folder/${token}/files/${fileId}/preview`, {
+        headers: password ? { "X-Share-Password": password } : undefined,
+      }),
+    enabled: !!token && !!fileId,
+    retry: false,
+    // The signed link inside lasts a few minutes; reopening the same file asks again rather than reusing a stale one.
+    staleTime: 0,
+    gcTime: 0,
   });
 
 // ---------- changing ----------
@@ -260,6 +284,11 @@ export const useXendriveActions = () => {
       api.put<{ folder: XenDriveFolder }>(`/api/xendrive/folders/${v.folderId}/share/settings`, v.settings),
     onSuccess: refresh,
   });
+  const moveItems = useMutation({
+    mutationFn: (v: { fileIds: string[]; folderIds: string[]; targetFolderId: string | null }) =>
+      api.post<{ files: number; folders: number }>("/api/xendrive/move", v),
+    onSuccess: refresh,
+  });
   const deleteFile = useMutation({
     mutationFn: (fileId: string) => api.delete(`/api/xendrive/files/${fileId}`),
     onSuccess: refresh,
@@ -281,6 +310,7 @@ export const useXendriveActions = () => {
     createFolder,
     renameFolder,
     deleteFolder,
+    moveItems,
     shareFolder,
     updateFolderShare,
     deleteFile,

@@ -207,7 +207,13 @@ const tooMany = { status: false, message: "Too many attempts. Please wait a few 
 // Only the unauthenticated, abuse-prone routes: /verify and /roles/verify run on ordinary page
 // loads and must not be throttled.
 app.use(
-  ["/api/auth/login", "/api/auth/signup", "/api/auth/verify-reset-token", "/api/auth/reset-password"],
+  [
+    "/api/auth/login",
+    "/api/auth/signup",
+    "/api/auth/verify-reset-token",
+    "/api/auth/reset-password",
+    "/api/auth/confirm-email-change",
+  ],
   rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 30,
@@ -277,6 +283,7 @@ require("./routes/xendrive.ts")(app);
 require("./routes/storage.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/feedback.ts")(app);
+require("./routes/emailChange.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);

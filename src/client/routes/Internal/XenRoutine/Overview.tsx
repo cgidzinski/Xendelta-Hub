@@ -16,7 +16,7 @@ import EventRepeatIcon from "@mui/icons-material/EventRepeat";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import type { AxiosProgressEvent } from "axios";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { useSnackbar } from "notistack";
+import { closeSnackbar, useSnackbar } from "notistack";
 import { useOutletContext } from "react-router-dom";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -25,6 +25,7 @@ import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import {
   intervalLabel,
   useCompleteRoutine,
+  useUndoRoutineCompletion,
   useInvalidateRoutines,
   useRoutines,
   useToggleChecklistItem,
@@ -64,6 +65,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const complete = useCompleteRoutine();
+  const undoCompletion = useUndoRoutineCompletion();
   const invalidate = useInvalidateRoutines();
   const [leaving, setLeaving] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -100,7 +102,22 @@ function PendingCard({ occ }: { occ: Occurrence }) {
       if (e?.response?.status === 409) void invalidate();
       throw e;
     }
-    enqueueSnackbar(`“${routine.name}” marked as done`, { variant: "success" });
+    // The card is about to leave, so the undo is a plain mutation that refetches the list itself when it settles.
+    enqueueSnackbar(`“${routine.name}” marked as done`, {
+      variant: "success",
+      action: (key) => (
+        <Button
+          color="inherit"
+          size="small"
+          onClick={() => {
+            closeSnackbar(key);
+            undoCompletion.mutate(routine._id);
+          }}
+        >
+          Undo
+        </Button>
+      ),
+    });
     setLeaving(true);
     // A timer rather than onExited so the refetch still happens if the user navigates away.
     setTimeout(() => {

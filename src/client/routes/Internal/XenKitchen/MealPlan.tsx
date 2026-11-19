@@ -20,7 +20,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CloseIcon from "@mui/icons-material/Close";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import { addDays, addWeeks, format, isSameDay, startOfWeek } from "date-fns";
-import { useSnackbar } from "notistack";
+import { closeSnackbar, useSnackbar } from "notistack";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -76,6 +76,29 @@ function MealRow({
       { onError: () => enqueueSnackbar("Couldn't save", { variant: "error" }) },
     );
   };
+
+  // Takes the meal off the day, and offers to put it back (the row is gone by then, so the undo is a promise, not state).
+  const removeMeal = () =>
+    remove.mutateAsync(entry._id).then(
+      () =>
+        enqueueSnackbar(`Removed ${entry.title}`, {
+          action: (key) => (
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                closeSnackbar(key);
+                add
+                  .mutateAsync({ bookId, date: entry.date, item_id: entry.item_id, servings: entry.servings })
+                  .catch((e: Error) => enqueueSnackbar(e.message || "Couldn't put it back", { variant: "error" }));
+              }}
+            >
+              Undo
+            </Button>
+          ),
+        }),
+      () => enqueueSnackbar("Couldn't remove it", { variant: "error" }),
+    );
 
   return (
     <Stack direction="row" alignItems="center" spacing={0.5} sx={{ py: 0.25 }}>
@@ -143,14 +166,7 @@ function MealRow({
         </>
       )}
       {canEdit && (
-        <IconButton
-          size="small"
-          aria-label={`Remove ${entry.title}`}
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(entry._id, { onError: () => enqueueSnackbar("Couldn't remove it", { variant: "error" }) })
-          }
-        >
+        <IconButton size="small" aria-label={`Remove ${entry.title}`} disabled={remove.isPending} onClick={removeMeal}>
           <CloseIcon fontSize="small" />
         </IconButton>
       )}

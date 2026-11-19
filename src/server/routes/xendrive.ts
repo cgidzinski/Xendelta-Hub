@@ -19,9 +19,13 @@ import {
   xenDriveFolderTokenFileParamSchema,
   xenDriveFolderTokenParamSchema,
   xenDriveInitiateSchema,
+  xenDriveMoveSchema,
   xenDrivePublicFolderQuerySchema,
   xenDriveSettingsSchema,
   xenDriveShareTokenParamSchema,
+  xenDriveTicketSchema,
+  xenDriveZipQuerySchema,
+  xenDriveZipTicketSchema,
   xenDriveUploadIdParamSchema,
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
@@ -42,9 +46,13 @@ import {
   deleteFolderTree,
   depthOf,
   folderStats,
+  heightOf,
   isInside,
+  subtreeIds,
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
+import { isValidDownloadTicket, signDownloadTicket } from "../utils/downloadTickets";
+import { MAX_ZIP_BYTES, MAX_ZIP_ENTRIES, ZipWriter, zipPath } from "../utils/zipStream";
 import { checkSharePassword, hashSharePassword, isUnset } from "../utils/sharePasswords";
 import { generateSignedUrl } from "../utils/storageUtils";
 import { isTextPreviewable, readTextPreview } from "../utils/fileText";
@@ -103,6 +111,8 @@ const serializeFolder = (folder: any, itemCount = 0) => ({
 /** What a person can look at in the browser without downloading. */
 const PREVIEWABLE = /^(image\/|application\/pdf$|video\/|audio\/)/;
 const PREVIEW_MINUTES = 60;
+/** A visitor's preview link is short-lived: they can ask again when they open the next file. */
+const PUBLIC_PREVIEW_MINUTES = 15;
 
 /**
  * Cacheable thumbnail links for files that have one, falling back to the original for images whose thumbnail isn't
@@ -166,6 +176,16 @@ async function assertNameFree(userId: string, parentId: string | null, name: str
   if (clash) throw new AppError(409, "A folder with that name already exists here");
 }
 
+/**
+ * The link password a request carries: in the X-Share-Password header (what the site sends), or in ?password= for
+ * older links and scripts. It is never read from the address by the site itself, so it stays out of history and logs.
+ */
+const sharePasswordOf = (req: express.Request): string | undefined => {
+  const header = req.headers["x-share-password"];
+  if (typeof header === "string" && header) return header;
+  return typeof req.query.password === "string" && req.query.password ? req.query.password : undefined;
+};
+
 /** A shared folder, looked up by its public token. */
 async function sharedFolder(token: string) {
   const folder = await XenDriveFolder.findOne({ "share.token": token, "share.enabled": true }).exec();
@@ -181,11 +201,15 @@ const folderLinkExpired = (folder: { share?: { expiry?: Date | null } | null }) 
  * sent as ?password=, the same way a file's link takes it) is right. A wrong or missing password is a 403, not a
  * 401: the client treats every 401 as "your sign-in expired" and would sign the owner out of their own browser.
  */
-async function openSharedFolder(token: string, password: unknown) {
+async function openSharedFolder(token: string, password: unknown, passwordAlreadyChecked = false) {
   const folder = await sharedFolder(token);
   if (folderLinkExpired(folder)) throw new AppError(403, "Link expired");
   const hash = folder.share?.passwordHash;
-  if (hash && !(typeof password === "string" && password && (await checkSharePassword(password, { hash })))) {
+  if (
+    hash &&
+    !passwordAlreadyChecked &&
+    !(typeof password === "string" && password && (await checkSharePassword(password, { hash })))
+  ) {
     throw new AppError(403, password ? "Incorrect password" : "Password required");
   }
   return folder;
@@ -389,6 +413,57 @@ module.exports = function (app: express.Application) {
 
       const folder = await XenDriveFolder.create({ owner_id: userId, parent_id: parentId, name });
       return res.json({ status: true, message: "Folder created", data: { folder: serializeFolder(folder) } });
+    },
+  );
+
+  // Move files and folders into another folder (or the top level). Checked as a whole first, so a clash or a loop
+  // refuses the lot instead of moving half of them.
+  app.post(
+    "/api/xendrive/move",
+    authenticateToken,
+    validate(xenDriveMoveSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = callerId(req);
+      const { fileIds, folderIds, targetFolderId } = xenDriveMoveSchema.parse(req.body);
+      const target = targetFolderId ?? null;
+      if (target) await ownFolder(target, userId);
+
+      const folders = await XenDriveFolder.find({ _id: { $in: folderIds }, owner_id: userId }).exec();
+      const files = await XenDriveFile.find({ _id: { $in: fileIds }, owner_id: userId }).exec();
+      const sameParent = (id: unknown) => (id ? String(id) : null) === target;
+      const foldersToMove = folders.filter((f) => !sameParent(f.parent_id));
+
+      const targetDepth = await depthOf(target);
+      const names = new Set<string>();
+      for (const folder of foldersToMove) {
+        // Into itself or something inside it would cut it off from the tree.
+        if (target && (await isInside(target, folder.id))) {
+          throw new AppError(400, `"${folder.name}" can't be moved into itself or a folder inside it`);
+        }
+        if (targetDepth + (await heightOf(folder.id)) > MAX_FOLDER_DEPTH) {
+          throw new AppError(400, `Folders can only be nested ${MAX_FOLDER_DEPTH} levels deep`);
+        }
+        const lower = folder.name.toLowerCase();
+        if (names.has(lower)) throw new AppError(409, `Two of the folders are called "${folder.name}"`);
+        names.add(lower);
+        await assertNameFree(userId, target, folder.name, folder.id);
+      }
+
+      const filesToMove = files.filter((f) => (f.folder_id ? String(f.folder_id) : null) !== target);
+      if (filesToMove.length > 0) {
+        await XenDriveFile.updateMany({ _id: { $in: filesToMove.map((f) => f._id) } }, { $set: { folder_id: target } });
+      }
+      if (foldersToMove.length > 0) {
+        await XenDriveFolder.updateMany(
+          { _id: { $in: foldersToMove.map((f) => f._id) } },
+          { $set: { parent_id: target } },
+        );
+      }
+      return res.json({
+        status: true,
+        message: "Moved",
+        data: { files: filesToMove.length, folders: foldersToMove.length },
+      });
     },
   );
 
@@ -721,33 +796,46 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  /** A file's own link, if it works: switched on, not expired, and the password (when it has one) is right. */
+  async function openFileLink(shareToken: string, password: string | undefined, passwordAlreadyChecked = false) {
+    const file = await withRecord(await XenDriveFile.findOne({ shareToken, shareEnabled: true }).exec());
+    if (!file) throw new AppError(404, "File not found");
+    if (file.isExpired()) throw new AppError(403, "Link expired");
+    if (file.hasPassword() && !passwordAlreadyChecked) {
+      const wrong = !password || !(await file.checkPassword(password));
+      if (wrong) {
+        throw new AppError(401, !password ? "Password required" : "Incorrect password", {
+          requiresPassword: true,
+          name: file.name,
+          expiry: file.expiry ? file.expiry.toISOString() : null,
+        });
+      }
+    }
+    return file;
+  }
+
+  // The site asks for a ticket (password in the body), then downloads with only the ticket in the address.
+  app.post(
+    "/api/xendrive/download/:shareToken/ticket",
+    validateParams(xenDriveShareTokenParamSchema),
+    validate(xenDriveTicketSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await openFileLink(req.params.shareToken as string, req.body.password);
+      return res.json({ status: true, data: { ticket: signDownloadTicket(req.params.shareToken as string, file.id) } });
+    },
+  );
+
   app.get(
     "/api/xendrive/download/:shareToken",
     validateParams(xenDriveShareTokenParamSchema),
     validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const { password } = req.query;
-
-      const file = await withRecord(
-        await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec(),
-      );
-      if (!file) throw new AppError(404, "File not found");
-
-      if (file.isExpired()) {
-        throw new AppError(403, "Link expired");
-      }
-
-      if (file.hasPassword()) {
-        const wrong = !password || typeof password !== "string" || !(await file.checkPassword(password));
-        if (wrong) {
-          throw new AppError(401, !password ? "Password required" : "Incorrect password", {
-            requiresPassword: true,
-            name: file.name,
-            expiry: file.expiry ? file.expiry.toISOString() : null,
-          });
-        }
-      }
-
+      const shareToken = req.params.shareToken as string;
+      const ticket = typeof req.query.ticket === "string" ? req.query.ticket : undefined;
+      // A ticket stands in for the password, but only for the file it was made for; everything else is checked again.
+      const peek = ticket ? await XenDriveFile.findOne({ shareToken, shareEnabled: true }, "_id").exec() : null;
+      const ticketOk = !!peek && isValidDownloadTicket(ticket, shareToken, peek.id);
+      const file = await openFileLink(shareToken, sharePasswordOf(req), ticketOk);
       return streamFile(res, file);
     },
   );
@@ -762,7 +850,7 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFolderTokenParamSchema),
     validateQuery(xenDrivePublicFolderQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const root = await openSharedFolder(req.params.token as string, req.query.password);
+      const root = await openSharedFolder(req.params.token as string, sharePasswordOf(req));
       const requested = (req.query.folder as string | undefined) || root.id;
 
       if (!(await isInside(requested, root.id))) throw new AppError(404, "Folder not found");
@@ -804,20 +892,171 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  /** A file inside a shared folder, if the link works (and the password is right, unless a ticket stands in for it). */
+  async function openFolderFile(token: string, fileId: string, password: string | undefined, ticket?: string) {
+    const ticketOk = isValidDownloadTicket(ticket, token, fileId);
+    const root = await openSharedFolder(token, password, ticketOk);
+    const file = await withRecord(await XenDriveFile.findOne({ _id: fileId, owner_id: root.owner_id }).exec());
+    if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
+      throw new AppError(404, "File not found");
+    }
+    if (file.isExpired()) throw new AppError(403, "Link expired");
+    return { root, file };
+  }
+
+  // What the folder page needs to show a file in place: a short-lived link for images, PDFs, video and audio, and the
+  // start of a text file. The password goes in the X-Share-Password header, like the listing's.
+  app.get(
+    "/api/xendrive/public/folder/:token/files/:fileId/preview",
+    validateParams(xenDriveFolderTokenFileParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const { file } = await openFolderFile(
+        req.params.token as string,
+        req.params.fileId as string,
+        sharePasswordOf(req),
+      );
+      const isImage = file.mimeType.startsWith("image/");
+      const [previewUrl, posterUrl, text] = await Promise.all([
+        isImage && file.thumb?.path
+          ? previewUrlFor(file.storage_path)
+          : PREVIEWABLE.test(file.mimeType)
+            ? generateSignedUrl(file.storage_path, PUBLIC_PREVIEW_MINUTES)
+            : Promise.resolve(null),
+        file.mimeType.startsWith("video/") && file.thumb?.path ? thumbnailUrlFor(file.storage_path) : null,
+        isTextPreviewable(file.mimeType) ? readTextPreview(file.storage_path) : null,
+      ]);
+      return res.json({
+        status: true,
+        data: { name: file.name, mimeType: file.mimeType, size: file.size, previewUrl, posterUrl, text },
+      });
+    },
+  );
+
+  app.post(
+    "/api/xendrive/public/folder/:token/files/:fileId/ticket",
+    validateParams(xenDriveFolderTokenFileParamSchema),
+    validate(xenDriveTicketSchema),
+    async function (req: express.Request, res: express.Response) {
+      const token = req.params.token as string;
+      const { file } = await openFolderFile(
+        token,
+        req.params.fileId as string,
+        req.body.password ?? sharePasswordOf(req),
+      );
+      return res.json({ status: true, data: { ticket: signDownloadTicket(token, file.id) } });
+    },
+  );
+
   app.get(
     "/api/xendrive/public/folder/:token/files/:fileId",
     validateParams(xenDriveFolderTokenFileParamSchema),
     validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const root = await openSharedFolder(req.params.token as string, req.query.password);
-      const file = await withRecord(
-        await XenDriveFile.findOne({ _id: req.params.fileId, owner_id: root.owner_id }).exec(),
+      const { root, file } = await openFolderFile(
+        req.params.token as string,
+        req.params.fileId as string,
+        sharePasswordOf(req),
+        typeof req.query.ticket === "string" ? req.query.ticket : undefined,
       );
-      if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
-        throw new AppError(404, "File not found");
-      }
-      if (file.isExpired()) throw new AppError(403, "Link expired");
       return streamFile(res, file, root.id);
+    },
+  );
+
+  // The shared folder (or one inside it) as a single zip. Like a file, it is asked for with the password in a POST and
+  // fetched with a ticket made for exactly this folder.
+  async function openZipFolder(token: string, folderId: string | undefined, password?: string, ticket?: string) {
+    const ticketOk = isValidDownloadTicket(ticket, token, `zip:${folderId ?? ""}`);
+    const root = await openSharedFolder(token, password, ticketOk);
+    const requested = folderId || root.id;
+    if (!(await isInside(requested, root.id))) throw new AppError(404, "Folder not found");
+    const current = await XenDriveFolder.findOne({ _id: requested, owner_id: root.owner_id }).exec();
+    if (!current) throw new AppError(404, "Folder not found");
+    return { root, current };
+  }
+
+  app.post(
+    "/api/xendrive/public/folder/:token/zip/ticket",
+    validateParams(xenDriveFolderTokenParamSchema),
+    validate(xenDriveZipTicketSchema),
+    async function (req: express.Request, res: express.Response) {
+      const token = req.params.token as string;
+      const { password, folder } = req.body;
+      await openZipFolder(token, folder, password ?? sharePasswordOf(req));
+      return res.json({ status: true, data: { ticket: signDownloadTicket(token, `zip:${folder ?? ""}`) } });
+    },
+  );
+
+  app.get(
+    "/api/xendrive/public/folder/:token/zip",
+    validateParams(xenDriveFolderTokenParamSchema),
+    validateQuery(xenDriveZipQuerySchema),
+    async function (req: express.Request, res: express.Response) {
+      const { folder, ticket } = req.query as { folder?: string; ticket?: string };
+      const { root, current } = await openZipFolder(req.params.token as string, folder, sharePasswordOf(req), ticket);
+
+      // Everything in the folder and beneath it, except files whose own expiry has passed.
+      const ids = await subtreeIds(current.id);
+      const [folders, found] = await Promise.all([
+        XenDriveFolder.find({ _id: { $in: ids }, owner_id: root.owner_id }, "name parent_id").lean(),
+        XenDriveFile.find({
+          owner_id: root.owner_id,
+          folder_id: { $in: ids },
+          $or: [{ expiry: null }, { expiry: { $exists: false } }, { expiry: { $gt: new Date() } }],
+        })
+          .sort({ name: 1 })
+          .exec(),
+      ]);
+      const files = await withRecords(found);
+      if (files.length === 0) throw new AppError(404, "There is nothing to download in this folder");
+      const total = files.reduce((sum, f) => sum + (f.size || 0), 0);
+      if (files.length > MAX_ZIP_ENTRIES || total > MAX_ZIP_BYTES) {
+        throw new AppError(413, "This folder is too big to download in one go. Download its files one at a time.");
+      }
+
+      // A file's path inside the zip: the folder names from the one being downloaded down to where it sits.
+      const byId = new Map(folders.map((f) => [String(f._id), f]));
+      const pathOf = (folderId: string): string[] => {
+        const parts: string[] = [];
+        for (let id: string | null = folderId, i = 0; id && i <= MAX_FOLDER_DEPTH; i++) {
+          const f = byId.get(id);
+          if (!f) break;
+          parts.unshift(f.name);
+          id = id === current.id ? null : f.parent_id ? String(f.parent_id) : null;
+        }
+        return parts;
+      };
+
+      const zipName = `${current.name}.zip`;
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", attachment(zipName));
+      const zip = new ZipWriter(res);
+      const taken = new Set<string>();
+      const sent: unknown[] = [];
+      try {
+        for (const file of files) {
+          let data;
+          try {
+            data = await privateStore.read(file.storage_path);
+          } catch {
+            continue; // the bytes are gone from storage; leave that file out rather than failing the lot
+          }
+          await zip.addFile(zipPath([...pathOf(String(file.folder_id)), file.name], taken), data, file.createdAt);
+          sent.push(file._id);
+        }
+        await zip.finish();
+      } catch (err) {
+        // Part of the zip is already on its way, so the only honest thing left is to cut the connection.
+        res.destroy(err as Error);
+        return;
+      }
+      const at = new Date();
+      await Promise.all([
+        XenDriveFile.updateMany({ _id: { $in: sent } }, { $inc: { downloads: 1 }, $set: { lastDownloadedAt: at } }),
+        XenDriveFolder.updateOne(
+          { _id: root.id },
+          { $inc: { "share.downloads": sent.length }, $set: { "share.lastDownloadedAt": at } },
+        ),
+      ]).catch(() => undefined); // a tally that can't be kept must not matter now
     },
   );
 

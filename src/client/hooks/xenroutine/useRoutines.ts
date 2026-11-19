@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosProgressEvent } from "axios";
+import { enqueueSnackbar } from "notistack";
 import { apiClient } from "../../config/api";
 import { ApiResponse } from "../../types/api";
 import { liveQuery } from "../liveQuery";
@@ -163,6 +164,17 @@ export const useCompleteRoutine = () =>
       await apiClient.post(url, form, { onUploadProgress: v.onUploadProgress });
     },
   });
+
+/** Take back the latest completion (the caller's own, within ten minutes). The list is refetched when it settles. */
+export function useUndoRoutineCompletion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.post(`${base}/${id}/undo`),
+    // Shown here, not at the call, because the card that offered the undo has usually left by the time it runs.
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.message ?? "Couldn't undo that", { variant: "error" }),
+    onSettled: () => qc.invalidateQueries({ queryKey: routineKeys.all }),
+  });
+}
 
 export function useInvalidateRoutines() {
   const qc = useQueryClient();
