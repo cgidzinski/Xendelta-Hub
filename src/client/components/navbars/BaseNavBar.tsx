@@ -42,6 +42,7 @@ import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
 import LoadingSpinner from "../LoadingSpinner";
 import { BRAND_NAME } from "@shared/brand";
+import { clickableRowProps } from "../../utils/keyboard";
 import { rememberRecentApp } from "../../utils/recentApps";
 
 const DRAWER_WIDTH = 240;
@@ -260,12 +261,12 @@ export default function BaseNavBar({
                 backgroundColor: "action.hover",
               },
             }}
-            onClick={() => {
+            {...clickableRowProps(() => {
               navigate(drawerHeaderPath);
               if (isMobile && isNavBarOpen) {
                 onToggleNavBar();
               }
-            }}
+            })}
           >
             <Typography
               variant="h5"

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Box } from "@mui/material";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
+import { clickableRowProps } from "../../utils/keyboard";
 
 interface PWAImageCaptureProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -46,11 +47,15 @@ export default function PWAImageCapture({ onChange }: PWAImageCaptureProps) {
         onChange={onChange}
       />
 
-      <Box onClick={() => cameraInputRef.current?.click()} sx={tileStyle}>
+      <Box {...clickableRowProps(() => cameraInputRef.current?.click())} aria-label="Take a photo" sx={tileStyle}>
         <CameraAltIcon />
       </Box>
 
-      <Box onClick={() => galleryInputRef.current?.click()} sx={tileStyle}>
+      <Box
+        {...clickableRowProps(() => galleryInputRef.current?.click())}
+        aria-label="Choose from gallery"
+        sx={tileStyle}
+      >
         <AddPhotoAlternateIcon />
       </Box>
     </>

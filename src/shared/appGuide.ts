@@ -68,7 +68,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Get notifications on your phone or computer, and by email if you want them.",
       "Choose for each app whether its notifications reach you in the app, by push or by email.",
       "See how many messages and notifications are waiting, mark them all read at once, and filter them by app or unread.",
-      "Move around with the Tab key and open chats, notifications and stored files with Enter or Space.",
+      "Move around with the Tab key and open chats, notifications, files, folders and expenses with Enter or Space.",
       "Send a link, some text or a photo from your phone's Share button, then save it as a note, a short link, a file or the start of an expense.",
       "Change the email on your account, confirmed with a link sent to the other address.",
       "Choose a light or dark look and your timezone.",
