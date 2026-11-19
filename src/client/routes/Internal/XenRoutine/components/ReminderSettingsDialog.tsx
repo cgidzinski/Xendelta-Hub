@@ -95,11 +95,10 @@ export default function ReminderSettingsDialog({ open, onClose }: Props) {
               control={<Switch checked={channels.push} onChange={toggle("push")} />}
               label="Push notification"
             />
-            <FormControlLabel control={<Switch checked={channels.email} onChange={toggle("email")} />} label="Email" />
           </Stack>
           <Typography variant="caption" color="text.secondary">
             This applies to every routine. Everything due at your reminder time arrives as one message. Push needs a
-            subscribed device, and email also needs email notifications turned on in your Profile.
+            subscribed device. To be emailed too, turn on Email for XenRoutine in Settings → Notifications.
           </Typography>
         </Stack>
       </DialogContent>

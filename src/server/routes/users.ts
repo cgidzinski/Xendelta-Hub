@@ -78,8 +78,8 @@ module.exports = function (app: express.Application) {
           pinnedApps: user.pinnedApps || [],
           timezone: user.timezone || "",
           theme: user.theme || "",
-          emailNotifications: user.notificationPrefs?.email !== false,
-          mutedNotifications: user.notificationPrefs?.muted ?? [],
+          mutedNotifications: (user.notificationPrefs?.muted ?? []).filter((m) => !m.endsWith(":email")),
+          emailApps: user.notificationPrefs?.emailApps ?? [],
           // Whether the email can be changed here (accounts that sign in with Google or GitHub have no password), and
           // an address still waiting for its confirm link.
           canChangeEmail: !!user.password,
@@ -103,7 +103,7 @@ module.exports = function (app: express.Application) {
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = callerId(req);
-      const { username, timezone, emailNotifications, mutedNotifications, etransfer, theme } = req.body;
+      const { username, timezone, mutedNotifications, emailApps, etransfer, theme } = req.body;
       // Which fields this request actually changed. A preference toggle should not
       // announce itself as "Profile updated" in the notification centre.
       const changed: string[] = [];
@@ -124,15 +124,17 @@ module.exports = function (app: express.Application) {
         await user.save();
       }
 
-      if (emailNotifications !== undefined) {
-        user.set("notificationPrefs.email", emailNotifications);
+      if (mutedNotifications !== undefined) {
+        // A preference toggle, like the theme: not news, so it isn't announced as a profile update. Old
+        // "app:email" entries are dropped: email is chosen in emailApps now.
+        user.set("notificationPrefs.muted", [
+          ...new Set<string>(mutedNotifications.filter((m: string) => !m.endsWith(":email"))),
+        ]);
         await user.save();
-        changed.push("email notifications");
       }
 
-      if (mutedNotifications !== undefined) {
-        // A preference toggle, like the theme: not news, so it isn't announced as a profile update.
-        user.set("notificationPrefs.muted", [...new Set<string>(mutedNotifications)]);
+      if (emailApps !== undefined) {
+        user.set("notificationPrefs.emailApps", [...new Set<string>(emailApps)]);
         await user.save();
       }
 
@@ -185,8 +187,8 @@ module.exports = function (app: express.Application) {
             avatar: user.avatar || "/avatars/default-avatar.png",
             timezone: user.timezone || "",
             theme: user.theme || "",
-            emailNotifications: user.notificationPrefs?.email !== false,
-            mutedNotifications: user.notificationPrefs?.muted ?? [],
+            mutedNotifications: (user.notificationPrefs?.muted ?? []).filter((m) => !m.endsWith(":email")),
+            emailApps: user.notificationPrefs?.emailApps ?? [],
             etransfer: etransferPayload(user),
             unread_messages: false,
             unread_notifications: true,

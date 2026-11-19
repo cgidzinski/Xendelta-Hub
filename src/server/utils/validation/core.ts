@@ -4,7 +4,12 @@ import { VALIDATION_LIMITS } from "../../constants";
 import { ALL_CURRENCIES } from "@shared/currencies";
 import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
 import { isSafeUrl } from "@shared/xennote/notes";
-import { NOTIFICATION_APPS, NOTIFICATION_WAYS, isMutedNotification } from "@shared/notificationApps";
+import {
+  NOTIFICATION_APPS,
+  NOTIFICATION_WAYS,
+  isMutedNotification,
+  type NotificationApp,
+} from "@shared/notificationApps";
 
 // Helper to validate MongoDB ObjectId
 export const objectIdSchema = z
@@ -83,11 +88,15 @@ export const updateProfileSchema = z.object({
     .max(50, "Username too long")
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
     .optional(),
-  emailNotifications: z.boolean().optional(),
   // The app-and-way combinations switched off; sending the list replaces it.
   mutedNotifications: z
     .array(z.string().refine(isMutedNotification, "Not a notification setting"))
     .max(NOTIFICATION_APPS.length * NOTIFICATION_WAYS.length)
+    .optional(),
+  // The apps to be emailed about; sending the list replaces it. Email is off for any app not listed.
+  emailApps: z
+    .array(z.enum(NOTIFICATION_APPS.map((a) => a.key) as [NotificationApp, ...NotificationApp[]]))
+    .max(NOTIFICATION_APPS.length)
     .optional(),
   // "" clears the preference (defaults to dark); "system" explicitly follows the OS.
   theme: z.union([z.enum(["light", "dark", "system"]), z.literal("")]).optional(),

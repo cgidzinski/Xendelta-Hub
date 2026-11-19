@@ -26,10 +26,10 @@ export interface UserProfile {
   timezone: string;
   /** "" means never chosen (defaults to dark); "system" means follow the OS setting. */
   theme: ThemePreference;
-  /** Whether the account receives emailed notifications (opt-out; default true). */
-  emailNotifications: boolean;
-  /** App-and-way notification switches that are off, like "xensplit:email" (shared/notificationApps.ts). */
+  /** App-and-way in-app and push switches that are off, like "xenroutine:push" (shared/notificationApps.ts). */
   mutedNotifications: string[];
+  /** The apps this person turned email on for. Email is off for any app not listed. */
+  emailApps: string[];
   /** Whether the email can be changed in Settings (accounts that sign in with Google or GitHub can't). */
   canChangeEmail: boolean;
   /** A new address that is waiting for its confirm link, or null. */
@@ -49,9 +49,10 @@ export interface UpdateProfileData {
   timezone?: string;
   /** "" clears the preference (defaults to dark). */
   theme?: ThemePreference;
-  emailNotifications?: boolean;
   /** Replaces the list of switched-off notification settings. */
   mutedNotifications?: string[];
+  /** Replaces the list of apps to be emailed about. */
+  emailApps?: string[];
   /** A blank handle clears it. */
   etransfer?: EtransferInfo;
 }

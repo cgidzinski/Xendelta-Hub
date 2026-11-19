@@ -18,7 +18,7 @@ const CHANNELS: Array<{ value: NotifyChannel; label: string; note: string }> = [
   { value: "inapp", label: "In the app", note: "Shows in everyone's notification list" },
   { value: "socket", label: "Live", note: "A toast for people who have the app open" },
   { value: "push", label: "Push", note: "Phone and desktop alerts, only for people who turned them on" },
-  { value: "email", label: "Email", note: "Respects each person's email setting. Use sparingly." },
+  { value: "email", label: "Email", note: "Goes to everyone you pick, whatever their email settings. Use sparingly." },
 ];
 const TEMPLATES = [
   {

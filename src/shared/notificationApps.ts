@@ -1,6 +1,10 @@
 // The apps whose notifications a person can switch on or off, and the ways each one reaches them. Shared so Settings
-// and the server agree on what can be muted. Announcements from the people who run the hub (messages to everyone,
+// and the server agree on what can be switched. Announcements from the people who run the hub (messages to everyone,
 // replies to your feedback) belong to no app and are always delivered.
+//
+// In the app and push are on unless switched off ("muted"). Email is the other way round: off for every app until the
+// person turns it on ("emailApps"). One-off messages that matter (password resets, email changes, announcements) are
+// emailed regardless.
 
 export const NOTIFICATION_APPS = [
   { key: "xensplit", label: "XenSplit", about: "Expenses, settlements and group changes" },
@@ -23,7 +27,7 @@ export const NOTIFICATION_WAYS = [
 
 export type NotificationWay = (typeof NOTIFICATION_WAYS)[number]["key"];
 
-/** One switched-off combination, stored as "xensplit:email". */
+/** One switched-off combination, stored as "xensplit:push". Old "xensplit:email" entries are still accepted and ignored. */
 export type MutedNotification = `${NotificationApp}:${NotificationWay}`;
 
 export const isMutedNotification = (v: unknown): v is MutedNotification => {
@@ -34,6 +38,9 @@ export const isMutedNotification = (v: unknown): v is MutedNotification => {
   );
 };
 
-/** The apps and ways that are switched on, given the switched-off list. */
-export const isNotificationOn = (muted: readonly string[], app: NotificationApp, way: NotificationWay): boolean =>
-  !muted.includes(`${app}:${way}`);
+/** Whether an app reaches the person this way, given their switched-off list and the apps they opted in to email for. */
+export const isNotificationOn = (
+  prefs: { muted: readonly string[]; emailApps: readonly string[] },
+  app: NotificationApp,
+  way: NotificationWay,
+): boolean => (way === "email" ? prefs.emailApps.includes(app) : !prefs.muted.includes(`${app}:${way}`));

@@ -10,7 +10,8 @@ import { isNotificationOn, type NotificationApp } from "@shared/notificationApps
 // A single event fans out to whichever channels the caller asks for:
 //   inapp  - persist a Notification document (the bell / inbox list)
 //   socket - emit notification:new to live clients over Socket.IO
-//   email  - send via Resend (respects user.notificationPrefs.email)
+//   email  - send via Resend. For a notification that names an app, only if the person turned email on for that app
+//            (Settings > Notifications); announcements and other one-offs without an app are emailed when asked for
 //   push   - Web Push to the user's subscribed devices (phone lock screen)
 //
 // Channels are independent: one failing never blocks the others, matching the original
@@ -26,8 +27,12 @@ export interface NotifyInput {
   icon?: string;
   channels?: NotifyChannel[];
   /**
-   * Which app this is about. The person's per-app settings (Settings > Notifications) can switch off the in-app, push or
-   * email way of hearing about it. Leave it out for announcements that must always arrive.
+   * Which app this is about. The person's per-app settings (Settings > Notifications) can switch off the in-app or push
+   * way of hearing about it, and email only happens for an app they turned it on for. Leave it out for announcements and
+   * other important one-offs that must always arrive.
+   *
+   * With `channels` left out, an app notification is also emailed to someone who opted in to that app's email. A caller
+   * that lists its own channels keeps them: email is then only dropped when the person has not opted in.
    */
   app?: NotificationApp;
 }
@@ -45,18 +50,23 @@ export async function notify(userId: string, input: NotifyInput): Promise<Notify
   const { title, message, link, icon = "announcement", app } = input;
   let channels = input.channels ?? DEFAULT_CHANNELS;
 
-  // What this person has switched off for this app. "In the app" covers the bell and the live pop-up together.
+  // What this person has switched off for this app, and whether they opted in to its email. "In the app" covers the
+  // bell and the live pop-up together.
   if (app) {
     try {
-      const prefs = await User.findById(userId).select("notificationPrefs").exec();
-      const muted = prefs?.notificationPrefs?.muted ?? [];
-      if (muted.length > 0) {
-        channels = channels.filter((c) =>
-          c === "inapp" || c === "socket" ? isNotificationOn(muted, app, "inapp") : isNotificationOn(muted, app, c),
-        );
-      }
+      const user = await User.findById(userId).select("notificationPrefs").exec();
+      const prefs = {
+        muted: user?.notificationPrefs?.muted ?? [],
+        emailApps: user?.notificationPrefs?.emailApps ?? [],
+      };
+      channels = channels.filter((c) =>
+        c === "inapp" || c === "socket" ? isNotificationOn(prefs, app, "inapp") : isNotificationOn(prefs, app, c),
+      );
+      if (!input.channels && isNotificationOn(prefs, app, "email")) channels = [...channels, "email"];
     } catch (e) {
       console.error("Notification (preferences) failed:", e);
+      // Without their settings, don't email: it is the one way that has to be opted into.
+      channels = channels.filter((c) => c !== "email");
     }
   }
 
@@ -143,9 +153,8 @@ export async function notify(userId: string, input: NotifyInput): Promise<Notify
     tasks.push(
       (async () => {
         try {
-          const user = await User.findById(userId).select("email username notificationPrefs").exec();
+          const user = await User.findById(userId).select("email username").exec();
           if (!user?.email) return;
-          if (user.notificationPrefs?.email !== true) return;
 
           const { success, error } = await sendNotificationEmail({
             username: user.username || "there",
