@@ -56,6 +56,8 @@ export interface Routine {
   last_done_at: string | null;
   due_at: string;
   enabled: boolean;
+  /** Put away: hidden from the Routines list unless asked for, paused, history kept. */
+  archived: boolean;
   remind_again_days: number;
   status: DueStatus;
   /** Positions (2 = the occurrence after due_at) already completed ahead of time; hidden from the projection. */
@@ -107,7 +109,7 @@ function useRoutineMutation<TVars>(fn: (v: TVars) => Promise<unknown>) {
 export const useCreateRoutine = () => useRoutineMutation((input: RoutineInput) => apiClient.post(base, input));
 
 export const useUpdateRoutine = () =>
-  useRoutineMutation((v: { id: string; patch: Partial<RoutineInput> & { enabled?: boolean } }) =>
+  useRoutineMutation((v: { id: string; patch: Partial<RoutineInput> & { enabled?: boolean; archived?: boolean } }) =>
     apiClient.put(`${base}/${v.id}`, v.patch),
   );
 

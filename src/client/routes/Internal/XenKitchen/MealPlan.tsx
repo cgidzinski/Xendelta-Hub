@@ -1,9 +1,22 @@
 import { useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import { Box, Button, Card, IconButton, Link, MenuItem, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Card,
+  IconButton,
+  Link,
+  Menu,
+  MenuItem,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CloseIcon from "@mui/icons-material/Close";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import { addDays, addWeeks, format, isSameDay, startOfWeek } from "date-fns";
@@ -19,6 +32,7 @@ import { canEditBook, useKitchenBooks } from "../../../hooks/xenkitchen/useKitch
 import { useKitchenSocket } from "../../../hooks/xenkitchen/useKitchenSocket";
 import {
   useAddPlanEntry,
+  useCopyPlanWeek,
   usePlan,
   useRemovePlanEntry,
   useUpdatePlanEntry,
@@ -31,11 +45,22 @@ const DAY = "yyyy-MM-dd";
 const weekOf = (d: Date) => startOfWeek(d, { weekStartsOn: 1 });
 
 /** A meal on a day: its recipe (a link), how many it's for, and a way to take it off. */
-function MealRow({ entry, canEdit, bookId }: { entry: PlanEntry; canEdit: boolean; bookId: string }) {
+function MealRow({
+  entry,
+  canEdit,
+  bookId,
+  days,
+}: {
+  entry: PlanEntry;
+  canEdit: boolean;
+  bookId: string;
+  days: Date[];
+}) {
   const { enqueueSnackbar } = useSnackbar();
   const update = useUpdatePlanEntry();
   const remove = useRemovePlanEntry();
   const add = useAddPlanEntry();
+  const [repeatAnchor, setRepeatAnchor] = useState<HTMLElement | null>(null);
   const [servings, setServings] = useState(entry.servings === null ? "" : String(entry.servings));
 
   const saveServings = () => {
@@ -108,6 +133,39 @@ function MealRow({ entry, canEdit, bookId }: { entry: PlanEntry; canEdit: boolea
         </Typography>
       )}
       {canEdit && (
+        <>
+          <IconButton
+            size="small"
+            aria-label={`Repeat ${entry.title} on another day`}
+            onClick={(e) => setRepeatAnchor(e.currentTarget)}
+          >
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+          <Menu open={!!repeatAnchor} anchorEl={repeatAnchor} onClose={() => setRepeatAnchor(null)}>
+            {days
+              .filter((d) => format(d, DAY) !== entry.date)
+              .map((d) => (
+                <MenuItem
+                  key={d.toISOString()}
+                  onClick={() => {
+                    setRepeatAnchor(null);
+                    add.mutate(
+                      { bookId, date: format(d, DAY), item_id: entry.item_id, servings: entry.servings },
+                      {
+                        onSuccess: () => enqueueSnackbar(`Added to ${format(d, "EEEE")}`, { variant: "success" }),
+                        onError: (e) =>
+                          enqueueSnackbar((e as Error).message || "Couldn't add it", { variant: "error" }),
+                      },
+                    );
+                  }}
+                >
+                  {format(d, "EEEE, MMM d")}
+                </MenuItem>
+              ))}
+          </Menu>
+        </>
+      )}
+      {canEdit && (
         <IconButton size="small" aria-label={`Remove ${entry.title}`} disabled={remove.isPending} onClick={removeMeal}>
           <CloseIcon fontSize="small" />
         </IconButton>
@@ -139,6 +197,7 @@ export default function MealPlan() {
 
   const { data: entries = [], isLoading, isError, error, refetch } = usePlan(book?._id, from, to);
   const add = useAddPlanEntry();
+  const copyWeek = useCopyPlanWeek();
   const [adding, setAdding] = useState<Date | null>(null);
   const [shopping, setShopping] = useState(false);
 
@@ -154,6 +213,22 @@ export default function MealPlan() {
       </PageContainer>
     );
   }
+
+  const copyLastWeek = () => {
+    copyWeek.mutate(
+      { bookId: book._id, from: format(addWeeks(weekStart, -1), DAY), to: from },
+      {
+        onSuccess: ({ copied }) =>
+          enqueueSnackbar(
+            copied === 0
+              ? "Nothing to copy from last week"
+              : `Copied ${copied} ${copied === 1 ? "meal" : "meals"} from last week`,
+            { variant: copied === 0 ? "info" : "success" },
+          ),
+        onError: (e) => enqueueSnackbar((e as Error).message || "Couldn't copy the week", { variant: "error" }),
+      },
+    );
+  };
 
   const pick = (itemId: string) => {
     if (!adding) return;
@@ -208,6 +283,11 @@ export default function MealPlan() {
         <Button size="small" onClick={() => setWeekStart(weekOf(new Date()))}>
           This week
         </Button>
+        {canEdit && (
+          <Button size="small" startIcon={<ContentCopyIcon />} onClick={copyLastWeek} disabled={copyWeek.isPending}>
+            Copy last week
+          </Button>
+        )}
       </Stack>
 
       {!canEdit && (
@@ -255,7 +335,7 @@ export default function MealPlan() {
                     Nothing planned
                   </Typography>
                 ) : (
-                  meals.map((m) => <MealRow key={m._id} entry={m} canEdit={canEdit} bookId={book._id} />)
+                  meals.map((m) => <MealRow key={m._id} entry={m} canEdit={canEdit} bookId={book._id} days={days} />)
                 )}
               </Card>
             );
