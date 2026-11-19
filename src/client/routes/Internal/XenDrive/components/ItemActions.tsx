@@ -18,6 +18,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
+import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import type { XenDriveFile, XenDriveFolder } from "../../../../types/XenDriveFile";
 import { formatFileSize } from "../../../../utils/fileUtils";
@@ -32,6 +33,7 @@ export interface ItemActionHandlers {
   onShare: (target: ActionTarget) => void;
   onDownload: (file: XenDriveFile) => void;
   onRename: (target: ActionTarget) => void;
+  onMove: (target: ActionTarget) => void;
   onDelete: (target: ActionTarget) => void;
 }
 
@@ -65,6 +67,7 @@ function entriesFor(target: ActionTarget, h: ItemActionHandlers): Entry[] {
         run: () => h.onShare(target),
       },
       { key: "rename", label: "Rename", icon: <DriveFileRenameOutlineIcon />, run: () => h.onRename(target) },
+      { key: "move", label: "Move to…", icon: <DriveFileMoveOutlinedIcon />, run: () => h.onMove(target) },
       { key: "delete", label: "Delete", icon: <DeleteOutlineIcon />, danger: true, run: () => h.onDelete(target) },
     ];
   }
@@ -89,6 +92,7 @@ function entriesFor(target: ActionTarget, h: ItemActionHandlers): Entry[] {
     { key: "share", label: "Share…", hint: "Password, expiry", icon: <IosShareIcon />, run: () => h.onShare(target) },
     { key: "download", label: "Download", icon: <FileDownloadOutlinedIcon />, run: () => h.onDownload(file) },
     { key: "rename", label: "Rename", icon: <DriveFileRenameOutlineIcon />, run: () => h.onRename(target) },
+    { key: "move", label: "Move to…", icon: <DriveFileMoveOutlinedIcon />, run: () => h.onMove(target) },
     { key: "delete", label: "Delete", icon: <DeleteOutlineIcon />, danger: true, run: () => h.onDelete(target) },
   ];
 }

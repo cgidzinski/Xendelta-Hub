@@ -30,6 +30,10 @@ export const xenKitchenPlanCreateSchema = z.object({
   item_id: objectIdSchema,
   servings: servings.nullable().optional(),
 });
+// Copy the seven days starting `from` onto the seven days starting `to`.
+export const xenKitchenPlanCopySchema = z
+  .object({ from: day, to: day })
+  .refine((v) => v.from !== v.to, "Pick a different week to copy to");
 export const xenKitchenPlanUpdateSchema = z
   .object({ date: day.optional(), servings: servings.nullable().optional() })
   .refine((v) => v.date !== undefined || v.servings !== undefined, "Nothing to change");

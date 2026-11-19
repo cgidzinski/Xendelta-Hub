@@ -14,7 +14,6 @@ import {
 import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
-import { removeNotePhotos } from "../../utils/xenNoteFiles";
 import { roleOf } from "../../utils/membership";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
@@ -109,12 +108,13 @@ export function registerNoteRoutes(app: any) {
     const visible = {
       $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }],
     };
-    const [all, mine, archived] = await Promise.all([
+    const [all, mine, archived, trash] = await Promise.all([
       XenNote.countDocuments({ ...visible, archived: { $ne: true } }),
       XenNote.countDocuments({ notebook_id: null, owner_id: uid, archived: { $ne: true } }),
       XenNote.countDocuments({ ...visible, archived: true }),
+      XenNote.countDocuments({ deleted_by: uid, deleted_at: { $ne: null } }).setOptions({ includeDeleted: true }),
     ]);
-    res.json({ status: true, message: "Counts retrieved", data: { all, mine, archived } });
+    res.json({ status: true, message: "Counts retrieved", data: { all, mine, archived, trash } });
   });
 
   app.get("/api/xennote/labels", async (req: Request, res: Response) => {
@@ -246,13 +246,15 @@ export function registerNoteRoutes(app: any) {
     },
   );
 
+  // Deleting a note moves it to the Trash, where the person who deleted it can restore it for 30 days. Its photos stay
+  // with it until it is removed for good.
   app.delete("/api/xennote/notes/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
     const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
-    await removeNotePhotos(note.images);
-    const owner = note.owner_id;
-    await note.deleteOne();
-    notifyChange(notebook, owner);
-    res.json({ status: true, message: "Note deleted" });
+    note.deleted_at = new Date();
+    note.deleted_by = callerId(req);
+    await note.save();
+    notifyChange(notebook, note.owner_id);
+    res.json({ status: true, message: "Note moved to Trash" });
   });
 
   // ---- my reminder on a note. Personal, so anyone who can see the note (a viewer too) may set one for themselves, and it

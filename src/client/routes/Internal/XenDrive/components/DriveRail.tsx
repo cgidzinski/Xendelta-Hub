@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Box, Button, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import ScheduleIcon from "@mui/icons-material/Schedule";
@@ -48,6 +49,10 @@ export default function DriveRail() {
       <Box component={NavLink} to={`${XENDRIVE_ROOT}/recent`} sx={railItemSx}>
         <ScheduleIcon fontSize="small" />
         Recent
+      </Box>
+      <Box component={NavLink} to={`${XENDRIVE_ROOT}/trash`} sx={railItemSx}>
+        <DeleteOutlineIcon fontSize="small" />
+        Trash
       </Box>
 
       <Box sx={{ flex: 1 }} />

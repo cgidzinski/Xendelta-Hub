@@ -35,6 +35,7 @@ export async function giftGems(
   if (!isRetry) {
     const giver = await User.findById(fromId, "username").lean().exec();
     await notify(toId, {
+      app: "billing",
       title: "You were given gems",
       message: `${giver?.username ?? "Someone"} gave you ${formatWholeGems(gems)}${note ? `: ${note}` : "."}`,
       link: "/internal/billing",

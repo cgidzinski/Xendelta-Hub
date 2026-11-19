@@ -51,24 +51,73 @@ export function useWindowFileDrop(onDrop: (files: File[]) => void): boolean {
   return dragging;
 }
 
-/** Make a folder row or card accept dropped files: they go inside it. */
-export function useFolderDrop(onFiles: (files: File[]) => void) {
+/** What a drag of the drive's own files and folders carries (set by the rows and cards, read by a folder). */
+export const DRIVE_ITEMS_TYPE = "application/x-xendrive-items";
+export interface DraggedItems {
+  fileIds: string[];
+  folderIds: string[];
+}
+
+/** Is a drag carrying files or folders from this drive (as opposed to files from the computer)? */
+export const dragHasItems = (e: DragEvent | ReactDragEvent): boolean =>
+  Array.from(e.dataTransfer?.types ?? []).includes(DRIVE_ITEMS_TYPE);
+
+/** Props that make a file row or folder card draggable, carrying `items` (what is selected, or just it). */
+export function itemDragProps(items: () => DraggedItems) {
+  return {
+    draggable: true,
+    onDragStart: (e: ReactDragEvent) => {
+      e.dataTransfer.setData(DRIVE_ITEMS_TYPE, JSON.stringify(items()));
+      e.dataTransfer.effectAllowed = "move";
+    },
+  };
+}
+
+/** The drive items a drop carries, or null when there are none, they are unreadable, or the folder is among them. */
+export function droppedItemsFor(e: ReactDragEvent, folderId: string): DraggedItems | null {
+  try {
+    const parsed = JSON.parse(e.dataTransfer.getData(DRIVE_ITEMS_TYPE));
+    if (!Array.isArray(parsed.fileIds) || !Array.isArray(parsed.folderIds)) return null;
+    // A folder can't go into itself.
+    return parsed.folderIds.includes(folderId) ? null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Make a folder row or card a drop target: files dragged in from the computer go inside it, and the drive's own files
+ * and folders dragged onto it are moved into it (never a folder onto itself).
+ */
+export function useFolderDrop(
+  folderId: string,
+  onFiles: (files: File[]) => void,
+  onItems?: (items: DraggedItems) => void,
+) {
   const [over, setOver] = useState(false);
   return {
     over,
     props: {
       onDragOver: (e: ReactDragEvent) => {
-        if (!dragHasFiles(e)) return;
-        e.preventDefault();
-        setOver(true);
+        if (dragHasFiles(e) || (onItems && dragHasItems(e))) {
+          e.preventDefault();
+          setOver(true);
+        }
       },
       onDragLeave: () => setOver(false),
       onDrop: (e: ReactDragEvent) => {
-        if (!dragHasFiles(e)) return;
-        e.preventDefault();
-        e.stopPropagation(); // the folder took them; the page behind must not also upload them
-        setOver(false);
-        onFiles(Array.from(e.dataTransfer.files));
+        if (dragHasFiles(e)) {
+          e.preventDefault();
+          e.stopPropagation(); // the folder took them; the page behind must not also upload them
+          setOver(false);
+          onFiles(Array.from(e.dataTransfer.files));
+        } else if (onItems && dragHasItems(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          setOver(false);
+          const items = droppedItemsFor(e, folderId);
+          if (items) onItems(items);
+        }
       },
     },
   };

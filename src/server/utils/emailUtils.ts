@@ -111,3 +111,74 @@ export async function sendNotificationEmail(data: NotificationEmailData): Promis
     return { success: false, error };
   }
 }
+
+const escapeHtml = (text: string) =>
+  text.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+  );
+
+async function deliver(config: { to: string; subject: string; text: string; html: string }) {
+  try {
+    const { error } = await resend().emails.send({ from: "no-reply@xendelta.com", ...config });
+    if (error) return { success: false, error };
+    await recordUsage(HOUSE, "email", 1); // one email on the house's bill (billing/usage.ts)
+    return { success: true };
+  } catch (error) {
+    return { success: false, error };
+  }
+}
+
+/** The link to confirm a new email address, sent to that address. */
+export async function sendEmailChangeConfirmEmail(data: {
+  username: string;
+  email: string;
+  confirmUrl: string;
+}): Promise<{ success: boolean; error?: any }> {
+  const { username, email, confirmUrl } = data;
+  return deliver({
+    to: email,
+    subject: `${BRAND_NAME} - Confirm your new email`,
+    text: `Open the link below to use this address for your ${BRAND_NAME} account. It expires in 1 hour.\n\n${confirmUrl}\n\nIf you didn't ask for this, ignore this email and nothing changes.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Confirm your new email</h2>
+        <p>Hello ${escapeHtml(username)},</p>
+        <p>Someone asked to use this address for a ${BRAND_NAME} account. Confirm it to finish the change:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${confirmUrl}" style="background: linear-gradient(45deg, #667eea 30%, #764ba2 90%); color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Confirm email</a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${confirmUrl}</p>
+        <p><strong>This link will expire in 1 hour.</strong></p>
+        <p>If you didn't ask for this, ignore this email and nothing changes.</p>
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #666; font-size: 12px;">This is an automated message from ${BRAND_NAME}.</p>
+      </div>
+    `,
+  });
+}
+
+/** Tells the old address that the account's email was changed, so a change nobody asked for doesn't go unnoticed. */
+export async function sendEmailChangedNotice(data: {
+  username: string;
+  email: string;
+  newEmail: string;
+}): Promise<{ success: boolean; error?: any }> {
+  const { username, email, newEmail } = data;
+  return deliver({
+    to: email,
+    subject: `${BRAND_NAME} - Your email was changed`,
+    text: `The email on your ${BRAND_NAME} account was changed to ${newEmail}. If this wasn't you, reset your password right away and contact us.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Your email was changed</h2>
+        <p>Hello ${escapeHtml(username)},</p>
+        <p>The email on your ${BRAND_NAME} account was changed to <strong>${escapeHtml(newEmail)}</strong>.</p>
+        <p>If this wasn't you, reset your password right away and contact us.</p>
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #666; font-size: 12px;">This is an automated message from ${BRAND_NAME}.</p>
+      </div>
+    `,
+  });
+}

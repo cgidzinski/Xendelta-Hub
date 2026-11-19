@@ -63,6 +63,19 @@ export async function depthOf(folderId: string | null): Promise<number> {
   return depth;
 }
 
+/** How many levels the folder and everything beneath it take (a folder with no subfolders is 1). */
+export async function heightOf(rootId: string): Promise<number> {
+  let height = 1;
+  let frontier = [rootId];
+  for (let i = 0; i < MAX_FOLDER_DEPTH + 1; i++) {
+    const children = await XenDriveFolder.find({ parent_id: { $in: frontier } }, "_id").lean();
+    if (children.length === 0) break;
+    height++;
+    frontier = children.map((c) => c._id.toString());
+  }
+  return height;
+}
+
 /** `rootId` and the ids of every folder beneath it. */
 export async function subtreeIds(rootId: string): Promise<string[]> {
   const all = [rootId];
@@ -88,7 +101,10 @@ export async function folderStats(rootId: string): Promise<{ folders: number; fi
 /** Delete a folder, everything inside it, and the stored bytes of every file. */
 export async function deleteFolderTree(rootId: string): Promise<void> {
   const ids = await subtreeIds(rootId);
-  const files = await XenDriveFile.find({ folder_id: { $in: ids } }, "file").lean();
+  // Files in the Trash go with the folder (their bytes too), or they would be left behind with nothing pointing at them.
+  const files = await XenDriveFile.find({ folder_id: { $in: ids } }, "file")
+    .setOptions({ includeDeleted: true })
+    .lean();
   const recordIds = files.map((f) => f.file ?? f._id);
   const records = await FileRecord.find({ _id: { $in: recordIds } }).lean();
   await FileRecord.deleteMany({ _id: { $in: recordIds } });

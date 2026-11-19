@@ -119,6 +119,19 @@ export function useXenBudgetItemMutations(bookId: string) {
     onSuccess: invalidate,
   });
 
+  // Several items at once. `ids` is capped at 200 by the server.
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (v: { ids: string[]; set_category?: string; add_flags?: string[]; remove_flags?: string[] }) =>
+      api.post<{ updated: number }>(`/api/xenbudget/books/${bookId}/items/bulk-update`, v),
+    onSuccess: invalidate,
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) =>
+      api.post<{ deleted: number }>(`/api/xenbudget/books/${bookId}/items/bulk-delete`, { ids }),
+    onSuccess: invalidate,
+  });
+
   const uploadImagesMutation = useMutation({
     mutationFn: async ({ itemId, files }: { itemId: string; files: File[] }) => {
       const formData = new FormData();
@@ -148,6 +161,9 @@ export function useXenBudgetItemMutations(bookId: string) {
     isUpdating: updateMutation.isPending,
     deleteItemAsync: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
+    bulkUpdateItemsAsync: bulkUpdateMutation.mutateAsync,
+    bulkDeleteItemsAsync: bulkDeleteMutation.mutateAsync,
+    isBulkWorking: bulkUpdateMutation.isPending || bulkDeleteMutation.isPending,
     uploadItemImages: uploadImagesMutation.mutateAsync,
     isUploadingImages: uploadImagesMutation.isPending,
     deleteItemImage: deleteImageMutation.mutateAsync,

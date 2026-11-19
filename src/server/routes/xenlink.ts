@@ -4,6 +4,7 @@ import {
   validate,
   validateParams,
   xenLinkCreateSchema,
+  xenLinkDeleteManySchema,
   xenLinkIdParamSchema,
   xenLinkSlugParamSchema,
   xenLinkUpdateSchema,
@@ -77,6 +78,7 @@ module.exports = function (app: express.Application) {
     async function (req: express.Request, res: express.Response) {
       const link = xenLinkUpdateSchema.parse(req.body);
       const set: Record<string, unknown> = { name: link.name, url: link.url, updatedAt: new Date() };
+      if (link.paused !== undefined) set.paused = link.paused;
       const unset: Record<string, ""> = {};
       if (link.slug) set.slug = link.slug;
       if (link.expiresAt !== undefined) {
@@ -116,6 +118,21 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  // Delete several of the caller's links at once (ids that aren't theirs are simply not counted).
+  app.post(
+    "/api/xenlink/delete-many",
+    authenticateToken,
+    validate(xenLinkDeleteManySchema),
+    async function (req: express.Request, res: express.Response) {
+      const { ids } = xenLinkDeleteManySchema.parse(req.body);
+      const mine = await XenLink.find({ _id: { $in: ids }, owner_id: callerId(req) }).select("_id");
+      const mineIds = mine.map((l) => l._id);
+      await XenLink.deleteMany({ _id: { $in: mineIds } });
+      await XenLinkDay.deleteMany({ link_id: { $in: mineIds } });
+      return res.json({ status: true, message: "Links deleted successfully", data: { deleted: mineIds.length } });
+    },
+  );
+
   // How a link is doing: its total, when it was last used, and clicks per day for the last STATS_DAYS days (oldest
   // first, days with none included as 0, so the chart needs no filling in).
   app.get(
@@ -152,11 +169,12 @@ module.exports = function (app: express.Application) {
     validateParams(xenLinkSlugParamSchema),
     async function (req: express.Request, res: express.Response) {
       const link = await XenLink.findOne({ slug: req.params.slug })
-        .select("name url slug expires_at createdAt updatedAt")
+        .select("name url slug expires_at paused createdAt updatedAt")
         .exec();
       if (!link) throw new AppError(404, "Link not found");
+      if (link.paused) throw new AppError(410, "This link is paused");
       if (link.expires_at && link.expires_at <= new Date()) throw new AppError(410, "This link has expired");
-      const { expires_at: _expires, ...visible } = link.toObject();
+      const { expires_at: _expires, paused: _paused, ...visible } = link.toObject();
       return res.json({
         status: true,
         data: { link: visible },
@@ -171,8 +189,9 @@ module.exports = function (app: express.Application) {
     clickLimiter,
     validateParams(xenLinkSlugParamSchema),
     async function (req: express.Request, res: express.Response) {
-      const link = await XenLink.findOne({ slug: req.params.slug }).select("url expires_at");
+      const link = await XenLink.findOne({ slug: req.params.slug }).select("url expires_at paused");
       if (!link) throw new AppError(404, "Link not found");
+      if (link.paused) throw new AppError(410, "This link is paused");
       const now = new Date();
       if (link.expires_at && link.expires_at <= now) throw new AppError(410, "This link has expired");
       // Links saved before addresses were checked may not be web addresses: refuse those rather than send anyone there.

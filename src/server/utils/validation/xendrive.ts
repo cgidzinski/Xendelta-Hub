@@ -33,7 +33,22 @@ const shareToken = z.string().regex(/^[A-Za-z0-9_-]{6,64}$/, "Invalid share toke
 export const xenDriveShareTokenParamSchema = z.object({ shareToken });
 export const xenDriveFolderTokenParamSchema = z.object({ token: shareToken });
 export const xenDriveFolderTokenFileParamSchema = z.object({ token: shareToken, fileId: objectIdSchema });
-export const xenDriveDownloadQuerySchema = z.object({ password: z.string().max(200).optional() });
+// A download carries a ticket (see utils/downloadTickets.ts); `password` is still read for older links and scripts.
+export const xenDriveDownloadQuerySchema = z.object({
+  password: z.string().max(200).optional(),
+  ticket: z.string().max(2000).optional(),
+});
+// Asking for a ticket: the link's password goes in the body, never the address.
+export const xenDriveTicketSchema = z.object({ password: z.string().max(200).optional() });
+// A ticket for the whole folder as one zip (the folder shown, or the shared folder itself when left out).
+export const xenDriveZipTicketSchema = z.object({
+  password: z.string().max(200).optional(),
+  folder: objectIdSchema.optional(),
+});
+export const xenDriveZipQuerySchema = z.object({
+  folder: objectIdSchema.optional(),
+  ticket: z.string().max(2000).optional(),
+});
 
 // What is in a folder (omit `folder` for the top level), or a search across the whole drive.
 export const xenDriveBrowseQuerySchema = z.object({
@@ -61,6 +76,15 @@ export const xenDriveFolderShareSettingsSchema = z.object({
   password: z.string().max(200).nullish(),
   expiry: z.string().max(64).nullish(),
 });
+
+// Move files and folders into a folder (null = the top level). Up to 200 of each at a time.
+export const xenDriveMoveSchema = z
+  .object({
+    fileIds: z.array(objectIdSchema).max(200).default([]),
+    folderIds: z.array(objectIdSchema).max(200).default([]),
+    targetFolderId: objectIdSchema.nullable(),
+  })
+  .refine((v) => v.fileIds.length + v.folderIds.length > 0, "Pick something to move");
 
 export const xenDriveFolderCreateSchema = z.object({
   name: z.string().trim().min(1, "Folder name is required").max(100, "Folder name too long"),

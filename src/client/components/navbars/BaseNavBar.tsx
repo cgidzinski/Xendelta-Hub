@@ -42,6 +42,7 @@ import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
 import LoadingSpinner from "../LoadingSpinner";
 import { BRAND_NAME } from "@shared/brand";
+import { rememberRecentApp } from "../../utils/recentApps";
 
 const DRAWER_WIDTH = 240;
 
@@ -107,6 +108,7 @@ export default function BaseNavBar({
 }: BaseNavBarProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  useEffect(() => rememberRecentApp(pathname), [pathname]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
