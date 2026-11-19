@@ -23,6 +23,8 @@ import { format } from "date-fns";
 import { useTitle } from "../../../hooks/useTitle";
 import PublicJoinCard from "../components/PublicJoinCard";
 import { usePublicFolder, usePublicFolderInfo } from "../../../hooks/xendrive/useXendrive";
+import { useSnackbar } from "notistack";
+import { startPublicDownload } from "../../../utils/publicDownload";
 import { formatFileSize } from "../../../utils/fileUtils";
 import FileTypeIcon from "../../Internal/XenDrive/components/FileTypeIcon";
 import { fileKindOf } from "../../Internal/XenDrive/lib/fileKind";
@@ -68,8 +70,14 @@ export default function XenDriveFolderPublic() {
   useTitle(data ? `${data.root.name} - XenDrive` : "Shared folder - XenDrive");
 
   const here = (id: string) => `/xendrive/f/${token}${id === data?.root._id ? "" : `?folder=${id}`}`;
-  const fileHref = (id: string) =>
-    `/api/xendrive/public/folder/${token}/files/${id}${locked && password ? `?password=${encodeURIComponent(password)}` : ""}`;
+  const { enqueueSnackbar } = useSnackbar();
+  // The password goes in a request body for a ticket; the browser then downloads from an address holding only the ticket.
+  const download = (id: string) =>
+    startPublicDownload(
+      `/api/xendrive/public/folder/${token}/files/${id}/ticket`,
+      `/api/xendrive/public/folder/${token}/files/${id}`,
+      locked && password ? password : undefined,
+    ).catch((e: Error) => enqueueSnackbar(e.message || "Couldn't download the file", { variant: "error" }));
 
   const wrongPassword = locked && !!password && isError && (error as Error | null)?.message === "Incorrect password";
   const unlock = (event: FormEvent) => {
@@ -263,9 +271,7 @@ export default function XenDriveFolderPublic() {
                   </Typography>
                 </Box>
                 <Button
-                  component="a"
-                  href={fileHref(file._id)}
-                  download={file.name}
+                  onClick={() => download(file._id)}
                   startIcon={<DownloadIcon />}
                   variant="outlined"
                   size="small"
@@ -274,9 +280,7 @@ export default function XenDriveFolderPublic() {
                   Download
                 </Button>
                 <IconButton
-                  component="a"
-                  href={fileHref(file._id)}
-                  download={file.name}
+                  onClick={() => download(file._id)}
                   aria-label={`Download ${file.name}`}
                   sx={{ display: { sm: "none" } }}
                 >
@@ -353,9 +357,7 @@ export default function XenDriveFolderPublic() {
                     {formatFileSize(file.size)}
                   </Typography>
                   <Button
-                    component="a"
-                    href={fileHref(file._id)}
-                    download={file.name}
+                    onClick={() => download(file._id)}
                     startIcon={<DownloadIcon />}
                     size="small"
                     fullWidth

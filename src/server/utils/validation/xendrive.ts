@@ -33,7 +33,13 @@ const shareToken = z.string().regex(/^[A-Za-z0-9_-]{6,64}$/, "Invalid share toke
 export const xenDriveShareTokenParamSchema = z.object({ shareToken });
 export const xenDriveFolderTokenParamSchema = z.object({ token: shareToken });
 export const xenDriveFolderTokenFileParamSchema = z.object({ token: shareToken, fileId: objectIdSchema });
-export const xenDriveDownloadQuerySchema = z.object({ password: z.string().max(200).optional() });
+// A download carries a ticket (see utils/downloadTickets.ts); `password` is still read for older links and scripts.
+export const xenDriveDownloadQuerySchema = z.object({
+  password: z.string().max(200).optional(),
+  ticket: z.string().max(2000).optional(),
+});
+// Asking for a ticket: the link's password goes in the body, never the address.
+export const xenDriveTicketSchema = z.object({ password: z.string().max(200).optional() });
 
 // What is in a folder (omit `folder` for the top level), or a search across the whole drive.
 export const xenDriveBrowseQuerySchema = z.object({

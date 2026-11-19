@@ -23,6 +23,7 @@ import {
   xenDrivePublicFolderQuerySchema,
   xenDriveSettingsSchema,
   xenDriveShareTokenParamSchema,
+  xenDriveTicketSchema,
   xenDriveUploadIdParamSchema,
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
@@ -47,6 +48,7 @@ import {
   isInside,
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
+import { isValidDownloadTicket, signDownloadTicket } from "../utils/downloadTickets";
 import { checkSharePassword, hashSharePassword, isUnset } from "../utils/sharePasswords";
 import { generateSignedUrl } from "../utils/storageUtils";
 import { isTextPreviewable, readTextPreview } from "../utils/fileText";
@@ -166,6 +168,16 @@ async function assertNameFree(userId: string, parentId: string | null, name: str
   if (clash) throw new AppError(409, "A folder with that name already exists here");
 }
 
+/**
+ * The link password a request carries: in the X-Share-Password header (what the site sends), or in ?password= for
+ * older links and scripts. It is never read from the address by the site itself, so it stays out of history and logs.
+ */
+const sharePasswordOf = (req: express.Request): string | undefined => {
+  const header = req.headers["x-share-password"];
+  if (typeof header === "string" && header) return header;
+  return typeof req.query.password === "string" && req.query.password ? req.query.password : undefined;
+};
+
 /** A shared folder, looked up by its public token. */
 async function sharedFolder(token: string) {
   const folder = await XenDriveFolder.findOne({ "share.token": token, "share.enabled": true }).exec();
@@ -181,11 +193,15 @@ const folderLinkExpired = (folder: { share?: { expiry?: Date | null } | null }) 
  * sent as ?password=, the same way a file's link takes it) is right. A wrong or missing password is a 403, not a
  * 401: the client treats every 401 as "your sign-in expired" and would sign the owner out of their own browser.
  */
-async function openSharedFolder(token: string, password: unknown) {
+async function openSharedFolder(token: string, password: unknown, passwordAlreadyChecked = false) {
   const folder = await sharedFolder(token);
   if (folderLinkExpired(folder)) throw new AppError(403, "Link expired");
   const hash = folder.share?.passwordHash;
-  if (hash && !(typeof password === "string" && password && (await checkSharePassword(password, { hash })))) {
+  if (
+    hash &&
+    !passwordAlreadyChecked &&
+    !(typeof password === "string" && password && (await checkSharePassword(password, { hash })))
+  ) {
     throw new AppError(403, password ? "Incorrect password" : "Password required");
   }
   return folder;
@@ -706,33 +722,46 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  /** A file's own link, if it works: switched on, not expired, and the password (when it has one) is right. */
+  async function openFileLink(shareToken: string, password: string | undefined, passwordAlreadyChecked = false) {
+    const file = await withRecord(await XenDriveFile.findOne({ shareToken, shareEnabled: true }).exec());
+    if (!file) throw new AppError(404, "File not found");
+    if (file.isExpired()) throw new AppError(403, "Link expired");
+    if (file.hasPassword() && !passwordAlreadyChecked) {
+      const wrong = !password || !(await file.checkPassword(password));
+      if (wrong) {
+        throw new AppError(401, !password ? "Password required" : "Incorrect password", {
+          requiresPassword: true,
+          name: file.name,
+          expiry: file.expiry ? file.expiry.toISOString() : null,
+        });
+      }
+    }
+    return file;
+  }
+
+  // The site asks for a ticket (password in the body), then downloads with only the ticket in the address.
+  app.post(
+    "/api/xendrive/download/:shareToken/ticket",
+    validateParams(xenDriveShareTokenParamSchema),
+    validate(xenDriveTicketSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await openFileLink(req.params.shareToken as string, req.body.password);
+      return res.json({ status: true, data: { ticket: signDownloadTicket(req.params.shareToken as string, file.id) } });
+    },
+  );
+
   app.get(
     "/api/xendrive/download/:shareToken",
     validateParams(xenDriveShareTokenParamSchema),
     validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const { password } = req.query;
-
-      const file = await withRecord(
-        await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec(),
-      );
-      if (!file) throw new AppError(404, "File not found");
-
-      if (file.isExpired()) {
-        throw new AppError(403, "Link expired");
-      }
-
-      if (file.hasPassword()) {
-        const wrong = !password || typeof password !== "string" || !(await file.checkPassword(password));
-        if (wrong) {
-          throw new AppError(401, !password ? "Password required" : "Incorrect password", {
-            requiresPassword: true,
-            name: file.name,
-            expiry: file.expiry ? file.expiry.toISOString() : null,
-          });
-        }
-      }
-
+      const shareToken = req.params.shareToken as string;
+      const ticket = typeof req.query.ticket === "string" ? req.query.ticket : undefined;
+      // A ticket stands in for the password, but only for the file it was made for; everything else is checked again.
+      const peek = ticket ? await XenDriveFile.findOne({ shareToken, shareEnabled: true }, "_id").exec() : null;
+      const ticketOk = !!peek && isValidDownloadTicket(ticket, shareToken, peek.id);
+      const file = await openFileLink(shareToken, sharePasswordOf(req), ticketOk);
       return streamFile(res, file);
     },
   );
@@ -747,7 +776,7 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFolderTokenParamSchema),
     validateQuery(xenDrivePublicFolderQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const root = await openSharedFolder(req.params.token as string, req.query.password);
+      const root = await openSharedFolder(req.params.token as string, sharePasswordOf(req));
       const requested = (req.query.folder as string | undefined) || root.id;
 
       if (!(await isInside(requested, root.id))) throw new AppError(404, "Folder not found");
@@ -789,19 +818,44 @@ module.exports = function (app: express.Application) {
     },
   );
 
+  /** A file inside a shared folder, if the link works (and the password is right, unless a ticket stands in for it). */
+  async function openFolderFile(token: string, fileId: string, password: string | undefined, ticket?: string) {
+    const ticketOk = isValidDownloadTicket(ticket, token, fileId);
+    const root = await openSharedFolder(token, password, ticketOk);
+    const file = await withRecord(await XenDriveFile.findOne({ _id: fileId, owner_id: root.owner_id }).exec());
+    if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
+      throw new AppError(404, "File not found");
+    }
+    if (file.isExpired()) throw new AppError(403, "Link expired");
+    return { root, file };
+  }
+
+  app.post(
+    "/api/xendrive/public/folder/:token/files/:fileId/ticket",
+    validateParams(xenDriveFolderTokenFileParamSchema),
+    validate(xenDriveTicketSchema),
+    async function (req: express.Request, res: express.Response) {
+      const token = req.params.token as string;
+      const { file } = await openFolderFile(
+        token,
+        req.params.fileId as string,
+        req.body.password ?? sharePasswordOf(req),
+      );
+      return res.json({ status: true, data: { ticket: signDownloadTicket(token, file.id) } });
+    },
+  );
+
   app.get(
     "/api/xendrive/public/folder/:token/files/:fileId",
     validateParams(xenDriveFolderTokenFileParamSchema),
     validateQuery(xenDriveDownloadQuerySchema),
     async function (req: express.Request, res: express.Response) {
-      const root = await openSharedFolder(req.params.token as string, req.query.password);
-      const file = await withRecord(
-        await XenDriveFile.findOne({ _id: req.params.fileId, owner_id: root.owner_id }).exec(),
+      const { root, file } = await openFolderFile(
+        req.params.token as string,
+        req.params.fileId as string,
+        sharePasswordOf(req),
+        typeof req.query.ticket === "string" ? req.query.ticket : undefined,
       );
-      if (!file || !file.folder_id || !(await isInside(file.folder_id.toString(), root.id))) {
-        throw new AppError(404, "File not found");
-      }
-      if (file.isExpired()) throw new AppError(403, "Link expired");
       return streamFile(res, file, root.id);
     },
   );

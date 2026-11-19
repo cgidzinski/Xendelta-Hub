@@ -174,11 +174,11 @@ export const usePublicFolder = (
   useQuery({
     queryKey: xendriveKeys.publicFolder(token ?? "", folderId, password),
     queryFn: () => {
-      const query = new URLSearchParams();
-      if (folderId) query.set("folder", folderId);
-      if (password) query.set("password", password);
-      const qs = query.toString();
-      return api.get<PublicFolderView>(`/api/xendrive/public/folder/${token}${qs ? `?${qs}` : ""}`);
+      // The password goes in a header, not the address (history, logs and referrers would keep it).
+      const qs = folderId ? `?folder=${encodeURIComponent(folderId)}` : "";
+      return api.get<PublicFolderView>(`/api/xendrive/public/folder/${token}${qs}`, {
+        headers: password ? { "X-Share-Password": password } : undefined,
+      });
     },
     enabled: !!token && enabled,
     retry: false,
