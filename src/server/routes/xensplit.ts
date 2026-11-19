@@ -1281,6 +1281,7 @@ module.exports = function (app: any) {
       ]);
       const amounts = owed.map((s: any) => `${s.amount} ${s.currency}`).join(" and ");
       await notify(targetId, {
+        app: "xensplit",
         title: "Time to settle up",
         message: `${me?.username ?? "Someone"} is asking you to settle up in ${group.name}: you owe them ${amounts}.`,
         link: `/internal/xensplit/groups/${groupId}/settlements`,
