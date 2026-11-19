@@ -20,6 +20,7 @@ import { calculateBalances, calculateMinimumTransfers } from "@shared/xensplit/b
 import { rewindBefore, excludedSettlementIds, settlementsNewestFirst } from "@shared/xensplit/rewind";
 import UserName from "../../../components/user/UserName";
 import UserAvatar from "../../../components/user/UserAvatar";
+import { clickableRowProps } from "../../../utils/keyboard";
 
 const listGridSx = {
   display: "grid",
@@ -299,7 +300,7 @@ export default function GroupSettlements() {
                 return (
                   <Box
                     key={idx}
-                    onClick={isRewound ? undefined : () => setViewPending(s)}
+                    {...(isRewound ? {} : clickableRowProps(() => setViewPending(s)))}
                     sx={{ ...cardSx, ...(isRewound ? { cursor: "default" } : {}) }}
                   >
                     {/* row 1: avatars + amount */}
@@ -383,7 +384,7 @@ export default function GroupSettlements() {
                       return (
                         <Box
                           key={s._id ?? idx}
-                          onClick={() => setViewSettlement(s)}
+                          {...clickableRowProps(() => setViewSettlement(s))}
                           sx={{
                             ...historyCardSx,
                             ...(isHidden ? { opacity: 0.45 } : {}),
