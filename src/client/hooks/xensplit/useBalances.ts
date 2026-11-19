@@ -40,6 +40,11 @@ export function useXenSplitBalances(groupId: string) {
     },
   });
 
+  // Remind a member who owes you to settle up (once a day each; the server says when it's too soon or nothing is owed).
+  const nudgeMemberMutation = useMutation({
+    mutationFn: async (userId: string) => api.post<unknown>(`/api/xensplit/groups/${groupId}/nudge`, { userId }),
+  });
+
   // Restore a soft-deleted settlement. Group owner only, server-side.
   const restoreSettlementMutation = useMutation({
     mutationFn: async (settlementId: string) => {
@@ -60,6 +65,8 @@ export function useXenSplitBalances(groupId: string) {
     settleDebt: settleDebtMutation.mutate,
     isSettlingDebt: settleDebtMutation.isPending,
     settleDebtError: settleDebtMutation.error,
+    nudgeMember: nudgeMemberMutation.mutateAsync,
+    isNudging: nudgeMemberMutation.isPending,
     restoreSettlement: restoreSettlementMutation.mutate,
     isRestoringSettlement: restoreSettlementMutation.isPending,
     deleteSettlement: deleteSettlementMutation.mutate,

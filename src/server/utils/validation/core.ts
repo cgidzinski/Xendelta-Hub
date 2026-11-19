@@ -306,6 +306,9 @@ export const settleDebtSchema = z
     path: ["to"],
   });
 
+// Remind a member who owes you to settle up.
+export const nudgeXenSplitMemberSchema = z.object({ userId: objectIdSchema });
+
 export const xenSplitIdParamSchema = z.object({
   groupId: objectIdSchema,
 });

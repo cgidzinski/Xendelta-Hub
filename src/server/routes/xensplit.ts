@@ -10,7 +10,7 @@ import type { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { AppError, callerId } from "../utils/http";
 import { accessOf, canManage, canView } from "../utils/membership";
 import { roundMoneyExact } from "@shared/money";
-import { XenSplit } from "../models/xenSplit";
+import { XenSplit, XenSplitNudge } from "../models/xenSplit";
 import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
@@ -29,6 +29,7 @@ import {
   createExpenseSchema,
   updateExpenseSchema,
   settleDebtSchema,
+  nudgeXenSplitMemberSchema,
   xenSplitIdParamSchema,
   xenSplitMemberParamSchema,
   xenSplitExpenseParamSchema,
@@ -1235,6 +1236,52 @@ module.exports = function (app: any) {
           settlements: enrichedSettlements,
         },
       });
+    },
+  );
+
+  // POST /api/xensplit/groups/:groupId/nudge - Remind a member who owes you to settle up. Only for someone who really
+  // owes the caller (by the group's current balances), and once a day per person, so it can't be used to pester.
+  app.post(
+    "/api/xensplit/groups/:groupId/nudge",
+    validateParams(xenSplitIdParamSchema),
+    validate(nudgeXenSplitMemberSchema),
+    async (req: Request, res: Response) => {
+      const userId = callerId(req);
+      const { groupId } = req.params;
+      const { userId: targetId } = req.body as { userId: string };
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) throw new AppError(404, "Group not found");
+      if (!canView(accessOf(group), userId)) throw new AppError(403, "Not a member of this group");
+      if (targetId === userId) throw new AppError(400, "You can't remind yourself");
+      if (!canView(accessOf(group), targetId)) throw new AppError(404, "That person isn't in this group");
+
+      const memberIds = (group.members as any[]).map((m: any) => String(m._id ?? m));
+      const balances = calculateBalances(asBalanceInput(group.toObject(), memberIds));
+      const owed = calculateMinimumTransfers(balances).filter((s: any) => s.from === targetId && s.to === userId);
+      if (owed.length === 0) throw new AppError(400, "They don't owe you anything in this group right now");
+
+      try {
+        await XenSplitNudge.create({ group_id: groupId, from_id: userId, to_id: targetId });
+      } catch (err) {
+        if ((err as { code?: number })?.code === 11000) {
+          throw new AppError(429, "You already reminded them in the last 24 hours");
+        }
+        throw err;
+      }
+
+      const [me, them] = await Promise.all([
+        User.findById(userId, "username").lean(),
+        User.findById(targetId, "username").lean(),
+      ]);
+      const amounts = owed.map((s: any) => `${s.amount} ${s.currency}`).join(" and ");
+      await notify(targetId, {
+        title: "Time to settle up",
+        message: `${me?.username ?? "Someone"} is asking you to settle up in ${group.name}: you owe them ${amounts}.`,
+        link: `/internal/xensplit/groups/${groupId}/settlements`,
+        icon: "person",
+      });
+      res.json({ status: true, message: `Reminder sent to ${them?.username ?? "them"}` });
     },
   );
 

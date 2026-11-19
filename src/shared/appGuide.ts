@@ -233,6 +233,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set up recurring expenses that repeat daily, weekly, monthly or yearly, and pause them.",
       "See who owes whom, and the fewest payments that settle everyone up.",
       "Record settlements, with a prompt to pay by e-transfer.",
+      "Remind someone who owes you to settle up, once a day.",
       "See a map of who owes what to whom, simplified or direct.",
       "See spending by category, by member and by month.",
       "Look back through the group's activity, including deleted expenses.",
