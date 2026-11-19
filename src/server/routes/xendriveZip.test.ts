@@ -189,3 +189,31 @@ describe("zip helpers", () => {
     expect(zipPath(["Top", "noext"], taken)).toBe("Top/noext (2)");
   });
 });
+
+describe("previewing a file in a shared folder", () => {
+  it("gives a link or the text, needs the password, and stays inside the share", async () => {
+    const me = await createUser();
+    const root = await folder(me, "Gallery");
+    const outside = await folder(me, "Outside");
+    const note = await addFile(me, "readme.txt", "hello there", root._id);
+    const pic = await addFile(me, "pic.png", "not really a png", root._id, { mimeType: "image/png" });
+    const bin = await addFile(me, "blob.bin", "bytes", root._id, { mimeType: "application/octet-stream" });
+    const other = await addFile(me, "other.txt", "elsewhere", outside._id);
+    const token = (await api(me).post(`/folders/${root._id}/share`)).body.data.folder.shareToken;
+    const url = (id: string) => `/api/xendrive/public/folder/${token}/files/${id}/preview`;
+
+    const text = await request(t.app).get(url(note.id));
+    expect(text.status, JSON.stringify(text.body)).toBe(200);
+    expect(text.body.data).toMatchObject({ name: "readme.txt", mimeType: "text/plain", text: { text: "hello there" } });
+
+    const image = await request(t.app).get(url(pic.id));
+    expect(image.body.data.previewUrl).toMatch(/^https:\/\/example\.test\/signed\//);
+    expect((await request(t.app).get(url(bin.id))).body.data).toMatchObject({ previewUrl: null, text: null });
+    expect((await request(t.app).get(url(other.id))).status).toBe(404);
+
+    await api(me).put(`/folders/${root._id}/share/settings`, { password: "pw" });
+    expect((await request(t.app).get(url(note.id))).status).toBe(403);
+    const ok = await request(t.app).get(url(note.id)).set("X-Share-Password", "pw");
+    expect(ok.status).toBe(200);
+  });
+});

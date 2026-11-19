@@ -180,6 +180,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a file with a link, with an optional password and expiry date.",
       "Share a whole folder with a link that anyone can browse without an account.",
       "Let people download a shared folder in one go, as a single zip with its folders.",
+      "Let people look at pictures, PDFs, video, audio and text in a shared folder without downloading them.",
       "See how many times a shared file or folder was downloaded.",
       "Search your drive and filter by type or link status.",
       "Switch between list and grid view, and act on several items at once.",

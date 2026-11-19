@@ -109,6 +109,8 @@ const serializeFolder = (folder: any, itemCount = 0) => ({
 /** What a person can look at in the browser without downloading. */
 const PREVIEWABLE = /^(image\/|application\/pdf$|video\/|audio\/)/;
 const PREVIEW_MINUTES = 60;
+/** A visitor's preview link is short-lived: they can ask again when they open the next file. */
+const PUBLIC_PREVIEW_MINUTES = 15;
 
 /**
  * Cacheable thumbnail links for files that have one, falling back to the original for images whose thumbnail isn't
@@ -833,6 +835,34 @@ module.exports = function (app: express.Application) {
     if (file.isExpired()) throw new AppError(403, "Link expired");
     return { root, file };
   }
+
+  // What the folder page needs to show a file in place: a short-lived link for images, PDFs, video and audio, and the
+  // start of a text file. The password goes in the X-Share-Password header, like the listing's.
+  app.get(
+    "/api/xendrive/public/folder/:token/files/:fileId/preview",
+    validateParams(xenDriveFolderTokenFileParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const { file } = await openFolderFile(
+        req.params.token as string,
+        req.params.fileId as string,
+        sharePasswordOf(req),
+      );
+      const isImage = file.mimeType.startsWith("image/");
+      const [previewUrl, posterUrl, text] = await Promise.all([
+        isImage && file.thumb?.path
+          ? previewUrlFor(file.storage_path)
+          : PREVIEWABLE.test(file.mimeType)
+            ? generateSignedUrl(file.storage_path, PUBLIC_PREVIEW_MINUTES)
+            : Promise.resolve(null),
+        file.mimeType.startsWith("video/") && file.thumb?.path ? thumbnailUrlFor(file.storage_path) : null,
+        isTextPreviewable(file.mimeType) ? readTextPreview(file.storage_path) : null,
+      ]);
+      return res.json({
+        status: true,
+        data: { name: file.name, mimeType: file.mimeType, size: file.size, previewUrl, posterUrl, text },
+      });
+    },
+  );
 
   app.post(
     "/api/xendrive/public/folder/:token/files/:fileId/ticket",

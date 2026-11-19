@@ -25,6 +25,7 @@ import PublicJoinCard from "../components/PublicJoinCard";
 import { usePublicFolder, usePublicFolderInfo } from "../../../hooks/xendrive/useXendrive";
 import { useSnackbar } from "notistack";
 import { startPublicDownload } from "../../../utils/publicDownload";
+import PublicFilePreviewDialog from "./PublicFilePreviewDialog";
 import { formatFileSize } from "../../../utils/fileUtils";
 import FileTypeIcon from "../../Internal/XenDrive/components/FileTypeIcon";
 import { fileKindOf } from "../../Internal/XenDrive/lib/fileKind";
@@ -57,6 +58,7 @@ export default function XenDriveFolderPublic() {
   const [mode, setMode] = useState<Mode>("list");
   const [password, setPassword] = useState(() => readPassword(token));
   const [typed, setTyped] = useState("");
+  const [previewing, setPreviewing] = useState<{ _id: string; name: string } | null>(null);
   const info = usePublicFolderInfo(token);
   // Wait to learn whether there's a password; a folder without one opens straight away.
   const locked = !!info.data?.requiresPassword;
@@ -283,8 +285,23 @@ export default function XenDriveFolderPublic() {
                 }}
               >
                 <FileTypeIcon mimeType={file.mimeType} />
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography sx={{ fontWeight: 500, wordBreak: "break-word" }}>{file.name}</Typography>
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    flex: 1,
+                    cursor: "pointer",
+                    borderRadius: 1,
+                    "&:hover .file-name": { textDecoration: "underline" },
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Preview ${file.name}`}
+                  onClick={() => setPreviewing(file)}
+                  onKeyDown={(e) => e.key === "Enter" && setPreviewing(file)}
+                >
+                  <Typography className="file-name" sx={{ fontWeight: 500, wordBreak: "break-word" }}>
+                    {file.name}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {formatFileSize(file.size)} · {format(new Date(file.createdAt), "MMM d, yyyy")}
                   </Typography>
@@ -348,12 +365,18 @@ export default function XenDriveFolderPublic() {
                 }}
               >
                 <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Preview ${file.name}`}
+                  onClick={() => setPreviewing(file)}
+                  onKeyDown={(e) => e.key === "Enter" && setPreviewing(file)}
                   sx={{
                     height: 120,
                     bgcolor: "action.hover",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    cursor: "pointer",
                   }}
                 >
                   {(fileKindOf(file.mimeType) === "image" || fileKindOf(file.mimeType) === "video") && file.thumbUrl ? (
@@ -395,6 +418,13 @@ export default function XenDriveFolderPublic() {
           Shared from XenDrive. You can look and download; you can't change anything.
         </Typography>
         <PublicJoinCard app="xendrive" />
+        <PublicFilePreviewDialog
+          token={token ?? ""}
+          file={previewing}
+          password={locked && password ? password : undefined}
+          onClose={() => setPreviewing(null)}
+          onDownload={download}
+        />
       </Container>
     </Box>
   );

@@ -184,6 +184,30 @@ export const usePublicFolder = (
     retry: false,
   });
 
+/** What the shared-folder page needs to show one file in place. Only fetched while a file is open. */
+export interface PublicFilePreview {
+  name: string;
+  mimeType: string;
+  size: number;
+  previewUrl: string | null;
+  posterUrl: string | null;
+  text: { text: string; truncated: boolean } | null;
+}
+
+export const usePublicFilePreview = (token: string | undefined, fileId: string | undefined, password?: string) =>
+  useQuery({
+    queryKey: [...xendriveKeys.publicFolderInfo(token ?? ""), "preview", fileId, ...(password ? [password] : [])],
+    queryFn: () =>
+      api.get<PublicFilePreview>(`/api/xendrive/public/folder/${token}/files/${fileId}/preview`, {
+        headers: password ? { "X-Share-Password": password } : undefined,
+      }),
+    enabled: !!token && !!fileId,
+    retry: false,
+    // The signed link inside lasts a few minutes; reopening the same file asks again rather than reusing a stale one.
+    staleTime: 0,
+    gcTime: 0,
+  });
+
 // ---------- changing ----------
 
 export interface FileSettings {
