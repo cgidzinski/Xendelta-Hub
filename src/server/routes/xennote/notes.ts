@@ -17,6 +17,7 @@ import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
 import { canEdit, roleOf } from "../../utils/membership";
+import { contentChanged, contentOf, keepVersion } from "../../utils/xenNoteVersions";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
@@ -317,9 +318,18 @@ export function registerNoteRoutes(app: any) {
         if (moved) destination = moved.destination;
       }
 
+      // What the note said before this edit, so a change to its wording can be looked at and undone later.
+      const before = contentOf(note);
+      const wasSavedAt = note.updated_at;
+      const wasSavedBy = note.updated_by ?? note.owner_id;
       applyFields(note, req.body);
       note.updated_by = uid;
       await note.save();
+      if (contentChanged(before, note)) {
+        await keepVersion(note._id, before, wasSavedAt, wasSavedBy).catch((e) =>
+          console.error("xennote version failed:", e),
+        );
+      }
       notifyChange(notebook, note.owner_id);
       if (destination && destination !== notebook) notifyChange(destination, note.owner_id);
       res.json({

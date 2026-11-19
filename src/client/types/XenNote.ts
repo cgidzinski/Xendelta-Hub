@@ -109,3 +109,26 @@ export interface NoteFilters {
   label?: string;
   q?: string;
 }
+
+/** One earlier version of a note, as listed in its history. */
+export interface XenNoteVersionSummary {
+  _id: string;
+  /** When the note last stood like this. */
+  at: string;
+  by_name: string | null;
+  type: "text" | "checklist" | "image" | "link";
+  title: string;
+  preview: string;
+}
+
+/** An earlier version in full, to read before putting it back. */
+export interface XenNoteVersionFull {
+  _id: string;
+  at: string;
+  by_name: string | null;
+  type: "text" | "checklist" | "image" | "link";
+  title: string;
+  body: string;
+  checklist: Array<{ text: string; done: boolean }>;
+  link: { url: string; title: string; description: string };
+}
