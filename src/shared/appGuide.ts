@@ -302,7 +302,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a routine so anyone in it can mark it done.",
       "Postpone a routine by a day, a week or more.",
       "See each routine's history with its notes and photos.",
-      "Pause, edit or delete a routine.",
+      "Pause, edit or delete a routine, or archive one to put it away and keep its history.",
       "Search your routines, filter them by category, and copy one to start a similar one.",
     ],
     tips: [
