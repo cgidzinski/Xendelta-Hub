@@ -210,6 +210,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set a date when a link stops working.",
       "Open a link's QR code to show or print it.",
       "See how many times a link was opened, when it was last opened, and a day-by-day chart.",
+      "Pause a link without deleting it, and turn it back on later.",
+      "Sort your links by age, clicks, name or expiry, and delete several at once.",
       "Edit, search and delete your links.",
     ],
     tips: [

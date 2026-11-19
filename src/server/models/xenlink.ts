@@ -13,6 +13,8 @@ const xenlinkSchema = new Schema({
   last_clicked_at: { type: Date },
   // After this the link stops working (and says so). Unset = never.
   expires_at: { type: Date },
+  // Switched off by the owner without deleting it: the page says so and nobody is sent on. Back on = it works again.
+  paused: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
