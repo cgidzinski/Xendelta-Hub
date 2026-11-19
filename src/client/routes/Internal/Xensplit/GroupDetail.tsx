@@ -79,6 +79,9 @@ export interface GroupDetailContext {
   onViewExpense: (expense: XenSplitExpense) => void;
   settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isSettlingDebt: boolean;
+  /** Remind a member who owes you to settle up. */
+  nudgeMember: (userId: string) => Promise<unknown>;
+  isNudging: boolean;
   onAddExchange: () => void;
   addExchange: (
     input: CreateExchangeInput,
@@ -138,9 +141,8 @@ export default function GroupDetail() {
   } = useXenSplit(groupId!);
   useTitle("XenSplit");
   const { deleteGroup } = useXenSplits();
-  const { balancesData, settleDebt, isSettlingDebt, deleteSettlement, isDeletingSettlement } = useXenSplitBalances(
-    groupId!,
-  );
+  const { balancesData, settleDebt, isSettlingDebt, nudgeMember, isNudging, deleteSettlement, isDeletingSettlement } =
+    useXenSplitBalances(groupId!);
   const {
     updateExpense,
     isUpdatingExpense,
@@ -498,6 +500,8 @@ export default function GroupDetail() {
     },
     settleDebt,
     isSettlingDebt,
+    nudgeMember,
+    isNudging,
     onAddExchange: () => setShowAddExchangeModal(true),
     addExchange,
     isAddingExchange,

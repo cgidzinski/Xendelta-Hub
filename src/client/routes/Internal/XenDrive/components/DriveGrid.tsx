@@ -7,9 +7,10 @@ import type { XenDriveFile, XenDriveFolder } from "../../../../types/XenDriveFil
 import { formatFileSize } from "../../../../utils/fileUtils";
 import { formatModified, itemCountLabel } from "../lib/driveFormat";
 import { fileKindOf } from "../lib/fileKind";
-import { useFolderDrop } from "../lib/useFileDrop";
+import { itemDragProps, useFolderDrop } from "../lib/useFileDrop";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
+import { clickableRowProps } from "../../../../utils/keyboard";
 import type { DriveListHandlers } from "./DriveTable";
 
 interface DriveGridProps {
@@ -30,12 +31,17 @@ const reveal = {
 } as const;
 
 function FolderCard({ folder, h }: { folder: XenDriveFolder; h: DriveListHandlers }) {
-  const drop = useFolderDrop((files) => h.onDropFiles(folder._id, files));
+  const drop = useFolderDrop(
+    folder._id,
+    (files) => h.onDropFiles(folder._id, files),
+    (items) => h.onDropItems(folder._id, items),
+  );
   const selected = h.selected.has(folder._id);
   return (
     <Box
       {...drop.props}
-      onClick={() => h.onOpenFolder(folder)}
+      {...itemDragProps(() => h.dragItems("folder", folder._id))}
+      {...clickableRowProps(() => h.onOpenFolder(folder))}
       sx={[
         {
           display: "flex",
@@ -50,6 +56,7 @@ function FolderCard({ folder, h }: { folder: XenDriveFolder; h: DriveListHandler
           bgcolor: "background.paper",
           cursor: "pointer",
           "&:hover": { borderColor: "text.disabled" },
+          "&:focus-visible": { outline: (t) => `2px solid ${t.palette.primary.main}`, outlineOffset: 1 },
         },
         selected && { borderColor: "primary.main", bgcolor: (t) => alpha(t.palette.primary.main, 0.1) },
         drop.over && {
@@ -91,7 +98,8 @@ function FileCard({
   const kind = fileKindOf(file.mimeType);
   return (
     <Box
-      onClick={() => h.onOpenFile(file)}
+      {...itemDragProps(() => h.dragItems("file", file._id))}
+      {...clickableRowProps(() => h.onOpenFile(file))}
       sx={[
         {
           border: 1,
@@ -103,6 +111,7 @@ function FileCard({
           position: "relative",
           "&:hover": { borderColor: "text.disabled" },
           "&:hover .reveal, &:focus-within .reveal": { opacity: 1 },
+          "&:focus-visible": { outline: (t) => `2px solid ${t.palette.primary.main}`, outlineOffset: 1 },
         },
         selected && { borderColor: "primary.main" },
       ]}

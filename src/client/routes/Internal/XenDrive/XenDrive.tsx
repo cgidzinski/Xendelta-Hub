@@ -39,6 +39,7 @@ import DriveGrid from "./components/DriveGrid";
 import DriveTable, { type DriveListHandlers } from "./components/DriveTable";
 import { FilterSelect, SelectionBar, ViewToggle, type DriveViewMode } from "./components/DriveControls";
 import DeleteFolderDialog from "./components/DeleteFolderDialog";
+import MoveDialog from "./components/MoveDialog";
 import FileShareDialog from "./components/FileShareDialog";
 import FolderDialog from "./components/FolderDialog";
 import FolderShareDialog from "./components/FolderShareDialog";
@@ -74,6 +75,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const [sharingFolderId, setSharingFolderId] = useState<string | null>(null);
   const [sharingFileId, setSharingFileId] = useState<string | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<XenDriveFolder | null>(null);
+  const [moving, setMoving] = useState<{ fileIds: string[]; folderIds: string[]; label: string } | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useXendriveBrowse(folderId ?? null, q || undefined, { view });
 
@@ -143,13 +145,13 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
 
   const removeFile = async (file: XenDriveFile) => {
     const ok = await confirm({
-      title: "Delete this file?",
-      message: `"${file.name}" will be deleted for good${file.shared ? ", and its link stops working" : ""}.`,
-      confirmLabel: "Delete file",
+      title: "Move this file to the Trash?",
+      message: `"${file.name}" is kept in the Trash for 30 days${file.shared ? ", and its link stops working meanwhile" : ""}.`,
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     actions.deleteFile.mutate(file._id, {
-      onSuccess: () => enqueueSnackbar("File deleted", { variant: "success" }),
+      onSuccess: () => enqueueSnackbar("File moved to Trash", { variant: "success" }),
       onError: (e: Error) => fail(e, "Couldn't delete the file"),
     });
   };
@@ -161,6 +163,10 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
       t.kind === "folder" ? setSharingFolderId(t.folder._id) : setSharingFileId(t.file._id),
     onDownload: download,
     onRename: setRenaming,
+    onMove: (t: ActionTarget) =>
+      t.kind === "folder"
+        ? setMoving({ fileIds: [], folderIds: [t.folder._id], label: `“${t.folder.name}”` })
+        : setMoving({ fileIds: [t.file._id], folderIds: [], label: `“${t.file.name}”` }),
     onDelete: (t: ActionTarget) => (t.kind === "folder" ? setDeletingFolder(t.folder) : removeFile(t.file)),
   };
 
@@ -178,16 +184,19 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const bulkDelete = async () => {
     const deletable = selectedFiles;
     const chosenFolders = folders.filter((f) => selected.has(f._id));
+    if (!deletable.length && !chosenFolders.length) return;
+    // Files go to the Trash; a folder (and everything in it) is deleted for good.
     const parts = [
-      deletable.length ? `${deletable.length} ${deletable.length === 1 ? "file" : "files"}` : "",
+      deletable.length
+        ? `${deletable.length} ${deletable.length === 1 ? "file goes" : "files go"} to the Trash for 30 days.`
+        : "",
       chosenFolders.length
-        ? `${chosenFolders.length} ${chosenFolders.length === 1 ? "folder" : "folders"} and everything inside`
+        ? `${chosenFolders.length} ${chosenFolders.length === 1 ? "folder" : "folders"} and everything inside ${chosenFolders.length === 1 ? "is" : "are"} deleted for good.`
         : "",
     ].filter(Boolean);
-    if (!deletable.length && !chosenFolders.length) return;
     const ok = await confirm({
       title: `Delete ${deletable.length + chosenFolders.length} ${deletable.length + chosenFolders.length === 1 ? "item" : "items"}?`,
-      message: `${parts.join(" and ")} will be deleted for good.`,
+      message: parts.join(" "),
       confirmLabel: "Delete",
     });
     if (!ok) return;
@@ -200,6 +209,23 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
       fail(e, "Couldn't delete everything");
     }
   };
+
+  // Move what is chosen (from the dialog, or dropped on a folder). The server checks the whole move first, so a name
+  // clash or a loop refuses all of it and says why.
+  const moveTo = async (fileIds: string[], folderIds: string[], targetFolderId: string | null, targetName: string) => {
+    try {
+      const done = await actions.moveItems.mutateAsync({ fileIds, folderIds, targetFolderId });
+      const n = done.files + done.folders;
+      enqueueSnackbar(n === 0 ? "Already there" : `Moved ${n} ${n === 1 ? "item" : "items"} to ${targetName}`, {
+        variant: n === 0 ? "info" : "success",
+      });
+      setSelected(new Set());
+      setMoving(null);
+    } catch (e) {
+      fail(e, "Couldn't move them");
+    }
+  };
+  const selectedFolderIds = folders.filter((f) => selected.has(f._id)).map((f) => f._id);
 
   const bulkDownload = async () => {
     for (const f of selectedFiles) {
@@ -231,6 +257,13 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
     onToggle: toggle,
     onToggleAll: toggleAll,
     onDropFiles: (id, dropped) => drive.add(dropped, id),
+    // Dragging a selected row takes the whole selection with it; dragging any other row takes just that one.
+    dragItems: (kind, id) =>
+      selected.has(id)
+        ? { fileIds: selectedFiles.map((f) => f._id), folderIds: selectedFolderIds }
+        : { fileIds: kind === "file" ? [id] : [], folderIds: kind === "folder" ? [id] : [] },
+    onDropItems: (folderId, items) =>
+      moveTo(items.fileIds, items.folderIds, folderId, folders.find((f) => f._id === folderId)?.name ?? "the folder"),
   };
 
   // ---- layout
@@ -366,6 +399,13 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
           onClear={() => setSelected(new Set())}
           onDownload={bulkDownload}
           onCopyLinks={bulkCopyLinks}
+          onMove={() =>
+            setMoving({
+              fileIds: selectedFiles.map((f) => f._id),
+              folderIds: selectedFolderIds,
+              label: `${selected.size} ${selected.size === 1 ? "item" : "items"}`,
+            })
+          }
           onDelete={bulkDelete}
         />
       )}
@@ -470,6 +510,17 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
           if (renaming.kind === "file")
             await actions.updateFileSettings.mutateAsync({ fileId: renaming.file._id, settings: { name } });
           else await actions.renameFolder.mutateAsync({ folderId: renaming.folder._id, name });
+        }}
+      />
+      <MoveDialog
+        open={!!moving}
+        label={moving?.label ?? ""}
+        folderIds={moving?.folderIds ?? []}
+        currentFolderId={view ? null : (folderId ?? null)}
+        onClose={() => setMoving(null)}
+        onMove={async (target) => {
+          if (!moving) return;
+          await moveTo(moving.fileIds, moving.folderIds, target, target ? "the folder" : "My Drive");
         }}
       />
       <FolderShareDialog folder={sharingFolder} onClose={() => setSharingFolderId(null)} />
