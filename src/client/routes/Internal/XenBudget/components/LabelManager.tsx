@@ -3,11 +3,7 @@ import {
   Box,
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
   DialogContentText,
-  DialogTitle,
   Divider,
   IconButton,
   Stack,
@@ -26,6 +22,7 @@ import { useXenBudgetLabels, type LabelKind } from "../../../../hooks/xenbudget/
 import LabelChip, { resolveLabelColor } from "./LabelChip";
 import LabelColorPicker from "./LabelColorPicker";
 import EmptyState from "../../../../components/ui/EmptyState";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 interface LabelManagerProps {
   book: XenBudgetBook;
@@ -310,21 +307,24 @@ export default function LabelManager({ book, kind, itemCounts }: LabelManagerPro
         </Stack>
       )}
 
-      <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
-        <DialogTitle>Delete &ldquo;{confirmDelete?.name}&rdquo;?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            This removes it from {confirmDelete?.count} item{confirmDelete?.count === 1 ? "" : "s"} — they keep
-            everything else, they just lose this {copy.chip}. This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
-          <Button color="error" disabled={isDeleting} onClick={handleConfirmDelete}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title={<>Delete &ldquo;{confirmDelete?.name}&rdquo;?</>}
+        actions={
+          <>
+            <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
+            <Button color="error" disabled={isDeleting} onClick={handleConfirmDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <DialogContentText>
+          This removes it from {confirmDelete?.count} item{confirmDelete?.count === 1 ? "" : "s"} — they keep everything
+          else, they just lose this {copy.chip}. This cannot be undone.
+        </DialogContentText>
+      </ResponsiveDialog>
     </Box>
   );
 }

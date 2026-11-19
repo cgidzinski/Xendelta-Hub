@@ -1,20 +1,11 @@
 import { useEffect, useState } from "react";
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  InputAdornment,
-  Stack,
-  TextField,
-  useMediaQuery,
-} from "@mui/material";
+import { Button, InputAdornment, Stack, TextField } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { XenBudgetBook, PiggyBankInput, XenBudgetPiggyBank } from "../../../../../hooks/xenbudget/types";
 import { getCurrencySymbol } from "../../currency";
 import { sanitizeAmount } from "../../../../../utils/currencyUtils";
 import LabelPicker from "../LabelPicker";
+import ResponsiveDialog from "../../../../../components/ui/ResponsiveDialog";
 
 interface PiggyBankFormProps {
   open: boolean;
@@ -36,7 +27,6 @@ export default function PiggyBankForm({
   onDelete,
 }: PiggyBankFormProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const isMobile = useMediaQuery("(max-width:600px)");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [target, setTarget] = useState("");
@@ -84,76 +74,80 @@ export default function PiggyBankForm({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" fullScreen={isMobile}>
-      <DialogTitle>{bank ? "Edit piggy bank" : "New piggy bank"}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            slotProps={{ htmlInput: { maxLength: 100 } }}
-            placeholder="New car"
-          />
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            slotProps={{ htmlInput: { maxLength: 500 } }}
-            helperText="Optional — what you're saving for."
-          />
-          <TextField
-            fullWidth
-            label="Target"
-            value={target}
-            onChange={(e) => {
-              const clean = sanitizeAmount(e.target.value);
-              if (clean !== null) setTarget(clean);
-            }}
-            slotProps={{
-              input: {
-                startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>,
-              },
-            }}
-          />
-          <LabelPicker
-            kind="category"
-            registry={book.categories}
-            value={category}
-            onChange={setCategory}
-            label="Category"
-            required
-            helperText="Contributions book as an expense here — the budget line this money comes from."
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        {bank && onDelete && (
-          <Button
-            color="error"
-            sx={{ mr: "auto" }}
-            onClick={async () => {
-              try {
-                await onDelete();
-                onClose();
-              } catch (e) {
-                enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete bank", { variant: "error" });
-              }
-            }}
-          >
-            Delete
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xs"
+      title={bank ? "Edit piggy bank" : "New piggy bank"}
+      actions={
+        <>
+          {bank && onDelete && (
+            <Button
+              color="error"
+              sx={{ mr: "auto" }}
+              onClick={async () => {
+                try {
+                  await onDelete();
+                  onClose();
+                } catch (e) {
+                  enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete bank", { variant: "error" });
+                }
+              }}
+            >
+              Delete
+            </Button>
+          )}
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
+            {bank ? "Save" : "Create"}
           </Button>
-        )}
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
-          {bank ? "Save" : "Create"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </>
+      }
+    >
+      <Stack spacing={2} sx={{ pt: 1 }}>
+        <TextField
+          autoFocus
+          fullWidth
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          slotProps={{ htmlInput: { maxLength: 100 } }}
+          placeholder="New car"
+        />
+        <TextField
+          fullWidth
+          multiline
+          minRows={2}
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          slotProps={{ htmlInput: { maxLength: 500 } }}
+          helperText="Optional — what you're saving for."
+        />
+        <TextField
+          fullWidth
+          label="Target"
+          value={target}
+          onChange={(e) => {
+            const clean = sanitizeAmount(e.target.value);
+            if (clean !== null) setTarget(clean);
+          }}
+          slotProps={{
+            input: {
+              startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>,
+            },
+          }}
+        />
+        <LabelPicker
+          kind="category"
+          registry={book.categories}
+          value={category}
+          onChange={setCategory}
+          label="Category"
+          required
+          helperText="Contributions book as an expense here — the budget line this money comes from."
+        />
+      </Stack>
+    </ResponsiveDialog>
   );
 }
