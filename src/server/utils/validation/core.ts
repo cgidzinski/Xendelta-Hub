@@ -4,6 +4,7 @@ import { VALIDATION_LIMITS } from "../../constants";
 import { ALL_CURRENCIES } from "@shared/currencies";
 import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
 import { isSafeUrl } from "@shared/xennote/notes";
+import { NOTIFICATION_APPS, NOTIFICATION_WAYS, isMutedNotification } from "@shared/notificationApps";
 
 // Helper to validate MongoDB ObjectId
 export const objectIdSchema = z
@@ -65,6 +66,13 @@ export const resetPasswordSchema = verifyResetTokenSchema.extend({
     .max(VALIDATION_LIMITS.PASSWORD_MAX, "Password too long"),
 });
 
+// Change the account's email: the new address, and the current password to prove it is them.
+export const requestEmailChangeSchema = z.object({
+  newEmail: z.string().trim().toLowerCase().email("Enter a valid email address").max(254, "Email too long"),
+  password: z.string().min(1, "Enter your current password").max(VALIDATION_LIMITS.PASSWORD_MAX),
+});
+export const confirmEmailChangeSchema = z.object({ token: z.string().min(16).max(200) });
+
 export const updateProfileSchema = z.object({
   avatar: z.string().url("Invalid avatar URL").optional(),
   // "" clears the preference and falls back to the browser's zone.
@@ -76,6 +84,11 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
     .optional(),
   emailNotifications: z.boolean().optional(),
+  // The app-and-way combinations switched off; sending the list replaces it.
+  mutedNotifications: z
+    .array(z.string().refine(isMutedNotification, "Not a notification setting"))
+    .max(NOTIFICATION_APPS.length * NOTIFICATION_WAYS.length)
+    .optional(),
   // "" clears the preference (defaults to dark); "system" explicitly follows the OS.
   theme: z.union([z.enum(["light", "dark", "system"]), z.literal("")]).optional(),
   // An empty handle clears the whole thing, the same way "" clears the timezone.
@@ -305,6 +318,12 @@ export const settleDebtSchema = z
     message: "Cannot settle with yourself",
     path: ["to"],
   });
+
+// The command palette's search text: at least two characters (one letter would match half of everything).
+export const searchQuerySchema = z.object({ q: z.string().trim().min(2).max(100) });
+
+// Remind a member who owes you to settle up.
+export const nudgeXenSplitMemberSchema = z.object({ userId: objectIdSchema });
 
 export const xenSplitIdParamSchema = z.object({
   groupId: objectIdSchema,
@@ -805,6 +824,22 @@ export const updateXenBudgetItemSchema = z.object({
   description: z.string().min(1).max(500).optional(),
 });
 
+// Several items at once: delete them, or give them all a category and/or add or remove flags. Up to 200 per request.
+const bulkIds = z.array(objectIdSchema).min(1, "Pick at least one item").max(200, "Up to 200 items at a time");
+export const xenBudgetBulkDeleteSchema = z.object({ ids: bulkIds });
+export const xenBudgetBulkUpdateSchema = z
+  .object({
+    ids: bulkIds,
+    // Replaces each item's categories with this one (the whole amount).
+    set_category: z.string().trim().min(1).max(50).optional(),
+    add_flags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+    remove_flags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  })
+  .refine(
+    (v) => v.set_category !== undefined || (v.add_flags?.length ?? 0) > 0 || (v.remove_flags?.length ?? 0) > 0,
+    "Choose what to change",
+  );
+
 // Web Push subscription schemas
 export const pushSubscribeSchema = z.object({
   endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
@@ -855,6 +890,7 @@ export const updateXenRoutineSchema = z.object({
   interval: xenRoutineIntervalSchema.optional(),
   due_at: z.string().datetime({ offset: true }).optional(),
   enabled: z.boolean().optional(),
+  archived: z.boolean().optional(),
   remind_again_days: z.number().int().min(1).max(365).optional(),
 });
 

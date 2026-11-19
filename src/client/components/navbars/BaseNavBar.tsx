@@ -20,6 +20,8 @@ import {
   Tooltip,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
+import SearchIcon from "@mui/icons-material/Search";
+import CommandPalette from "../search/CommandPalette";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PersonIcon from "@mui/icons-material/Person";
@@ -30,7 +32,7 @@ import DoneAllIcon from "@mui/icons-material/DoneAll";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import ProfileListItem from "../ProfileListItem";
 import GemBalance from "../GemBalance";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
@@ -40,6 +42,8 @@ import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
 import LoadingSpinner from "../LoadingSpinner";
 import { BRAND_NAME } from "@shared/brand";
+import { clickableRowProps } from "../../utils/keyboard";
+import { rememberRecentApp } from "../../utils/recentApps";
 
 const DRAWER_WIDTH = 240;
 
@@ -105,10 +109,24 @@ export default function BaseNavBar({
 }: BaseNavBarProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  useEffect(() => rememberRecentApp(pathname), [pathname]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
   const { count: unreadChats } = useChatUnread();
+
+  // Ctrl/Cmd+K opens the search palette from anywhere in the app.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
@@ -243,12 +261,12 @@ export default function BaseNavBar({
                 backgroundColor: "action.hover",
               },
             }}
-            onClick={() => {
+            {...clickableRowProps(() => {
               navigate(drawerHeaderPath);
               if (isMobile && isNavBarOpen) {
                 onToggleNavBar();
               }
-            }}
+            })}
           >
             <Typography
               variant="h5"
@@ -345,6 +363,15 @@ export default function BaseNavBar({
           </Typography>
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
+              <IconButton
+                color="inherit"
+                aria-label="Search (Ctrl+K)"
+                title="Search (Ctrl+K)"
+                sx={{ width: 50, height: 50 }}
+                onClick={() => setPaletteOpen(true)}
+              >
+                <SearchIcon />
+              </IconButton>
               {showMessages && (
                 <IconButton
                   color="inherit"
@@ -374,6 +401,10 @@ export default function BaseNavBar({
           {children}
         </Toolbar>
       </AppBar>
+
+      {(showMessages || showNotifications) && (
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      )}
 
       {/* Notifications Dropdown */}
       {showNotifications && (

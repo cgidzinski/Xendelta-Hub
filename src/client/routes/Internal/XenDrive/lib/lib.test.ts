@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fileKindOf, isPreviewable } from "./fileKind";
 import { expiryLabel, folderContentsLabel, formatModified, itemCountLabel } from "./driveFormat";
+import { DRIVE_ITEMS_TYPE, dragHasFiles, dragHasItems, droppedItemsFor, itemDragProps } from "./useFileDrop";
 import { applyFilters, filtersActive, matchesLink, sortFiles } from "./driveFilters";
 import { nextWaiting, summarize, uploadReducer, type UploadItem } from "./uploadQueue";
 import type { XenDriveFile } from "../../../../types/XenDriveFile";
@@ -174,5 +175,46 @@ describe("sortFiles", () => {
     expect(names("largest")).toEqual(["a", "b10", "b2"]);
     expect(names("smallest")).toEqual(["b2", "b10", "a"]);
     expect(list.map((x) => x.name)).toEqual(["b10", "a", "b2"]);
+  });
+});
+
+describe("dragging drive items", () => {
+  const fakeEvent = (types: string[], data: Record<string, string> = {}) =>
+    ({
+      dataTransfer: {
+        types,
+        setData: (type: string, value: string) => {
+          data[type] = value;
+        },
+        getData: (type: string) => data[type] ?? "",
+        effectAllowed: "",
+      },
+    }) as any;
+
+  it("carries what the row says it carries, as a drive-only type", () => {
+    const data: Record<string, string> = {};
+    const props = itemDragProps(() => ({ fileIds: ["f1"], folderIds: ["d1"] }));
+    expect(props.draggable).toBe(true);
+    const e = fakeEvent([], data);
+    props.onDragStart(e);
+    expect(JSON.parse(data[DRIVE_ITEMS_TYPE])).toEqual({ fileIds: ["f1"], folderIds: ["d1"] });
+    expect(e.dataTransfer.effectAllowed).toBe("move");
+  });
+
+  it("tells a drag of the drive's own items from files dragged in from the computer", () => {
+    expect(dragHasItems(fakeEvent([DRIVE_ITEMS_TYPE]))).toBe(true);
+    expect(dragHasItems(fakeEvent(["Files"]))).toBe(false);
+    expect(dragHasFiles(fakeEvent([DRIVE_ITEMS_TYPE]))).toBe(false);
+  });
+
+  it("a folder takes dropped items, but not a folder dropped onto itself or something unreadable", () => {
+    const withItems = (items: object) => fakeEvent([DRIVE_ITEMS_TYPE], { [DRIVE_ITEMS_TYPE]: JSON.stringify(items) });
+    expect(droppedItemsFor(withItems({ fileIds: ["f1"], folderIds: ["d1"] }), "d2")).toEqual({
+      fileIds: ["f1"],
+      folderIds: ["d1"],
+    });
+    expect(droppedItemsFor(withItems({ fileIds: [], folderIds: ["d2"] }), "d2")).toBeNull();
+    expect(droppedItemsFor(withItems({ nope: true }), "d2")).toBeNull();
+    expect(droppedItemsFor(fakeEvent([DRIVE_ITEMS_TYPE], { [DRIVE_ITEMS_TYPE]: "not json" }), "d2")).toBeNull();
   });
 });

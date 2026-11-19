@@ -111,3 +111,14 @@ rosterSync(xenSplitSchema);
 export type XenSplitAttrs = InferSchemaType<typeof xenSplitSchema>;
 
 export const XenSplit = mongoose.model("XenSplit", xenSplitSchema);
+
+// A reminder to settle up that one member sent another in a group. One per pair per day: the row is the limit, and the
+// database removes it after a day, which is also when the same person may be reminded again.
+const nudgeSchema = new Schema({
+  group_id: { type: Schema.Types.ObjectId, required: true },
+  from_id: { type: String, required: true }, // who asked
+  to_id: { type: String, required: true }, // who was asked (owes money)
+  created_at: { type: Date, default: Date.now, expires: 24 * 60 * 60 },
+});
+nudgeSchema.index({ group_id: 1, from_id: 1, to_id: 1 }, { unique: true });
+export const XenSplitNudge = mongoose.model("XenSplitNudge", nudgeSchema);

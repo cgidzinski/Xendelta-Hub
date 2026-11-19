@@ -125,6 +125,7 @@ async function generate(task: any, dueDates: Date[]): Promise<TaskRunResult> {
     for (const mid of memberIds) {
       if (mid !== source.created_by && involved.has(mid)) {
         await notify(mid, {
+          app: "xensplit",
           title: "Recurring Expense",
           message,
           link: `/internal/xensplit/groups/${groupId}/expenses`,

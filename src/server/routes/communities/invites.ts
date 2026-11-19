@@ -78,6 +78,7 @@ export function registerInviteRoutes(app: Application) {
       for (const userId of fresh) {
         realtime.toUsers([userId], "community:invite", { communityId: String(community._id) });
         void notify(userId, {
+          app: "communities",
           title: "Community invite",
           message: `${inviter} invited you to ${community.name}`,
           link: "/internal/communities",

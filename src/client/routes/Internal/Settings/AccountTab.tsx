@@ -9,6 +9,7 @@ import { useUserAvatar } from "../../../hooks/user/useUserAvatar";
 import AvatarUploadSection from "./components/AvatarUploadSection";
 import TimezoneSection from "./components/TimezoneSection";
 import ETransferSection from "./components/ETransferSection";
+import ChangeEmailDialog from "./components/ChangeEmailDialog";
 
 /** Who you are: photo, name, the address you sign in with, your zone, and where people send you money. */
 export default function AccountTab() {
@@ -24,6 +25,7 @@ export default function AccountTab() {
   const [editUsername, setEditUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [isSavingUsername, setIsSavingUsername] = useState(false);
+  const [changingEmail, setChangingEmail] = useState(false);
 
   useEffect(() => {
     // Fill the field once the profile arrives, without overwriting what the person is typing.
@@ -140,9 +142,32 @@ export default function AccountTab() {
         </Stack>
       </SectionCard>
 
-      <SectionCard title="Email" description="Used to sign in and for account mail. It can't be changed here.">
+      <SectionCard
+        title="Email"
+        description={
+          profile?.canChangeEmail === false
+            ? "Used to sign in and for account mail. You sign in with Google or GitHub, so it is managed there."
+            : "Used to sign in and for account mail."
+        }
+      >
         <Typography variant="body1">{profile?.email}</Typography>
+        {profile?.pendingEmail && (
+          <Typography variant="body2" color="text.secondary">
+            Waiting for you to open the link we sent to {profile.pendingEmail}.
+          </Typography>
+        )}
+        {profile?.canChangeEmail && (
+          <Button variant="outlined" onClick={() => setChangingEmail(true)} sx={{ alignSelf: "flex-start" }}>
+            Change email
+          </Button>
+        )}
       </SectionCard>
+      <ChangeEmailDialog
+        open={changingEmail}
+        currentEmail={profile?.email ?? ""}
+        onClose={() => setChangingEmail(false)}
+        onSent={() => refetch()}
+      />
 
       <SectionCard title="Timezone" description="How dates and months are shown to you.">
         <TimezoneSection />

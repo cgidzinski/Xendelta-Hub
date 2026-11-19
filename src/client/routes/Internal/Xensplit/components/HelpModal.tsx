@@ -13,7 +13,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 
 interface HelpModalProps {
   open: boolean;
@@ -185,9 +185,7 @@ export default function HelpModal({ open, onClose }: HelpModalProps) {
       <DialogContent sx={{ px: 3, py: 2.5 }}>
         {TABS[tab].sections.map((section) => (
           <Box key={section.heading} sx={{ mb: 2.5, "&:last-of-type": { mb: 0 } }}>
-            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 0.75 }}>
-              {section.heading}
-            </Typography>
+            <SectionLabel sx={{ mb: 0.75 }}>{section.heading}</SectionLabel>
             <List dense disablePadding>
               {section.items.map((item, i) => (
                 <ListItem key={i} disablePadding sx={{ display: "list-item", listStyleType: "disc", ml: 2.5, py: 0.5 }}>

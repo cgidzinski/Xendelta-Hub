@@ -41,6 +41,20 @@ const historySchema = new Schema(
     occurrence_at: { type: Date },
     // For "postponed": the due date it was pushed to.
     due_at: { type: Date },
+    // For the latest "done": how the routine stood before it, so it can be undone for a few minutes (utils/xenRoutine.ts).
+    undo_state: {
+      type: new Schema(
+        {
+          last_done_at: { type: Date, default: null },
+          due_at: { type: Date, required: true },
+          last_notified_at: { type: Date, default: null },
+          done_ahead: { type: [Date], default: [] },
+          checklist_done: { type: [String], default: [] },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
     // For "done" on a routine with a checklist: what was ticked off, out of how many steps there were.
     steps_done: { type: [String], default: undefined },
     steps_total: { type: Number, min: 0 },
@@ -73,6 +87,8 @@ const xenRoutineSchema = new Schema({
   last_done_at: { type: Date, default: null },
   due_at: { type: Date, required: true },
   enabled: { type: Boolean, default: true },
+  // Put away: out of the list and reminders (it is also paused), but its history is kept and it can be restored.
+  archived: { type: Boolean, default: false },
   last_notified_at: { type: Date, default: null },
   // Future occurrences already completed ahead of time. The schedule grid is
   // due_at + k * interval; these dates are skipped when the grid reaches them.

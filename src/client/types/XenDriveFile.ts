@@ -120,3 +120,13 @@ export interface AppFilesResult {
     }>;
   }>;
 }
+
+/** A file in the Trash: what it is, and when it goes for good. */
+export interface TrashedXenDriveFile {
+  _id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  deleted_at: string;
+  purge_at: string;
+}
