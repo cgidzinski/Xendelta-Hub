@@ -4,6 +4,7 @@ import { VALIDATION_LIMITS } from "../../constants";
 import { ALL_CURRENCIES } from "@shared/currencies";
 import { ETRANSFER_MAX, isValidEtransfer } from "@shared/etransfer";
 import { isSafeUrl } from "@shared/xennote/notes";
+import { NOTIFICATION_APPS, NOTIFICATION_WAYS, isMutedNotification } from "@shared/notificationApps";
 
 // Helper to validate MongoDB ObjectId
 export const objectIdSchema = z
@@ -65,6 +66,13 @@ export const resetPasswordSchema = verifyResetTokenSchema.extend({
     .max(VALIDATION_LIMITS.PASSWORD_MAX, "Password too long"),
 });
 
+// Change the account's email: the new address, and the current password to prove it is them.
+export const requestEmailChangeSchema = z.object({
+  newEmail: z.string().trim().toLowerCase().email("Enter a valid email address").max(254, "Email too long"),
+  password: z.string().min(1, "Enter your current password").max(VALIDATION_LIMITS.PASSWORD_MAX),
+});
+export const confirmEmailChangeSchema = z.object({ token: z.string().min(16).max(200) });
+
 export const updateProfileSchema = z.object({
   avatar: z.string().url("Invalid avatar URL").optional(),
   // "" clears the preference and falls back to the browser's zone.
@@ -76,6 +84,11 @@ export const updateProfileSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
     .optional(),
   emailNotifications: z.boolean().optional(),
+  // The app-and-way combinations switched off; sending the list replaces it.
+  mutedNotifications: z
+    .array(z.string().refine(isMutedNotification, "Not a notification setting"))
+    .max(NOTIFICATION_APPS.length * NOTIFICATION_WAYS.length)
+    .optional(),
   // "" clears the preference (defaults to dark); "system" explicitly follows the OS.
   theme: z.union([z.enum(["light", "dark", "system"]), z.literal("")]).optional(),
   // An empty handle clears the whole thing, the same way "" clears the timezone.

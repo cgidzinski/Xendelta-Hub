@@ -110,7 +110,14 @@ export async function runRoutineReminders(now: Date = new Date()): Promise<void>
           claimed.map((p) => p.item),
           now,
         );
-        await notify(userId, { title, message, link: "/internal/xenroutine", icon: "event_repeat", channels });
+        await notify(userId, {
+          app: "xenroutine",
+          title,
+          message,
+          link: "/internal/xenroutine",
+          icon: "event_repeat",
+          channels,
+        });
       } catch (e) {
         // Nothing was delivered: put the stamps back so the next run retries.
         await Promise.all(
@@ -150,6 +157,7 @@ export async function sendActivityNotices(
     await Promise.all(
       activityRecipients(routine, actorId, prefs).map((r) =>
         notify(r.userId, {
+          app: "xenroutine",
           title: "XenRoutine",
           message: `${actorName} ${text}`,
           link: "/internal/xenroutine",

@@ -40,6 +40,13 @@ const userSchema = new Schema({
     token: { type: String },
     expires: { type: Date },
   },
+  // A new address waiting for its confirm link (routes/emailChange.ts). Only the token's hash is stored; the address
+  // only replaces `email` once the link emailed to it is opened.
+  pendingEmail: {
+    email: { type: String },
+    token: { type: String },
+    expires: { type: Date },
+  },
   // Presence (shared/presence.ts): what the person chose to show, and an optional status line that can expire.
   presence: {
     choice: { type: String, enum: ["online", "idle", "dnd", "invisible"], default: "online" },
@@ -83,6 +90,8 @@ const userSchema = new Schema({
     // equivalent flag — it is governed by whether the user has any subscribed devices
     // (see models/pushSubscription.js), since a browser can't be silently subscribed.
     email: { type: Boolean, default: true },
+    // Per-app switches that are off, as "app:way" (shared/notificationApps.ts), e.g. "xensplit:email". Everything else is on.
+    muted: { type: [String], default: [] },
   },
 });
 export type UserAttrs = InferSchemaType<typeof userSchema>;

@@ -374,6 +374,7 @@ module.exports = function (app: any) {
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
 
       await notify(newOwnerId, {
+        app: "xensplit",
         title: "Group Ownership",
         message: `You are now the owner of ${group.name}`,
         link: `/internal/xensplit/groups/${groupId}/overview`,
@@ -434,6 +435,7 @@ module.exports = function (app: any) {
 
       for (const memberId of newMemberIds) {
         await notify(memberId, {
+          app: "xensplit",
           title: "Added to Group",
           message: `You've been added to ${group.name}`,
           link: `/internal/xensplit/groups/${groupId}/overview`,
@@ -509,6 +511,7 @@ module.exports = function (app: any) {
       // Notify removed user if they were removed by someone else (not a voluntary leave)
       if (targetUserId !== userId) {
         await notify(targetUserId, {
+          app: "xensplit",
           title: "Removed from Group",
           message: `You've been removed from ${group.name}`,
           icon: "person",
@@ -671,6 +674,7 @@ module.exports = function (app: any) {
         const mid = member._id.toString();
         if (mid !== userId && involvedIds.has(mid)) {
           await notify(mid, {
+            app: "xensplit",
             title: "New Expense",
             message: `${actorName} added: ${title} (${amount} ${expenseCurrency})`,
             link: `/internal/xensplit/groups/${groupId}/expenses`,
@@ -861,6 +865,7 @@ module.exports = function (app: any) {
         const mid = member._id.toString();
         if (mid !== userId && involvedIds.has(mid)) {
           await notify(mid, {
+            app: "xensplit",
             title: "Expense Updated",
             message: `${actorName} updated: ${expense.title}`,
             link: `/internal/xensplit/groups/${groupId}/expenses`,
@@ -1286,6 +1291,7 @@ module.exports = function (app: any) {
       const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
       const fromName = fromMember?.username || "Someone";
       await notify(to, {
+        app: "xensplit",
         title: "Settlement Received",
         message: `${fromName} paid you ${amount} ${currency} in ${group.name}`,
         link: `/internal/xensplit/groups/${groupId}/overview`,
@@ -1403,6 +1409,7 @@ module.exports = function (app: any) {
       const notifyIds = new Set([party_a, party_b].filter((id) => id !== userId));
       for (const mid of notifyIds) {
         await notify(mid, {
+          app: "xensplit",
           title: "New Exchange",
           message: `${actorName} recorded a currency exchange in ${group.name}`,
           link: `/internal/xensplit/groups/${groupId}/expenses`,
