@@ -262,6 +262,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Keep budget books you share with other people.",
       "Log money in and out with a date, amount, note and receipt photos, and read a receipt photo to fill in the shop, total and date.",
       "Sort items with categories and flags, and share an item between people.",
+      "Select several items to give them a category, add or remove a flag, or delete them together.",
       "Search, filter and review items by period, category, flag or person.",
       "Set budgets per category, with shared and per-person limits and a projection of where you will end up.",
       "See where the money goes in an overview and a report, and export the report to CSV.",
