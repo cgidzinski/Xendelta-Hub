@@ -63,6 +63,19 @@ export async function depthOf(folderId: string | null): Promise<number> {
   return depth;
 }
 
+/** How many levels the folder and everything beneath it take (a folder with no subfolders is 1). */
+export async function heightOf(rootId: string): Promise<number> {
+  let height = 1;
+  let frontier = [rootId];
+  for (let i = 0; i < MAX_FOLDER_DEPTH + 1; i++) {
+    const children = await XenDriveFolder.find({ parent_id: { $in: frontier } }, "_id").lean();
+    if (children.length === 0) break;
+    height++;
+    frontier = children.map((c) => c._id.toString());
+  }
+  return height;
+}
+
 /** `rootId` and the ids of every folder beneath it. */
 export async function subtreeIds(rootId: string): Promise<string[]> {
   const all = [rootId];
