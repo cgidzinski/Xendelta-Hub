@@ -4,9 +4,6 @@ import {
   Box,
   Typography,
   Button,
-  Dialog,
-  DialogContent,
-  DialogActions,
   TextField,
   FormControl,
   InputLabel,
@@ -18,9 +15,7 @@ import {
   Step,
   StepButton,
   Divider,
-  useMediaQuery,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import CheckIcon from "@mui/icons-material/Check";
@@ -39,6 +34,7 @@ import {
 import { MemberSelect } from "./MemberSelect";
 import UserName from "../../../../components/user/UserName";
 import UserAvatar from "../../../../components/user/UserAvatar";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 interface CreateExchangeDialogProps {
   open: boolean;
@@ -72,7 +68,6 @@ export default function CreateExchangeDialog({
   fetchLiveRate,
 }: CreateExchangeDialogProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const isMobile = useMediaQuery("(max-width:600px)");
 
   const [step, setStep] = useState(0);
   // The furthest step reached this session — lets the stepper allow navigating back to any
@@ -198,462 +193,457 @@ export default function CreateExchangeDialog({
   };
 
   return (
-    <Dialog fullWidth maxWidth="xs" fullScreen={isMobile} open={open} onClose={onClose}>
-      <Box sx={{ position: "relative", pt: 3, pb: 1, px: 3, textAlign: "center" }}>
-        <IconButton onClick={onClose} size="small" sx={{ position: "absolute", top: 12, right: 12 }}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          Currency Exchange
-        </Typography>
-      </Box>
+    <ResponsiveDialog
+      maxWidth="xs"
+      open={open}
+      onClose={onClose}
+      title="Currency Exchange"
+      actions={
+        <>
+          <Button
+            variant="outlined"
+            sx={{ visibility: step === 0 ? "hidden" : "visible" }}
+            onClick={() => setStep((s) => s - 1)}
+          >
+            Back
+          </Button>
 
-      <DialogContent sx={{ px: 3, pt: 1.5, pb: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-        <Stepper activeStep={step} alternativeLabel sx={{ mb: 0.5 }}>
-          {STEPS.map((label, index) => (
-            <Step key={label} completed={index < STEPS.length - 1 && stepsValid[index] && index !== step}>
-              <StepButton disabled={!canGoToStep(index)} onClick={() => setStep(index)}>
-                {label}
-              </StepButton>
-            </Step>
-          ))}
-        </Stepper>
-
-        {/* Step 1: Parties */}
-        {step === 0 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {/* Party A */}
-            <MemberSelect
-              members={members}
-              label="Party A"
-              value={partyAId}
-              excludeId={partyBId}
-              onChange={setPartyAId}
-            />
-
-            {/* Currency A */}
-            <FormControl fullWidth>
-              <InputLabel id="exchange-currency-a-label">Gives</InputLabel>
-              <Select
-                labelId="exchange-currency-a-label"
-                label="Gives"
-                value={currencyA}
-                onChange={(e) => setCurrencyA(e.target.value)}
-                MenuProps={STABLE_CURRENCY_MENU_PROPS}
-              >
-                {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyA).map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c} ({getCurrencySymbol(c)})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <Divider>
-              <IconButton
-                size="small"
-                onClick={() => {
-                  const tmp = currencyA;
-                  setCurrencyA(currencyB);
-                  setCurrencyB(tmp);
-                }}
-                title="Swap currencies"
-                sx={{
-                  bgcolor: "action.selected",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <SwapVertIcon fontSize="small" />
-              </IconButton>
-            </Divider>
-
-            {/* Party B */}
-            <MemberSelect
-              members={members}
-              label="Party B"
-              value={partyBId}
-              excludeId={partyAId}
-              onChange={setPartyBId}
-            />
-
-            {/* Currency B */}
-            <FormControl fullWidth>
-              <InputLabel id="exchange-currency-b-label">Gives</InputLabel>
-              <Select
-                labelId="exchange-currency-b-label"
-                label="Gives"
-                value={currencyB}
-                onChange={(e) => setCurrencyB(e.target.value)}
-                MenuProps={STABLE_CURRENCY_MENU_PROPS}
-              >
-                {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyB).map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c} ({getCurrencySymbol(c)})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {partyAId && partyBId && partyAId === partyBId && (
-              <Typography variant="caption" color="error">
-                Party A and Party B must be different members.
-              </Typography>
-            )}
-            {currencyA && currencyB && currencyA === currencyB && (
-              <Typography variant="caption" color="error">
-                Currency A and Currency B must be different.
-              </Typography>
-            )}
-          </Box>
-        )}
-
-        {/* Step 2: Rate */}
-        {step === 1 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
-              Set the exchange rate between {currencyA} and {currencyB}.
-            </Typography>
-
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-              <TextField
-                label={inverted ? currencyB : currencyA}
-                fullWidth
-                value={previewLeft}
-                onChange={(e) => {
-                  const v = sanitizeAmount(e.target.value);
-                  if (v === null) return;
-                  setPreviewLeft(v);
-                  commitRate(v, previewRight);
-                }}
-                onBlur={() => {
-                  const n = parseFloat(previewLeft);
-                  if (!isNaN(n)) setPreviewLeft(parseFloat(n.toFixed(6)).toString());
-                }}
-                slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-              />
-              <IconButton
-                onClick={handleRateInvert}
-                tabIndex={-1}
-                title="Invert rate direction"
-                sx={{
-                  mt: 1,
-                  flexShrink: 0,
-                  bgcolor: "action.selected",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <SwapHorizIcon fontSize="small" />
-              </IconButton>
-              <TextField
-                label={inverted ? currencyA : currencyB}
-                fullWidth
-                value={previewRight}
-                onChange={(e) => {
-                  const v = sanitizeAmount(e.target.value);
-                  if (v === null) return;
-                  setPreviewRight(v);
-                  commitRate(previewLeft, v);
-                }}
-                onBlur={() => {
-                  const n = parseFloat(previewRight);
-                  if (!isNaN(n)) setPreviewRight(parseFloat(n.toFixed(6)).toString());
-                }}
-                slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-              />
-            </Box>
-
-            <Button
-              variant="outlined"
-              sx={{ alignSelf: "center", px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}
-              onClick={async () => {
-                try {
-                  const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
-                  setRateNum(rate);
-                  setPreviewLeft("1");
-                  setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
-                } catch (e) {
-                  enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
-                }
-              }}
-            >
-              <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                Live Rate
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                Synced daily
-              </Typography>
+          {step < 3 ? (
+            <Button variant="contained" disabled={!stepValid} onClick={() => setStep((s) => s + 1)}>
+              Next
             </Button>
+          ) : (
+            <Button
+              variant="contained"
+              startIcon={<CheckIcon />}
+              disabled={!isValid || isAddingExchange}
+              loading={isAddingExchange}
+              onClick={handleCreate}
+            >
+              Record Exchange
+            </Button>
+          )}
+        </>
+      }
+    >
+      <Stepper activeStep={step} alternativeLabel sx={{ mb: 0.5 }}>
+        {STEPS.map((label, index) => (
+          <Step key={label} completed={index < STEPS.length - 1 && stepsValid[index] && index !== step}>
+            <StepButton disabled={!canGoToStep(index)} onClick={() => setStep(index)}>
+              {label}
+            </StepButton>
+          </Step>
+        ))}
+      </Stepper>
 
-            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.3 }}>
-              This is an ideal online rate.
-              <br />
-              Make sure the other party agrees with it before proceeding.
-            </Typography>
+      {/* Step 1: Parties */}
+      {step === 0 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {/* Party A */}
+          <MemberSelect
+            members={members}
+            label="Party A"
+            value={partyAId}
+            excludeId={partyBId}
+            onChange={setPartyAId}
+          />
 
-            {(() => {
-              const base =
-                resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b"
-                  ? currencyB
-                  : currencyA;
-              const other = base === currencyA ? currencyB : currencyA;
-              const hasRate = !isNaN(rateNum) && rateNum > 0;
-              return (
-                <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
-                  1 {base} ={" "}
-                  {hasRate
-                    ? formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD").split("= ")[1]
-                    : `? ${other}`}
-                </Typography>
-              );
-            })()}
-          </Box>
-        )}
+          {/* Currency A */}
+          <FormControl fullWidth>
+            <InputLabel id="exchange-currency-a-label">Gives</InputLabel>
+            <Select
+              labelId="exchange-currency-a-label"
+              label="Gives"
+              value={currencyA}
+              onChange={(e) => setCurrencyA(e.target.value)}
+              MenuProps={STABLE_CURRENCY_MENU_PROPS}
+            >
+              {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyA).map((c) => (
+                <MenuItem key={c} value={c}>
+                  {c} ({getCurrencySymbol(c)})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-        {/* Step 3: Amounts */}
-        {step === 2 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {!isNaN(rateNum) && rateNum > 0 && (
-              <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-                {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
-              </Typography>
-            )}
-
-            {/* Party A: name box, amount field directly underneath */}
-            <Box
+          <Divider>
+            <IconButton
+              size="small"
+              onClick={() => {
+                const tmp = currencyA;
+                setCurrencyA(currencyB);
+                setCurrencyB(tmp);
+              }}
+              title="Swap currencies"
               sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                bgcolor: "action.hover",
-                borderRadius: 2,
-                px: 2,
-                py: 1.5,
+                bgcolor: "action.selected",
+                border: "1px solid",
+                borderColor: "divider",
+                "&:hover": { bgcolor: "action.hover" },
               }}
             >
-              <UserAvatar user={partyA} sx={{ width: 32, height: 32 }}>
+              <SwapVertIcon fontSize="small" />
+            </IconButton>
+          </Divider>
+
+          {/* Party B */}
+          <MemberSelect
+            members={members}
+            label="Party B"
+            value={partyBId}
+            excludeId={partyAId}
+            onChange={setPartyBId}
+          />
+
+          {/* Currency B */}
+          <FormControl fullWidth>
+            <InputLabel id="exchange-currency-b-label">Gives</InputLabel>
+            <Select
+              labelId="exchange-currency-b-label"
+              label="Gives"
+              value={currencyB}
+              onChange={(e) => setCurrencyB(e.target.value)}
+              MenuProps={STABLE_CURRENCY_MENU_PROPS}
+            >
+              {getGroupCurrencies(defaultCurrency, secondaryCurrencies, currencyB).map((c) => (
+                <MenuItem key={c} value={c}>
+                  {c} ({getCurrencySymbol(c)})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {partyAId && partyBId && partyAId === partyBId && (
+            <Typography variant="caption" color="error">
+              Party A and Party B must be different members.
+            </Typography>
+          )}
+          {currencyA && currencyB && currencyA === currencyB && (
+            <Typography variant="caption" color="error">
+              Currency A and Currency B must be different.
+            </Typography>
+          )}
+        </Box>
+      )}
+
+      {/* Step 2: Rate */}
+      {step === 1 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+            Set the exchange rate between {currencyA} and {currencyB}.
+          </Typography>
+
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+            <TextField
+              label={inverted ? currencyB : currencyA}
+              fullWidth
+              value={previewLeft}
+              onChange={(e) => {
+                const v = sanitizeAmount(e.target.value);
+                if (v === null) return;
+                setPreviewLeft(v);
+                commitRate(v, previewRight);
+              }}
+              onBlur={() => {
+                const n = parseFloat(previewLeft);
+                if (!isNaN(n)) setPreviewLeft(parseFloat(n.toFixed(6)).toString());
+              }}
+              slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+            />
+            <IconButton
+              onClick={handleRateInvert}
+              tabIndex={-1}
+              title="Invert rate direction"
+              sx={{
+                mt: 1,
+                flexShrink: 0,
+                bgcolor: "action.selected",
+                border: "1px solid",
+                borderColor: "divider",
+                "&:hover": { bgcolor: "action.hover" },
+              }}
+            >
+              <SwapHorizIcon fontSize="small" />
+            </IconButton>
+            <TextField
+              label={inverted ? currencyA : currencyB}
+              fullWidth
+              value={previewRight}
+              onChange={(e) => {
+                const v = sanitizeAmount(e.target.value);
+                if (v === null) return;
+                setPreviewRight(v);
+                commitRate(previewLeft, v);
+              }}
+              onBlur={() => {
+                const n = parseFloat(previewRight);
+                if (!isNaN(n)) setPreviewRight(parseFloat(n.toFixed(6)).toString());
+              }}
+              slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+            />
+          </Box>
+
+          <Button
+            variant="outlined"
+            sx={{ alignSelf: "center", px: 2, py: 0.75, flexDirection: "column", gap: 0.25, textTransform: "none" }}
+            onClick={async () => {
+              try {
+                const { rate } = await fetchLiveRate({ from: currencyA, to: currencyB });
+                setRateNum(rate);
+                setPreviewLeft("1");
+                setPreviewRight(parseFloat((inverted ? 1 / rate : rate).toFixed(6)).toString());
+              } catch (e) {
+                enqueueSnackbar(e instanceof Error ? e.message : "Failed to fetch live rate", { variant: "error" });
+              }
+            }}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+              Live Rate
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+              Synced daily
+            </Typography>
+          </Button>
+
+          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.3 }}>
+            This is an ideal online rate.
+            <br />
+            Make sure the other party agrees with it before proceeding.
+          </Typography>
+
+          {(() => {
+            const base =
+              resolveRateBase(currencyA, currencyB, preferred, defaultCurrency ?? "CAD") === "b"
+                ? currencyB
+                : currencyA;
+            const other = base === currencyA ? currencyB : currencyA;
+            const hasRate = !isNaN(rateNum) && rateNum > 0;
+            return (
+              <Typography variant="subtitle1" sx={{ textAlign: "center", fontWeight: 700 }}>
+                1 {base} ={" "}
+                {hasRate
+                  ? formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD").split("= ")[1]
+                  : `? ${other}`}
+              </Typography>
+            );
+          })()}
+        </Box>
+      )}
+
+      {/* Step 3: Amounts */}
+      {step === 2 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {!isNaN(rateNum) && rateNum > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+              {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
+            </Typography>
+          )}
+
+          {/* Party A: name box, amount field directly underneath */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "action.hover",
+              borderRadius: 2,
+              px: 2,
+              py: 1.5,
+            }}
+          >
+            <UserAvatar user={partyA} sx={{ width: 32, height: 32 }}>
+              {partyA?.username[0]?.toUpperCase()}
+            </UserAvatar>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                <UserName user={partyA} />
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Gives {currencyA}
+              </Typography>
+            </Box>
+          </Box>
+          <TextField
+            label={`Amount (${currencyA})`}
+            fullWidth
+            value={amountA}
+            onChange={(e) => {
+              const v = sanitizeAmount(e.target.value);
+              if (v === null) return;
+              setAmountA(v);
+              const n = parseFloat(v);
+              if (!isNaN(n) && !isNaN(rateNum) && rateNum > 0) {
+                setAmountB((n * rateNum).toFixed(2));
+              }
+            }}
+            onBlur={() => {
+              const n = parseFloat(amountA);
+              if (!isNaN(n)) setAmountA(n.toFixed(2));
+            }}
+            slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+          />
+
+          <Divider>
+            <SwapVertIcon fontSize="small" sx={{ color: "text.disabled" }} />
+          </Divider>
+
+          {/* Party B: name box, amount field directly underneath */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "action.hover",
+              borderRadius: 2,
+              px: 2,
+              py: 1.5,
+            }}
+          >
+            <UserAvatar user={partyB} sx={{ width: 32, height: 32 }}>
+              {partyB?.username[0]?.toUpperCase()}
+            </UserAvatar>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                <UserName user={partyB} />
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Gives {currencyB}
+              </Typography>
+            </Box>
+          </Box>
+          <TextField
+            label={`Amount (${currencyB})`}
+            fullWidth
+            value={amountB}
+            onChange={(e) => {
+              const v = sanitizeAmount(e.target.value);
+              if (v === null) return;
+              setAmountB(v);
+              const n = parseFloat(v);
+              if (!isNaN(n) && !isNaN(rateNum) && rateNum > 0) {
+                setAmountA((n / rateNum).toFixed(2));
+              }
+            }}
+            onBlur={() => {
+              const n = parseFloat(amountB);
+              if (!isNaN(n)) setAmountB(n.toFixed(2));
+            }}
+            slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
+          />
+        </Box>
+      )}
+
+      {/* Step 4: Summary */}
+      {step === 3 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ textAlign: "center" }}>
+            Review the exchange before confirming
+          </Typography>
+
+          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+            {/* Party A side */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 2.5, py: 2 }}>
+              <UserAvatar user={partyA} sx={{ width: 40, height: 40 }}>
                 {partyA?.username[0]?.toUpperCase()}
               </UserAvatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   <UserName user={partyA} />
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Gives {currencyA}
+                  Party A
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: "right" }}>
+                <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                  {formatCurrency(amountANum, currencyA)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {currencyA}
                 </Typography>
               </Box>
             </Box>
-            <TextField
-              label={`Amount (${currencyA})`}
-              fullWidth
-              value={amountA}
-              onChange={(e) => {
-                const v = sanitizeAmount(e.target.value);
-                if (v === null) return;
-                setAmountA(v);
-                const n = parseFloat(v);
-                if (!isNaN(n) && !isNaN(rateNum) && rateNum > 0) {
-                  setAmountB((n * rateNum).toFixed(2));
-                }
-              }}
-              onBlur={() => {
-                const n = parseFloat(amountA);
-                if (!isNaN(n)) setAmountA(n.toFixed(2));
-              }}
-              slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-            />
 
             <Divider>
-              <SwapVertIcon fontSize="small" sx={{ color: "text.disabled" }} />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1 }}>
+                <SwapHorizIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+                <Typography variant="caption" color="text.secondary">
+                  {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
+                </Typography>
+              </Box>
             </Divider>
 
-            {/* Party B: name box, amount field directly underneath */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                bgcolor: "action.hover",
-                borderRadius: 2,
-                px: 2,
-                py: 1.5,
-              }}
-            >
-              <UserAvatar user={partyB} sx={{ width: 32, height: 32 }}>
+            {/* Party B side */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 2.5, py: 2 }}>
+              <UserAvatar user={partyB} sx={{ width: 40, height: 40 }}>
                 {partyB?.username[0]?.toUpperCase()}
               </UserAvatar>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   <UserName user={partyB} />
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Gives {currencyB}
+                  Party B
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: "right" }}>
+                <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                  {amountBNum > 0 ? formatCurrency(amountBNum, currencyB) : "—"}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {currencyB}
                 </Typography>
               </Box>
             </Box>
-            <TextField
-              label={`Amount (${currencyB})`}
-              fullWidth
-              value={amountB}
-              onChange={(e) => {
-                const v = sanitizeAmount(e.target.value);
-                if (v === null) return;
-                setAmountB(v);
-                const n = parseFloat(v);
-                if (!isNaN(n) && !isNaN(rateNum) && rateNum > 0) {
-                  setAmountA((n / rateNum).toFixed(2));
-                }
-              }}
-              onBlur={() => {
-                const n = parseFloat(amountB);
-                if (!isNaN(n)) setAmountB(n.toFixed(2));
-              }}
-              slotProps={{ htmlInput: { inputMode: "decimal" }, inputLabel: { shrink: true } }}
-            />
-          </Box>
-        )}
+          </Paper>
 
-        {/* Step 4: Summary */}
-        {step === 3 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ textAlign: "center" }}>
-              Review the exchange before confirming
+          {/* What each party owes */}
+          <Paper variant="outlined" sx={{ px: 2, py: 1, borderRadius: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+              Settlement
             </Typography>
-
-            <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-              {/* Party A side */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 2.5, py: 2 }}>
-                <UserAvatar user={partyA} sx={{ width: 40, height: 40 }}>
-                  {partyA?.username[0]?.toUpperCase()}
-                </UserAvatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    <UserName user={partyA} />
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Party A
-                  </Typography>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+              <Typography variant="caption" color="text.secondary">
+                <strong>
+                  <UserName user={partyA} />
+                </strong>{" "}
+                owes{" "}
+                <strong>
+                  <UserName user={partyB} />
+                </strong>{" "}
+                <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
+                  {formatCurrency(amountANum, currencyA)}
                 </Box>
-                <Box sx={{ textAlign: "right" }}>
-                  <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                    {formatCurrency(amountANum, currencyA)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {currencyA}
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Divider>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1 }}>
-                  <SwapHorizIcon sx={{ fontSize: 16, color: "text.disabled" }} />
-                  <Typography variant="caption" color="text.secondary">
-                    {formatRate(currencyA, currencyB, rateNum, preferred, defaultCurrency ?? "CAD")}
-                  </Typography>
-                </Box>
-              </Divider>
-
-              {/* Party B side */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2, px: 2.5, py: 2 }}>
-                <UserAvatar user={partyB} sx={{ width: 40, height: 40 }}>
-                  {partyB?.username[0]?.toUpperCase()}
-                </UserAvatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    <UserName user={partyB} />
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Party B
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: "right" }}>
-                  <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                    {amountBNum > 0 ? formatCurrency(amountBNum, currencyB) : "—"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {currencyB}
-                  </Typography>
-                </Box>
-              </Box>
-            </Paper>
-
-            {/* What each party owes */}
-            <Paper variant="outlined" sx={{ px: 2, py: 1, borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                Settlement
               </Typography>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+              {amountBNum > 0 && (
                 <Typography variant="caption" color="text.secondary">
                   <strong>
-                    <UserName user={partyA} />
+                    <UserName user={partyB} />
                   </strong>{" "}
                   owes{" "}
                   <strong>
-                    <UserName user={partyB} />
+                    <UserName user={partyA} />
                   </strong>{" "}
                   <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
-                    {formatCurrency(amountANum, currencyA)}
+                    {formatCurrency(amountBNum, currencyB)}
                   </Box>
                 </Typography>
-                {amountBNum > 0 && (
-                  <Typography variant="caption" color="text.secondary">
-                    <strong>
-                      <UserName user={partyB} />
-                    </strong>{" "}
-                    owes{" "}
-                    <strong>
-                      <UserName user={partyA} />
-                    </strong>{" "}
-                    <Box component="span" sx={{ color: "common.white", fontWeight: 700 }}>
-                      {formatCurrency(amountBNum, currencyB)}
-                    </Box>
-                  </Typography>
-                )}
-              </Box>
-            </Paper>
+              )}
+            </Box>
+          </Paper>
 
-            <TextField
-              label="Note (optional)"
-              fullWidth
-              size="small"
-              multiline
-              rows={2}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              inputProps={{ maxLength: 500 }}
-            />
-          </Box>
-        )}
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, display: "flex", justifyContent: "space-between" }}>
-        <Button
-          variant="outlined"
-          sx={{ visibility: step === 0 ? "hidden" : "visible" }}
-          onClick={() => setStep((s) => s - 1)}
-        >
-          Back
-        </Button>
-
-        {step < 3 ? (
-          <Button variant="contained" disabled={!stepValid} onClick={() => setStep((s) => s + 1)}>
-            Next
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            startIcon={<CheckIcon />}
-            disabled={!isValid || isAddingExchange}
-            loading={isAddingExchange}
-            onClick={handleCreate}
-          >
-            Record Exchange
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
+          <TextField
+            label="Note (optional)"
+            fullWidth
+            size="small"
+            multiline
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            inputProps={{ maxLength: 500 }}
+          />
+        </Box>
+      )}
+    </ResponsiveDialog>
   );
 }

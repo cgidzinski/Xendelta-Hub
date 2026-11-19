@@ -23,6 +23,7 @@ import {
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
@@ -34,7 +35,7 @@ import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
-import { useSnackbar } from "notistack";
+import { closeSnackbar, useSnackbar } from "notistack";
 import type { NoteType } from "@shared/xennote/notes";
 import { normalizeTitle } from "@shared/xennote/wikiLinks";
 import { matchesKind, type NoteKind } from "./noteDraft";
@@ -55,12 +56,15 @@ import {
   useXenNoteCounts,
   useXenNoteLabels,
   useXenNotebooks,
+  useXenNoteTrashActions,
   useXenNotes,
 } from "../../../hooks/xennote/useXenNote";
 import type { NoteFilters, XenNote as Note } from "../../../types/XenNote";
 import { NOTE_SORTS, isNoteSort, sortNotes, type NoteSort } from "./noteSort";
 import NoteCard from "./components/NoteCard";
 import NoteEditor from "./components/NoteEditor";
+import NoteTrash from "./components/NoteTrash";
+import NoteBulkBar from "./components/NoteBulkBar";
 import NoteRail, { type Scope } from "./components/NoteRail";
 import NotebookDialog from "./components/NotebookDialog";
 
@@ -79,7 +83,8 @@ const ROLE_LABEL = { owner: "Owner", editor: "Editor", viewer: "Viewer" } as con
 export default function XenNote() {
   useTitle("XenNote");
   const { enqueueSnackbar } = useSnackbar();
-  const { updateNote, deleteNote } = useXenNoteActions();
+  const { updateNote, deleteNote, bulkUpdateNotes, bulkDeleteNotes } = useXenNoteActions();
+  const { restore } = useXenNoteTrashActions();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const theme = useTheme();
@@ -92,6 +97,9 @@ export default function XenNote() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useLocalStorageState<NoteSort>("xennote_sort", "edited", isNoteSort);
   const [railOpen, setRailOpen] = useState(false);
+  // Choosing several notes to change or trash together.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const q = useDeferredValue(search);
 
   const [editor, setEditor] = useState<{ note: Note | null; startType?: NoteType } | null>(null);
@@ -121,7 +129,7 @@ export default function XenNote() {
   }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
 
   const filters: NoteFilters = {
-    notebook: scope === "all" || scope === "archive" ? undefined : scope,
+    notebook: scope === "all" || scope === "archive" || scope === "trash" ? undefined : scope,
     archived: scope === "archive",
     label: label ?? undefined,
     q,
@@ -153,6 +161,35 @@ export default function XenNote() {
     return shown && sortNotes(shown, sort);
   }, [allNotes, typeFilter, sort]);
   const openBook = notebooks.find((b) => b._id === scope) ?? null;
+  // What is ticked belongs to the view it was ticked in; a new view, search or filter starts again.
+  const viewKey = `${scope}|${label ?? ""}|${typeFilter}|${q}`;
+  useEffect(() => setSelectedIds([]), [viewKey]);
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelectedIds([]);
+  };
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const editableShown = (notes ?? []).filter((n) => n.can_edit);
+  const countLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "note" : "notes"}`;
+  const bulk = async (run: () => Promise<{ updated?: number; deleted?: number; skipped: number }>, done: string) => {
+    try {
+      const r = await run();
+      const skipped = r.skipped > 0 ? ` (${r.skipped} you can't edit left alone)` : "";
+      enqueueSnackbar(`${done}${skipped}`, { variant: "success" });
+      setSelectedIds([]);
+    } catch (e) {
+      enqueueSnackbar((e as Error).message || "Couldn't change those notes", { variant: "error" });
+    }
+  };
+  const bulkDelete = async () => {
+    const ok = await confirm({
+      title: `Move ${countLabel} to the Trash?`,
+      message: "They disappear for everyone who can see them. You can bring them back from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
+    });
+    if (ok) await bulk(() => bulkDeleteNotes.mutateAsync(selectedIds), `${countLabel} moved to Trash`);
+  };
   const pinned = useMemo(() => (notes ?? []).filter((n) => n.pinned), [notes]);
   const others = useMemo(() => (notes ?? []).filter((n) => !n.pinned), [notes]);
 
@@ -181,14 +218,31 @@ export default function XenNote() {
 
   const removeNote = async (note: Note) => {
     const ok = await confirm({
-      title: "Delete this note?",
-      message: "It's deleted for everyone who can see it, and can't be brought back.",
-      confirmLabel: "Delete note",
+      title: "Move this note to the Trash?",
+      message: "It disappears for everyone who can see it. You can bring it back from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     try {
       await deleteNote.mutateAsync(note._id);
-      enqueueSnackbar("Note deleted", { variant: "success" });
+      enqueueSnackbar("Note moved to Trash", {
+        variant: "success",
+        action: (key) => (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              closeSnackbar(key);
+              restore.mutate(note._id, {
+                onError: (e) =>
+                  enqueueSnackbar((e as Error).message || "Couldn't restore the note", { variant: "error" }),
+              });
+            }}
+          >
+            Undo
+          </Button>
+        ),
+      });
     } catch (e) {
       enqueueSnackbar((e as Error).message || "Couldn't delete the note", { variant: "error" });
     }
@@ -208,6 +262,8 @@ export default function XenNote() {
           onDelete={() => removeNote(n)}
           resolveTitle={resolveTitle}
           onOpenLinked={openNoteById}
+          selected={selecting ? selectedIds.includes(n._id) : undefined}
+          onSelect={() => toggleSelected(n._id)}
         />
       ))}
     </Box>
@@ -217,7 +273,7 @@ export default function XenNote() {
   const empty = !!notes && notes.length === 0;
   const startNotebookId =
     openBook && (openBook.my_role === "owner" || openBook.my_role === "editor") ? openBook._id : null;
-  const canWrite = scope !== "archive" && (!openBook || !!startNotebookId);
+  const canWrite = scope !== "archive" && scope !== "trash" && (!openBook || !!startNotebookId);
 
   const pickScope = (next: Scope) => {
     setScope(next);
@@ -291,7 +347,9 @@ export default function XenNote() {
                     ? "My notes"
                     : scope === "archive"
                       ? "Archive"
-                      : (openBook?.name ?? "Notes")
+                      : scope === "trash"
+                        ? "Trash"
+                        : (openBook?.name ?? "Notes")
               }
               actions={
                 <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
@@ -300,6 +358,8 @@ export default function XenNote() {
               }
             />
           )}
+
+          {scope === "trash" && <NoteTrash />}
 
           {openBook && (
             <Box
@@ -374,39 +434,55 @@ export default function XenNote() {
             </Box>
           )}
 
-          <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
-            <TextField
-              fullWidth
-              placeholder="Search notes, lists and links"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  sx: { borderRadius: 3, height: 44 },
-                },
-              }}
-              sx={{ flex: 1, minWidth: 0 }}
-            />
-            <TextField
-              select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as NoteSort)}
-              aria-label="Sort notes"
-              slotProps={{ input: { sx: { borderRadius: 3, height: 44 } } }}
-              sx={{ width: { xs: 130, sm: 160 } }}
-            >
-              {NOTE_SORTS.map((s) => (
-                <MenuItem key={s.value} value={s.value}>
-                  {s.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
+          {scope !== "trash" && (
+            <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
+              <TextField
+                fullWidth
+                placeholder="Search notes, lists and links"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    sx: { borderRadius: 3, height: 44 },
+                  },
+                }}
+                sx={{ flex: 1, minWidth: 0 }}
+              />
+              <TextField
+                select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as NoteSort)}
+                aria-label="Sort notes"
+                slotProps={{ input: { sx: { borderRadius: 3, height: 44 } } }}
+                sx={{ width: { xs: 130, sm: 160 } }}
+              >
+                {NOTE_SORTS.map((s) => (
+                  <MenuItem key={s.value} value={s.value}>
+                    {s.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Tooltip title={selecting ? "Stop selecting" : "Select notes to change together"}>
+                <span>
+                  <IconButton
+                    aria-label="Select notes"
+                    aria-pressed={selecting}
+                    color={selecting ? "primary" : "default"}
+                    disabled={!notes || notes.length === 0}
+                    onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                    sx={{ height: 44, width: 44 }}
+                  >
+                    <ChecklistIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+          )}
 
           {canWrite && !phone && !openBook && (
             <Card
@@ -476,7 +552,38 @@ export default function XenNote() {
             </Box>
           )}
 
-          {isLoading && !notes ? (
+          {selecting && scope !== "trash" && (
+            <NoteBulkBar
+              count={selectedIds.length}
+              inArchive={scope === "archive"}
+              busy={bulkUpdateNotes.isPending || bulkDeleteNotes.isPending}
+              notebooks={notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor")}
+              labels={labels.map((l) => l.name)}
+              onSelectAll={() => setSelectedIds(editableShown.map((n) => n._id))}
+              onArchive={(archived) =>
+                bulk(
+                  () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, archived: !archived }),
+                  `${countLabel} ${archived ? "unarchived" : "archived"}`,
+                )
+              }
+              onColor={(color) =>
+                bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, color }), `${countLabel} recoloured`)
+              }
+              onAddLabel={(l) =>
+                bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, add_label: l }), `Labelled ${countLabel}`)
+              }
+              onMove={(notebookId) =>
+                bulk(
+                  () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, notebook_id: notebookId }),
+                  `Moved ${countLabel}`,
+                )
+              }
+              onDelete={bulkDelete}
+              onDone={stopSelecting}
+            />
+          )}
+
+          {scope === "trash" ? null : isLoading && !notes ? (
             <ListSkeleton rows={4} height={96} gap={2} />
           ) : isError ? (
             <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />

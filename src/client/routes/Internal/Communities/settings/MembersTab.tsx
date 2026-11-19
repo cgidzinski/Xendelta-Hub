@@ -28,6 +28,7 @@ import { canManageRoleClient, rankOf } from "../../../../utils/communityRoles";
 import { roleTextColor } from "../communityUi";
 import InvitePeopleDialog from "./InvitePeopleDialog";
 import UserAvatar from "../../../../components/user/UserAvatar";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 
 const failure = (e: any, fallback: string) => e?.response?.data?.message || e?.message || fallback;
 const joined = (iso: string) =>
@@ -252,11 +253,7 @@ export default function MembersTab({ community }: { community: Community }) {
       )}
 
       <Menu anchorEl={menu?.anchor} open={!!menu} onClose={closeMenu}>
-        {canEditRoles && manageableRoles.length > 0 && (
-          <Typography variant="overline" color="text.secondary" sx={{ px: 2, display: "block" }}>
-            Roles
-          </Typography>
-        )}
+        {canEditRoles && manageableRoles.length > 0 && <SectionLabel sx={{ px: 2 }}>Roles</SectionLabel>}
         {canEditRoles &&
           manageableRoles.map((role) => (
             <MenuItem key={role._id} dense onClick={() => setRole(role._id)} disabled={admin.setMemberRoles.isPending}>

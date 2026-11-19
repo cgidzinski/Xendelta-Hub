@@ -1,18 +1,5 @@
 import { useState } from "react";
-import {
-  Box,
-  Button,
-  Card,
-  CardActionArea,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  TextField,
-  Typography,
-  AvatarGroup,
-} from "@mui/material";
+import { Box, Button, Card, CardActionArea, Stack, TextField, Typography, AvatarGroup } from "@mui/material";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import AddIcon from "@mui/icons-material/Add";
 import { format } from "date-fns";
@@ -26,6 +13,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import { cardSx } from "../../../components/ui/surfaceStyles";
 import EmptyState from "../../../components/ui/EmptyState";
 import UserAvatar from "../../../components/user/UserAvatar";
+import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
 
 export default function BooksList() {
   useTitle("XenBudget");
@@ -105,29 +93,33 @@ export default function BooksList() {
         </Stack>
       )}
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>New book</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            fullWidth
-            margin="dense"
-            label="Name"
-            placeholder="Household 2026"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && name.trim()) handleCreate();
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={!name.trim() || isCreating} onClick={handleCreate}>
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        maxWidth="xs"
+        title="New book"
+        actions={
+          <>
+            <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="contained" disabled={!name.trim() || isCreating} onClick={handleCreate}>
+              Create
+            </Button>
+          </>
+        }
+      >
+        <TextField
+          autoFocus
+          fullWidth
+          margin="dense"
+          label="Name"
+          placeholder="Household 2026"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && name.trim()) handleCreate();
+          }}
+        />
+      </ResponsiveDialog>
     </Box>
   );
 }

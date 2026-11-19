@@ -57,6 +57,19 @@ export interface XenNoteCounts {
   all: number;
   mine: number;
   archived: number;
+  /** Notes this person deleted that are still in the Trash. */
+  trash: number;
+}
+
+/** A note in the Trash: enough to recognise it, and when it goes for good. */
+export interface TrashedXenNote {
+  _id: string;
+  type: "text" | "checklist" | "image" | "link";
+  title: string;
+  preview: string;
+  color: string;
+  deleted_at: string;
+  purge_at: string;
 }
 
 /** What a public link shows: no owner, no sharing details. */
@@ -95,4 +108,27 @@ export interface NoteFilters {
   archived?: boolean;
   label?: string;
   q?: string;
+}
+
+/** One earlier version of a note, as listed in its history. */
+export interface XenNoteVersionSummary {
+  _id: string;
+  /** When the note last stood like this. */
+  at: string;
+  by_name: string | null;
+  type: "text" | "checklist" | "image" | "link";
+  title: string;
+  preview: string;
+}
+
+/** An earlier version in full, to read before putting it back. */
+export interface XenNoteVersionFull {
+  _id: string;
+  at: string;
+  by_name: string | null;
+  type: "text" | "checklist" | "image" | "link";
+  title: string;
+  body: string;
+  checklist: Array<{ text: string; done: boolean }>;
+  link: { url: string; title: string; description: string };
 }

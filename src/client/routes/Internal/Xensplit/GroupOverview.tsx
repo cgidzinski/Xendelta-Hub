@@ -23,6 +23,7 @@ import {
   saveSortMode,
   type SortField,
 } from "./components/activitySort";
+import { clickableRowProps } from "../../../utils/keyboard";
 
 // `date` is the transaction date, `added` is when the row was entered. Both travel with
 // the item so the comparator and the day-header key never re-derive them per type.
@@ -200,7 +201,7 @@ export default function GroupOverview() {
     return (
       <Box
         key={`s-${dateKey}-${idx}`}
-        onClick={() => setViewSettlement(s)}
+        {...clickableRowProps(() => setViewSettlement(s))}
         sx={{
           ...xsCardSx,
           display: "grid",

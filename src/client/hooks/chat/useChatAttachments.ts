@@ -23,10 +23,7 @@ export interface PendingAttachment {
   signal?: UploadSignal;
 }
 
-const errorText = (e: any) =>
-  e?.response?.status === 403
-    ? "Not enough storage. Free up space or get more."
-    : e?.response?.data?.message || e?.message || "Upload failed";
+const errorText = (e: any) => e?.response?.data?.message || e?.message || "Upload failed";
 
 /**
  * The files being attached to the message in progress. Uploads go to XenDrive tagged as chat files (so they count

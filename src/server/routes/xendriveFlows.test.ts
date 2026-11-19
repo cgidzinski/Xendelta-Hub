@@ -139,12 +139,14 @@ describe("deleting", () => {
     expect(left.files.map((f: any) => f._id)).toEqual([keep.id]);
   });
 
-  it("deletes a single file and its bytes", async () => {
+  it("moves a single file to the Trash, and deletes its bytes when it is removed from there", async () => {
     const me = await createUser();
     const file = await addFile(me, "x.txt", null);
     expect((await api(me).del(`/files/${file.id}`)).status).toBe(200);
-    expect(removed).toContain(`xendrive/${me.user._id}/x.txt-stored`);
+    expect(removed).toEqual([]);
     expect((await api(me).get(`/files/${file.id}`)).status).toBe(404);
+    expect((await api(me).del(`/trash/${file.id}`)).status).toBe(200);
+    expect(removed).toContain(`xendrive/${me.user._id}/x.txt-stored`);
   });
 });
 

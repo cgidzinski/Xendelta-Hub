@@ -612,6 +612,7 @@ module.exports = function (app: any) {
       await Promise.all(
         added.map((id: string) =>
           notify(id, {
+            app: "xenkitchen",
             title: "Recipe book shared with you",
             message: `${callerName(req)} added you to "${book.name}" as ${role === "viewer" ? "a viewer" : "an editor"}.`,
             link: `/internal/xenkitchen?book=${book._id}`,

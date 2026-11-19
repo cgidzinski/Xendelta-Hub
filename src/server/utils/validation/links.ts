@@ -29,7 +29,9 @@ const linkFields = {
 };
 
 export const xenLinkCreateSchema = z.object(linkFields);
-export const xenLinkUpdateSchema = z.object({ _id: objectIdSchema, ...linkFields });
+// `paused` leaves the link in place but switched off; leave it out to keep it as it is.
+export const xenLinkUpdateSchema = z.object({ _id: objectIdSchema, ...linkFields, paused: z.boolean().optional() });
+export const xenLinkDeleteManySchema = z.object({ ids: z.array(objectIdSchema).min(1).max(200) });
 export const xenLinkIdParamSchema = z.object({ linkId: objectIdSchema });
 // Slugs are random strings, counters (older links) or a name the owner chose.
 export const xenLinkSlugParamSchema = z.object({ slug: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "Invalid slug") });

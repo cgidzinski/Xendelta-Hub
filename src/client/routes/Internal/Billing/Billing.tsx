@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button, Stack, Typography } from "@mui/material";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
@@ -33,33 +33,32 @@ export default function Billing() {
       {isLoading && <ListSkeleton rows={4} height={96} />}
       {error && <ErrorDisplay error={error as Error} title="Couldn't load your bill" />}
       {data && (
-        <BillingView
-          overview={data}
-          paidFrom="your gems"
-          balanceCard={
-            <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
-              <SectionLabel>Your gems</SectionLabel>
-              <GemAmount amount={data.balance} variant="h5" iconSize={26} />
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                {coverageText(data)}
-              </Typography>
-              <Button variant="contained" size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/internal/shop")}>
-                Get gems
-              </Button>
-            </Box>
-          }
-        />
-      )}
-      {data && (
-        <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
-          <SectionLabel>Storage</SectionLabel>
-          <Typography variant="body2" color="text.secondary">
-            See which apps use your space, and free it up.
-          </Typography>
-          <Button variant="outlined" size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/internal/storage")}>
-            See where your storage is used
-          </Button>
-        </Box>
+        <Stack spacing={2.5}>
+          <BillingView
+            overview={data}
+            balanceCard={
+              <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
+                <SectionLabel>Your gems</SectionLabel>
+                <GemAmount amount={data.balance} variant="h5" iconSize={26} />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {coverageText(data)}
+                </Typography>
+                <Button variant="contained" size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/internal/shop")}>
+                  Get gems
+                </Button>
+              </Box>
+            }
+          />
+          <Box component="section" sx={{ ...cardSx, p: 2.5 }}>
+            <SectionLabel>Storage</SectionLabel>
+            <Typography variant="body2" color="text.secondary">
+              See the files your apps keep for you and how much space they use.
+            </Typography>
+            <Button variant="outlined" size="small" sx={{ mt: 1.5 }} onClick={() => navigate("/internal/storage")}>
+              See stored files
+            </Button>
+          </Box>
+        </Stack>
       )}
     </PageContainer>
   );

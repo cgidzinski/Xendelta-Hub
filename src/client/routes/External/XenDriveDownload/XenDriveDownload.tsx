@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import LockIcon from "@mui/icons-material/Lock";
+import { startPublicDownload } from "../../../utils/publicDownload";
 import { useTitle } from "../../../hooks/useTitle";
 import { formatDistanceToNow } from "date-fns";
 import { formatFileSize } from "../../../utils/fileUtils";
@@ -87,78 +88,22 @@ export default function XenDriveDownload() {
     }
   };
 
-  const handleDownload = async (skipCheck = false) => {
+  const handleDownload = async () => {
     if (!shareToken) return;
-
-    if (!skipCheck) {
-      setIsDownloading(true);
-    }
+    setIsDownloading(true);
     setError(null);
-
-    const url = `/api/xendrive/download/${shareToken}${password ? `?password=${encodeURIComponent(password)}` : ""}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-    });
-
-    // Check if response is JSON (error) or file stream
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.includes("application/json")) {
-      // It's an error response
-      const data = await response.json();
-
-      if (response.status === 401) {
-        setError(data.message || "Incorrect password");
-        setIsDownloading(false);
-        setIsLoading(false);
-        return;
-      }
-
-      if (response.status === 403) {
-        setError(data.message || "Link expired");
-        setIsDownloading(false);
-        setIsLoading(false);
-        return;
-      }
-
-      setError(data.message || "Failed to download file");
+    try {
+      await startPublicDownload(
+        `/api/xendrive/download/${shareToken}/ticket`,
+        `/api/xendrive/download/${shareToken}`,
+        password || undefined,
+      );
+    } catch (e) {
+      setError((e as Error).message || "Failed to download file");
+    } finally {
+      // The browser takes over from here (or there is an error to show); the page itself never left.
       setIsDownloading(false);
-      setIsLoading(false);
-      return;
     }
-
-    // It's a file stream
-    if (!response.ok) {
-      setError("Failed to download file");
-      setIsDownloading(false);
-      setIsLoading(false);
-      return;
-    }
-
-    // Get filename from Content-Disposition header or use default
-    const contentDisposition = response.headers.get("Content-Disposition");
-    let filename = "download";
-    if (contentDisposition) {
-      // The server sends the name RFC 5987-encoded (filename*=UTF-8''...) so any name survives
-      const encoded = contentDisposition.match(/filename*=UTF-8''([^;]+)/i);
-      const plain = contentDisposition.match(/filename="?([^";]+)"?/);
-      if (encoded) filename = decodeURIComponent(encoded[1]);
-      else if (plain) filename = plain[1];
-    }
-
-    // Create blob and download
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
-
-    setIsDownloading(false);
-    setIsLoading(false);
   };
 
   if (isLoading) {

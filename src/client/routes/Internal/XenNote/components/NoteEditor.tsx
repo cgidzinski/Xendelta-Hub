@@ -1,7 +1,6 @@
 import { alpha } from "@mui/material/styles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -14,7 +13,6 @@ import {
   ListItemIcon,
   Menu,
   MenuItem,
-  Popover,
   Stack,
   TextField,
   ToggleButton,
@@ -36,7 +34,6 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
 import LinkIcon from "@mui/icons-material/Link";
@@ -48,15 +45,16 @@ import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { useSnackbar } from "notistack";
-import { NOTE_COLORS, isSafeUrl, type NoteType } from "@shared/xennote/notes";
-import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
+import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
-import { noteShareUrl, useXenNoteActions, useXenNoteBacklinks } from "../../../../hooks/xennote/useXenNote";
+import { useXenNoteActions, useXenNoteBacklinks } from "../../../../hooks/xennote/useXenNote";
 import { completeWikiLink, normalizeTitle, openWikiLink } from "@shared/xennote/wikiLinks";
 import type { XenNote, XenNotebook } from "../../../../types/XenNote";
-import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
+import { noteSurfaceSx } from "../noteColors";
 import NoteMarkdown from "./NoteMarkdown";
 import NoteReminderMenu from "./NoteReminderMenu";
+import NoteHistoryDialog from "./NoteHistoryDialog";
+import HistoryIcon from "@mui/icons-material/History";
 import {
   changeType,
   draftFromNote,
@@ -68,6 +66,10 @@ import {
   toInput,
   type NoteDraft,
 } from "../noteDraft";
+import NoteColorPopover from "./NoteColorPopover";
+import NoteLabelPopover from "./NoteLabelPopover";
+import NoteNotebookMenu from "./NoteNotebookMenu";
+import NoteShareDialog from "./NoteShareDialog";
 
 const AUTOSAVE_MS = 800;
 
@@ -140,6 +142,7 @@ export default function NoteEditor({
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [reminderAnchor, setReminderAnchor] = useState<HTMLElement | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   // What the server holds for this note right now (photos and the link change it outside the draft).
   const [live, setLive] = useState<XenNote | null>(note);
@@ -268,9 +271,9 @@ export default function NoteEditor({
   const remove = async () => {
     if (!live) return onClose();
     const ok = await confirm({
-      title: "Delete this note?",
-      message: "It's deleted for everyone who can see it, and can't be brought back.",
-      confirmLabel: "Delete note",
+      title: "Move this note to the Trash?",
+      message: "It disappears for everyone who can see it. You can bring it back from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     try {
@@ -317,7 +320,6 @@ export default function NoteEditor({
   const updateItem = (i: number, patch: Partial<NoteDraft["checklist"][number]>) =>
     set({ checklist: draft.checklist.map((item, idx) => (idx === i ? { ...item, ...patch } : item)) });
 
-  const colorOpen = !!colorAnchor;
   // The writing area reads as a field: a soft inset with a border, tall enough not to feel cramped.
   const fieldSx = {
     bgcolor: alpha(theme.palette.text.primary, 0.05),
@@ -857,81 +859,34 @@ export default function NoteEditor({
         </Box>
       </Dialog>
 
-      <Popover
-        open={colorOpen}
-        anchorEl={colorAnchor}
+      <NoteColorPopover
+        anchor={colorAnchor}
+        value={draft.color}
+        onPick={(color) => {
+          set({ color });
+          setColorAnchor(null);
+        }}
         onClose={() => setColorAnchor(null)}
-        anchorOrigin={{ vertical: "top", horizontal: "left" }}
-        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        <Box sx={{ display: "flex", gap: 1, p: 1.5 }} role="group" aria-label="Note colour">
-          {NOTE_COLORS.map((c) => {
-            const main = swatchColor(theme, c);
-            return (
-              <IconButton
-                key={c}
-                size="small"
-                aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
-                aria-pressed={draft.color === c}
-                onClick={() => {
-                  set({ color: c });
-                  setColorAnchor(null);
-                }}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  bgcolor: main ?? "background.paper",
-                  border: 2,
-                  borderColor: draft.color === c ? "text.primary" : "divider",
-                }}
-              />
-            );
-          })}
-        </Box>
-      </Popover>
+      />
 
-      <Popover
-        open={!!labelAnchor}
-        anchorEl={labelAnchor}
+      <NoteLabelPopover
+        anchor={labelAnchor}
+        options={labelSuggestions}
+        value={draft.labels}
+        onChange={(labels) => set({ labels })}
         onClose={() => setLabelAnchor(null)}
-        anchorOrigin={{ vertical: "top", horizontal: "left" }}
-        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
-      >
-        <Box sx={{ p: 1.5, width: 280 }}>
-          <Autocomplete
-            multiple
-            freeSolo
-            size="small"
-            options={labelSuggestions}
-            value={draft.labels}
-            onChange={(_, v) => set({ labels: v as string[] })}
-            renderTags={() => null}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                autoFocus
-                placeholder="Add a label"
-                slotProps={{ htmlInput: { ...params.inputProps, "aria-label": "Add a label" } }}
-              />
-            )}
-          />
-        </Box>
-      </Popover>
+      />
 
-      <Menu anchorEl={bookAnchor} open={!!bookAnchor} onClose={() => setBookAnchor(null)}>
-        {[{ _id: "", name: "Private (only me)" }, ...writableNotebooks].map((b) => (
-          <MenuItem
-            key={b._id}
-            selected={(draft.notebook_id ?? "") === b._id}
-            onClick={() => {
-              set({ notebook_id: b._id || null });
-              setBookAnchor(null);
-            }}
-          >
-            {b.name}
-          </MenuItem>
-        ))}
-      </Menu>
+      <NoteNotebookMenu
+        anchor={bookAnchor}
+        notebooks={writableNotebooks}
+        value={draft.notebook_id}
+        onPick={(notebookId) => {
+          set({ notebook_id: notebookId });
+          setBookAnchor(null);
+        }}
+        onClose={() => setBookAnchor(null)}
+      />
 
       <Menu anchorEl={moreAnchor} open={!!moreAnchor} onClose={() => setMoreAnchor(null)}>
         <MenuItem
@@ -970,6 +925,18 @@ export default function NoteEditor({
           Public link
         </MenuItem>
         <MenuItem
+          sx={{ display: live ? "flex" : "none" }}
+          onClick={() => {
+            setMoreAnchor(null);
+            setHistoryOpen(true);
+          }}
+        >
+          <ListItemIcon>
+            <HistoryIcon fontSize="small" />
+          </ListItemIcon>
+          History
+        </MenuItem>
+        <MenuItem
           onClick={() => {
             setMoreAnchor(null);
             remove();
@@ -983,6 +950,18 @@ export default function NoteEditor({
         </MenuItem>
       </Menu>
 
+      <NoteHistoryDialog
+        open={historyOpen}
+        noteId={live?._id ?? null}
+        canRestore={!readOnly}
+        onClose={() => setHistoryOpen(false)}
+        // The note is different now, so the editor closes and the board shows it as it stands.
+        onRestored={() => {
+          setHistoryOpen(false);
+          onClose();
+        }}
+      />
+
       <NoteReminderMenu
         anchor={reminderAnchor}
         onClose={() => setReminderAnchor(null)}
@@ -990,42 +969,7 @@ export default function NoteEditor({
         onSet={setReminder}
       />
 
-      <ResponsiveDialog open={shareOpen} onClose={() => setShareOpen(false)} maxWidth="xs" title="Public link">
-        {shareToken ? (
-          <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-            <TextField
-              size="small"
-              value={noteShareUrl(shareToken)}
-              slotProps={{ input: { readOnly: true } }}
-              sx={{ flex: 1, minWidth: 200 }}
-            />
-            <IconButton
-              aria-label="Copy link"
-              onClick={() => {
-                navigator.clipboard.writeText(noteShareUrl(shareToken));
-                enqueueSnackbar("Link copied", { variant: "success" });
-              }}
-            >
-              <ContentCopyIcon />
-            </IconButton>
-            <Button size="small" onClick={() => shareAction("rotate")}>
-              New link
-            </Button>
-            <Button size="small" color="error" onClick={() => shareAction("disable")}>
-              Stop sharing
-            </Button>
-          </Box>
-        ) : (
-          <Box>
-            <Button variant="outlined" onClick={() => shareAction("enable")}>
-              Create link
-            </Button>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Anyone with the link can read this note.
-            </Typography>
-          </Box>
-        )}
-      </ResponsiveDialog>
+      <NoteShareDialog open={shareOpen} token={shareToken} onClose={() => setShareOpen(false)} onAction={shareAction} />
     </>
   );
 }

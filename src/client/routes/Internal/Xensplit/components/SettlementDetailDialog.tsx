@@ -18,6 +18,7 @@ import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
+import NotificationsActiveOutlinedIcon from "@mui/icons-material/NotificationsActiveOutlined";
 import type {
   EtransferInfo,
   XenSplitSettlement,
@@ -27,6 +28,7 @@ import type {
 import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 import type { Cosmetics } from "@shared/cosmetics";
 import UserName from "../../../../components/user/UserName";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 
 export function PersonStack({
   avatar,
@@ -85,9 +87,20 @@ interface PendingProps {
   userId: string;
   settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isSettling: boolean;
+  /** Remind the person who owes (only offered when the pending payment is owed to you). */
+  onRemind?: (userId: string) => Promise<unknown>;
+  isReminding?: boolean;
 }
 
-export function PendingSettlementDialog({ settlement, onClose, userId, settleDebt, isSettling }: PendingProps) {
+export function PendingSettlementDialog({
+  settlement,
+  onClose,
+  userId,
+  settleDebt,
+  isSettling,
+  onRemind,
+  isReminding,
+}: PendingProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -124,6 +137,15 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
         },
       },
     );
+  };
+
+  const remind = async () => {
+    try {
+      await onRemind?.(s.from);
+      enqueueSnackbar(`Reminder sent to ${s.fromUser.username}`, { variant: "success" });
+    } catch (error) {
+      enqueueSnackbar((error as Error)?.message || "Couldn't send the reminder", { variant: "error" });
+    }
   };
 
   return (
@@ -207,6 +229,22 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
           >
             Confirm Settlement
           </Button>
+        </DialogActions>
+      )}
+      {s.to === userId && onRemind && (
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, flexDirection: "column", alignItems: "stretch", gap: 0.5 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<NotificationsActiveOutlinedIcon />}
+            disabled={isReminding}
+            onClick={remind}
+          >
+            Remind {s.fromUser.username}
+          </Button>
+          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+            Sends them a notification. You can remind each person once a day.
+          </Typography>
         </DialogActions>
       )}
     </Dialog>
@@ -306,20 +344,7 @@ export default function SettlementDetailDialog({
           <EtransferNote etransfer={toMember?.etransfer} settlementCurrency={s.currency} sx={{ mb: 2 }} />
 
           <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display: "block",
-                mb: 0.5,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                fontSize: "0.65rem",
-              }}
-            >
-              Note
-            </Typography>
+            <SectionLabel sx={{ mb: 0.5 }}>Note</SectionLabel>
             {isInvolved ? (
               s.note ? (
                 <Typography variant="body2">{s.note}</Typography>
