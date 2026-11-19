@@ -263,21 +263,7 @@ export default function GroupExpenses() {
       <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pb: { xs: 11, md: 1 } }}>
         {pendingSeries.length > 0 && (
           <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="caption"
-              sx={{
-                px: 0.5,
-                mb: 0.75,
-                display: "block",
-                color: "secondary.main",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                fontSize: "0.65rem",
-              }}
-            >
-              Upcoming Recurring
-            </Typography>
+            <SectionLabel sx={{ px: 0.5, mb: 0.75, color: "secondary.main" }}>Upcoming Recurring</SectionLabel>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {pendingSeries.map((series) => (
                 <Box
@@ -340,21 +326,7 @@ export default function GroupExpenses() {
         )}
         {heldVisible.length > 0 && (
           <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="caption"
-              sx={{
-                px: 0.5,
-                mb: 0.75,
-                display: "block",
-                color: "warning.main",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                fontSize: "0.65rem",
-              }}
-            >
-              Held Expenses
-            </Typography>
+            <SectionLabel sx={{ px: 0.5, mb: 0.75, color: "warning.main" }}>Held Expenses</SectionLabel>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {heldVisible.map((expense) => (
                 <ExpenseListItem

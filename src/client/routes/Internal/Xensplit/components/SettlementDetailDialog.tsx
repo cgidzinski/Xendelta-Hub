@@ -27,6 +27,7 @@ import type {
 import { formatCurrency, sanitizeAmount } from "../../../../utils/currencyUtils";
 import type { Cosmetics } from "@shared/cosmetics";
 import UserName from "../../../../components/user/UserName";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 
 export function PersonStack({
   avatar,
@@ -306,20 +307,7 @@ export default function SettlementDetailDialog({
           <EtransferNote etransfer={toMember?.etransfer} settlementCurrency={s.currency} sx={{ mb: 2 }} />
 
           <Box sx={{ bgcolor: "action.hover", borderRadius: 2, px: 2, py: 1.5 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                display: "block",
-                mb: 0.5,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-                fontSize: "0.65rem",
-              }}
-            >
-              Note
-            </Typography>
+            <SectionLabel sx={{ mb: 0.5 }}>Note</SectionLabel>
             {isInvolved ? (
               s.note ? (
                 <Typography variant="body2">{s.note}</Typography>

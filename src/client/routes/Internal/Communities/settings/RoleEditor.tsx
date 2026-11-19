@@ -14,6 +14,7 @@ import { canGrantClient, canManageRoleClient, rankOf } from "../../../../utils/c
 import { useAuth } from "../../../../contexts/AuthContext";
 import { PERMISSION_INFO, roleTextColor } from "../communityUi";
 import type { Theme } from "@mui/material/styles";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 
 interface Props {
   community: Community;
@@ -168,9 +169,7 @@ export default function RoleEditor({ community, role, onDone }: Props) {
       )}
 
       <Box>
-        <Typography variant="overline" color="text.secondary">
-          Permissions
-        </Typography>
+        <SectionLabel>Permissions</SectionLabel>
         <Box
           sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 1, mt: 0.5 }}
         >
