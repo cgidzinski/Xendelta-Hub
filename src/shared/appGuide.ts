@@ -42,6 +42,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     features: [
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
+      "Jump back into the apps you opened lately from Home.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
       "Start a voice or video call with anyone in a chat or group, and share your screen during it, and pick which microphone or camera to use.",
@@ -209,6 +210,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set a date when a link stops working.",
       "Open a link's QR code to show or print it.",
       "See how many times a link was opened, when it was last opened, and a day-by-day chart.",
+      "Pause a link without deleting it, and turn it back on later.",
+      "Sort your links by age, clicks, name or expiry, and delete several at once.",
       "Edit, search and delete your links.",
     ],
     tips: [
@@ -303,7 +306,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a routine so anyone in it can mark it done.",
       "Postpone a routine by a day, a week or more.",
       "See each routine's history with its notes and photos.",
-      "Pause, edit or delete a routine.",
+      "Pause, edit or delete a routine, or archive one to put it away and keep its history.",
       "Search your routines, filter them by category, and copy one to start a similar one.",
     ],
     tips: [
