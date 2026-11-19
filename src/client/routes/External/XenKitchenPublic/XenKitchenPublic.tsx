@@ -16,6 +16,7 @@ import {
 } from "../../../hooks/xenkitchen/useKitchen";
 import ItemView from "../../Internal/XenKitchen/components/ItemView";
 import { BRAND_NAME } from "@shared/brand";
+import { clickableRowProps } from "../../../utils/keyboard";
 
 /** Read-only page behind /k/:token (one shared item) or /k/b/:token/:itemId (an item in a shared book). Works signed out. */
 export default function XenKitchenPublic() {
@@ -74,7 +75,8 @@ export default function XenKitchenPublic() {
             direction="row"
             alignItems="center"
             spacing={1}
-            onClick={() => navigate("/")}
+            {...clickableRowProps(() => navigate("/"))}
+            aria-label="XenKitchen home"
             sx={{ cursor: "pointer" }}
           >
             <RestaurantMenuIcon color="primary" />

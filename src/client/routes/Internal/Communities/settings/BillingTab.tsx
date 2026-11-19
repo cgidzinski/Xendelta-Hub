@@ -145,7 +145,6 @@ export default function BillingTab({ community }: { community: Community }) {
       </Typography>
       <BillingView
         overview={overview}
-        paidFrom="the fund"
         communityName={community.name}
         balanceCard={
           <Box component="section" sx={{ ...cardSx, p: 2.5 }}>

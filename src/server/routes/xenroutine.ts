@@ -35,6 +35,7 @@ import {
   DEFAULT_REMIND_HOUR,
   effectiveTimezone,
   MAX_HISTORY,
+  UNDO_WINDOW_MS,
   type RoutineLike,
 } from "../utils/xenRoutine";
 import { sendActivityNotices } from "../utils/xenRoutineReminders";
@@ -113,6 +114,7 @@ async function serialize(routines: any[], uid: string) {
       last_done_at: obj.last_done_at,
       due_at: obj.due_at,
       enabled: obj.enabled,
+      archived: !!obj.archived,
       remind_again_days: obj.remind_again_days,
       status: computeDueStatus(obj, now),
       done_ahead_indices: doneAheadIndices(obj),
@@ -127,7 +129,7 @@ async function serialize(routines: any[], uid: string) {
         avatar: byId.get(m.user_id)?.avatar ?? null,
         cosmetics: cosmeticsOf(byId.get(m.user_id)),
       })),
-      history: [...obj.history].reverse().map((h: any) => ({
+      history: [...obj.history].reverse().map(({ undo_state: _undo, ...h }: any) => ({
         ...h,
         // Photos taken when it was marked done; one that has since been deleted from XenDrive is left out.
         ...(h.images
@@ -222,6 +224,11 @@ module.exports = function (app: any) {
       const b = req.body;
       for (const k of ["name", "category", "notes", "interval", "enabled", "remind_again_days"]) {
         if (b[k] !== undefined) routine.set(k, b[k]);
+      }
+      // Archiving also pauses it (so reminders and the feed leave it alone); restoring brings it back running.
+      if (b.archived !== undefined) {
+        routine.set("archived", b.archived);
+        routine.set("enabled", !b.archived);
       }
       if (b.checklist !== undefined) {
         // A step that is still there keeps its tick; a new one starts unticked; a missing one is gone.
@@ -323,6 +330,49 @@ module.exports = function (app: any) {
         // A deliberate refusal (a photo that can't be read) says why; anything else is logged by the global handler.
         throw e;
       }
+    },
+  );
+
+  // Take back the latest "done" (the caller's own, within UNDO_WINDOW_MS, and still the newest thing in the history):
+  // the schedule and ticks go back to how they were, and its photos and history entry are removed.
+  app.post(
+    "/api/xenroutine/routines/:id/undo",
+    validateParams(xenRoutineIdParamSchema),
+    async (req: Request, res: Response) => {
+      const routine = await loadRoutine(req, "act");
+      const last = routine.history[routine.history.length - 1] as any;
+      const undo = last?.undo_state;
+      if (
+        !last ||
+        last.action !== "done" ||
+        !undo ||
+        last.by_user !== callerId(req) ||
+        Date.now() - new Date(last.at).getTime() > UNDO_WINDOW_MS
+      ) {
+        throw new AppError(409, "That can't be undone any more");
+      }
+      const ticked = new Set<string>(undo.checklist_done ?? []);
+      routine.set({
+        last_done_at: undo.last_done_at ?? null,
+        due_at: undo.due_at,
+        last_notified_at: undo.last_notified_at ?? null,
+        done_ahead: undo.done_ahead ?? [],
+        history: routine.history.slice(0, -1),
+      });
+      // The steps that were ticked when it was marked done are ticked again (completing had cleared them all).
+      if (routine.checklist.length > 0 && ticked.size > 0) {
+        routine.set(
+          "checklist",
+          routine.checklist.map((c: any) => ({ _id: c._id, text: c.text, done: ticked.has(String(c._id)) })),
+        );
+      }
+      await routine.save();
+      await removeHistoryPhotos([{ images: last.images }]).catch((e) =>
+        console.error("xenroutine photo cleanup failed:", e),
+      );
+      const [out] = await serialize([routine], callerId(req));
+      routineChanged(routine);
+      return res.json({ status: true, message: "Undone", data: { routine: out } });
     },
   );
 

@@ -23,6 +23,9 @@ import { format } from "date-fns";
 import { useTitle } from "../../../hooks/useTitle";
 import PublicJoinCard from "../components/PublicJoinCard";
 import { usePublicFolder, usePublicFolderInfo } from "../../../hooks/xendrive/useXendrive";
+import { useSnackbar } from "notistack";
+import { startPublicDownload } from "../../../utils/publicDownload";
+import PublicFilePreviewDialog from "./PublicFilePreviewDialog";
 import { formatFileSize } from "../../../utils/fileUtils";
 import FileTypeIcon from "../../Internal/XenDrive/components/FileTypeIcon";
 import { fileKindOf } from "../../Internal/XenDrive/lib/fileKind";
@@ -55,6 +58,7 @@ export default function XenDriveFolderPublic() {
   const [mode, setMode] = useState<Mode>("list");
   const [password, setPassword] = useState(() => readPassword(token));
   const [typed, setTyped] = useState("");
+  const [previewing, setPreviewing] = useState<{ _id: string; name: string } | null>(null);
   const info = usePublicFolderInfo(token);
   // Wait to learn whether there's a password; a folder without one opens straight away.
   const locked = !!info.data?.requiresPassword;
@@ -68,8 +72,22 @@ export default function XenDriveFolderPublic() {
   useTitle(data ? `${data.root.name} - XenDrive` : "Shared folder - XenDrive");
 
   const here = (id: string) => `/xendrive/f/${token}${id === data?.root._id ? "" : `?folder=${id}`}`;
-  const fileHref = (id: string) =>
-    `/api/xendrive/public/folder/${token}/files/${id}${locked && password ? `?password=${encodeURIComponent(password)}` : ""}`;
+  const { enqueueSnackbar } = useSnackbar();
+  // The whole folder (the one shown, and everything beneath it) as one zip.
+  const downloadAll = () =>
+    startPublicDownload(
+      `/api/xendrive/public/folder/${token}/zip/ticket`,
+      `/api/xendrive/public/folder/${token}/zip${folderId ? `?folder=${encodeURIComponent(folderId)}` : ""}`,
+      locked && password ? password : undefined,
+      folderId ? { folder: folderId } : {},
+    ).catch((e: Error) => enqueueSnackbar(e.message || "Couldn't download the folder", { variant: "error" }));
+  // The password goes in a request body for a ticket; the browser then downloads from an address holding only the ticket.
+  const download = (id: string) =>
+    startPublicDownload(
+      `/api/xendrive/public/folder/${token}/files/${id}/ticket`,
+      `/api/xendrive/public/folder/${token}/files/${id}`,
+      locked && password ? password : undefined,
+    ).catch((e: Error) => enqueueSnackbar(e.message || "Couldn't download the file", { variant: "error" }));
 
   const wrongPassword = locked && !!password && isError && (error as Error | null)?.message === "Incorrect password";
   const unlock = (event: FormEvent) => {
@@ -173,6 +191,17 @@ export default function XenDriveFolderPublic() {
               {counts}
             </Typography>
           </Box>
+          {(data.files.length > 0 || data.folders.length > 0) && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadIcon />}
+              onClick={downloadAll}
+              sx={{ flexShrink: 0 }}
+            >
+              Download all
+            </Button>
+          )}
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -256,16 +285,29 @@ export default function XenDriveFolderPublic() {
                 }}
               >
                 <FileTypeIcon mimeType={file.mimeType} />
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography sx={{ fontWeight: 500, wordBreak: "break-word" }}>{file.name}</Typography>
+                <Box
+                  sx={{
+                    minWidth: 0,
+                    flex: 1,
+                    cursor: "pointer",
+                    borderRadius: 1,
+                    "&:hover .file-name": { textDecoration: "underline" },
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Preview ${file.name}`}
+                  onClick={() => setPreviewing(file)}
+                  onKeyDown={(e) => e.key === "Enter" && setPreviewing(file)}
+                >
+                  <Typography className="file-name" sx={{ fontWeight: 500, wordBreak: "break-word" }}>
+                    {file.name}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {formatFileSize(file.size)} · {format(new Date(file.createdAt), "MMM d, yyyy")}
                   </Typography>
                 </Box>
                 <Button
-                  component="a"
-                  href={fileHref(file._id)}
-                  download={file.name}
+                  onClick={() => download(file._id)}
                   startIcon={<DownloadIcon />}
                   variant="outlined"
                   size="small"
@@ -274,9 +316,7 @@ export default function XenDriveFolderPublic() {
                   Download
                 </Button>
                 <IconButton
-                  component="a"
-                  href={fileHref(file._id)}
-                  download={file.name}
+                  onClick={() => download(file._id)}
                   aria-label={`Download ${file.name}`}
                   sx={{ display: { sm: "none" } }}
                 >
@@ -325,12 +365,18 @@ export default function XenDriveFolderPublic() {
                 }}
               >
                 <Box
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Preview ${file.name}`}
+                  onClick={() => setPreviewing(file)}
+                  onKeyDown={(e) => e.key === "Enter" && setPreviewing(file)}
                   sx={{
                     height: 120,
                     bgcolor: "action.hover",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    cursor: "pointer",
                   }}
                 >
                   {(fileKindOf(file.mimeType) === "image" || fileKindOf(file.mimeType) === "video") && file.thumbUrl ? (
@@ -353,9 +399,7 @@ export default function XenDriveFolderPublic() {
                     {formatFileSize(file.size)}
                   </Typography>
                   <Button
-                    component="a"
-                    href={fileHref(file._id)}
-                    download={file.name}
+                    onClick={() => download(file._id)}
                     startIcon={<DownloadIcon />}
                     size="small"
                     fullWidth
@@ -374,6 +418,13 @@ export default function XenDriveFolderPublic() {
           Shared from XenDrive. You can look and download; you can't change anything.
         </Typography>
         <PublicJoinCard app="xendrive" />
+        <PublicFilePreviewDialog
+          token={token ?? ""}
+          file={previewing}
+          password={locked && password ? password : undefined}
+          onClose={() => setPreviewing(null)}
+          onDownload={download}
+        />
       </Container>
     </Box>
   );

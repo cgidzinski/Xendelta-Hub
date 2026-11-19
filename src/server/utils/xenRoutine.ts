@@ -22,6 +22,18 @@ export interface RoutineMember {
   last_due_notified_at?: Date | null;
   lead_notified_for?: Date | null;
 }
+/** How a routine stood just before a completion, kept on the latest "done" so it can be undone for a few minutes. */
+export interface UndoState {
+  last_done_at: Date | null;
+  due_at: Date;
+  last_notified_at: Date | null;
+  done_ahead: Date[];
+  /** The ids of the checklist steps that were ticked. */
+  checklist_done: string[];
+}
+/** How long after marking a routine done that it can still be undone. */
+export const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
 export interface HistoryEntry {
   action: "done" | "postponed";
   at: Date;
@@ -34,6 +46,8 @@ export interface HistoryEntry {
   steps_total?: number;
   /** Photos taken when it was marked done (XenDrive files). */
   images?: Array<{ file_id: unknown; uploaded_by?: string }>;
+  /** Only on the latest completion (older ones are stripped by pushHistory). */
+  undo_state?: UndoState;
 }
 export interface ChecklistStep {
   _id?: unknown;
@@ -95,7 +109,20 @@ export function shouldNotify(routine: RoutineLike, now: Date): boolean {
 }
 
 export function pushHistory(history: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
-  return [...history, entry].slice(-MAX_HISTORY);
+  // Only the newest entry can be undone, so the snapshot on every earlier one is dropped.
+  const earlier = history.map(({ undo_state: _undo, ...rest }) => rest);
+  return [...earlier, entry].slice(-MAX_HISTORY);
+}
+
+/** The snapshot to keep with a completion: how the routine stands now, before it is applied. */
+export function undoStateOf(routine: RoutineLike): UndoState {
+  return {
+    last_done_at: routine.last_done_at,
+    due_at: routine.due_at,
+    last_notified_at: routine.last_notified_at,
+    done_ahead: routine.done_ahead,
+    checklist_done: (routine.checklist ?? []).filter((c) => c.done && c._id).map((c) => String(c._id)),
+  };
 }
 
 /** The Nth scheduled occurrence (1 = due_at), on the grid due_at + (N-1) * interval. */
@@ -163,6 +190,7 @@ export function applyComplete(
         note: opts.note,
         occurrence_at: date,
         ...photos,
+        undo_state: undoStateOf(routine),
       }),
     };
   }
@@ -190,6 +218,7 @@ export function applyComplete(
       note: opts.note,
       ...stepsRecord,
       ...photos,
+      undo_state: undoStateOf(routine),
     }),
     ...(steps.length > 0 ? { checklist: steps.map((c) => ({ ...c, done: false })) } : {}),
   };

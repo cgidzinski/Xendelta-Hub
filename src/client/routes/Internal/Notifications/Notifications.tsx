@@ -1,3 +1,4 @@
+import { clickableRowProps } from "../../../utils/keyboard";
 import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -176,9 +177,10 @@ export default function Notifications() {
               {visible.map((notification, index) => (
                 <Box key={notification._id}>
                   <ListItem
-                    onClick={() => handleNotificationClick(notification)}
+                    {...clickableRowProps(() => handleNotificationClick(notification))}
                     sx={{
                       cursor: "pointer",
+                      "&:focus-visible": { outline: (t) => `2px solid ${t.palette.primary.main}`, outlineOffset: -2 },
                       backgroundColor: notification.unread ? "action.hover" : "transparent",
                       "&:hover": { backgroundColor: "action.selected" },
                       py: 2,

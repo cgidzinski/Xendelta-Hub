@@ -7,6 +7,8 @@ import {
   validateParams,
   createXenBudgetItemSchema,
   updateXenBudgetItemSchema,
+  xenBudgetBulkDeleteSchema,
+  xenBudgetBulkUpdateSchema,
   xenBudgetBookIdParamSchema,
   xenBudgetItemParamSchema,
   xenBudgetItemImageParamSchema,
@@ -454,6 +456,74 @@ export function registerItemRoutes(app: any) {
       await item.save();
       broadcastBook(book);
       res.json({ status: true, message: "Item updated", data: serializeItem(item) });
+    },
+  );
+
+  // POST /api/xenbudget/books/:bookId/items/bulk-update - give several items a category and/or add or remove flags
+  app.post(
+    "/api/xenbudget/books/:bookId/items/bulk-update",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(xenBudgetBulkUpdateSchema),
+    async (req: Request, res: Response) => {
+      const book = await loadBookForMember(req);
+      const { ids, set_category, add_flags, remove_flags } = req.body as {
+        ids: string[];
+        set_category?: string;
+        add_flags?: string[];
+        remove_flags?: string[];
+      };
+      // Only names the book already has, spelled the way the book spells them.
+      const registryName = (list: Array<{ name: string }>, name: string) =>
+        list.find((l) => l.name.toLowerCase() === name.toLowerCase())?.name;
+      let category: string | undefined;
+      if (set_category !== undefined) {
+        category = registryName(book.categories, set_category);
+        if (!category) throw new AppError(400, `This book has no category called "${set_category}"`);
+      }
+      const adding: string[] = [];
+      for (const f of add_flags ?? []) {
+        const name = registryName(book.flags, f);
+        if (!name) throw new AppError(400, `This book has no flag called "${f}"`);
+        adding.push(name);
+      }
+      const removing = new Set((remove_flags ?? []).map((f) => f.toLowerCase()));
+
+      const items = await XenBudgetItem.find({ _id: { $in: ids }, book_id: book._id });
+      for (const item of items) {
+        if (category !== undefined) {
+          item.category_split_type = "equal";
+          item.set("categories", resolveCategories("equal", item.amount, [{ name: category }]));
+        }
+        if (adding.length > 0 || removing.size > 0) {
+          const kept = (item.flags as string[]).filter((f) => !removing.has(f.toLowerCase()));
+          item.flags = normalizeFlagNames([...kept, ...adding]);
+          item.rule_flags = (item.rule_flags || []).filter((f: string) =>
+            item.flags.some((n: string) => n.toLowerCase() === f.toLowerCase()),
+          );
+        }
+        item.flags = withDerivedUncategorised(item.flags, item.categories);
+        // Hand-corrected, so a later rules re-apply leaves it alone.
+        item.manually_edited = true;
+        await item.save();
+      }
+      if (items.length > 0) broadcastBook(book);
+      res.json({ status: true, message: "Items updated", data: { updated: items.length } });
+    },
+  );
+
+  // POST /api/xenbudget/books/:bookId/items/bulk-delete - delete several items (ids from another book are ignored)
+  app.post(
+    "/api/xenbudget/books/:bookId/items/bulk-delete",
+    validateParams(xenBudgetBookIdParamSchema),
+    validate(xenBudgetBulkDeleteSchema),
+    async (req: Request, res: Response) => {
+      const book = await loadBookForMember(req);
+      const { ids } = req.body as { ids: string[] };
+      const items = await XenBudgetItem.find({ _id: { $in: ids }, book_id: book._id });
+      await XenBudgetItem.deleteMany({ _id: { $in: items.map((i) => i._id) } });
+      for (const item of items) await removeItemPhotos(item.images ?? []);
+      if (items.length > 0) broadcastBook(book);
+      res.json({ status: true, message: "Items deleted", data: { deleted: items.length } });
     },
   );
 

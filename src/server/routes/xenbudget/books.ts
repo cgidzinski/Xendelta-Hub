@@ -101,6 +101,7 @@ export function registerBookRoutes(app: any) {
     for (const uid of members) {
       if (uid === userId) continue;
       notify(uid, {
+        app: "xenbudget",
         title: "Added to a budget book",
         message: `You were added to "${book.name}"`,
         link: `/internal/xenbudget/books/${book._id}/overview`,
@@ -208,6 +209,7 @@ export function registerBookRoutes(app: any) {
       broadcastBook(book);
       for (const uid of added) {
         notify(uid, {
+          app: "xenbudget",
           title: "Added to a budget book",
           message: `You were added to "${book.name}"`,
           link: `/internal/xenbudget/books/${book._id}/overview`,
@@ -265,6 +267,7 @@ export function registerBookRoutes(app: any) {
       broadcastBook(book);
       SocketManager.getInstance().notifyXenBudgetBooksUpdated(memberIds(book));
       notify(target, {
+        app: "xenbudget",
         title: "You now own a budget book",
         message: `You were made the owner of "${book.name}"`,
         link: `/internal/xenbudget/books/${book._id}/overview`,

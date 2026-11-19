@@ -7,6 +7,7 @@ import { formatCurrency } from "../../../../utils/currencyUtils";
 import { getCategoryIcon, getCategoryColor } from "../../../../constants/xensplitCategoryIcons";
 import { xsCardSx, xsBadgeSx } from "./rowStyles";
 import UserName from "../../../../components/user/UserName";
+import { clickableRowProps } from "../../../../utils/keyboard";
 
 export const FREQUENCY_LABELS: Record<XenSplitRecurringSeries["frequency"], string> = {
   daily: "Daily",
@@ -93,7 +94,7 @@ export default function ExpenseListItem({
 
   return (
     <Box
-      onClick={onClick}
+      {...clickableRowProps(onClick)}
       sx={{
         ...xsCardSx,
         display: "grid",

@@ -12,6 +12,7 @@ import type { SxProps, Theme } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import ViewListIcon from "@mui/icons-material/ViewList";
@@ -79,6 +80,7 @@ interface SelectionBarProps {
   onClear: () => void;
   onDownload: () => void;
   onCopyLinks: () => void;
+  onMove: () => void;
   onDelete: () => void;
 }
 
@@ -90,6 +92,7 @@ export function SelectionBar({
   onClear,
   onDownload,
   onCopyLinks,
+  onMove,
   onDelete,
 }: SelectionBarProps) {
   return (
@@ -120,6 +123,9 @@ export function SelectionBar({
       </Button>
       <Button color="inherit" startIcon={<LinkIcon />} onClick={onCopyLinks} disabled={linkCount === 0}>
         Copy links
+      </Button>
+      <Button color="inherit" startIcon={<DriveFileMoveOutlinedIcon />} onClick={onMove}>
+        Move
       </Button>
       <Box sx={{ flex: 1 }} />
       <Button color="error" startIcon={<DeleteOutlineIcon />} onClick={onDelete}>
