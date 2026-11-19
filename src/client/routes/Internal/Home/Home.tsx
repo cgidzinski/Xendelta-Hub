@@ -3,6 +3,7 @@ import { Box, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
 import CompactHomeHeader from "./components/CompactHomeHeader";
 import QuickPanel from "./components/QuickPanel";
+import RecentApps from "./components/RecentApps";
 import AttentionStrip from "./components/AttentionStrip";
 import ActivityFeed from "./components/ActivityFeed";
 import HomeLinks from "./components/HomeLinks";
@@ -32,6 +33,7 @@ export default function Home() {
           counts={attention.data?.counts ?? {}}
           totals={attention.data?.totals ?? {}}
         />
+        <RecentApps pinnedApps={resolvePinnedApps(profile.pinnedApps)} />
         <AttentionStrip cards={attention.data?.cards ?? []} />
         <ActivityFeed />
         <HomeLinks />
