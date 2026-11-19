@@ -385,6 +385,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Search and filter by type, label or notebook.",
       "Bring back a deleted note from the Trash within 30 days.",
       "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
+      "Select several notes to archive, recolour, label, move or delete them together.",
     ],
     tips: [
       { text: "Tick checklist items right from the board, without opening the note.", link: "/internal/xennote" },
