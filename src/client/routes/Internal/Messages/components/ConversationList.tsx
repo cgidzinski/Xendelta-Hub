@@ -1,5 +1,16 @@
 import { useMemo, useState } from "react";
-import { Badge, Box, Button, IconButton, InputAdornment, List, TextField, Tooltip, Typography } from "@mui/material";
+import {
+  Badge,
+  Box,
+  Button,
+  IconButton,
+  InputAdornment,
+  List,
+  ListItemButton,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import StatusMenu from "../../../../components/presence/StatusMenu";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
@@ -37,27 +48,11 @@ function Row({
   const prefix = fromMe ? "You: " : group && sender ? `${sender.username}: ` : "";
 
   return (
-    <Box
-      component="button"
-      type="button"
+    <ListItemButton
       onClick={onSelect}
+      selected={selected}
       aria-current={selected ? "true" : undefined}
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1.5,
-        width: "100%",
-        px: 1.5,
-        py: 1.25,
-        border: 0,
-        borderRadius: 2,
-        textAlign: "left",
-        font: "inherit",
-        color: "text.primary",
-        cursor: "pointer",
-        bgcolor: selected ? "action.selected" : "transparent",
-        "&:hover": { bgcolor: selected ? "action.selected" : "action.hover" },
-      }}
+      sx={{ gap: 1.5, px: 1.5, py: 1.25, borderRadius: 2, alignItems: "center" }}
     >
       <ChatAvatar conversation={chat} meId={meId} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -90,7 +85,7 @@ function Row({
           )}
         </Box>
       </Box>
-    </Box>
+    </ListItemButton>
   );
 }
 
