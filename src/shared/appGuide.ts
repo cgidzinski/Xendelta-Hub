@@ -297,6 +297,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Make routines for things you do on a schedule: every few days, weeks, months or years.",
       "See what is overdue, due soon and coming up, and choose how far ahead to look.",
       "Slide to mark a routine done, or add a note and photos about what you did.",
+      "Undo marking a routine as done for a few minutes after, if you slid it by mistake.",
       "Give a routine a checklist of steps to tick off.",
       "Get reminders in the app, by push or by email, with a heads-up before it is due and nudges while it is overdue.",
       "Share a routine so anyone in it can mark it done.",
