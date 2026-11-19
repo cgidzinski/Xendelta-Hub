@@ -1,77 +1,27 @@
 import { alpha } from "@mui/material/styles";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Box,
-  Button,
-  Checkbox,
-  Chip,
-  Collapse,
-  Dialog,
-  DialogContent,
-  IconButton,
-  InputBase,
-  ListItemIcon,
-  Menu,
-  MenuItem,
-  Stack,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import AddIcon from "@mui/icons-material/Add";
-import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
-import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
-import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
-import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
-import LinkIcon from "@mui/icons-material/Link";
-import NotesIcon from "@mui/icons-material/Notes";
-import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
-import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
-import PushPinIcon from "@mui/icons-material/PushPin";
-import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
-import { useSnackbar } from "notistack";
+import { useState } from "react";
+import { Dialog, DialogContent, Stack, useMediaQuery, useTheme } from "@mui/material";
 import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
-import { useConfirm } from "../../../../components/ui/ConfirmProvider";
-import { useXenNoteActions, useXenNoteBacklinks } from "../../../../hooks/xennote/useXenNote";
-import { completeWikiLink, normalizeTitle, openWikiLink } from "@shared/xennote/wikiLinks";
 import type { XenNote, XenNotebook } from "../../../../types/XenNote";
+import { useNoteDraft } from "../hooks/useNoteDraft";
+import { changeType } from "../noteDraft";
 import { noteSurfaceSx } from "../noteColors";
-import NoteMarkdown from "./NoteMarkdown";
-import NoteReminderMenu from "./NoteReminderMenu";
-import NoteHistoryDialog from "./NoteHistoryDialog";
-import HistoryIcon from "@mui/icons-material/History";
-import {
-  changeType,
-  draftFromNote,
-  emptyDraft,
-  isDirty,
-  isEmptyDraft,
-  moveAmongActive,
-  moveItem,
-  toInput,
-  type NoteDraft,
-} from "../noteDraft";
+import NoteBacklinks from "./NoteBacklinks";
+import NoteChecklistEditor from "./NoteChecklistEditor";
+import NoteChips from "./NoteChips";
 import NoteColorPopover from "./NoteColorPopover";
+import NoteEditorToolbar from "./NoteEditorToolbar";
+import NoteHistoryDialog from "./NoteHistoryDialog";
 import NoteLabelPopover from "./NoteLabelPopover";
+import NoteLinkFields from "./NoteLinkFields";
+import NoteMoreMenu from "./NoteMoreMenu";
 import NoteNotebookMenu from "./NoteNotebookMenu";
+import NotePhotoGrid from "./NotePhotoGrid";
+import NoteReminderMenu from "./NoteReminderMenu";
 import NoteShareDialog from "./NoteShareDialog";
-
-const AUTOSAVE_MS = 800;
+import NoteTextBody from "./NoteTextBody";
+import NoteTitleRow from "./NoteTitleRow";
+import NoteTypeToggle from "./NoteTypeToggle";
 
 interface NoteEditorProps {
   open: boolean;
@@ -93,6 +43,7 @@ interface NoteEditorProps {
 /**
  * Write or edit a note. Closing saves it (like Keep) unless it is empty or was not changed; delete is
  * explicit. A person with view-only access sees the note without being able to change it.
+ * This is the dialog shell: the sections and the draft/autosave logic live in their own files.
  */
 export default function NoteEditor({
   open,
@@ -106,36 +57,10 @@ export default function NoteEditor({
   onOpenNote,
 }: NoteEditorProps) {
   const theme = useTheme();
-  const { enqueueSnackbar } = useSnackbar();
-  const confirm = useConfirm();
-  const actions = useXenNoteActions();
-  const fileInput = useRef<HTMLInputElement>(null);
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const n = useNoteDraft({ open, onClose, note, startType, startNotebookId, onOpenNote });
+  const { draft, setDraft, set, live, readOnly } = n;
 
-  const initial = useMemo(
-    () =>
-      note
-        ? draftFromNote(note)
-        : emptyDraft({
-            type: startType ?? "text",
-            notebook_id: startNotebookId ?? null,
-            checklist: startType === "checklist" ? [{ text: "", done: false }] : [],
-          }),
-    // The draft is reset each time the dialog opens, for a given note or a fresh start
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, note?._id, startType, startNotebookId],
-  );
-  const [draft, setDraft] = useState<NoteDraft>(initial);
-  const [saving, setSaving] = useState(false);
-  // Autosave state for an existing note: shown beside Done as "Saving…" then "Saved"
-  const [autosave, setAutosave] = useState<"idle" | "saving" | "saved">("idle");
-  const [showDone, setShowDone] = useState(false);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  // A text note is written as Markdown; "Preview" shows it as it will look. Typing "[[" offers titles of other notes.
-  const [mode, setMode] = useState<"write" | "preview">("write");
-  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
-  const [caret, setCaret] = useState(0);
-  const [suggestIndex, setSuggestIndex] = useState(0);
-  const [suggestDismissed, setSuggestDismissed] = useState(false);
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
   const [bookAnchor, setBookAnchor] = useState<HTMLElement | null>(null);
@@ -143,203 +68,18 @@ export default function NoteEditor({
   const [reminderAnchor, setReminderAnchor] = useState<HTMLElement | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  // What the server holds for this note right now (photos and the link change it outside the draft).
-  const [live, setLive] = useState<XenNote | null>(note);
 
-  // Reset when the dialog opens for a note (or a fresh start), never because the board refetched behind
-  // it: a collaborator's live update must not wipe what is being typed.
-  useEffect(() => {
-    if (open) {
-      setDraft(initial);
-      setLive(note);
-      setMode("write");
-      setCaret(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial]);
-
-  const readOnly = !!live && !live.can_edit;
-  const set = (patch: Partial<NoteDraft>) => setDraft((d) => ({ ...d, ...patch }));
-
-  // An existing note saves itself shortly after you stop typing; a new one is created when you press Done.
-  useEffect(() => {
-    if (!open || readOnly || !live || !isDirty(draft, draftFromNote(live))) return;
-    if (draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim())) return;
-    const timer = setTimeout(async () => {
-      setAutosave("saving");
-      try {
-        const saved = await actions.updateNote.mutateAsync({ id: live._id, input: toInput(draft) });
-        setLive((cur) => (cur && cur._id === saved._id ? { ...cur, ...saved } : cur));
-        setAutosave("saved");
-      } catch (e) {
-        setAutosave("idle");
-        enqueueSnackbar((e as Error).message || "Couldn't save the note", { variant: "error" });
-      }
-    }, AUTOSAVE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, live, open, readOnly]);
-  useEffect(() => {
-    if (open) setAutosave("idle");
-  }, [open, initial]);
-  // My reminder on this note. Personal, so it works in a notebook I can only view too; it isn't part of the draft.
-  const setReminder = async (at: string | null) => {
-    if (!live) return;
-    try {
-      const saved = await actions.setReminder.mutateAsync({ id: live._id, at });
-      setLive((cur) => (cur && cur._id === saved._id ? { ...cur, reminder: saved.reminder } : cur));
-      enqueueSnackbar(at ? "Reminder set" : "Reminder removed", { variant: "success" });
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't set the reminder", { variant: "error" });
-    }
-  };
-  const writableNotebooks = notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor");
-
-  const pendingUrls = useMemo(() => draft.pendingImages.map((f) => URL.createObjectURL(f)), [draft.pendingImages]);
-  useEffect(() => () => pendingUrls.forEach((u) => URL.revokeObjectURL(u)), [pendingUrls]);
-
-  // Save what is in the editor (a new note is created, a changed one updated). False if it couldn't be saved, in which
-  // case the editor stays as it is so nothing typed is lost.
-  const persist = async (): Promise<boolean> => {
-    try {
-      setSaving(true);
-      if (!live) {
-        if (!isEmptyDraft(draft)) {
-          const created = await actions.createNote.mutateAsync(toInput(draft));
-          if (draft.pendingImages.length)
-            await actions.addImages.mutateAsync({ id: created._id, files: draft.pendingImages });
-        }
-      } else if (isDirty(draft, draftFromNote(live))) {
-        await actions.updateNote.mutateAsync({ id: live._id, input: toInput(draft) });
-      }
-      return true;
-    } catch (e) {
-      // Stay open so nothing typed is lost; say what to fix
-      enqueueSnackbar((e as Error).message || "Couldn't save the note", { variant: "error" });
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveAndClose = async () => {
-    if (readOnly) return onClose();
-    if (await persist()) onClose();
-  };
-
-  // Go to another note (a [[link]], or one under "Linked from"), saving this one first.
-  const openLinked = async (id: string) => {
-    if (id === live?._id) return;
-    if (readOnly || (await persist())) onOpenNote?.(id);
-  };
-
-  const { data: backlinks = [] } = useXenNoteBacklinks(open ? live?._id : undefined);
-  const resolveTitle = useMemo(() => {
-    const byTitle = new Map<string, string>();
-    for (const t of titles) if (!byTitle.has(normalizeTitle(t.title))) byTitle.set(normalizeTitle(t.title), t._id);
-    return (title: string) => byTitle.get(normalizeTitle(title)) ?? null;
-  }, [titles]);
-
-  // Titles to suggest while a "[[" is open at the caret: those containing what was typed, starting with it first.
-  const openLink = draft.type === "text" && mode === "write" && !readOnly ? openWikiLink(draft.body, caret) : null;
-  const suggestions = useMemo(() => {
-    if (!openLink || suggestDismissed) return [];
-    const q = normalizeTitle(openLink.query);
-    return titles
-      .filter((t) => t._id !== live?._id && normalizeTitle(t.title).includes(q))
-      .sort((a, b) => Number(normalizeTitle(b.title).startsWith(q)) - Number(normalizeTitle(a.title).startsWith(q)))
-      .slice(0, 6);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openLink?.query, openLink?.start, suggestDismissed, titles, live?._id]);
-  useEffect(() => {
-    setSuggestIndex(0);
-    setSuggestDismissed(false);
-  }, [openLink?.query, openLink?.start]);
-
-  const chooseTitle = (title: string) => {
-    const done = completeWikiLink(draft.body, caret, title);
-    if (!done) return;
-    set({ body: done.text });
-    setCaret(done.caret);
-    requestAnimationFrame(() => {
-      bodyRef.current?.focus();
-      bodyRef.current?.setSelectionRange(done.caret, done.caret);
-    });
-  };
-
-  const remove = async () => {
-    if (!live) return onClose();
-    const ok = await confirm({
-      title: "Move this note to the Trash?",
-      message: "It disappears for everyone who can see it. You can bring it back from the Trash for 30 days.",
-      confirmLabel: "Move to Trash",
-    });
-    if (!ok) return;
-    try {
-      await actions.deleteNote.mutateAsync(live._id);
-      onClose();
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't delete the note", { variant: "error" });
-    }
-  };
-
-  const addPhotos = async (files: ArrayLike<File> | null) => {
-    if (!files || files.length === 0) return;
-    const list = Array.from(files);
-    if (!live) return set({ pendingImages: [...draft.pendingImages, ...list] });
-    try {
-      setLive(await actions.addImages.mutateAsync({ id: live._id, files: list }));
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't add the photos", { variant: "error" });
-    }
-    if (fileInput.current) fileInput.current.value = "";
-  };
-
-  const removePhoto = async (imageId: string) => {
-    if (!live) return;
-    try {
-      setLive(await actions.removeImage.mutateAsync({ id: live._id, imageId }));
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't remove the photo", { variant: "error" });
-    }
-  };
-
-  const shareAction = async (action: "enable" | "rotate" | "disable") => {
-    if (!live) return;
-    try {
-      setLive(await actions.shareNote.mutateAsync({ id: live._id, action }));
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't update the link", { variant: "error" });
-    }
-  };
-
-  const linkError = draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim());
-  const shareToken = live?.share?.enabled ? live.share.token : null;
-
-  const updateItem = (i: number, patch: Partial<NoteDraft["checklist"][number]>) =>
-    set({ checklist: draft.checklist.map((item, idx) => (idx === i ? { ...item, ...patch } : item)) });
-
-  // The writing area reads as a field: a soft inset with a border, tall enough not to feel cramped.
-  const fieldSx = {
-    bgcolor: alpha(theme.palette.text.primary, 0.05),
-    border: 1,
-    borderColor: "divider",
-    borderRadius: 2,
-    p: 2,
-    minHeight: 240,
-    alignItems: "flex-start",
-    fontSize: 16,
-    lineHeight: 1.6,
-    "&:focus-within": { borderColor: "primary.main" },
-  } as const;
   const isList = draft.type === "checklist";
+  const linkError = draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim());
+  const writableNotebooks = notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor");
+  const photoCount = (live?.images.length ?? 0) + draft.pendingImages.length;
+  const isBlank = !draft.body.trim() && draft.checklist.every((i) => !i.text.trim());
 
   return (
     <>
       <Dialog
         open={open}
-        onClose={saveAndClose}
+        onClose={n.saveAndClose}
         fullWidth
         maxWidth={false}
         fullScreen={isMobile}
@@ -348,7 +88,7 @@ export default function NoteEditor({
           const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
           if (!readOnly && images.length) {
             e.preventDefault();
-            addPhotos(images);
+            n.addPhotos(images);
           }
         }}
         slotProps={{
@@ -358,505 +98,95 @@ export default function NoteEditor({
           backdrop: { sx: { bgcolor: alpha(theme.palette.common.black, 0.4) } },
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, pl: 3, pr: 1, pt: 1.5 }}>
-          <InputBase
-            fullWidth
-            placeholder="Title"
-            value={draft.title}
-            onChange={(e) => set({ title: e.target.value })}
-            disabled={readOnly}
-            slotProps={{ input: { maxLength: 200, "aria-label": "Title" } }}
-            sx={{ fontSize: 20, fontWeight: 500 }}
-          />
-          {readOnly ? (
-            <IconButton aria-label="Close" onClick={saveAndClose}>
-              <CloseIcon />
-            </IconButton>
-          ) : (
-            <>
-              <Tooltip title={draft.pinned ? "Unpin" : "Pin"}>
-                <IconButton
-                  aria-label={draft.pinned ? "Unpin" : "Pin"}
-                  aria-pressed={draft.pinned}
-                  onClick={() => set({ pinned: !draft.pinned })}
-                >
-                  {draft.pinned ? <PushPinIcon color="primary" /> : <PushPinOutlinedIcon />}
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="More">
-                <IconButton aria-label="More" onClick={(e) => setMoreAnchor(e.currentTarget)}>
-                  <MoreVertIcon />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
-        </Box>
+        <NoteTitleRow
+          title={draft.title}
+          pinned={draft.pinned}
+          readOnly={readOnly}
+          onTitle={(title) => set({ title })}
+          onTogglePin={() => set({ pinned: !draft.pinned })}
+          onMore={setMoreAnchor}
+          onClose={n.saveAndClose}
+        />
 
         <DialogContent sx={{ pt: 1.5, px: { xs: 2, sm: 3 } }}>
           <Stack spacing={2.5}>
-            {!live && !readOnly && !draft.body.trim() && draft.checklist.every((i) => !i.text.trim()) && (
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={isList ? "list" : "note"}
-                aria-label="Note or list"
-                onChange={(_, v: "note" | "list" | null) => {
-                  if (!v) return;
+            {!live && !readOnly && isBlank && (
+              <NoteTypeToggle
+                isList={isList}
+                onChange={(v) =>
                   setDraft((d) => {
                     const next = changeType(d, v === "list" ? "checklist" : "text");
                     return v === "list" && next.checklist.length === 0
                       ? { ...next, checklist: [{ text: "", done: false }] }
                       : next;
-                  });
-                }}
-                sx={{ alignSelf: "flex-start" }}
-              >
-                <ToggleButton value="note" sx={{ gap: 0.75, px: 2, textTransform: "none" }}>
-                  <NotesIcon fontSize="small" />
-                  Note
-                </ToggleButton>
-                <ToggleButton value="list" sx={{ gap: 0.75, px: 2, textTransform: "none" }}>
-                  <CheckBoxOutlinedIcon fontSize="small" />
-                  List
-                </ToggleButton>
-              </ToggleButtonGroup>
+                  })
+                }
+              />
             )}
-            {draft.type === "text" && !readOnly && (
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={mode}
-                onChange={(_, v: "write" | "preview" | null) => v && setMode(v)}
-                aria-label="Write or preview"
-                sx={{ alignSelf: "flex-end" }}
-              >
-                <ToggleButton value="write" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
-                  <EditOutlinedIcon fontSize="small" />
-                  Write
-                </ToggleButton>
-                <ToggleButton value="preview" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
-                  <VisibilityOutlinedIcon fontSize="small" />
-                  Preview
-                </ToggleButton>
-              </ToggleButtonGroup>
+            {(draft.type === "text" || draft.type === "image") && (
+              <NoteTextBody
+                type={draft.type}
+                body={draft.body}
+                onBody={(body) => set({ body })}
+                readOnly={readOnly}
+                noteId={live?._id ?? null}
+                titles={titles}
+                onOpenNote={n.openLinked}
+                resetToken={n.initial}
+              />
             )}
-            {draft.type === "text" && (mode === "preview" || readOnly) ? (
-              <Box sx={{ ...fieldSx, display: "block", minHeight: 160 }}>
-                {draft.body.trim() ? (
-                  <NoteMarkdown text={draft.body} resolve={resolveTitle} onOpenNote={openLinked} />
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Nothing to preview yet.
-                  </Typography>
-                )}
-              </Box>
-            ) : (
-              (draft.type === "text" || draft.type === "image") && (
-                <>
-                  <InputBase
-                    fullWidth
-                    multiline
-                    minRows={draft.type === "image" ? 4 : 9}
-                    maxRows={22}
-                    sx={fieldSx}
-                    autoFocus={!live && draft.type === "text"}
-                    placeholder={
-                      draft.type === "image"
-                        ? "Add a caption"
-                        : "Take a note… (Markdown works; [[ links to another note)"
-                    }
-                    value={draft.body}
-                    onChange={(e) => {
-                      set({ body: e.target.value });
-                      setCaret(e.target.selectionStart ?? e.target.value.length);
-                    }}
-                    onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)}
-                    onKeyDown={(e) => {
-                      if (suggestions.length === 0) return;
-                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setSuggestIndex(
-                          (i) => (i + (e.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length,
-                        );
-                      } else if (e.key === "Enter" || e.key === "Tab") {
-                        e.preventDefault();
-                        chooseTitle(suggestions[Math.min(suggestIndex, suggestions.length - 1)].title);
-                      } else if (e.key === "Escape") {
-                        e.preventDefault();
-                        e.stopPropagation(); // closes the suggestions, not the whole note
-                        setSuggestDismissed(true);
-                      }
-                    }}
-                    inputRef={bodyRef}
-                    disabled={readOnly}
-                    slotProps={{
-                      input: { maxLength: 20000, "aria-label": draft.type === "image" ? "Caption" : "Note" },
-                    }}
-                  />
-                  {suggestions.length > 0 && (
-                    <Box
-                      role="listbox"
-                      aria-label="Notes to link to"
-                      sx={{
-                        border: 1,
-                        borderColor: "divider",
-                        borderRadius: 1,
-                        bgcolor: "background.paper",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {suggestions.map((t, i) => (
-                        <Box
-                          key={t._id}
-                          role="option"
-                          aria-selected={i === suggestIndex}
-                          // mouse-down (not click) so the text field keeps focus and the caret
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            chooseTitle(t.title);
-                          }}
-                          sx={{
-                            px: 1.5,
-                            py: 0.75,
-                            cursor: "pointer",
-                            typography: "body2",
-                            bgcolor: i === suggestIndex ? "action.selected" : "transparent",
-                            "&:hover": { bgcolor: "action.hover" },
-                          }}
-                        >
-                          {t.title}
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                </>
-              )
+            {isList && (
+              <NoteChecklistEditor
+                items={draft.checklist}
+                readOnly={readOnly}
+                autoFocusFirst={!live}
+                onChange={(checklist) => set({ checklist })}
+              />
             )}
-
-            {draft.type === "checklist" && (
-              <Box sx={{ ...fieldSx, display: "block" }}>
-                {(() => {
-                  const row = (item: NoteDraft["checklist"][number], i: number) => (
-                    <Box
-                      key={item._id ?? i}
-                      draggable={!readOnly && !item.done}
-                      onDragStart={() => setDragFrom(i)}
-                      onDragOver={(e) => dragFrom !== null && e.preventDefault()}
-                      onDrop={() => {
-                        if (dragFrom !== null) set({ checklist: moveItem(draft.checklist, dragFrom, i) });
-                        setDragFrom(null);
-                      }}
-                      onDragEnd={() => setDragFrom(null)}
-                      sx={{ display: "flex", alignItems: "center", gap: 0.5, opacity: dragFrom === i ? 0.4 : 1 }}
-                    >
-                      {!readOnly && !item.done && (
-                        <DragIndicatorIcon
-                          fontSize="small"
-                          aria-label="Drag to reorder"
-                          // Dragging doesn't work on a touchscreen; there the arrows below take its place.
-                          sx={{
-                            color: "text.disabled",
-                            cursor: "grab",
-                            "@media (pointer: coarse)": { display: "none" },
-                          }}
-                        />
-                      )}
-                      {!readOnly && !item.done && (
-                        <Box sx={{ display: "none", "@media (pointer: coarse)": { display: "flex" } }}>
-                          <IconButton
-                            size="small"
-                            aria-label={`Move ${item.text || "item"} up`}
-                            disabled={moveAmongActive(draft.checklist, i, -1) === draft.checklist}
-                            onClick={() => set({ checklist: moveAmongActive(draft.checklist, i, -1) })}
-                          >
-                            <KeyboardArrowUpIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            aria-label={`Move ${item.text || "item"} down`}
-                            disabled={moveAmongActive(draft.checklist, i, 1) === draft.checklist}
-                            onClick={() => set({ checklist: moveAmongActive(draft.checklist, i, 1) })}
-                          >
-                            <KeyboardArrowDownIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      )}
-                      <Checkbox
-                        checked={item.done}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(i, { done: e.target.checked })}
-                        slotProps={{ input: { "aria-label": `Done: ${item.text || "item"}` } }}
-                      />
-                      <TextField
-                        variant="standard"
-                        fullWidth
-                        autoFocus={!live && i === 0}
-                        value={item.text}
-                        disabled={readOnly}
-                        onChange={(e) => updateItem(i, { text: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            set({
-                              checklist: [
-                                ...draft.checklist.slice(0, i + 1),
-                                { text: "", done: false },
-                                ...draft.checklist.slice(i + 1),
-                              ],
-                            });
-                          }
-                        }}
-                        slotProps={{
-                          htmlInput: { maxLength: 500, "aria-label": `Item ${i + 1}` },
-                          input: { sx: { textDecoration: item.done ? "line-through" : "none" } },
-                        }}
-                      />
-                      {!readOnly && (
-                        <IconButton
-                          aria-label="Remove item"
-                          size="small"
-                          onClick={() => set({ checklist: draft.checklist.filter((_, idx) => idx !== i) })}
-                        >
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </Box>
-                  );
-                  const indexed = draft.checklist.map((item, i) => ({ item, i }));
-                  const active = indexed.filter((x) => !x.item.done);
-                  const done = indexed.filter((x) => x.item.done);
-                  return (
-                    <>
-                      {active.map((x) => row(x.item, x.i))}
-                      {!readOnly && (
-                        <Button
-                          startIcon={<AddIcon />}
-                          onClick={() => set({ checklist: [...draft.checklist, { text: "", done: false }] })}
-                          sx={{ mt: 0.5 }}
-                        >
-                          Add item
-                        </Button>
-                      )}
-                      {done.length > 0 && (
-                        <Box sx={{ mt: 1.5, borderTop: 1, borderColor: "divider" }}>
-                          <Button
-                            size="small"
-                            color="inherit"
-                            onClick={() => setShowDone((v) => !v)}
-                            aria-expanded={showDone}
-                            startIcon={
-                              <ExpandMoreIcon
-                                sx={{ transform: showDone ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}
-                              />
-                            }
-                            sx={{ mt: 0.5, textTransform: "none" }}
-                          >
-                            {done.length} completed
-                          </Button>
-                          <Collapse in={showDone}>{done.map((x) => row(x.item, x.i))}</Collapse>
-                        </Box>
-                      )}
-                    </>
-                  );
-                })()}
-              </Box>
-            )}
-
             {draft.type === "link" && (
-              <Stack spacing={1.5}>
-                <TextField
-                  label="Web address"
-                  placeholder="https://"
-                  value={draft.link.url}
-                  onChange={(e) => set({ link: { ...draft.link, url: e.target.value } })}
-                  error={linkError}
-                  helperText={linkError ? "Use a web address that starts with http:// or https://" : " "}
-                  fullWidth
-                  disabled={readOnly}
-                />
-                <TextField
-                  label="Link title"
-                  value={draft.link.title}
-                  onChange={(e) => set({ link: { ...draft.link, title: e.target.value } })}
-                  fullWidth
-                  disabled={readOnly}
-                  slotProps={{ htmlInput: { maxLength: 200 } }}
-                />
-                <TextField
-                  label="Description"
-                  value={draft.link.description}
-                  onChange={(e) => set({ link: { ...draft.link, description: e.target.value } })}
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  disabled={readOnly}
-                  slotProps={{ htmlInput: { maxLength: 1000 } }}
-                />
-              </Stack>
+              <NoteLinkFields
+                link={draft.link}
+                error={linkError}
+                readOnly={readOnly}
+                onChange={(link) => set({ link })}
+              />
             )}
-
-            {(draft.type === "image" || (live?.images.length ?? 0) + draft.pendingImages.length > 0) && (
-              <Box>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                  {(live?.images ?? []).map((img) => (
-                    <Box key={img._id} sx={{ position: "relative" }}>
-                      <Box
-                        component="img"
-                        src={img.thumbUrl ?? img.url}
-                        alt=""
-                        sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
-                      />
-                      {!readOnly && (
-                        <IconButton
-                          size="small"
-                          aria-label="Remove photo"
-                          onClick={() => removePhoto(img._id)}
-                          sx={{ position: "absolute", top: 2, right: 2, bgcolor: "background.paper" }}
-                        >
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </Box>
-                  ))}
-                  {pendingUrls.map((url, i) => (
-                    <Box key={url} sx={{ position: "relative" }}>
-                      <Box
-                        component="img"
-                        src={url}
-                        alt=""
-                        sx={{ width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" }}
-                      />
-                      <IconButton
-                        size="small"
-                        aria-label="Remove photo"
-                        onClick={() => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
-                        sx={{ position: "absolute", top: 2, right: 2, bgcolor: "background.paper" }}
-                      >
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
+            {(draft.type === "image" || photoCount > 0) && (
+              <NotePhotoGrid
+                images={live?.images ?? []}
+                pendingImages={draft.pendingImages}
+                readOnly={readOnly}
+                onRemoveSaved={n.removePhoto}
+                onRemovePending={(i) => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
+              />
             )}
-
             {(draft.labels.length > 0 || draft.notebook_id) && (
-              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
-                {draft.notebook_id && (
-                  <Chip
-                    size="small"
-                    icon={<MenuBookOutlinedIcon />}
-                    label={notebooks.find((b) => b._id === draft.notebook_id)?.name ?? "Notebook"}
-                  />
-                )}
-                {draft.labels.map((label) => (
-                  <Chip
-                    key={label}
-                    size="small"
-                    variant="outlined"
-                    label={label}
-                    onDelete={readOnly ? undefined : () => set({ labels: draft.labels.filter((l) => l !== label) })}
-                  />
-                ))}
-              </Box>
+              <NoteChips
+                notebookName={
+                  draft.notebook_id ? (notebooks.find((b) => b._id === draft.notebook_id)?.name ?? "Notebook") : null
+                }
+                labels={draft.labels}
+                readOnly={readOnly}
+                onRemoveLabel={(label) => set({ labels: draft.labels.filter((l) => l !== label) })}
+              />
             )}
-            {live && backlinks.length > 0 && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Linked from
-                </Typography>
-                <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 0.5 }}>
-                  {backlinks.map((b) => (
-                    <Chip
-                      key={b._id}
-                      size="small"
-                      variant="outlined"
-                      icon={<LinkIcon />}
-                      label={b.title.trim() || "Untitled note"}
-                      onClick={() => openLinked(b._id)}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            )}
+            {live && <NoteBacklinks noteId={live._id} onOpenNote={n.openLinked} />}
           </Stack>
         </DialogContent>
 
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.25,
-            px: 1,
-            py: 0.75,
-            borderTop: 1,
-            borderColor: "divider",
-          }}
-        >
-          {!readOnly && (
-            <>
-              <input
-                ref={fileInput}
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-                id="xennote-photo-input"
-                onChange={(e) => addPhotos(e.target.files)}
-              />
-              <Tooltip title="Add photos">
-                <IconButton
-                  size="small"
-                  aria-label="Add photos"
-                  disabled={actions.addImages.isPending}
-                  onClick={() => fileInput.current?.click()}
-                >
-                  <AddPhotoAlternateOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Colour">
-                <IconButton size="small" aria-label="Colour" onClick={(e) => setColorAnchor(e.currentTarget)}>
-                  <PaletteOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Labels">
-                <IconButton size="small" aria-label="Labels" onClick={(e) => setLabelAnchor(e.currentTarget)}>
-                  <LabelOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Notebook">
-                <IconButton size="small" aria-label="Notebook" onClick={(e) => setBookAnchor(e.currentTarget)}>
-                  <MenuBookOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </>
-          )}
-          {live && (
-            <Tooltip title={live.reminder ? "Reminder" : "Remind me"}>
-              <IconButton
-                size="small"
-                aria-label="Reminder"
-                color={live.reminder && !live.reminder.sent ? "primary" : "default"}
-                onClick={(e) => setReminderAnchor(e.currentTarget)}
-              >
-                {live.reminder && !live.reminder.sent ? (
-                  <NotificationsActiveIcon fontSize="small" />
-                ) : (
-                  <NotificationsNoneIcon fontSize="small" />
-                )}
-              </IconButton>
-            </Tooltip>
-          )}
-          <Box sx={{ flex: 1 }} />
-          {autosave !== "idle" && (
-            <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: 1 }}>
-              {autosave === "saving" ? "Saving…" : "Saved"}
-            </Typography>
-          )}
-          <Button variant="contained" onClick={saveAndClose} disabled={saving || linkError}>
-            {readOnly ? "Close" : "Done"}
-          </Button>
-        </Box>
+        <NoteEditorToolbar
+          readOnly={readOnly}
+          live={live}
+          autosave={n.autosave}
+          addingPhotos={n.addingPhotos}
+          doneDisabled={n.saving || linkError}
+          onAddPhotos={n.addPhotos}
+          onColor={setColorAnchor}
+          onLabels={setLabelAnchor}
+          onNotebook={setBookAnchor}
+          onReminder={setReminderAnchor}
+          onDone={n.saveAndClose}
+        />
       </Dialog>
 
       <NoteColorPopover
@@ -888,67 +218,18 @@ export default function NoteEditor({
         onClose={() => setBookAnchor(null)}
       />
 
-      <Menu anchorEl={moreAnchor} open={!!moreAnchor} onClose={() => setMoreAnchor(null)}>
-        <MenuItem
-          onClick={() => {
-            setDraft((d) => changeType(d, isList ? "text" : "checklist"));
-            setMoreAnchor(null);
-          }}
-        >
-          <ListItemIcon>
-            {isList ? <NotesIcon fontSize="small" /> : <CheckBoxOutlinedIcon fontSize="small" />}
-          </ListItemIcon>
-          {isList ? "Turn into a note" : "Turn into a list"}
-        </MenuItem>
-        <MenuItem
-          sx={{ display: live ? "flex" : "none" }}
-          onClick={() => {
-            set({ archived: !draft.archived });
-            setMoreAnchor(null);
-          }}
-        >
-          <ListItemIcon>
-            <ArchiveOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          {draft.archived ? "Unarchive" : "Archive"}
-        </MenuItem>
-        <MenuItem
-          sx={{ display: live ? "flex" : "none" }}
-          onClick={() => {
-            setMoreAnchor(null);
-            setShareOpen(true);
-          }}
-        >
-          <ListItemIcon>
-            <LinkIcon fontSize="small" />
-          </ListItemIcon>
-          Public link
-        </MenuItem>
-        <MenuItem
-          sx={{ display: live ? "flex" : "none" }}
-          onClick={() => {
-            setMoreAnchor(null);
-            setHistoryOpen(true);
-          }}
-        >
-          <ListItemIcon>
-            <HistoryIcon fontSize="small" />
-          </ListItemIcon>
-          History
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setMoreAnchor(null);
-            remove();
-          }}
-          sx={{ color: "error.main", display: live ? "flex" : "none" }}
-        >
-          <ListItemIcon sx={{ color: "inherit" }}>
-            <DeleteOutlineIcon fontSize="small" />
-          </ListItemIcon>
-          Delete
-        </MenuItem>
-      </Menu>
+      <NoteMoreMenu
+        anchor={moreAnchor}
+        isList={isList}
+        saved={!!live}
+        archived={draft.archived}
+        onToggleList={() => setDraft((d) => changeType(d, isList ? "text" : "checklist"))}
+        onToggleArchived={() => set({ archived: !draft.archived })}
+        onShare={() => setShareOpen(true)}
+        onHistory={() => setHistoryOpen(true)}
+        onDelete={n.remove}
+        onClose={() => setMoreAnchor(null)}
+      />
 
       <NoteHistoryDialog
         open={historyOpen}
@@ -966,10 +247,15 @@ export default function NoteEditor({
         anchor={reminderAnchor}
         onClose={() => setReminderAnchor(null)}
         reminder={live?.reminder ?? null}
-        onSet={setReminder}
+        onSet={n.setReminder}
       />
 
-      <NoteShareDialog open={shareOpen} token={shareToken} onClose={() => setShareOpen(false)} onAction={shareAction} />
+      <NoteShareDialog
+        open={shareOpen}
+        token={live?.share?.enabled ? live.share.token : null}
+        onClose={() => setShareOpen(false)}
+        onAction={n.shareAction}
+      />
     </>
   );
 }
