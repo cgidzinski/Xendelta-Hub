@@ -83,6 +83,8 @@ const userSchema = new Schema({
     // equivalent flag — it is governed by whether the user has any subscribed devices
     // (see models/pushSubscription.js), since a browser can't be silently subscribed.
     email: { type: Boolean, default: true },
+    // Per-app switches that are off, as "app:way" (shared/notificationApps.ts), e.g. "xensplit:email". Everything else is on.
+    muted: { type: [String], default: [] },
   },
 });
 export type UserAttrs = InferSchemaType<typeof userSchema>;

@@ -110,6 +110,7 @@ export function registerNotebookRoutes(app: any) {
       await Promise.all(
         added.map((id) =>
           notify(id, {
+            app: "xennote",
             title: "Added to a notebook",
             message: `${me} shared the notebook "${book.name}" with you as ${role === "viewer" ? "a viewer" : "an editor"}.`,
             link: "/internal/xennote",

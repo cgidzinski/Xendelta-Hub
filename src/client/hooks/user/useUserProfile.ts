@@ -28,6 +28,8 @@ export interface UserProfile {
   theme: ThemePreference;
   /** Whether the account receives emailed notifications (opt-out; default true). */
   emailNotifications: boolean;
+  /** App-and-way notification switches that are off, like "xensplit:email" (shared/notificationApps.ts). */
+  mutedNotifications: string[];
   /** Where XenSplit tells others to send this user's settlements. Blank handle means unset. */
   etransfer: EtransferInfo;
   xendrive: {
@@ -44,6 +46,8 @@ export interface UpdateProfileData {
   /** "" clears the preference (defaults to dark). */
   theme?: ThemePreference;
   emailNotifications?: boolean;
+  /** Replaces the list of switched-off notification settings. */
+  mutedNotifications?: string[];
   /** A blank handle clears it. */
   etransfer?: EtransferInfo;
 }

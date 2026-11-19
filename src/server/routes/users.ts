@@ -79,6 +79,7 @@ module.exports = function (app: express.Application) {
           timezone: user.timezone || "",
           theme: user.theme || "",
           emailNotifications: user.notificationPrefs?.email !== false,
+          mutedNotifications: user.notificationPrefs?.muted ?? [],
           etransfer: etransferPayload(user),
           xendrive: {
             fileCount: fileCount,
@@ -95,7 +96,7 @@ module.exports = function (app: express.Application) {
     validate(updateProfileSchema),
     async function (req: express.Request, res: express.Response) {
       const userId = callerId(req);
-      const { username, timezone, emailNotifications, etransfer, theme } = req.body;
+      const { username, timezone, emailNotifications, mutedNotifications, etransfer, theme } = req.body;
       // Which fields this request actually changed. A preference toggle should not
       // announce itself as "Profile updated" in the notification centre.
       const changed: string[] = [];
@@ -117,9 +118,15 @@ module.exports = function (app: express.Application) {
       }
 
       if (emailNotifications !== undefined) {
-        user.notificationPrefs = { ...(user.notificationPrefs || {}), email: emailNotifications };
+        user.set("notificationPrefs.email", emailNotifications);
         await user.save();
         changed.push("email notifications");
+      }
+
+      if (mutedNotifications !== undefined) {
+        // A preference toggle, like the theme: not news, so it isn't announced as a profile update.
+        user.set("notificationPrefs.muted", [...new Set<string>(mutedNotifications)]);
+        await user.save();
       }
 
       if (etransfer !== undefined) {
@@ -172,6 +179,7 @@ module.exports = function (app: express.Application) {
             timezone: user.timezone || "",
             theme: user.theme || "",
             emailNotifications: user.notificationPrefs?.email !== false,
+            mutedNotifications: user.notificationPrefs?.muted ?? [],
             etransfer: etransferPayload(user),
             unread_messages: false,
             unread_notifications: true,

@@ -72,6 +72,7 @@ export async function runNoteReminders(now: Date = new Date()): Promise<void> {
         if (!allowed) continue;
 
         await notify(reminder.user_id, {
+          app: "xennote",
           title: `Reminder: ${note.title.trim() || "Untitled note"}`,
           message: reminderMessage(note),
           link: `/internal/xennote?note=${note.id}`,
