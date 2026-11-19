@@ -14,13 +14,19 @@ export class PublicDownloadError extends Error {
 }
 
 /** Ask for a ticket (throws a PublicDownloadError saying why not), then start the download. */
-export async function startPublicDownload(ticketUrl: string, fileUrl: string, password?: string): Promise<void> {
+export async function startPublicDownload(
+  ticketUrl: string,
+  fileUrl: string,
+  password?: string,
+  /** More fields for the ticket request (which folder a zip is of). */
+  extra: Record<string, string> = {},
+): Promise<void> {
   let response: Response;
   try {
     response = await fetch(ticketUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(password ? { password } : {}),
+      body: JSON.stringify(password ? { ...extra, password } : extra),
     });
   } catch {
     throw new PublicDownloadError("Couldn't reach the server. Try again.", 0);

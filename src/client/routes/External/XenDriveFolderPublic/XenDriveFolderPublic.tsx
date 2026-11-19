@@ -71,6 +71,14 @@ export default function XenDriveFolderPublic() {
 
   const here = (id: string) => `/xendrive/f/${token}${id === data?.root._id ? "" : `?folder=${id}`}`;
   const { enqueueSnackbar } = useSnackbar();
+  // The whole folder (the one shown, and everything beneath it) as one zip.
+  const downloadAll = () =>
+    startPublicDownload(
+      `/api/xendrive/public/folder/${token}/zip/ticket`,
+      `/api/xendrive/public/folder/${token}/zip${folderId ? `?folder=${encodeURIComponent(folderId)}` : ""}`,
+      locked && password ? password : undefined,
+      folderId ? { folder: folderId } : {},
+    ).catch((e: Error) => enqueueSnackbar(e.message || "Couldn't download the folder", { variant: "error" }));
   // The password goes in a request body for a ticket; the browser then downloads from an address holding only the ticket.
   const download = (id: string) =>
     startPublicDownload(
@@ -181,6 +189,17 @@ export default function XenDriveFolderPublic() {
               {counts}
             </Typography>
           </Box>
+          {(data.files.length > 0 || data.folders.length > 0) && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadIcon />}
+              onClick={downloadAll}
+              sx={{ flexShrink: 0 }}
+            >
+              Download all
+            </Button>
+          )}
           <ToggleButtonGroup
             exclusive
             size="small"

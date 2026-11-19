@@ -40,6 +40,15 @@ export const xenDriveDownloadQuerySchema = z.object({
 });
 // Asking for a ticket: the link's password goes in the body, never the address.
 export const xenDriveTicketSchema = z.object({ password: z.string().max(200).optional() });
+// A ticket for the whole folder as one zip (the folder shown, or the shared folder itself when left out).
+export const xenDriveZipTicketSchema = z.object({
+  password: z.string().max(200).optional(),
+  folder: objectIdSchema.optional(),
+});
+export const xenDriveZipQuerySchema = z.object({
+  folder: objectIdSchema.optional(),
+  ticket: z.string().max(2000).optional(),
+});
 
 // What is in a folder (omit `folder` for the top level), or a search across the whole drive.
 export const xenDriveBrowseQuerySchema = z.object({

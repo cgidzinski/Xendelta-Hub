@@ -24,6 +24,8 @@ import {
   xenDriveSettingsSchema,
   xenDriveShareTokenParamSchema,
   xenDriveTicketSchema,
+  xenDriveZipQuerySchema,
+  xenDriveZipTicketSchema,
   xenDriveUploadIdParamSchema,
 } from "../utils/validation";
 import { AppError, callerId } from "../utils/http";
@@ -46,9 +48,11 @@ import {
   folderStats,
   heightOf,
   isInside,
+  subtreeIds,
 } from "../utils/xendriveFolders";
 import { randomToken } from "../utils/tokens";
 import { isValidDownloadTicket, signDownloadTicket } from "../utils/downloadTickets";
+import { MAX_ZIP_BYTES, MAX_ZIP_ENTRIES, ZipWriter, zipPath } from "../utils/zipStream";
 import { checkSharePassword, hashSharePassword, isUnset } from "../utils/sharePasswords";
 import { generateSignedUrl } from "../utils/storageUtils";
 import { isTextPreviewable, readTextPreview } from "../utils/fileText";
@@ -857,6 +861,104 @@ module.exports = function (app: express.Application) {
         typeof req.query.ticket === "string" ? req.query.ticket : undefined,
       );
       return streamFile(res, file, root.id);
+    },
+  );
+
+  // The shared folder (or one inside it) as a single zip. Like a file, it is asked for with the password in a POST and
+  // fetched with a ticket made for exactly this folder.
+  async function openZipFolder(token: string, folderId: string | undefined, password?: string, ticket?: string) {
+    const ticketOk = isValidDownloadTicket(ticket, token, `zip:${folderId ?? ""}`);
+    const root = await openSharedFolder(token, password, ticketOk);
+    const requested = folderId || root.id;
+    if (!(await isInside(requested, root.id))) throw new AppError(404, "Folder not found");
+    const current = await XenDriveFolder.findOne({ _id: requested, owner_id: root.owner_id }).exec();
+    if (!current) throw new AppError(404, "Folder not found");
+    return { root, current };
+  }
+
+  app.post(
+    "/api/xendrive/public/folder/:token/zip/ticket",
+    validateParams(xenDriveFolderTokenParamSchema),
+    validate(xenDriveZipTicketSchema),
+    async function (req: express.Request, res: express.Response) {
+      const token = req.params.token as string;
+      const { password, folder } = req.body;
+      await openZipFolder(token, folder, password ?? sharePasswordOf(req));
+      return res.json({ status: true, data: { ticket: signDownloadTicket(token, `zip:${folder ?? ""}`) } });
+    },
+  );
+
+  app.get(
+    "/api/xendrive/public/folder/:token/zip",
+    validateParams(xenDriveFolderTokenParamSchema),
+    validateQuery(xenDriveZipQuerySchema),
+    async function (req: express.Request, res: express.Response) {
+      const { folder, ticket } = req.query as { folder?: string; ticket?: string };
+      const { root, current } = await openZipFolder(req.params.token as string, folder, sharePasswordOf(req), ticket);
+
+      // Everything in the folder and beneath it, except files whose own expiry has passed.
+      const ids = await subtreeIds(current.id);
+      const [folders, found] = await Promise.all([
+        XenDriveFolder.find({ _id: { $in: ids }, owner_id: root.owner_id }, "name parent_id").lean(),
+        XenDriveFile.find({
+          owner_id: root.owner_id,
+          folder_id: { $in: ids },
+          $or: [{ expiry: null }, { expiry: { $exists: false } }, { expiry: { $gt: new Date() } }],
+        })
+          .sort({ name: 1 })
+          .exec(),
+      ]);
+      const files = await withRecords(found);
+      if (files.length === 0) throw new AppError(404, "There is nothing to download in this folder");
+      const total = files.reduce((sum, f) => sum + (f.size || 0), 0);
+      if (files.length > MAX_ZIP_ENTRIES || total > MAX_ZIP_BYTES) {
+        throw new AppError(413, "This folder is too big to download in one go. Download its files one at a time.");
+      }
+
+      // A file's path inside the zip: the folder names from the one being downloaded down to where it sits.
+      const byId = new Map(folders.map((f) => [String(f._id), f]));
+      const pathOf = (folderId: string): string[] => {
+        const parts: string[] = [];
+        for (let id: string | null = folderId, i = 0; id && i <= MAX_FOLDER_DEPTH; i++) {
+          const f = byId.get(id);
+          if (!f) break;
+          parts.unshift(f.name);
+          id = id === current.id ? null : f.parent_id ? String(f.parent_id) : null;
+        }
+        return parts;
+      };
+
+      const zipName = `${current.name}.zip`;
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", attachment(zipName));
+      const zip = new ZipWriter(res);
+      const taken = new Set<string>();
+      const sent: unknown[] = [];
+      try {
+        for (const file of files) {
+          let data;
+          try {
+            data = await privateStore.read(file.storage_path);
+          } catch {
+            continue; // the bytes are gone from storage; leave that file out rather than failing the lot
+          }
+          await zip.addFile(zipPath([...pathOf(String(file.folder_id)), file.name], taken), data, file.createdAt);
+          sent.push(file._id);
+        }
+        await zip.finish();
+      } catch (err) {
+        // Part of the zip is already on its way, so the only honest thing left is to cut the connection.
+        res.destroy(err as Error);
+        return;
+      }
+      const at = new Date();
+      await Promise.all([
+        XenDriveFile.updateMany({ _id: { $in: sent } }, { $inc: { downloads: 1 }, $set: { lastDownloadedAt: at } }),
+        XenDriveFolder.updateOne(
+          { _id: root.id },
+          { $inc: { "share.downloads": sent.length }, $set: { "share.lastDownloadedAt": at } },
+        ),
+      ]).catch(() => undefined); // a tally that can't be kept must not matter now
     },
   );
 

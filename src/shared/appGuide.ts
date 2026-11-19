@@ -179,6 +179,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "See thumbnails of your photos and videos in the list and grid.",
       "Share a file with a link, with an optional password and expiry date.",
       "Share a whole folder with a link that anyone can browse without an account.",
+      "Let people download a shared folder in one go, as a single zip with its folders.",
       "See how many times a shared file or folder was downloaded.",
       "Search your drive and filter by type or link status.",
       "Switch between list and grid view, and act on several items at once.",
