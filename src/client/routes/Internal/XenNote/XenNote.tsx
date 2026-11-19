@@ -21,7 +21,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
+import { useTheme } from "@mui/material/styles";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
 import ChecklistIcon from "@mui/icons-material/Checklist";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
@@ -29,7 +29,6 @@ import LinkIcon from "@mui/icons-material/Link";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import NotesIcon from "@mui/icons-material/Notes";
 import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
-import AddIcon from "@mui/icons-material/Add";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
@@ -41,7 +40,6 @@ import { normalizeTitle } from "@shared/xennote/wikiLinks";
 import { matchesKind, type NoteKind } from "./noteDraft";
 import { railPanelSx } from "../../../components/ui/railStyles";
 import { sectionLabelSx } from "../../../components/ui/surfaceStyles";
-import { swatchColor } from "./noteColors";
 import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -283,6 +281,23 @@ export default function XenNote() {
     </Box>
   );
 
+  const scopeTitle =
+    scope === "all"
+      ? "All notes"
+      : scope === "none"
+        ? "My notes"
+        : scope === "archive"
+          ? "Archive"
+          : scope === "trash"
+            ? "Trash"
+            : (openBook?.name ?? "Notes");
+  const bookSubtitle = openBook
+    ? `${openBook.note_count} ${openBook.note_count === 1 ? "note" : "notes"}${
+        openBook.my_role
+          ? ` · You're ${openBook.my_role === "owner" ? "the owner" : `a ${ROLE_LABEL[openBook.my_role].toLowerCase()}`}`
+          : ""
+      }`
+    : undefined;
   const startNote = (type?: NoteType) => setEditor({ note: null, startType: type });
   const empty = !!notes && notes.length === 0;
   const startNotebookId =
@@ -352,101 +367,54 @@ export default function XenNote() {
         )}
 
         <Box sx={{ flex: 1, minWidth: 0, px: { xs: 1.5, sm: 4 }, pt: { xs: 2, sm: 3 }, pb: { xs: 10, sm: 4 } }}>
-          {!wide && (
-            <PageHeader
-              title={
-                scope === "all"
-                  ? "All notes"
-                  : scope === "none"
-                    ? "My notes"
-                    : scope === "archive"
-                      ? "Archive"
-                      : scope === "trash"
-                        ? "Trash"
-                        : (openBook?.name ?? "Notes")
-              }
-              actions={
-                <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
-                  <MenuBookOutlinedIcon />
-                </IconButton>
-              }
-            />
-          )}
+          <PageHeader
+            title={scopeTitle}
+            subtitle={openBook ? bookSubtitle : undefined}
+            mb={2.5}
+            actions={
+              <>
+                {openBook && (
+                  <>
+                    <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
+                      {openBook.members.map((m) => (
+                        <UserAvatar key={m.user_id} user={m}>
+                          {m.username.slice(0, 1).toUpperCase()}
+                        </UserAvatar>
+                      ))}
+                    </AvatarGroup>
+                    {openBook.share?.enabled && (
+                      <Chip size="small" color="primary" variant="outlined" icon={<PublicIcon />} label="Link on" />
+                    )}
+                    {openBook.my_role === "owner" && (
+                      <Button
+                        variant="outlined"
+                        color="inherit"
+                        startIcon={<PersonAddAltOutlinedIcon />}
+                        onClick={() => setNotebookDialog({ id: openBook._id, tab: "people" })}
+                      >
+                        Share
+                      </Button>
+                    )}
+                    <Tooltip title="Notebook settings">
+                      <IconButton
+                        aria-label="Notebook settings"
+                        onClick={() => setNotebookDialog({ id: openBook._id })}
+                      >
+                        <SettingsOutlinedIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </>
+                )}
+                {!wide && (
+                  <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
+                    <MenuBookOutlinedIcon />
+                  </IconButton>
+                )}
+              </>
+            }
+          />
 
           {scope === "trash" && <NoteTrash />}
-
-          {openBook && (
-            <Box
-              aria-label="Notebook"
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-                flexWrap: "wrap",
-                p: { xs: 1.5, sm: 2.5 },
-                mb: 2.5,
-                border: 1,
-                borderColor: "divider",
-                borderRadius: 3,
-              }}
-            >
-              <Box
-                sx={(t) => {
-                  const main = swatchColor(t, openBook.color) ?? t.palette.text.secondary;
-                  return {
-                    width: 48,
-                    height: 48,
-                    borderRadius: 3,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: main,
-                    bgcolor: alpha(main, 0.18),
-                  };
-                }}
-              >
-                <MenuBookOutlinedIcon />
-              </Box>
-              <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
-                <Typography variant="h5" component="h1" noWrap sx={{ fontWeight: 500 }}>
-                  {openBook.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {openBook.note_count} {openBook.note_count === 1 ? "note" : "notes"}
-                  {openBook.my_role
-                    ? ` · You're ${ROLE_LABEL[openBook.my_role].toLowerCase() === "owner" ? "the owner" : `a ${ROLE_LABEL[openBook.my_role].toLowerCase()}`}`
-                    : ""}
-                </Typography>
-              </Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
-                  {openBook.members.map((m) => (
-                    <UserAvatar key={m.user_id} user={m}>
-                      {m.username.slice(0, 1).toUpperCase()}
-                    </UserAvatar>
-                  ))}
-                </AvatarGroup>
-                {openBook.share?.enabled && (
-                  <Chip size="small" color="primary" variant="outlined" icon={<PublicIcon />} label="Link on" />
-                )}
-                {openBook.my_role === "owner" && (
-                  <Button
-                    variant="contained"
-                    startIcon={<PersonAddAltOutlinedIcon />}
-                    onClick={() => setNotebookDialog({ id: openBook._id, tab: "people" })}
-                    sx={{ borderRadius: 6 }}
-                  >
-                    Share
-                  </Button>
-                )}
-                <Tooltip title="Notebook settings">
-                  <IconButton aria-label="Notebook settings" onClick={() => setNotebookDialog({ id: openBook._id })}>
-                    <SettingsOutlinedIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            </Box>
-          )}
 
           {scope !== "trash" && (
             <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
@@ -498,7 +466,7 @@ export default function XenNote() {
             </Box>
           )}
 
-          {canWrite && !phone && !openBook && (
+          {canWrite && !phone && (
             <Card
               variant="outlined"
               sx={{
@@ -512,7 +480,6 @@ export default function XenNote() {
                 maxWidth: 640,
                 mx: "auto",
                 borderRadius: 3,
-                boxShadow: 2,
               }}
             >
               <Typography
@@ -538,7 +505,7 @@ export default function XenNote() {
             </Card>
           )}
 
-          {openBook && (
+          {scope !== "trash" && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", mb: 2.75 }}>
               <Stack direction="row" sx={{ gap: 1, flex: 1, flexWrap: "wrap" }} aria-label="Filter by type">
                 {TYPE_FILTERS.map((f) => (
@@ -552,17 +519,6 @@ export default function XenNote() {
                   />
                 ))}
               </Stack>
-              {canWrite && !phone && (
-                <Button
-                  variant="outlined"
-                  color="inherit"
-                  startIcon={<AddIcon />}
-                  onClick={() => startNote()}
-                  sx={{ borderRadius: 6, height: 40 }}
-                >
-                  New note
-                </Button>
-              )}
             </Box>
           )}
 

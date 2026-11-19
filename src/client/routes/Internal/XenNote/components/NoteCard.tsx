@@ -125,9 +125,11 @@ export default function NoteCard({
   const content = (
     <Box>
       {hasPhotos && <PhotoMosaic images={note.images} />}
-      <Box sx={{ p: 2, pb: 2 }}>
+      {/* The pin, menu and tick sit in the top-right corner, so the box is tall enough that they stay inside a one-line
+          note, and an untitled note's first line is kept out from under them. */}
+      <Box sx={{ p: 2, pb: 2, minHeight: 80, pr: editable && !note.title ? 8 : 2 }}>
         {note.title && (
-          <Typography sx={{ fontWeight: 600, mb: 0.5, wordBreak: "break-word", pr: editable ? 8 : 0 }}>
+          <Typography sx={{ fontWeight: 600, mb: 0.5, wordBreak: "break-word", pr: editable ? 6 : 0 }}>
             {note.title}
           </Typography>
         )}
@@ -261,11 +263,22 @@ export default function NoteCard({
       sx={[
         { position: "relative", breakInside: "avoid", mb: 2, overflow: "hidden" },
         noteSurfaceSx(note.color),
-        selected !== undefined && {
-          outline: 2,
-          outlineStyle: selected ? "solid" : "none",
-          outlineColor: "primary.main",
-        },
+        selected === undefined
+          ? {}
+          : {
+              outline: 2,
+              outlineStyle: selected ? "solid" : "none",
+              outlineColor: "primary.main",
+              ...(selected && {
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  bgcolor: "action.selected",
+                  pointerEvents: "none",
+                },
+              }),
+            },
       ]}
     >
       {selected !== undefined ? (
@@ -289,12 +302,12 @@ export default function NoteCard({
           slotProps={{ input: { "aria-label": `Select ${note.title || "note"}` } }}
           sx={{
             position: "absolute",
-            top: 4,
-            left: 4,
+            top: 6,
+            right: 6,
             zIndex: 1,
-            bgcolor: "background.paper",
-            borderRadius: 1.5,
             p: 0.5,
+            // Photos sit under the corner, so the tick gets a backing there; on text it stays bare.
+            ...(hasPhotos && { bgcolor: (t) => alpha(t.palette.background.paper, 0.75), borderRadius: 1.5 }),
           }}
         />
       )}
