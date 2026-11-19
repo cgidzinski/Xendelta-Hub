@@ -1,5 +1,6 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 import { memberSchema } from "../utils/membership";
+import { softDeleteFields, softDeletePlugin } from "../utils/softDelete";
 import {
   MAX_BODY,
   MAX_CHECKLIST_TEXT,
@@ -79,6 +80,7 @@ const noteSchema = new Schema({
     token: { type: String, default: undefined },
   },
   updated_by: { type: String, default: null },
+  ...softDeleteFields,
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
 });
@@ -88,6 +90,9 @@ noteSchema.index({ owner_id: 1, notebook_id: 1 });
 noteSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
 // The reminder job: notes with a reminder that has come due.
 noteSchema.index({ "reminders.at": 1 });
+
+// Deleting a note moves it to the Trash for 30 days (utils/softDelete.ts).
+noteSchema.plugin(softDeletePlugin);
 
 noteSchema.pre("save", function (next) {
   this.updated_at = new Date();
