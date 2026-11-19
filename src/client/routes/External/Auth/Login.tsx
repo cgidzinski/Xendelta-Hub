@@ -10,6 +10,7 @@ import FormLoadingButton from "../../../components/forms/FormLoadingButton";
 import { validateEmail, validatePassword } from "../../../utils/formValidation";
 import { BRAND_NAME } from "@shared/brand";
 import { useTitle } from "../../../hooks/useTitle";
+import { locationPath, peekReturnTo } from "../../../utils/returnTo";
 
 interface LoginFormData {
   email: string;
@@ -79,8 +80,8 @@ export default function Login() {
 
     if (success) {
       // Redirect to the page they were trying to access, or internal by default
-      const from = location.state?.from?.pathname;
-      navigate(from || "/internal", { replace: true });
+      const stateFrom = location.state?.from ? locationPath(location.state.from) : null;
+      navigate(peekReturnTo() ?? stateFrom ?? "/internal", { replace: true });
     } else {
       setErrors({ general: "Invalid email or password" });
     }

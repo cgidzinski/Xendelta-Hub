@@ -7,6 +7,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import { useTitle } from "../../../hooks/useTitle";
 import PublicJoinCard from "../components/PublicJoinCard";
+import ShareLinkGate from "../components/ShareLinkGate";
 import { useAuth } from "../../../contexts/AuthContext";
 import LoadingSpinner from "../../../components/LoadingSpinner";
 import ErrorDisplay from "../../../components/ErrorDisplay";
@@ -21,7 +22,7 @@ import { BRAND_NAME } from "@shared/brand";
 import { clickableRowProps } from "../../../utils/keyboard";
 
 /** Read-only browse of a whole book behind /k/b/:token. Works signed out. */
-export default function XenKitchenPublicBook() {
+function XenKitchenPublicBookContent() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -179,5 +180,18 @@ export default function XenKitchenPublicBook() {
         />
       )}
     </Box>
+  );
+}
+
+/** A member of the book goes to it in the app; anyone else browses it here. */
+export default function XenKitchenPublicBook() {
+  const { token } = useParams<{ token: string }>();
+  return (
+    <ShareLinkGate<{ access: string; book_id: string }>
+      url={token ? `/api/xenkitchen/shared/book/${token}` : undefined}
+      target={(a) => (a.access === "member" ? `/internal/xenkitchen?book=${a.book_id}` : null)}
+    >
+      <XenKitchenPublicBookContent />
+    </ShareLinkGate>
   );
 }

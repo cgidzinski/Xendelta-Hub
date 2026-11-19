@@ -132,6 +132,22 @@ export const usePublicNote = (token: string | undefined) =>
     retry: false,
   });
 
+/** What a signed-in person opening a public link already has: a member goes to the real page, anyone else reads it. */
+export interface SharedLinkAccess {
+  access: "member" | "link";
+  role: "owner" | "editor" | "viewer" | null;
+  note_id?: string;
+  notebook_id: string | null;
+}
+
+export const useSharedLinkAccess = (kind: "note" | "notebook", token: string | undefined, signedIn: boolean) =>
+  useQuery({
+    queryKey: xennoteKeys.sharedLink(kind, token ?? ""),
+    queryFn: () => api.get<SharedLinkAccess>(`/api/xennote/shared/${kind}/${token}`),
+    enabled: !!token && signedIn,
+    retry: false,
+  });
+
 export const usePublicNotebook = (token: string | undefined) =>
   useQuery({
     queryKey: xennoteKeys.publicNotebook(token ?? ""),

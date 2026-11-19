@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
+import ShareLinkGate from "../components/ShareLinkGate";
 import { Box, Button, Card, Container, Stack, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import BrushIcon from "@mui/icons-material/Brush";
@@ -15,7 +16,7 @@ import { cardSx } from "../../../components/ui/surfaceStyles";
 import RecipeView from "../../Internal/Recipaint/components/RecipeView";
 import { BRAND_NAME } from "@shared/brand";
 
-export default function RecipaintPublic() {
+function RecipaintPublicContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -145,5 +146,18 @@ export default function RecipaintPublic() {
         )}
       </Container>
     </Box>
+  );
+}
+
+/** The owner of the recipe goes to it in the app; everyone else reads it here. */
+export default function RecipaintPublic() {
+  const { id } = useParams<{ id: string }>();
+  return (
+    <ShareLinkGate<{ mine: boolean }>
+      url={id ? `/api/recipaint/shared-link/${id}` : undefined}
+      target={(a) => (a.mine ? `/internal/recipaint/${id}` : null)}
+    >
+      <RecipaintPublicContent />
+    </ShareLinkGate>
   );
 }

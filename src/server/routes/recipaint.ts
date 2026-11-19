@@ -111,6 +111,19 @@ module.exports = function (app: express.Application) {
     });
   });
 
+  // A public recipe opened by someone signed in: if it is their own, they go to it in the app.
+  app.get(
+    "/api/recipaint/shared-link/:id",
+    authenticateToken,
+    validateParams(recipeIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const recipe = await Recipe.findById(req.params.id).select("owner isPublic").lean().exec();
+      if (!recipe || !recipe.isPublic) throw new AppError(404, "Recipe not found");
+      const mine = String(recipe.owner) === callerId(req);
+      res.json({ status: true, data: { mine } });
+    },
+  );
+
   // Get single recipe
   app.get(
     "/api/recipaint/public/:id",

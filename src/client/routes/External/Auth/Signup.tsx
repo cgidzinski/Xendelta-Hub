@@ -15,6 +15,7 @@ import {
 } from "../../../utils/formValidation";
 import { BRAND_NAME } from "@shared/brand";
 import { useTitle } from "../../../hooks/useTitle";
+import { peekReturnTo } from "../../../utils/returnTo";
 
 interface SignupFormData {
   username: string;
@@ -101,7 +102,7 @@ export default function Signup() {
     });
 
     if (success) {
-      navigate("/internal", { replace: true });
+      navigate(peekReturnTo() ?? "/internal", { replace: true });
     } else {
       setErrors({ general: "Signup failed. Username or email may already be taken." });
     }

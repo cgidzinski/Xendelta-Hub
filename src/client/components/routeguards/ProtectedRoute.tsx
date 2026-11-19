@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { Box, CircularProgress, Typography } from "@mui/material";
+import { clearReturnTo, locationPath, rememberReturnTo } from "../../utils/returnTo";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,6 +11,14 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+
+  // A signed-out visitor who is turned away keeps the address (query included) for after they sign in; once someone
+  // is signed in and reaching protected pages, a stale one is dropped.
+  useEffect(() => {
+    if (isLoading) return;
+    if (isAuthenticated) clearReturnTo();
+    else rememberReturnTo(locationPath(location));
+  }, [isAuthenticated, isLoading, location]);
 
   // Show loading spinner while checking authentication
   if (isLoading) {

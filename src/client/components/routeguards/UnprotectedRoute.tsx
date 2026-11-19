@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { peekReturnTo, locationPath } from "../../utils/returnTo";
 import { Box, CircularProgress, Typography, Container } from "@mui/material";
 
 interface UnprotectedRouteProps {
@@ -19,7 +20,8 @@ const UnprotectedRoute: React.FC<UnprotectedRouteProps> = ({ children }) => {
       if (location.pathname === "/") {
         navigate("/internal", { replace: true });
       } else {
-        const from = location.state?.from?.pathname || "/internal";
+        const stateFrom = location.state?.from ? locationPath(location.state.from) : null;
+        const from = peekReturnTo() ?? stateFrom ?? "/internal";
         navigate(from, { replace: true });
       }
     }
