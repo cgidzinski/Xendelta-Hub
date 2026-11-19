@@ -7,7 +7,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CloseIcon from "@mui/icons-material/Close";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import { addDays, addWeeks, format, isSameDay, startOfWeek } from "date-fns";
-import { useSnackbar } from "notistack";
+import { closeSnackbar, useSnackbar } from "notistack";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -31,10 +31,11 @@ const DAY = "yyyy-MM-dd";
 const weekOf = (d: Date) => startOfWeek(d, { weekStartsOn: 1 });
 
 /** A meal on a day: its recipe (a link), how many it's for, and a way to take it off. */
-function MealRow({ entry, canEdit }: { entry: PlanEntry; canEdit: boolean }) {
+function MealRow({ entry, canEdit, bookId }: { entry: PlanEntry; canEdit: boolean; bookId: string }) {
   const { enqueueSnackbar } = useSnackbar();
   const update = useUpdatePlanEntry();
   const remove = useRemovePlanEntry();
+  const add = useAddPlanEntry();
   const [servings, setServings] = useState(entry.servings === null ? "" : String(entry.servings));
 
   const saveServings = () => {
@@ -50,6 +51,29 @@ function MealRow({ entry, canEdit }: { entry: PlanEntry; canEdit: boolean }) {
       { onError: () => enqueueSnackbar("Couldn't save", { variant: "error" }) },
     );
   };
+
+  // Takes the meal off the day, and offers to put it back (the row is gone by then, so the undo is a promise, not state).
+  const removeMeal = () =>
+    remove.mutateAsync(entry._id).then(
+      () =>
+        enqueueSnackbar(`Removed ${entry.title}`, {
+          action: (key) => (
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                closeSnackbar(key);
+                add
+                  .mutateAsync({ bookId, date: entry.date, item_id: entry.item_id, servings: entry.servings })
+                  .catch((e: Error) => enqueueSnackbar(e.message || "Couldn't put it back", { variant: "error" }));
+              }}
+            >
+              Undo
+            </Button>
+          ),
+        }),
+      () => enqueueSnackbar("Couldn't remove it", { variant: "error" }),
+    );
 
   return (
     <Stack direction="row" alignItems="center" spacing={0.5} sx={{ py: 0.25 }}>
@@ -84,14 +108,7 @@ function MealRow({ entry, canEdit }: { entry: PlanEntry; canEdit: boolean }) {
         </Typography>
       )}
       {canEdit && (
-        <IconButton
-          size="small"
-          aria-label={`Remove ${entry.title}`}
-          disabled={remove.isPending}
-          onClick={() =>
-            remove.mutate(entry._id, { onError: () => enqueueSnackbar("Couldn't remove it", { variant: "error" }) })
-          }
-        >
+        <IconButton size="small" aria-label={`Remove ${entry.title}`} disabled={remove.isPending} onClick={removeMeal}>
           <CloseIcon fontSize="small" />
         </IconButton>
       )}
@@ -238,7 +255,7 @@ export default function MealPlan() {
                     Nothing planned
                   </Typography>
                 ) : (
-                  meals.map((m) => <MealRow key={m._id} entry={m} canEdit={canEdit} />)
+                  meals.map((m) => <MealRow key={m._id} entry={m} canEdit={canEdit} bookId={book._id} />)
                 )}
               </Card>
             );
