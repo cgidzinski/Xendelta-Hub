@@ -9,6 +9,7 @@ export const xendriveKeys = {
   browseAll: () => [...xendriveKeys.all, "browse"] as const,
   file: (fileId: string | undefined) => [...xendriveKeys.all, "file", fileId] as const,
   folderStats: (folderId: string) => [...xendriveKeys.all, "folder-stats", folderId] as const,
+  trash: () => [...xendriveKeys.all, "trash"] as const,
   recent: () => [...xendriveKeys.all, "recent"] as const,
   // The password (when the link has one) is part of the key so a corrected one fetches again instead of reusing the error.
   publicFolder: (token: string, folderId?: string | null, password?: string) =>

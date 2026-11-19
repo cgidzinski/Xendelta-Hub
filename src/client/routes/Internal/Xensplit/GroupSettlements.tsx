@@ -56,6 +56,8 @@ export default function GroupSettlements() {
     user,
     settleDebt,
     isSettlingDebt,
+    nudgeMember,
+    isNudging,
     deleteSettlement,
     isDeletingSettlement,
     onAddExchange,
@@ -497,6 +499,8 @@ export default function GroupSettlements() {
         userId={user.id}
         settleDebt={settleDebt}
         isSettling={isSettlingDebt}
+        onRemind={nudgeMember}
+        isReminding={isNudging}
       />
 
       <SettlementDetailDialog

@@ -10,7 +10,7 @@ import type { AuthenticatedRequest } from "../types/AuthenticatedRequest";
 import { AppError, callerId } from "../utils/http";
 import { accessOf, canManage, canView } from "../utils/membership";
 import { roundMoneyExact } from "@shared/money";
-import { XenSplit } from "../models/xenSplit";
+import { XenSplit, XenSplitNudge } from "../models/xenSplit";
 import { User } from "../models/user";
 import { authenticateToken } from "../middleware/auth";
 import { SocketManager } from "../infrastructure/SocketManager";
@@ -29,6 +29,7 @@ import {
   createExpenseSchema,
   updateExpenseSchema,
   settleDebtSchema,
+  nudgeXenSplitMemberSchema,
   xenSplitIdParamSchema,
   xenSplitMemberParamSchema,
   xenSplitExpenseParamSchema,
@@ -374,6 +375,7 @@ module.exports = function (app: any) {
       SocketManager.getInstance().notifyXenSplitGroupUpdate(groupId, allMemberIds);
 
       await notify(newOwnerId, {
+        app: "xensplit",
         title: "Group Ownership",
         message: `You are now the owner of ${group.name}`,
         link: `/internal/xensplit/groups/${groupId}/overview`,
@@ -434,6 +436,7 @@ module.exports = function (app: any) {
 
       for (const memberId of newMemberIds) {
         await notify(memberId, {
+          app: "xensplit",
           title: "Added to Group",
           message: `You've been added to ${group.name}`,
           link: `/internal/xensplit/groups/${groupId}/overview`,
@@ -509,6 +512,7 @@ module.exports = function (app: any) {
       // Notify removed user if they were removed by someone else (not a voluntary leave)
       if (targetUserId !== userId) {
         await notify(targetUserId, {
+          app: "xensplit",
           title: "Removed from Group",
           message: `You've been removed from ${group.name}`,
           icon: "person",
@@ -671,6 +675,7 @@ module.exports = function (app: any) {
         const mid = member._id.toString();
         if (mid !== userId && involvedIds.has(mid)) {
           await notify(mid, {
+            app: "xensplit",
             title: "New Expense",
             message: `${actorName} added: ${title} (${amount} ${expenseCurrency})`,
             link: `/internal/xensplit/groups/${groupId}/expenses`,
@@ -861,6 +866,7 @@ module.exports = function (app: any) {
         const mid = member._id.toString();
         if (mid !== userId && involvedIds.has(mid)) {
           await notify(mid, {
+            app: "xensplit",
             title: "Expense Updated",
             message: `${actorName} updated: ${expense.title}`,
             link: `/internal/xensplit/groups/${groupId}/expenses`,
@@ -1238,6 +1244,53 @@ module.exports = function (app: any) {
     },
   );
 
+  // POST /api/xensplit/groups/:groupId/nudge - Remind a member who owes you to settle up. Only for someone who really
+  // owes the caller (by the group's current balances), and once a day per person, so it can't be used to pester.
+  app.post(
+    "/api/xensplit/groups/:groupId/nudge",
+    validateParams(xenSplitIdParamSchema),
+    validate(nudgeXenSplitMemberSchema),
+    async (req: Request, res: Response) => {
+      const userId = callerId(req);
+      const { groupId } = req.params;
+      const { userId: targetId } = req.body as { userId: string };
+
+      const group = await XenSplit.findById(groupId);
+      if (!group) throw new AppError(404, "Group not found");
+      if (!canView(accessOf(group), userId)) throw new AppError(403, "Not a member of this group");
+      if (targetId === userId) throw new AppError(400, "You can't remind yourself");
+      if (!canView(accessOf(group), targetId)) throw new AppError(404, "That person isn't in this group");
+
+      const memberIds = (group.members as any[]).map((m: any) => String(m._id ?? m));
+      const balances = calculateBalances(asBalanceInput(group.toObject(), memberIds));
+      const owed = calculateMinimumTransfers(balances).filter((s: any) => s.from === targetId && s.to === userId);
+      if (owed.length === 0) throw new AppError(400, "They don't owe you anything in this group right now");
+
+      try {
+        await XenSplitNudge.create({ group_id: groupId, from_id: userId, to_id: targetId });
+      } catch (err) {
+        if ((err as { code?: number })?.code === 11000) {
+          throw new AppError(429, "You already reminded them in the last 24 hours");
+        }
+        throw err;
+      }
+
+      const [me, them] = await Promise.all([
+        User.findById(userId, "username").lean(),
+        User.findById(targetId, "username").lean(),
+      ]);
+      const amounts = owed.map((s: any) => `${s.amount} ${s.currency}`).join(" and ");
+      await notify(targetId, {
+        app: "xensplit",
+        title: "Time to settle up",
+        message: `${me?.username ?? "Someone"} is asking you to settle up in ${group.name}: you owe them ${amounts}.`,
+        link: `/internal/xensplit/groups/${groupId}/settlements`,
+        icon: "person",
+      });
+      res.json({ status: true, message: `Reminder sent to ${them?.username ?? "them"}` });
+    },
+  );
+
   // POST /api/xensplit/groups/:groupId/settle - Mark debt as settled
   app.post(
     "/api/xensplit/groups/:groupId/settle",
@@ -1286,6 +1339,7 @@ module.exports = function (app: any) {
       const fromMember = (group.members as any[]).find((m: any) => m._id.toString() === from);
       const fromName = fromMember?.username || "Someone";
       await notify(to, {
+        app: "xensplit",
         title: "Settlement Received",
         message: `${fromName} paid you ${amount} ${currency} in ${group.name}`,
         link: `/internal/xensplit/groups/${groupId}/overview`,
@@ -1403,6 +1457,7 @@ module.exports = function (app: any) {
       const notifyIds = new Set([party_a, party_b].filter((id) => id !== userId));
       for (const mid of notifyIds) {
         await notify(mid, {
+          app: "xensplit",
           title: "New Exchange",
           message: `${actorName} recorded a currency exchange in ${group.name}`,
           link: `/internal/xensplit/groups/${groupId}/expenses`,

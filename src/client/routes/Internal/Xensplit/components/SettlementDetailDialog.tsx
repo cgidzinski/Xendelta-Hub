@@ -18,6 +18,7 @@ import UndoIcon from "@mui/icons-material/Undo";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import LockIcon from "@mui/icons-material/Lock";
+import NotificationsActiveOutlinedIcon from "@mui/icons-material/NotificationsActiveOutlined";
 import type {
   EtransferInfo,
   XenSplitSettlement,
@@ -85,9 +86,20 @@ interface PendingProps {
   userId: string;
   settleDebt: (input: SettleDebtInput, options?: { onSuccess?: () => void; onError?: (error: Error) => void }) => void;
   isSettling: boolean;
+  /** Remind the person who owes (only offered when the pending payment is owed to you). */
+  onRemind?: (userId: string) => Promise<unknown>;
+  isReminding?: boolean;
 }
 
-export function PendingSettlementDialog({ settlement, onClose, userId, settleDebt, isSettling }: PendingProps) {
+export function PendingSettlementDialog({
+  settlement,
+  onClose,
+  userId,
+  settleDebt,
+  isSettling,
+  onRemind,
+  isReminding,
+}: PendingProps) {
   const { enqueueSnackbar } = useSnackbar();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -124,6 +136,15 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
         },
       },
     );
+  };
+
+  const remind = async () => {
+    try {
+      await onRemind?.(s.from);
+      enqueueSnackbar(`Reminder sent to ${s.fromUser.username}`, { variant: "success" });
+    } catch (error) {
+      enqueueSnackbar((error as Error)?.message || "Couldn't send the reminder", { variant: "error" });
+    }
   };
 
   return (
@@ -207,6 +228,22 @@ export function PendingSettlementDialog({ settlement, onClose, userId, settleDeb
           >
             Confirm Settlement
           </Button>
+        </DialogActions>
+      )}
+      {s.to === userId && onRemind && (
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, flexDirection: "column", alignItems: "stretch", gap: 0.5 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<NotificationsActiveOutlinedIcon />}
+            disabled={isReminding}
+            onClick={remind}
+          >
+            Remind {s.fromUser.username}
+          </Button>
+          <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
+            Sends them a notification. You can remind each person once a day.
+          </Typography>
         </DialogActions>
       )}
     </Dialog>

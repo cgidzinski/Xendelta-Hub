@@ -129,7 +129,7 @@ export default function RoutineMenu({ routine, variant, onEdit, onDuplicate, all
             Share
           </MenuItem>
         )}
-        {variant === "routines" && routine.is_owner && (
+        {variant === "routines" && routine.is_owner && !routine.archived && (
           <MenuItem
             onClick={() => {
               closeMenu();
@@ -140,6 +140,19 @@ export default function RoutineMenu({ routine, variant, onEdit, onDuplicate, all
             }}
           >
             {routine.enabled ? "Pause" : "Resume"}
+          </MenuItem>
+        )}
+        {variant === "routines" && routine.is_owner && (
+          <MenuItem
+            onClick={() => {
+              closeMenu();
+              quiet(
+                updateRoutine.mutateAsync({ id: routine._id, patch: { archived: !routine.archived } }),
+                routine.archived ? "Routine restored" : "Routine archived",
+              );
+            }}
+          >
+            {routine.archived ? "Restore" : "Archive"}
           </MenuItem>
         )}
         {variant === "routines" && !routine.is_owner && (

@@ -27,13 +27,13 @@ const USER_ID = "507f1f77bcf86cd799439011";
 
 let sendNotificationSpy: ReturnType<typeof vi.fn>;
 
-function mockUser(overrides: { email?: string | null; emailPref?: boolean } = {}) {
+function mockUser(overrides: { email?: string | null; emailPref?: boolean; muted?: string[] } = {}) {
   vi.spyOn(User, "findById").mockReturnValue({
     select: () => ({
       exec: async () => ({
         email: overrides.email === null ? undefined : (overrides.email ?? "user@example.com"),
         username: "tester",
-        notificationPrefs: { email: overrides.emailPref ?? false },
+        notificationPrefs: { email: overrides.emailPref ?? false, muted: overrides.muted ?? [] },
       }),
     }),
   } as any);
@@ -188,5 +188,39 @@ describe("notify email channel", () => {
 
     expect(result.email).toBe(false);
     expect(sendNotificationEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("per-app notification settings", () => {
+  const input = { title: "t", message: "m", link: "/x", app: "xensplit" as const };
+
+  it("does nothing different when nothing is switched off", async () => {
+    mockUser({ emailPref: true });
+    const result = await notify(USER_ID, { ...input, channels: ["inapp", "socket", "push", "email"] });
+    expect(result).toMatchObject({ inapp: true, socket: true, email: true, push: { sent: 1 } });
+  });
+
+  it("drops the way that is switched off for that app only", async () => {
+    mockUser({ emailPref: true, muted: ["xensplit:push", "xensplit:email"] });
+    const result = await notify(USER_ID, { ...input, channels: ["inapp", "socket", "push", "email"] });
+    expect(result).toMatchObject({ inapp: true, socket: true, email: false, push: { sent: 0 } });
+    expect(sendPushToUserMock).not.toHaveBeenCalled();
+    expect(sendNotificationEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("switching off 'in the app' drops the bell and the live pop-up together", async () => {
+    mockUser({ muted: ["xensplit:inapp"] });
+    const result = await notify(USER_ID, input);
+    expect(result).toMatchObject({ inapp: false, socket: false });
+    expect(sendNotificationSpy).not.toHaveBeenCalled();
+    expect(sendPushToUserMock).toHaveBeenCalled(); // push is a different way
+  });
+
+  it("ignores another app's switches, and never filters a notification that names no app", async () => {
+    mockUser({ muted: ["xenroutine:inapp", "xenroutine:push", "xensplit:email"] });
+    expect(await notify(USER_ID, input)).toMatchObject({ inapp: true, socket: true, push: { sent: 1 } });
+    sendPushToUserMock.mockClear();
+    mockUser({ muted: ["xensplit:inapp", "xensplit:push"] });
+    expect(await notify(USER_ID, { title: "t", message: "m" })).toMatchObject({ inapp: true, push: { sent: 1 } });
   });
 });

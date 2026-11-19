@@ -17,6 +17,8 @@ export interface XenLink {
   last_clicked_at?: string | null;
   /** ISO time after which the link stops working; absent = never. */
   expires_at?: string | null;
+  /** Switched off by the owner: nobody is sent on until it is turned back on. */
+  paused?: boolean;
 }
 
 /** What is sent to create or change a link. */
@@ -28,6 +30,8 @@ export interface XenLinkInput {
   slug?: string;
   /** ISO time, or null to remove the expiry; absent leaves it as it is. */
   expiresAt?: string | null;
+  /** Pause or resume the link; absent leaves it as it is. */
+  paused?: boolean;
 }
 
 export interface XenLinkStats {
@@ -65,6 +69,10 @@ const updateXenLink = async (link: XenLinkInput): Promise<XenLink> => {
 
 const deleteXenLink = async (linkId: string): Promise<XenLink> => {
   return api.delete<XenLink>(`/api/xenlink/${linkId}`);
+};
+
+const deleteManyXenLinks = async (ids: string[]): Promise<{ deleted: number }> => {
+  return api.post<{ deleted: number }>("/api/xenlink/delete-many", { ids });
 };
 
 // Hooks
@@ -135,6 +143,17 @@ export const useDeleteXenLink = () => {
     },
     onError: () => {
       enqueueSnackbar("Failed to delete link", { variant: "error" });
+    },
+  });
+};
+
+export const useDeleteManyXenLinks = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => deleteManyXenLinks(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: xenLinkKeys.list() });
+      queryClient.invalidateQueries({ queryKey: userProfileKeys.profile() });
     },
   });
 };

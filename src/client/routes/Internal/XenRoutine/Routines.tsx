@@ -19,7 +19,9 @@ export default function Routines() {
   const { routines, isLoading, isError, error, refetch } = useRoutines();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
+  const archivedCount = useMemo(() => routines.filter((r) => r.archived).length, [routines]);
   const categories = useMemo(
     () => [...new Set(routines.map((r) => r.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [routines],
@@ -30,10 +32,11 @@ export default function Routines() {
     const words = search.toLowerCase().split(/\s+/).filter(Boolean);
     return routines.filter(
       (r) =>
+        (showArchived || !r.archived) &&
         (!activeCategory || r.category === activeCategory) &&
         words.every((w) => `${r.name} ${r.category} ${r.notes}`.toLowerCase().includes(w)),
     );
-  }, [routines, search, activeCategory]);
+  }, [routines, search, activeCategory, showArchived]);
 
   if (isLoading) return <ListSkeleton rows={4} height={96} />;
   if (isError) return <ErrorDisplay error={error as Error} onRetry={() => refetch()} />;
@@ -70,7 +73,7 @@ export default function Routines() {
           },
         }}
       />
-      {categories.length > 0 && (
+      {(categories.length > 0 || archivedCount > 0) && (
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" aria-label="Filter by category">
           {categories.map((c) => (
             <Chip
@@ -81,6 +84,14 @@ export default function Routines() {
               onClick={() => setCategory(activeCategory === c ? null : c)}
             />
           ))}
+          {archivedCount > 0 && (
+            <Chip
+              label={`Archived (${archivedCount})`}
+              color={showArchived ? "primary" : "default"}
+              variant={showArchived ? "filled" : "outlined"}
+              onClick={() => setShowArchived((v) => !v)}
+            />
+          )}
         </Stack>
       )}
       {visible.length === 0 && (
@@ -98,7 +109,11 @@ export default function Routines() {
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
                   {r.name}
                 </Typography>
-                {!r.enabled && <Chip size="small" label="Paused" />}
+                {r.archived ? (
+                  <Chip size="small" label="Archived" />
+                ) : (
+                  !r.enabled && <Chip size="small" label="Paused" />
+                )}
                 {r.category && <Chip size="small" label={r.category} />}
                 {r.members.length > 1 && (
                   <Tooltip title={`Shared with ${r.members.map((m) => m.username).join(", ")}`}>
