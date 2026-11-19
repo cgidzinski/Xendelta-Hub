@@ -1,11 +1,22 @@
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { Alert, Box, CircularProgress, Container, Typography } from "@mui/material";
 import { useTitle } from "../../../hooks/useTitle";
 import PublicJoinCard from "../components/PublicJoinCard";
-import { usePublicNote, usePublicNotebook } from "../../../hooks/xennote/useXenNote";
+import { useAuth } from "../../../contexts/AuthContext";
+import { usePublicNote, usePublicNotebook, useSharedLinkAccess } from "../../../hooks/xennote/useXenNote";
 import NoteCard from "../../Internal/XenNote/components/NoteCard";
 
 const GONE = "This link doesn't work any more. Ask the person who shared it for a new one.";
+
+function Loading() {
+  return (
+    <Frame>
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <CircularProgress />
+      </Box>
+    </Frame>
+  );
+}
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
@@ -18,9 +29,20 @@ function Frame({ children }: { children: React.ReactNode }) {
 /** One shared note, opened from its public link (read-only). */
 export function XenNotePublicNote() {
   const { token } = useParams<{ token: string }>();
-  const { data: note, isLoading, isError } = usePublicNote(token);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  // Signed in: a member goes to the note in the app (at their role), anyone else to the in-app read-only view.
+  const access = useSharedLinkAccess("note", token, isAuthenticated);
+  const { data: note, isLoading, isError } = usePublicNote(isAuthenticated ? undefined : token);
   useTitle(note?.title ? `${note.title} - XenNote` : "Shared note - XenNote");
 
+  if (authLoading || (isAuthenticated && access.isLoading)) return <Loading />;
+  if (isAuthenticated && access.data) {
+    const to =
+      access.data.access === "member"
+        ? `/internal/xennote?note=${access.data.note_id}`
+        : `/internal/xennote/shared/${token}`;
+    return <Navigate to={to} replace />;
+  }
   if (isLoading) {
     return (
       <Frame>
@@ -52,9 +74,19 @@ export function XenNotePublicNote() {
 /** A shared notebook, opened from its public link: its notes, read-only. */
 export function XenNotePublicNotebook() {
   const { token } = useParams<{ token: string }>();
-  const { data, isLoading, isError } = usePublicNotebook(token);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const access = useSharedLinkAccess("notebook", token, isAuthenticated);
+  const { data, isLoading, isError } = usePublicNotebook(isAuthenticated ? undefined : token);
   useTitle(data ? `${data.notebook.name} - XenNote` : "Shared notebook - XenNote");
 
+  if (authLoading || (isAuthenticated && access.isLoading)) return <Loading />;
+  if (isAuthenticated && access.data) {
+    const to =
+      access.data.access === "member"
+        ? `/internal/xennote?notebook=${access.data.notebook_id}`
+        : `/internal/xennote/shared/b/${token}`;
+    return <Navigate to={to} replace />;
+  }
   if (isLoading) {
     return (
       <Frame>

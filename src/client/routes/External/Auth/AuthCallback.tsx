@@ -3,6 +3,7 @@ import { tokenStore } from "../../../config/tokenStore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../../contexts/AuthContext";
+import { peekReturnTo } from "../../../utils/returnTo";
 import { Container, Typography, CircularProgress, Alert } from "@mui/material";
 
 export default function AuthCallback() {
@@ -29,7 +30,7 @@ export default function AuthCallback() {
         // Store the token and verify authentication
         tokenStore.set(token);
         await checkAuth();
-        navigate("/internal");
+        navigate(peekReturnTo() ?? "/internal");
       } else {
         // No token received, redirect to login
         navigate("/login?error=no_token");

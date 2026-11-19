@@ -5,6 +5,7 @@ import { BRAND_NAME } from "@shared/brand";
 import { useAuth } from "../../../contexts/AuthContext";
 import { APPS_REGISTRY } from "../../../constants/apps";
 import { cardSx } from "../../../components/ui/surfaceStyles";
+import { rememberReturnTo } from "../../../utils/returnTo";
 
 /**
  * Shown at the bottom of a public page to someone who isn't signed in: what the app is, and a way in.
@@ -14,6 +15,11 @@ export default function PublicJoinCard({ app }: { app: Exclude<GuideApp, "hub"> 
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   if (isAuthenticated) return null;
+  // After signing in or up, come back to the link they were looking at
+  const goTo = (path: string) => {
+    rememberReturnTo(`${window.location.pathname}${window.location.search}`);
+    navigate(path);
+  };
   const label = APPS_REGISTRY.find((a) => a.key === app)?.label ?? app;
   return (
     <Card variant="outlined" sx={{ ...cardSx, p: 3, mt: 4, textAlign: "center" }}>
@@ -25,10 +31,10 @@ export default function PublicJoinCard({ app }: { app: Exclude<GuideApp, "hub"> 
       </Typography>
       <Box>
         <Stack direction="row" spacing={1} justifyContent="center">
-          <Button variant="contained" onClick={() => navigate("/signup")}>
+          <Button variant="contained" onClick={() => goTo("/signup")}>
             Sign up
           </Button>
-          <Button onClick={() => navigate("/login")}>Sign in</Button>
+          <Button onClick={() => goTo("/login")}>Sign in</Button>
         </Stack>
       </Box>
     </Card>

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useParams, useSearchParams, Link as RouterLink } from "react-router-dom";
+import ShareLinkGate from "../components/ShareLinkGate";
 import {
   Alert,
   Box,
@@ -51,7 +52,7 @@ const storePassword = (token: string, password: string) => {
 };
 
 /** A shared folder, opened from its public link: browse it and everything inside, download files. Read-only. */
-export default function XenDriveFolderPublic() {
+function XenDriveFolderPublicContent() {
   const { token } = useParams<{ token: string }>();
   const [params] = useSearchParams();
   const folderId = params.get("folder");
@@ -427,5 +428,18 @@ export default function XenDriveFolderPublic() {
         />
       </Container>
     </Box>
+  );
+}
+
+/** The owner of the folder goes to it in the app; everyone else browses it here. */
+export default function XenDriveFolderPublic() {
+  const { token } = useParams<{ token: string }>();
+  return (
+    <ShareLinkGate<{ mine: boolean; folder_id: string | null }>
+      url={token ? `/api/xendrive/shared-link/folder/${token}` : undefined}
+      target={(a) => (a.mine && a.folder_id ? `/internal/xendrive/folder/${a.folder_id}` : null)}
+    >
+      <XenDriveFolderPublicContent />
+    </ShareLinkGate>
   );
 }

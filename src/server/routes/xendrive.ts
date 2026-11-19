@@ -767,6 +767,36 @@ module.exports = function (app: express.Application) {
   });
 
   // ---------------------------------------------------------------------------------------------
+  // A link opened by someone signed in: is the file or folder theirs? Then they go to it in the app. Nobody else is a
+  // member (XenDrive shares by link only), so everyone else stays on the public page. The token only ever lets
+  // someone read.
+  // ---------------------------------------------------------------------------------------------
+
+  app.get(
+    "/api/xendrive/shared-link/file/:shareToken",
+    authenticateToken,
+    validateParams(xenDriveShareTokenParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await XenDriveFile.findOne({ shareToken: req.params.shareToken, shareEnabled: true }).exec();
+      if (!file) throw new AppError(404, "File not found");
+      const mine = String(file.owner_id) === callerId(req);
+      return res.json({ status: true, data: { mine, file_id: mine ? String(file._id) : null } });
+    },
+  );
+
+  app.get(
+    "/api/xendrive/shared-link/folder/:token",
+    authenticateToken,
+    validateParams(xenDriveFolderTokenParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const folder = await XenDriveFolder.findOne({ "share.token": req.params.token, "share.enabled": true }).exec();
+      if (!folder) throw new AppError(404, "Folder not found");
+      const mine = String(folder.owner_id) === callerId(req);
+      return res.json({ status: true, data: { mine, folder_id: mine ? String(folder._id) : null } });
+    },
+  );
+
+  // ---------------------------------------------------------------------------------------------
   // Public: a single file's own link
   // ---------------------------------------------------------------------------------------------
 

@@ -359,6 +359,41 @@ const cloneSchema = z
   .optional();
 
 module.exports = function (app: any) {
+  // ---------- a public link opened by someone signed in ----------
+  // A member of the book (or its owner) is sent to the real page at their role; anyone else just holds the link.
+  // The token only ever lets someone read: it never makes them a member.
+  const linkAccess = (res: Response, book: any, uid: string, ids: { item_id?: string; book_id: string }) => {
+    const role: string | null = book?.members?.find((m: { user_id: string }) => m.user_id === uid)?.role ?? null;
+    res.json({ status: true, message: "OK", data: { access: role ? "member" : "link", role, ...ids } });
+  };
+
+  app.get(
+    "/api/xenkitchen/shared/:token",
+    authenticateToken,
+    validateParams(xenKitchenTokenParamSchema),
+    handle(async (req, res) => {
+      const item = await XenKitchenItem.findOne({ "share.token": req.params.token, "share.enabled": true })
+        .lean()
+        .exec();
+      if (!item) throw new AppError(404, "This link isn't available");
+      const book = await XenKitchenBook.findById(item.book_id).lean().exec();
+      linkAccess(res, book, callerId(req), { item_id: String(item._id), book_id: String(item.book_id) });
+    }),
+  );
+
+  app.get(
+    "/api/xenkitchen/shared/book/:token",
+    authenticateToken,
+    validateParams(xenKitchenTokenParamSchema),
+    handle(async (req, res) => {
+      const book = await XenKitchenBook.findOne({ "share.token": req.params.token, "share.enabled": true })
+        .lean()
+        .exec();
+      if (!book) throw new AppError(404, "This link isn't available");
+      linkAccess(res, book, callerId(req), { book_id: String(book._id) });
+    }),
+  );
+
   // ---------- public links (no auth) ----------
 
   app.get(

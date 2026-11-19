@@ -115,7 +115,7 @@ export function registerNotebookRoutes(app: any) {
             app: "xennote",
             title: "Added to a notebook",
             message: `${me} shared the notebook "${book.name}" with you as ${role === "viewer" ? "a viewer" : "an editor"}.`,
-            link: "/internal/xennote",
+            link: `/internal/xennote?notebook=${book.id}`,
             icon: "sticky_note_2",
           }),
         ),

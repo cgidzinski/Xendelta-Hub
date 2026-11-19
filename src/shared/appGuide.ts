@@ -395,6 +395,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Pin, archive, colour and label notes.",
       "Group notes in notebooks and share them with people as editors or viewers.",
       "Share a note or a notebook with a link anyone can open.",
+      "Open a note link while signed in and it opens right in the app, ready to edit if you are an editor.",
       "Set a reminder on a note and get a notification when it is due.",
       "Search and filter by type, label or notebook.",
       "Bring back a deleted note from the Trash within 30 days.",

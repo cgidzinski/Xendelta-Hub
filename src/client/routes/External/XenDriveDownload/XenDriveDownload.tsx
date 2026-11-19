@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import ShareLinkGate from "../components/ShareLinkGate";
 import {
   Container,
   Typography,
@@ -28,7 +29,7 @@ interface FileInfo {
   expiry: string | null;
 }
 
-export default function XenDriveDownload() {
+function XenDriveDownloadContent() {
   const { shareToken } = useParams<{ shareToken: string }>();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -196,5 +197,18 @@ export default function XenDriveDownload() {
       </Card>
       <PublicJoinCard app="xendrive" />
     </Container>
+  );
+}
+
+/** The owner of the file goes to it in the app; everyone else gets the download page. */
+export default function XenDriveDownload() {
+  const { shareToken } = useParams<{ shareToken: string }>();
+  return (
+    <ShareLinkGate<{ mine: boolean; file_id: string | null }>
+      url={shareToken ? `/api/xendrive/shared-link/file/${shareToken}` : undefined}
+      target={(a) => (a.mine && a.file_id ? `/internal/xendrive/file/${a.file_id}` : null)}
+    >
+      <XenDriveDownloadContent />
+    </ShareLinkGate>
   );
 }

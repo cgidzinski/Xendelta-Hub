@@ -128,6 +128,20 @@ export default function XenNote() {
       .finally(() => setSearchParams({}, { replace: true }));
   }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
 
+  // A link to a notebook (being added to one, or opening its public link as a member): /internal/xennote?notebook=<id>.
+  const linkedBookId = searchParams.get("notebook");
+  useEffect(() => {
+    if (!linkedBookId) return;
+    setScope(linkedBookId);
+    setSearchParams(
+      (p) => {
+        p.delete("notebook");
+        return p;
+      },
+      { replace: true },
+    );
+  }, [linkedBookId, setSearchParams]);
+
   const filters: NoteFilters = {
     notebook: scope === "all" || scope === "archive" || scope === "trash" ? undefined : scope,
     archived: scope === "archive",

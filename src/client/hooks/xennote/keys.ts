@@ -14,5 +14,6 @@ export const xennoteKeys = {
   version: (noteId: string, versionId: string) => [...xennoteKeys.all, "version", noteId, versionId] as const,
   labels: () => [...xennoteKeys.all, "labels"] as const,
   publicNote: (token: string) => [...xennoteKeys.all, "public-note", token] as const,
+  sharedLink: (kind: string, token: string) => [...xennoteKeys.all, "shared-link", kind, token] as const,
   publicNotebook: (token: string) => [...xennoteKeys.all, "public-notebook", token] as const,
 };
