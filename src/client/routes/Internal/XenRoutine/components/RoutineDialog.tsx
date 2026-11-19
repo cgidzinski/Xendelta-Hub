@@ -160,12 +160,17 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
             </TextField>
           </Stack>
           {routine ? (
-            <DatePicker
-              label="Next due"
-              value={toDate(dueAt)}
-              onChange={(d) => setDueAt(fromDate(d))}
-              slotProps={{ textField: { fullWidth: true } }}
-            />
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              <DatePicker
+                label="Next due"
+                value={toDate(dueAt)}
+                onChange={(d) => setDueAt(fromDate(d))}
+                slotProps={{ textField: { fullWidth: true }, actionBar: { actions: ["today", "accept"] } }}
+              />
+              <Button onClick={() => setDueAt(today)} disabled={dueAt === today}>
+                Today
+              </Button>
+            </Stack>
           ) : (
             <>
               <DatePicker
@@ -173,7 +178,7 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
                 value={toDate(startDate)}
                 onChange={(d) => setStartDate(fromDate(d))}
                 maxDate={alreadyDone ? new Date() : undefined}
-                slotProps={{ textField: { fullWidth: true } }}
+                slotProps={{ textField: { fullWidth: true }, actionBar: { actions: ["today", "accept"] } }}
               />
               <ToggleButtonGroup
                 exclusive
