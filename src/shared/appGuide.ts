@@ -238,6 +238,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set up recurring expenses that repeat daily, weekly, monthly or yearly, and pause them.",
       "See who owes whom, and the fewest payments that settle everyone up.",
       "Record settlements, with a prompt to pay by e-transfer.",
+      "Remind someone who owes you to settle up, once a day.",
       "See a map of who owes what to whom, simplified or direct.",
       "See spending by category, by member and by month.",
       "Look back through the group's activity, including deleted expenses.",
@@ -391,7 +392,9 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set a reminder on a note and get a notification when it is due.",
       "Search and filter by type, label or notebook.",
       "Bring back a deleted note from the Trash within 30 days.",
+      "See how a note used to read and put an earlier version back, from its last 20.",
       "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
+      "Select several notes to archive, recolour, label, move or delete them together.",
     ],
     tips: [
       { text: "Tick checklist items right from the board, without opening the note.", link: "/internal/xennote" },
