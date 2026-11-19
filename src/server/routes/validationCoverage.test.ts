@@ -19,6 +19,8 @@ const PARAMS_EXEMPT: Record<string, string> = {};
 const BODY_EXEMPT: Record<string, string> = {
   "POST /api/user/link-google": "no body: authenticated trigger for an OAuth redirect flow",
   "POST /api/xennote/notes/:id/images": "multipart upload handled by multer, not JSON",
+  "POST /api/xendrive/trash/:fileId/restore": "no body: puts back the trashed file named by the path",
+  "POST /api/xennote/trash/:id/restore": "no body: puts back the trashed note named by the path",
   "POST /api/xennote/notes/:id/share": "no body: turns on the note's public link (path names the note)",
   "POST /api/xennote/notes/:id/share/rotate": "no body: replaces the note's public link (path names the note)",
   "POST /api/xennote/notebooks/:id/share": "no body: turns on the notebook's public link (path names the notebook)",

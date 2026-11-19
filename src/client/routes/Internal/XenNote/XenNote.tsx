@@ -34,7 +34,7 @@ import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
-import { useSnackbar } from "notistack";
+import { closeSnackbar, useSnackbar } from "notistack";
 import type { NoteType } from "@shared/xennote/notes";
 import { normalizeTitle } from "@shared/xennote/wikiLinks";
 import { matchesKind, type NoteKind } from "./noteDraft";
@@ -55,12 +55,14 @@ import {
   useXenNoteCounts,
   useXenNoteLabels,
   useXenNotebooks,
+  useXenNoteTrashActions,
   useXenNotes,
 } from "../../../hooks/xennote/useXenNote";
 import type { NoteFilters, XenNote as Note } from "../../../types/XenNote";
 import { NOTE_SORTS, isNoteSort, sortNotes, type NoteSort } from "./noteSort";
 import NoteCard from "./components/NoteCard";
 import NoteEditor from "./components/NoteEditor";
+import NoteTrash from "./components/NoteTrash";
 import NoteRail, { type Scope } from "./components/NoteRail";
 import NotebookDialog from "./components/NotebookDialog";
 
@@ -80,6 +82,7 @@ export default function XenNote() {
   useTitle("XenNote");
   const { enqueueSnackbar } = useSnackbar();
   const { updateNote, deleteNote } = useXenNoteActions();
+  const { restore } = useXenNoteTrashActions();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const theme = useTheme();
@@ -121,7 +124,7 @@ export default function XenNote() {
   }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
 
   const filters: NoteFilters = {
-    notebook: scope === "all" || scope === "archive" ? undefined : scope,
+    notebook: scope === "all" || scope === "archive" || scope === "trash" ? undefined : scope,
     archived: scope === "archive",
     label: label ?? undefined,
     q,
@@ -181,14 +184,31 @@ export default function XenNote() {
 
   const removeNote = async (note: Note) => {
     const ok = await confirm({
-      title: "Delete this note?",
-      message: "It's deleted for everyone who can see it, and can't be brought back.",
-      confirmLabel: "Delete note",
+      title: "Move this note to the Trash?",
+      message: "It disappears for everyone who can see it. You can bring it back from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     try {
       await deleteNote.mutateAsync(note._id);
-      enqueueSnackbar("Note deleted", { variant: "success" });
+      enqueueSnackbar("Note moved to Trash", {
+        variant: "success",
+        action: (key) => (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              closeSnackbar(key);
+              restore.mutate(note._id, {
+                onError: (e) =>
+                  enqueueSnackbar((e as Error).message || "Couldn't restore the note", { variant: "error" }),
+              });
+            }}
+          >
+            Undo
+          </Button>
+        ),
+      });
     } catch (e) {
       enqueueSnackbar((e as Error).message || "Couldn't delete the note", { variant: "error" });
     }
@@ -217,7 +237,7 @@ export default function XenNote() {
   const empty = !!notes && notes.length === 0;
   const startNotebookId =
     openBook && (openBook.my_role === "owner" || openBook.my_role === "editor") ? openBook._id : null;
-  const canWrite = scope !== "archive" && (!openBook || !!startNotebookId);
+  const canWrite = scope !== "archive" && scope !== "trash" && (!openBook || !!startNotebookId);
 
   const pickScope = (next: Scope) => {
     setScope(next);
@@ -291,7 +311,9 @@ export default function XenNote() {
                     ? "My notes"
                     : scope === "archive"
                       ? "Archive"
-                      : (openBook?.name ?? "Notes")
+                      : scope === "trash"
+                        ? "Trash"
+                        : (openBook?.name ?? "Notes")
               }
               actions={
                 <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
@@ -300,6 +322,8 @@ export default function XenNote() {
               }
             />
           )}
+
+          {scope === "trash" && <NoteTrash />}
 
           {openBook && (
             <Box
@@ -374,39 +398,41 @@ export default function XenNote() {
             </Box>
           )}
 
-          <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
-            <TextField
-              fullWidth
-              placeholder="Search notes, lists and links"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  sx: { borderRadius: 3, height: 44 },
-                },
-              }}
-              sx={{ flex: 1, minWidth: 0 }}
-            />
-            <TextField
-              select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as NoteSort)}
-              aria-label="Sort notes"
-              slotProps={{ input: { sx: { borderRadius: 3, height: 44 } } }}
-              sx={{ width: { xs: 130, sm: 160 } }}
-            >
-              {NOTE_SORTS.map((s) => (
-                <MenuItem key={s.value} value={s.value}>
-                  {s.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
+          {scope !== "trash" && (
+            <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
+              <TextField
+                fullWidth
+                placeholder="Search notes, lists and links"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    sx: { borderRadius: 3, height: 44 },
+                  },
+                }}
+                sx={{ flex: 1, minWidth: 0 }}
+              />
+              <TextField
+                select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as NoteSort)}
+                aria-label="Sort notes"
+                slotProps={{ input: { sx: { borderRadius: 3, height: 44 } } }}
+                sx={{ width: { xs: 130, sm: 160 } }}
+              >
+                {NOTE_SORTS.map((s) => (
+                  <MenuItem key={s.value} value={s.value}>
+                    {s.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          )}
 
           {canWrite && !phone && !openBook && (
             <Card
@@ -476,7 +502,7 @@ export default function XenNote() {
             </Box>
           )}
 
-          {isLoading && !notes ? (
+          {scope === "trash" ? null : isLoading && !notes ? (
             <ListSkeleton rows={4} height={96} gap={2} />
           ) : isError ? (
             <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />

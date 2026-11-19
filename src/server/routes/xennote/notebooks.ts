@@ -78,7 +78,7 @@ export function registerNotebookRoutes(app: any) {
     validateParams(xenNoteIdParamSchema),
     async (req: Request, res: Response) => {
       const book = await loadNotebook(req, req.params.id as string, "manage");
-      const notes = await XenNote.find({ notebook_id: book._id }, "images").lean();
+      const notes = await XenNote.find({ notebook_id: book._id }, "images").setOptions({ includeDeleted: true }).lean();
       await removeNotePhotos(notes.flatMap((n) => n.images));
       await XenNote.deleteMany({ notebook_id: book._id });
       const people = book.members.map((m) => m.user_id);

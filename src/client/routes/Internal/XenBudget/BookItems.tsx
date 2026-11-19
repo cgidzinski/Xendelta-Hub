@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 import DownloadIcon from "@mui/icons-material/Download";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
@@ -24,11 +25,14 @@ import { startOfMonth } from "date-fns";
 import type { BookDetailContext } from "./BookDetail";
 import {
   useXenBudgetItems,
+  useXenBudgetItemMutations,
   exportItemsCsv,
   type ItemFilters,
   type ItemSortMode,
 } from "../../../hooks/xenbudget/useItems";
 import ItemListItem from "./components/ItemListItem";
+import BulkActionBar from "./components/BulkActionBar";
+import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import ItemFilterSelect from "./components/ItemFilterSelect";
 import {
   CATEGORY_PREFIX,
@@ -115,6 +119,11 @@ export default function BookItems() {
     // Only when a fresh seed arrives — otherwise this would fight the period button.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed?.from, seed?.to, seed?.period]);
+  const confirm = useConfirm();
+  const { bulkUpdateItemsAsync, bulkDeleteItemsAsync, isBulkWorking } = useXenBudgetItemMutations(book._id);
+  // Choosing several items to change or delete together. The list is paged, so "all" means the ones loaded.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [sortMode, setSortMode] = useState<ItemSortMode>("date_desc");
@@ -179,6 +188,35 @@ export default function BookItems() {
     book._id,
     filters,
   );
+
+  // What is ticked belongs to the view it was ticked in: changing the filters or search starts again.
+  useEffect(() => setSelectedIds([]), [filters]);
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelectedIds([]);
+  };
+  const toggleItem = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const MAX_BULK = 200;
+  const selectAll = () => setSelectedIds(items.slice(0, MAX_BULK).map((i) => i._id));
+  const bulk = async (run: () => Promise<unknown>, done: string) => {
+    try {
+      await run();
+      enqueueSnackbar(done, { variant: "success" });
+      setSelectedIds([]);
+    } catch (e: any) {
+      enqueueSnackbar(e?.message ?? "Couldn't change those items", { variant: "error" });
+    }
+  };
+  const countLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "item" : "items"}`;
+  const bulkDelete = async () => {
+    const ok = await confirm({
+      title: `Delete ${countLabel}?`,
+      message: "They are removed from the book for everyone, along with their photos. This can't be undone.",
+    });
+    if (ok) await bulk(() => bulkDeleteItemsAsync(selectedIds), `${countLabel} deleted`);
+  };
+  const itemProps = (id: string) => (selecting ? { selected: selectedIds.includes(id) } : {});
 
   // Day-section headers make sense reading either newest-first or oldest-first — only the
   // amount/name sorts break the "same-day items stay contiguous" assumption groupByDay
@@ -301,6 +339,21 @@ export default function BookItems() {
               <MenuItem value="description_asc">Name: A to Z</MenuItem>
               <MenuItem value="description_desc">Name: Z to A</MenuItem>
             </TextField>
+            <Tooltip title={selecting ? "Stop selecting" : "Select items to change or delete together"}>
+              <span>
+                <IconButton
+                  size="small"
+                  color={selecting ? "primary" : "default"}
+                  aria-pressed={selecting}
+                  aria-label="Select items"
+                  sx={{ height: 40, width: 40, flexShrink: 0 }}
+                  disabled={items.length === 0}
+                  onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                >
+                  <ChecklistIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
             <Tooltip title="Export this view as CSV">
               {/* A span, because a disabled button fires no events and the
                             tooltip would have nothing to listen to. */}
@@ -380,6 +433,35 @@ export default function BookItems() {
               sx={{ height: 40 }}
             />
           </Stack>
+          {selecting && (
+            <BulkActionBar
+              count={selectedIds.length}
+              categories={book.categories}
+              flags={book.flags}
+              busy={isBulkWorking}
+              onSetCategory={(name) =>
+                bulk(
+                  () => bulkUpdateItemsAsync({ ids: selectedIds, set_category: name }),
+                  `${countLabel} moved to ${name}`,
+                )
+              }
+              onAddFlag={(name) =>
+                bulk(
+                  () => bulkUpdateItemsAsync({ ids: selectedIds, add_flags: [name] }),
+                  `${name} added to ${countLabel}`,
+                )
+              }
+              onRemoveFlag={(name) =>
+                bulk(
+                  () => bulkUpdateItemsAsync({ ids: selectedIds, remove_flags: [name] }),
+                  `${name} removed from ${countLabel}`,
+                )
+              }
+              onDelete={bulkDelete}
+              onSelectAll={selectAll}
+              onDone={stopSelecting}
+            />
+          )}
           {!isLoading && <ItemsTotalsBar totals={totals} />}
         </Stack>
       </Box>
@@ -415,7 +497,8 @@ export default function BookItems() {
                         members={book.members}
                         categoryRegistry={book.categories}
                         flagRegistry={book.flags}
-                        onClick={onPreviewItem}
+                        onClick={selecting ? (i) => toggleItem(i._id) : onPreviewItem}
+                        {...itemProps(item._id)}
                       />
                     ))}
                   </Stack>
@@ -430,7 +513,8 @@ export default function BookItems() {
                     members={book.members}
                     categoryRegistry={book.categories}
                     flagRegistry={book.flags}
-                    onClick={onPreviewItem}
+                    onClick={selecting ? (i) => toggleItem(i._id) : onPreviewItem}
+                    {...itemProps(item._id)}
                   />
                 ))}
               </Stack>

@@ -3,6 +3,7 @@ import { randomToken } from "../utils/tokens";
 import { deleteFromStorage } from "../utils/storageUtils";
 import { checkSharePassword } from "../utils/sharePasswords";
 import { FileRecord } from "./fileRecord";
+import { softDeleteFields, softDeletePlugin } from "../utils/softDelete";
 
 // A file in XenDrive: what XenDrive shows (owner, folder, name) and the file's own link. The stored file itself is the
 // FileRecord it points at, so a file can be renamed or moved between folders without touching storage.
@@ -26,9 +27,12 @@ const xendriveFileSchema = new Schema({
   // Public downloads through the file's own link or through a shared folder's.
   downloads: { type: Number, default: 0 },
   lastDownloadedAt: { type: Date },
+  ...softDeleteFields,
 });
 
 xendriveFileSchema.index({ owner_id: 1, folder_id: 1 });
+// Deleting a file moves it to the Trash for 30 days (utils/softDelete.ts); its stored bytes stay (and count toward storage).
+xendriveFileSchema.plugin(softDeletePlugin);
 
 // Every file has a share token ready, so turning its link on is instant. It does nothing until shareEnabled.
 xendriveFileSchema.pre("save", function (next) {
@@ -59,7 +63,7 @@ xendriveFileSchema.method("isExpired", function (this: XenDriveFileDocument) {
 
 // Deleting a file through a query (findByIdAndDelete, deleteOne) also deletes its record and its stored objects.
 xendriveFileSchema.pre(["findOneAndDelete", "deleteOne"], async function () {
-  const doc = await this.model.findOne(this.getQuery());
+  const doc = await this.model.findOne(this.getQuery()).setOptions({ includeDeleted: true });
   if (!doc) return;
   const record = await FileRecord.findByIdAndDelete(doc.file ?? doc._id).lean();
   if (!record) return;

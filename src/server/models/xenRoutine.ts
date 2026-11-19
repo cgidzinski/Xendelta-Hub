@@ -73,6 +73,8 @@ const xenRoutineSchema = new Schema({
   last_done_at: { type: Date, default: null },
   due_at: { type: Date, required: true },
   enabled: { type: Boolean, default: true },
+  // Put away: out of the list and reminders (it is also paused), but its history is kept and it can be restored.
+  archived: { type: Boolean, default: false },
   last_notified_at: { type: Date, default: null },
   // Future occurrences already completed ahead of time. The schedule grid is
   // due_at + k * interval; these dates are skipped when the grid reaches them.

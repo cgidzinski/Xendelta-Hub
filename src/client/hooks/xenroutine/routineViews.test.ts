@@ -22,6 +22,7 @@ const routine = (over: Partial<Routine> = {}): Routine => ({
   last_done_at: null,
   due_at: iso(1),
   enabled: true,
+  archived: false,
   remind_again_days: 3,
   status: "ok",
   is_owner: true,

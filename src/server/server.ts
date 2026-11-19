@@ -123,6 +123,22 @@ mongoConnection.on("connected", async () => {
       runOnStart: true,
       handler: () => reconcilePendingGems(),
     });
+    // Notes that have been in the Trash for 30 days are removed for good (utils/xenNoteTrash.ts).
+    const { purgeExpiredNotes } = require("./utils/xenNoteTrash");
+    scheduler.register({
+      name: "xennote-trash-purge",
+      everyMs: 6 * 60 * 60 * 1000,
+      runOnStart: true,
+      handler: async () => void (await purgeExpiredNotes()),
+    });
+    // Files that have been in the Trash for 30 days are removed for good (utils/xendriveTrash.ts).
+    const { purgeExpiredFiles } = require("./utils/xendriveTrash");
+    scheduler.register({
+      name: "xendrive-trash-purge",
+      everyMs: 6 * 60 * 60 * 1000,
+      runOnStart: true,
+      handler: async () => void (await purgeExpiredFiles()),
+    });
     // Photos of XenSplit expenses deleted over a month ago (utils/xensplitFiles.ts).
     const { purgeDeletedExpensePhotos } = require("./utils/xensplitFiles");
     scheduler.register({

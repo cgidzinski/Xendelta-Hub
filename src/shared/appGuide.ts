@@ -42,6 +42,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     features: [
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
+      "Jump back into the apps you opened lately from Home.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
       "Start a voice or video call with anyone in a chat or group, and share your screen during it, and pick which microphone or camera to use.",
@@ -186,6 +187,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Switch between list and grid view, and act on several items at once.",
       "Sort your files by name, size or date.",
       "Rename, move, download and delete files and folders.",
+      "Bring back a deleted file from the Trash within 30 days.",
     ],
     tips: [
       {
@@ -211,6 +213,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Set a date when a link stops working.",
       "Open a link's QR code to show or print it.",
       "See how many times a link was opened, when it was last opened, and a day-by-day chart.",
+      "Pause a link without deleting it, and turn it back on later.",
+      "Sort your links by age, clicks, name or expiry, and delete several at once.",
       "Edit, search and delete your links.",
     ],
     tips: [
@@ -264,6 +268,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Keep budget books you share with other people.",
       "Log money in and out with a date, amount, note and receipt photos, and read a receipt photo to fill in the shop, total and date.",
       "Sort items with categories and flags, and share an item between people.",
+      "Select several items to give them a category, add or remove a flag, or delete them together.",
       "Search, filter and review items by period, category, flag or person.",
       "Set budgets per category, with shared and per-person limits and a projection of where you will end up.",
       "See where the money goes in an overview and a report, and export the report to CSV.",
@@ -304,7 +309,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a routine so anyone in it can mark it done.",
       "Postpone a routine by a day, a week or more.",
       "See each routine's history with its notes and photos.",
-      "Pause, edit or delete a routine.",
+      "Pause, edit or delete a routine, or archive one to put it away and keep its history.",
       "Search your routines, filter them by category, and copy one to start a similar one.",
     ],
     tips: [
@@ -330,7 +335,8 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Scale the servings and switch between metric and US units.",
       "Cook one step at a time in big text, with timers and the screen kept awake.",
       "Plan meals week by week.",
-      "Get a shopping list for the planned meals with the ingredients added up, and send it to XenNote to tick off in the shop.",
+      "Copy last week's meal plan onto this week, or repeat a meal on another day.",
+      "Get a shopping list for the planned meals with the ingredients added up, untick what you already have, and send it to XenNote to tick off in the shop.",
       "Organize recipes with categories, and mark favourites.",
       "Search and filter recipes by favourite or ingredient.",
       "Share a recipe or a whole book with a link anyone can read.",
@@ -379,6 +385,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a note or a notebook with a link anyone can open.",
       "Set a reminder on a note and get a notification when it is due.",
       "Search and filter by type, label or notebook.",
+      "Bring back a deleted note from the Trash within 30 days.",
       "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
     ],
     tips: [
