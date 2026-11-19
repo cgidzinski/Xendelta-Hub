@@ -319,6 +319,9 @@ export const settleDebtSchema = z
     path: ["to"],
   });
 
+// The command palette's search text: at least two characters (one letter would match half of everything).
+export const searchQuerySchema = z.object({ q: z.string().trim().min(2).max(100) });
+
 // Remind a member who owes you to settle up.
 export const nudgeXenSplitMemberSchema = z.object({ userId: objectIdSchema });
 

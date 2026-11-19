@@ -20,6 +20,8 @@ import {
   Tooltip,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
+import SearchIcon from "@mui/icons-material/Search";
+import CommandPalette from "../search/CommandPalette";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import PersonIcon from "@mui/icons-material/Person";
@@ -111,6 +113,19 @@ export default function BaseNavBar({
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
   const { count: unreadChats } = useChatUnread();
+
+  // Ctrl/Cmd+K opens the search palette from anywhere in the app.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
@@ -347,6 +362,15 @@ export default function BaseNavBar({
           </Typography>
           {(showMessages || showNotifications) && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
+              <IconButton
+                color="inherit"
+                aria-label="Search (Ctrl+K)"
+                title="Search (Ctrl+K)"
+                sx={{ width: 50, height: 50 }}
+                onClick={() => setPaletteOpen(true)}
+              >
+                <SearchIcon />
+              </IconButton>
               {showMessages && (
                 <IconButton
                   color="inherit"
@@ -376,6 +400,10 @@ export default function BaseNavBar({
           {children}
         </Toolbar>
       </AppBar>
+
+      {(showMessages || showNotifications) && (
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      )}
 
       {/* Notifications Dropdown */}
       {showNotifications && (
