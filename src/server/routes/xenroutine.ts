@@ -113,6 +113,7 @@ async function serialize(routines: any[], uid: string) {
       last_done_at: obj.last_done_at,
       due_at: obj.due_at,
       enabled: obj.enabled,
+      archived: !!obj.archived,
       remind_again_days: obj.remind_again_days,
       status: computeDueStatus(obj, now),
       done_ahead_indices: doneAheadIndices(obj),
@@ -222,6 +223,11 @@ module.exports = function (app: any) {
       const b = req.body;
       for (const k of ["name", "category", "notes", "interval", "enabled", "remind_again_days"]) {
         if (b[k] !== undefined) routine.set(k, b[k]);
+      }
+      // Archiving also pauses it (so reminders and the feed leave it alone); restoring brings it back running.
+      if (b.archived !== undefined) {
+        routine.set("archived", b.archived);
+        routine.set("enabled", !b.archived);
       }
       if (b.checklist !== undefined) {
         // A step that is still there keeps its tick; a new one starts unticked; a missing one is gone.

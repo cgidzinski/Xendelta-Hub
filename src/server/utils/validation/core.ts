@@ -855,6 +855,7 @@ export const updateXenRoutineSchema = z.object({
   interval: xenRoutineIntervalSchema.optional(),
   due_at: z.string().datetime({ offset: true }).optional(),
   enabled: z.boolean().optional(),
+  archived: z.boolean().optional(),
   remind_again_days: z.number().int().min(1).max(365).optional(),
 });
 
