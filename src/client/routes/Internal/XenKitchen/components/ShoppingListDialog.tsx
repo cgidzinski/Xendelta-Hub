@@ -1,5 +1,17 @@
-import { useEffect } from "react";
-import { Alert, Box, Button, CircularProgress, List, ListItem, ListItemText, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  CircularProgress,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { shoppingLineText } from "@shared/xenkitchen/shopping";
@@ -33,7 +45,18 @@ export default function ShoppingListDialog({ open, bookId, from, to, rangeLabel,
     else reset();
   }, [open, bookId, from, to, mutate, reset]);
 
-  const lines = list.data?.lines ?? [];
+  const allLines = list.data?.lines ?? [];
+  // Things already in the cupboard are unticked here so they are left off what is copied or sent to XenNote.
+  const [skipped, setSkipped] = useState<Set<string>>(new Set());
+  useEffect(() => setSkipped(new Set()), [list.data]);
+  const keyOf = (l: { name: string; unit: string }) => `${l.name}|${l.unit}`;
+  const lines = allLines.filter((l) => !skipped.has(keyOf(l)));
+  const toggle = (key: string) =>
+    setSkipped((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
 
   const copy = async () => {
     try {
@@ -86,21 +109,32 @@ export default function ShoppingListDialog({ open, bookId, from, to, rangeLabel,
         </Box>
       )}
       {list.isError && <Alert severity="error">{(list.error as Error).message || "Couldn't make the list"}</Alert>}
-      {list.data && lines.length === 0 && (
+      {list.data && allLines.length === 0 && (
         <Typography color="text.secondary">
           {list.data.meals === 0 ? "No meals are planned for this week." : "The planned meals have no ingredients."}
         </Typography>
       )}
-      {lines.length > 0 && (
+      {allLines.length > 0 && (
         <>
           <Typography variant="body2" color="text.secondary">
             For {list.data!.meals} {list.data!.meals === 1 ? "meal" : "meals"}. The same ingredient in the same unit is
-            added together.
+            added together. Untick what you already have.
           </Typography>
           <List dense>
-            {lines.map((l) => (
-              <ListItem key={`${l.name}|${l.unit}`} disableGutters>
-                <ListItemText primary={shoppingLineText(l)} secondary={l.sources.join(", ")} />
+            {allLines.map((l) => (
+              <ListItem key={keyOf(l)} disablePadding>
+                <ListItemButton onClick={() => toggle(keyOf(l))} sx={{ px: 0 }}>
+                  <ListItemIcon sx={{ minWidth: 40 }}>
+                    <Checkbox
+                      edge="start"
+                      tabIndex={-1}
+                      disableRipple
+                      checked={!skipped.has(keyOf(l))}
+                      slotProps={{ input: { "aria-label": `Buy ${l.name}` } }}
+                    />
+                  </ListItemIcon>
+                  <ListItemText primary={shoppingLineText(l)} secondary={l.sources.join(", ")} />
+                </ListItemButton>
               </ListItem>
             ))}
           </List>
