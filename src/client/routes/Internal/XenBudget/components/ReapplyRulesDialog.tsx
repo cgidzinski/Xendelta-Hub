@@ -1,21 +1,10 @@
 import { useEffect, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Checkbox, FormControlLabel, Stack, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { ReapplyResult } from "../../../../hooks/xenbudget/types";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 interface ReapplyRulesDialogProps {
   open: boolean;
@@ -62,77 +51,81 @@ export default function ReapplyRulesDialog({ open, onClose, reapply, isReapplyin
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Re-apply rules</DialogTitle>
-      <DialogContent>
-        {done ? (
-          <Alert severity="success">
-            Updated {done.changed} item{done.changed === 1 ? "" : "s"}.
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      title="Re-apply rules"
+      actions={
+        <>
+          <Button onClick={onClose}>{done ? "Close" : "Cancel"}</Button>
+          {!done && (
+            <Button
+              variant="contained"
+              disabled={isReapplying || !preview || preview.changed === 0}
+              onClick={handleApply}
+            >
+              Apply to {preview?.changed ?? 0} item{preview?.changed === 1 ? "" : "s"}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {done ? (
+        <Alert severity="success">
+          Updated {done.changed} item{done.changed === 1 ? "" : "s"}.
+        </Alert>
+      ) : !preview ? (
+        <LoadingSpinner message="Working out what would change..." />
+      ) : (
+        <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">
+            Every item is stripped of what rules previously did to it, then re-evaluated against the current rules. That
+            is what makes deleting a rule actually undo its effects. Amounts, dates and notes are never touched.
+          </Typography>
+
+          <Alert severity={preview.changed > 0 ? "info" : "success"}>
+            {preview.changed === 0
+              ? `Nothing would change across ${preview.examined} items.`
+              : `${preview.changed} of ${preview.examined} items would change.`}
           </Alert>
-        ) : !preview ? (
-          <LoadingSpinner message="Working out what would change..." />
-        ) : (
-          <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
-              Every item is stripped of what rules previously did to it, then re-evaluated against the current rules.
-              That is what makes deleting a rule actually undo its effects. Amounts, dates and notes are never touched.
-            </Typography>
 
-            <Alert severity={preview.changed > 0 ? "info" : "success"}>
-              {preview.changed === 0
-                ? `Nothing would change across ${preview.examined} items.`
-                : `${preview.changed} of ${preview.examined} items would change.`}
-            </Alert>
+          <FormControlLabel
+            control={
+              <Checkbox size="small" checked={includeManual} onChange={(e) => setIncludeManual(e.target.checked)} />
+            }
+            label={`Also sweep items I've edited by hand${
+              preview.skipped_manually_edited ? ` (${preview.skipped_manually_edited} skipped)` : ""
+            }`}
+          />
+          {includeManual && (
+            <Alert severity="warning">Hand-made corrections to those items will be overwritten by the rules.</Alert>
+          )}
 
-            <FormControlLabel
-              control={
-                <Checkbox size="small" checked={includeManual} onChange={(e) => setIncludeManual(e.target.checked)} />
-              }
-              label={`Also sweep items I've edited by hand${
-                preview.skipped_manually_edited ? ` (${preview.skipped_manually_edited} skipped)` : ""
-              }`}
-            />
-            {includeManual && (
-              <Alert severity="warning">Hand-made corrections to those items will be overwritten by the rules.</Alert>
-            )}
-
-            {preview.sample.length > 0 && (
-              <Box sx={{ ...cardSx, p: 1.25, maxHeight: 260, overflowY: "auto" }}>
-                <Stack spacing={1}>
-                  {preview.sample.map((change) => (
-                    <Box key={change._id}>
-                      <Typography variant="body2" noWrap>
-                        {change.description}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {describe(change)}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Stack>
-                {preview.changed > preview.sample.length && (
-                  <Typography variant="caption" color="text.secondary">
-                    …and {preview.changed - preview.sample.length} more
-                  </Typography>
-                )}
-              </Box>
-            )}
-          </Stack>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{done ? "Close" : "Cancel"}</Button>
-        {!done && (
-          <Button
-            variant="contained"
-            disabled={isReapplying || !preview || preview.changed === 0}
-            onClick={handleApply}
-          >
-            Apply to {preview?.changed ?? 0} item{preview?.changed === 1 ? "" : "s"}
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
+          {preview.sample.length > 0 && (
+            <Box sx={{ ...cardSx, p: 1.25, maxHeight: 260, overflowY: "auto" }}>
+              <Stack spacing={1}>
+                {preview.sample.map((change) => (
+                  <Box key={change._id}>
+                    <Typography variant="body2" noWrap>
+                      {change.description}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {describe(change)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+              {preview.changed > preview.sample.length && (
+                <Typography variant="caption" color="text.secondary">
+                  …and {preview.changed - preview.sample.length} more
+                </Typography>
+              )}
+            </Box>
+          )}
+        </Stack>
+      )}
+    </ResponsiveDialog>
   );
 }
 

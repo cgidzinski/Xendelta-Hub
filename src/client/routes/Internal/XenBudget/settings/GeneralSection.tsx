@@ -3,11 +3,7 @@ import { useOutletContext, useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
   DialogContentText,
-  DialogTitle,
   IconButton,
   List,
   ListItem,
@@ -32,6 +28,7 @@ import { useXenBudgetReseedLabels } from "../../../../hooks/xenbudget/useLabels"
 import { ALL_CURRENCIES, STABLE_CURRENCY_MENU_PROPS } from "../../../../utils/currencyUtils";
 import PersonLink from "../../../../components/user/PersonLink";
 import UserAvatar from "../../../../components/user/UserAvatar";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 export default function GeneralSection() {
   const {
@@ -186,40 +183,47 @@ export default function GeneralSection() {
         </SectionCard>
       )}
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Add people</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1 }}>
-            <UserSelect
-              value={selected}
-              onChange={setSelected}
-              label="People"
-              excludeUserIds={book.members.map((m) => m.user_id)}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={selected.length === 0 || isAddingMembers} onClick={handleAdd}>
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        maxWidth="xs"
+        title="Add people"
+        actions={
+          <>
+            <Button onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button variant="contained" disabled={selected.length === 0 || isAddingMembers} onClick={handleAdd}>
+              Add
+            </Button>
+          </>
+        }
+      >
+        <Box sx={{ pt: 1 }}>
+          <UserSelect
+            value={selected}
+            onChange={setSelected}
+            label="People"
+            excludeUserIds={book.members.map((m) => m.user_id)}
+          />
+        </Box>
+      </ResponsiveDialog>
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>Delete &ldquo;{book.name}&rdquo;?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            This permanently deletes the book and all {book.item_count ?? 0} of its items. This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
-          <Button color="error" disabled={isDeletingBook} onClick={handleDelete}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={<>Delete &ldquo;{book.name}&rdquo;?</>}
+        actions={
+          <>
+            <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button color="error" disabled={isDeletingBook} onClick={handleDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <DialogContentText>
+          This permanently deletes the book and all {book.item_count ?? 0} of its items. This cannot be undone.
+        </DialogContentText>
+      </ResponsiveDialog>
     </Stack>
   );
 }

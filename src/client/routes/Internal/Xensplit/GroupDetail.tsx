@@ -76,6 +76,7 @@ import UserName from "../../../components/user/UserName";
 import { MAX_RECEIPT_IMAGES } from "../Share/receipt";
 import { useSharedReceipt } from "../Share/useSharedReceipt";
 import UserAvatar from "../../../components/user/UserAvatar";
+import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
 
 export interface GroupDetailContext {
   group: XenSplit;
@@ -755,32 +756,36 @@ export default function GroupDetail() {
         ) : null}
       </Menu>
 
-      <Dialog fullWidth maxWidth="xs" open={showAddMemberModal} onClose={() => setShowAddMemberModal(false)}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Add Members</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <UserSelect
-            value={selectedMembers}
-            onChange={setSelectedMembers}
-            label="Search Users"
-            placeholder="Search for users..."
-            excludeUserIds={group.members.map((m) => m.user_id)}
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button fullWidth variant="outlined" onClick={() => setShowAddMemberModal(false)}>
-            Cancel
-          </Button>
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={handleAddMembers}
-            disabled={selectedMembers.length === 0 || isAddingMembers}
-            loading={isAddingMembers}
-          >
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        maxWidth="xs"
+        open={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        title="Add Members"
+        actions={
+          <>
+            <Button fullWidth variant="outlined" onClick={() => setShowAddMemberModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={handleAddMembers}
+              disabled={selectedMembers.length === 0 || isAddingMembers}
+              loading={isAddingMembers}
+            >
+              Add
+            </Button>
+          </>
+        }
+      >
+        <UserSelect
+          value={selectedMembers}
+          onChange={setSelectedMembers}
+          label="Search Users"
+          placeholder="Search for users..."
+          excludeUserIds={group.members.map((m) => m.user_id)}
+        />
+      </ResponsiveDialog>
 
       <Dialog
         fullWidth
