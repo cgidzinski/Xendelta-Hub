@@ -23,6 +23,7 @@ import {
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
@@ -63,6 +64,7 @@ import { NOTE_SORTS, isNoteSort, sortNotes, type NoteSort } from "./noteSort";
 import NoteCard from "./components/NoteCard";
 import NoteEditor from "./components/NoteEditor";
 import NoteTrash from "./components/NoteTrash";
+import NoteBulkBar from "./components/NoteBulkBar";
 import NoteRail, { type Scope } from "./components/NoteRail";
 import NotebookDialog from "./components/NotebookDialog";
 
@@ -81,7 +83,7 @@ const ROLE_LABEL = { owner: "Owner", editor: "Editor", viewer: "Viewer" } as con
 export default function XenNote() {
   useTitle("XenNote");
   const { enqueueSnackbar } = useSnackbar();
-  const { updateNote, deleteNote } = useXenNoteActions();
+  const { updateNote, deleteNote, bulkUpdateNotes, bulkDeleteNotes } = useXenNoteActions();
   const { restore } = useXenNoteTrashActions();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
@@ -95,6 +97,9 @@ export default function XenNote() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useLocalStorageState<NoteSort>("xennote_sort", "edited", isNoteSort);
   const [railOpen, setRailOpen] = useState(false);
+  // Choosing several notes to change or trash together.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const q = useDeferredValue(search);
 
   const [editor, setEditor] = useState<{ note: Note | null; startType?: NoteType } | null>(null);
@@ -156,6 +161,35 @@ export default function XenNote() {
     return shown && sortNotes(shown, sort);
   }, [allNotes, typeFilter, sort]);
   const openBook = notebooks.find((b) => b._id === scope) ?? null;
+  // What is ticked belongs to the view it was ticked in; a new view, search or filter starts again.
+  const viewKey = `${scope}|${label ?? ""}|${typeFilter}|${q}`;
+  useEffect(() => setSelectedIds([]), [viewKey]);
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelectedIds([]);
+  };
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const editableShown = (notes ?? []).filter((n) => n.can_edit);
+  const countLabel = `${selectedIds.length} ${selectedIds.length === 1 ? "note" : "notes"}`;
+  const bulk = async (run: () => Promise<{ updated?: number; deleted?: number; skipped: number }>, done: string) => {
+    try {
+      const r = await run();
+      const skipped = r.skipped > 0 ? ` (${r.skipped} you can't edit left alone)` : "";
+      enqueueSnackbar(`${done}${skipped}`, { variant: "success" });
+      setSelectedIds([]);
+    } catch (e) {
+      enqueueSnackbar((e as Error).message || "Couldn't change those notes", { variant: "error" });
+    }
+  };
+  const bulkDelete = async () => {
+    const ok = await confirm({
+      title: `Move ${countLabel} to the Trash?`,
+      message: "They disappear for everyone who can see them. You can bring them back from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
+    });
+    if (ok) await bulk(() => bulkDeleteNotes.mutateAsync(selectedIds), `${countLabel} moved to Trash`);
+  };
   const pinned = useMemo(() => (notes ?? []).filter((n) => n.pinned), [notes]);
   const others = useMemo(() => (notes ?? []).filter((n) => !n.pinned), [notes]);
 
@@ -228,6 +262,8 @@ export default function XenNote() {
           onDelete={() => removeNote(n)}
           resolveTitle={resolveTitle}
           onOpenLinked={openNoteById}
+          selected={selecting ? selectedIds.includes(n._id) : undefined}
+          onSelect={() => toggleSelected(n._id)}
         />
       ))}
     </Box>
@@ -431,6 +467,20 @@ export default function XenNote() {
                   </MenuItem>
                 ))}
               </TextField>
+              <Tooltip title={selecting ? "Stop selecting" : "Select notes to change together"}>
+                <span>
+                  <IconButton
+                    aria-label="Select notes"
+                    aria-pressed={selecting}
+                    color={selecting ? "primary" : "default"}
+                    disabled={!notes || notes.length === 0}
+                    onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                    sx={{ height: 44, width: 44 }}
+                  >
+                    <ChecklistIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
             </Box>
           )}
 
@@ -500,6 +550,37 @@ export default function XenNote() {
                 </Button>
               )}
             </Box>
+          )}
+
+          {selecting && scope !== "trash" && (
+            <NoteBulkBar
+              count={selectedIds.length}
+              inArchive={scope === "archive"}
+              busy={bulkUpdateNotes.isPending || bulkDeleteNotes.isPending}
+              notebooks={notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor")}
+              labels={labels.map((l) => l.name)}
+              onSelectAll={() => setSelectedIds(editableShown.map((n) => n._id))}
+              onArchive={(archived) =>
+                bulk(
+                  () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, archived: !archived }),
+                  `${countLabel} ${archived ? "unarchived" : "archived"}`,
+                )
+              }
+              onColor={(color) =>
+                bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, color }), `${countLabel} recoloured`)
+              }
+              onAddLabel={(l) =>
+                bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, add_label: l }), `Labelled ${countLabel}`)
+              }
+              onMove={(notebookId) =>
+                bulk(
+                  () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, notebook_id: notebookId }),
+                  `Moved ${countLabel}`,
+                )
+              }
+              onDelete={bulkDelete}
+              onDone={stopSelecting}
+            />
           )}
 
           {scope === "trash" ? null : isLoading && !notes ? (

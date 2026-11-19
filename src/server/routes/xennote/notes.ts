@@ -5,6 +5,8 @@ import {
   validate,
   validateParams,
   validateQuery,
+  xenNoteBulkDeleteSchema,
+  xenNoteBulkUpdateSchema,
   xenNoteCreateSchema,
   xenNoteIdParamSchema,
   xenNoteListQuerySchema,
@@ -14,7 +16,8 @@ import {
 import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
-import { roleOf } from "../../utils/membership";
+import { canEdit, roleOf } from "../../utils/membership";
+import { contentChanged, contentOf, keepVersion } from "../../utils/xenNoteVersions";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
@@ -25,6 +28,7 @@ import {
   namesForNotes,
   notifyChange,
   serializeNote,
+  type NotebookDoc,
   type NoteDoc,
 } from "./shared";
 
@@ -56,7 +60,101 @@ function applyFields(note: NoteDoc, body: Record<string, any>) {
   else if (!note.link?.url) throw new AppError(400, "Add a web address for the link");
 }
 
+/**
+ * Move a note to another notebook (needs edit there) or out to a private loose note (only the person who wrote it).
+ * Returns where it is now, or `undefined` when it is already there. A moved note stops using its old public link.
+ */
+async function moveNote(req: Request, note: NoteDoc, to: string | null) {
+  const uid = callerId(req);
+  const from = note.notebook_id ? String(note.notebook_id) : null;
+  if (to === from) return undefined;
+  let destination = null;
+  if (to) {
+    destination = await loadNotebook(req, to, "edit");
+  } else if (note.owner_id !== uid) {
+    throw new AppError(403, "Only the person who wrote a note can make it private");
+  }
+  note.notebook_id = to ? new Types.ObjectId(to) : null;
+  note.share = { enabled: false, token: note.share?.token };
+  return { destination };
+}
+
 export function registerNoteRoutes(app: any) {
+  // The notes among `ids` that the caller may change, each with the notebook it sits in (null for a loose note).
+  async function editableAmong(
+    uid: string,
+    ids: string[],
+  ): Promise<Array<{ note: NoteDoc; notebook: NotebookDoc | null }>> {
+    const [notes, books] = await Promise.all([XenNote.find({ _id: { $in: ids } }), myNotebooks(uid)]);
+    const byId = new Map<string, NotebookDoc>(books.map((b) => [b.id as string, b]));
+    const found: Array<{ note: NoteDoc; notebook: NotebookDoc | null }> = [];
+    for (const note of notes) {
+      if (!note.notebook_id) {
+        if (note.owner_id === uid) found.push({ note, notebook: null });
+        continue;
+      }
+      const notebook = byId.get(String(note.notebook_id));
+      if (notebook && canEdit(notebook.toObject(), uid)) found.push({ note, notebook });
+    }
+    return found;
+  }
+
+  // Change several notes at once. Notes the caller can't edit are skipped, and the count says how many were changed.
+  app.post("/api/xennote/notes/bulk-update", validate(xenNoteBulkUpdateSchema), async (req: Request, res: Response) => {
+    const uid = callerId(req);
+    const body = xenNoteBulkUpdateSchema.parse(req.body);
+    const targets = await editableAmong(uid, body.ids);
+    // Checked for the lot before anything changes: a private move needs every note to be the caller's own.
+    if (body.notebook_id === null && targets.some((t) => t.note.owner_id !== uid && t.note.notebook_id)) {
+      throw new AppError(403, "Only the person who wrote a note can make it private");
+    }
+    // A destination the caller can't write to refuses the whole request before any note moves.
+    if (body.notebook_id) await loadNotebook(req, body.notebook_id, "edit");
+
+    const touched = new Map<string, NotebookDoc | null>();
+    for (const { note, notebook } of targets) {
+      if (body.archived !== undefined) note.archived = body.archived;
+      if (body.color !== undefined) note.color = body.color;
+      if (body.add_label !== undefined) note.labels = normalizeLabels([...note.labels, body.add_label]);
+      if (body.remove_label !== undefined) {
+        const gone = body.remove_label.toLowerCase();
+        note.labels = note.labels.filter((l) => l.toLowerCase() !== gone);
+      }
+      const moved = body.notebook_id !== undefined ? await moveNote(req, note, body.notebook_id) : undefined;
+      note.updated_by = uid;
+      await note.save();
+      touched.set(String(notebook?.id ?? `loose:${note.owner_id}`), notebook);
+      if (moved?.destination) touched.set(String(moved.destination.id), moved.destination);
+    }
+    for (const [key, book] of touched) notifyChange(book, key.startsWith("loose:") ? key.slice(6) : uid);
+    res.json({
+      status: true,
+      message: "Notes updated",
+      data: { updated: targets.length, skipped: body.ids.length - targets.length },
+    });
+  });
+
+  // Send several notes to the Trash. Notes the caller can't edit are skipped.
+  app.post("/api/xennote/notes/bulk-delete", validate(xenNoteBulkDeleteSchema), async (req: Request, res: Response) => {
+    const uid = callerId(req);
+    const { ids } = xenNoteBulkDeleteSchema.parse(req.body);
+    const targets = await editableAmong(uid, ids);
+    const now = new Date();
+    const touched = new Map<string, NotebookDoc | null>();
+    for (const { note, notebook } of targets) {
+      note.deleted_at = now;
+      note.deleted_by = uid;
+      await note.save();
+      touched.set(String(notebook?.id ?? `loose:${note.owner_id}`), notebook);
+    }
+    for (const [key, book] of touched) notifyChange(book, key.startsWith("loose:") ? key.slice(6) : uid);
+    res.json({
+      status: true,
+      message: "Notes moved to Trash",
+      data: { deleted: targets.length, skipped: ids.length - targets.length },
+    });
+  });
+
   app.get("/api/xennote/notes", validateQuery(xenNoteListQuerySchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
     const { notebook, archived, label, q } = req.query as Record<string, string | undefined>;
@@ -216,24 +314,22 @@ export function registerNoteRoutes(app: any) {
 
       // Moving a note: into another notebook (needs edit there) or out to a private loose note (author only)
       if (req.body.notebook_id !== undefined) {
-        const to: string | null = req.body.notebook_id;
-        const from = note.notebook_id ? String(note.notebook_id) : null;
-        if (to !== from) {
-          if (to) {
-            destination = await loadNotebook(req, to, "edit");
-          } else {
-            if (note.owner_id !== uid) throw new AppError(403, "Only the person who wrote a note can make it private");
-            destination = null;
-          }
-          note.notebook_id = to ? new Types.ObjectId(to) : null;
-          // sharing is per place: a note that moves stops using its old public link
-          note.share = { enabled: false, token: note.share?.token };
-        }
+        const moved = await moveNote(req, note, req.body.notebook_id);
+        if (moved) destination = moved.destination;
       }
 
+      // What the note said before this edit, so a change to its wording can be looked at and undone later.
+      const before = contentOf(note);
+      const wasSavedAt = note.updated_at;
+      const wasSavedBy = note.updated_by ?? note.owner_id;
       applyFields(note, req.body);
       note.updated_by = uid;
       await note.save();
+      if (contentChanged(before, note)) {
+        await keepVersion(note._id, before, wasSavedAt, wasSavedBy).catch((e) =>
+          console.error("xennote version failed:", e),
+        );
+      }
       notifyChange(notebook, note.owner_id);
       if (destination && destination !== notebook) notifyChange(destination, note.owner_id);
       res.json({

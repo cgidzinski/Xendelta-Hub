@@ -20,6 +20,7 @@ import { removeNotePhotos } from "../../utils/xenNoteFiles";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { changeRole, removeMember } from "../../utils/membership";
 import { MAX_NOTEBOOKS_OWNED, MAX_NOTEBOOK_PEOPLE } from "../../../shared/xennote/notes";
+import { removeVersionsOf } from "../../utils/xenNoteVersions";
 import { loadNotebook, myNotebooks, serializeNotebook } from "./shared";
 import { addRefused } from "../../social/policy";
 
@@ -79,6 +80,7 @@ export function registerNotebookRoutes(app: any) {
     async (req: Request, res: Response) => {
       const book = await loadNotebook(req, req.params.id as string, "manage");
       const notes = await XenNote.find({ notebook_id: book._id }, "images").setOptions({ includeDeleted: true }).lean();
+      await removeVersionsOf(notes.map((n) => n._id));
       await removeNotePhotos(notes.flatMap((n) => n.images));
       await XenNote.deleteMany({ notebook_id: book._id });
       const people = book.members.map((m) => m.user_id);
