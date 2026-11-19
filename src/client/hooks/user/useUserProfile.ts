@@ -30,6 +30,10 @@ export interface UserProfile {
   emailNotifications: boolean;
   /** App-and-way notification switches that are off, like "xensplit:email" (shared/notificationApps.ts). */
   mutedNotifications: string[];
+  /** Whether the email can be changed in Settings (accounts that sign in with Google or GitHub can't). */
+  canChangeEmail: boolean;
+  /** A new address that is waiting for its confirm link, or null. */
+  pendingEmail: string | null;
   /** Where XenSplit tells others to send this user's settlements. Blank handle means unset. */
   etransfer: EtransferInfo;
   xendrive: {

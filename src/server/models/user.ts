@@ -40,6 +40,13 @@ const userSchema = new Schema({
     token: { type: String },
     expires: { type: Date },
   },
+  // A new address waiting for its confirm link (routes/emailChange.ts). Only the token's hash is stored; the address
+  // only replaces `email` once the link emailed to it is opened.
+  pendingEmail: {
+    email: { type: String },
+    token: { type: String },
+    expires: { type: Date },
+  },
   // Presence (shared/presence.ts): what the person chose to show, and an optional status line that can expire.
   presence: {
     choice: { type: String, enum: ["online", "idle", "dnd", "invisible"], default: "online" },

@@ -80,6 +80,13 @@ module.exports = function (app: express.Application) {
           theme: user.theme || "",
           emailNotifications: user.notificationPrefs?.email !== false,
           mutedNotifications: user.notificationPrefs?.muted ?? [],
+          // Whether the email can be changed here (accounts that sign in with Google or GitHub have no password), and
+          // an address still waiting for its confirm link.
+          canChangeEmail: !!user.password,
+          pendingEmail:
+            user.pendingEmail?.email && user.pendingEmail.expires && user.pendingEmail.expires > new Date()
+              ? user.pendingEmail.email
+              : null,
           etransfer: etransferPayload(user),
           xendrive: {
             fileCount: fileCount,

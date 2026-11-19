@@ -66,6 +66,13 @@ export const resetPasswordSchema = verifyResetTokenSchema.extend({
     .max(VALIDATION_LIMITS.PASSWORD_MAX, "Password too long"),
 });
 
+// Change the account's email: the new address, and the current password to prove it is them.
+export const requestEmailChangeSchema = z.object({
+  newEmail: z.string().trim().toLowerCase().email("Enter a valid email address").max(254, "Email too long"),
+  password: z.string().min(1, "Enter your current password").max(VALIDATION_LIMITS.PASSWORD_MAX),
+});
+export const confirmEmailChangeSchema = z.object({ token: z.string().min(16).max(200) });
+
 export const updateProfileSchema = z.object({
   avatar: z.string().url("Invalid avatar URL").optional(),
   // "" clears the preference and falls back to the browser's zone.
