@@ -145,6 +145,22 @@ export const useXenNoteActions = () => {
       void refresh();
     },
   });
+  // Several notes at once: archive, colour, label or move them, or send them to the Trash.
+  const bulkUpdateNotes = useMutation({
+    mutationFn: (v: {
+      ids: string[];
+      archived?: boolean;
+      color?: string;
+      add_label?: string;
+      notebook_id?: string | null;
+    }) => api.post<{ updated: number; skipped: number }>("/api/xennote/notes/bulk-update", v),
+    onSuccess: refresh,
+  });
+  const bulkDeleteNotes = useMutation({
+    mutationFn: (ids: string[]) =>
+      api.post<{ deleted: number; skipped: number }>("/api/xennote/notes/bulk-delete", { ids }),
+    onSuccess: refresh,
+  });
   const addImages = useMutation({
     mutationFn: async (v: { id: string; files: File[] }) => {
       const form = new FormData();
@@ -229,6 +245,8 @@ export const useXenNoteActions = () => {
     updateNote,
     setReminder,
     deleteNote,
+    bulkUpdateNotes,
+    bulkDeleteNotes,
     addImages,
     removeImage,
     shareNote,
