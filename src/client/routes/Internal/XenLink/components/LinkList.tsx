@@ -1,4 +1,4 @@
-import { Box, Typography, Card, CardContent, CardActionArea, Chip, IconButton } from "@mui/material";
+import { Box, Typography, Card, CardContent, CardActionArea, Checkbox, Chip, IconButton } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useSnackbar } from "notistack";
 import { format } from "date-fns";
@@ -19,6 +19,8 @@ interface LinkListProps {
   onRetry?: () => void;
   /** The current search; when it finds nothing the empty state says so instead of inviting a first link. */
   search?: string;
+  /** Set while choosing links to delete: the ids ticked so far. A tap ticks instead of opening the link. */
+  selectedIds?: string[];
 }
 
 export default function LinkList({
@@ -29,6 +31,7 @@ export default function LinkList({
   error,
   onRetry,
   search,
+  selectedIds,
 }: LinkListProps) {
   const { enqueueSnackbar } = useSnackbar();
 
@@ -61,7 +64,7 @@ export default function LinkList({
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {links.map((link) => (
         <Card key={link._id} sx={{ width: "100%", position: "relative" }}>
-          {link.url && (
+          {link.url && !selectedIds && (
             <IconButton
               size="small"
               onClick={(e) => handleCopyUrl(e, link)}
@@ -77,6 +80,15 @@ export default function LinkList({
               <ContentCopyIcon fontSize="small" />
             </IconButton>
           )}
+          {selectedIds && (
+            <Checkbox
+              checked={selectedIds.includes(link._id || "")}
+              tabIndex={-1}
+              inputProps={{ "aria-label": `Select ${link.name}` }}
+              sx={{ position: "absolute", top: 4, right: 4, zIndex: 1 }}
+              onChange={() => handleLinkClick(link._id || "")}
+            />
+          )}
           <CardActionArea onClick={() => handleLinkClick(link._id || "")}>
             <CardContent>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -91,7 +103,7 @@ export default function LinkList({
                 >
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 500, flexGrow: 1, wordBreak: "break-word", pr: link.url ? 4 : 0 }}
+                    sx={{ fontWeight: 500, flexGrow: 1, wordBreak: "break-word", pr: link.url || selectedIds ? 4 : 0 }}
                   >
                     {link.name}
                   </Typography>
@@ -117,6 +129,7 @@ export default function LinkList({
                       icon={<AdsClickIcon sx={{ fontSize: 14 }} />}
                       label={`${link.clicks ?? 0} ${link.clicks === 1 ? "click" : "clicks"}`}
                     />
+                    {link.paused && <Chip size="small" variant="outlined" color="warning" label="Paused" />}
                     {link.expires_at && (
                       <Chip
                         size="small"
