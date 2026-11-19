@@ -43,12 +43,7 @@ export default function VoiceRecorderBar({ conversationId, onSend, onClose }: Pr
       onSend({ fileId: stored._id, name: stored.name, mimeType: stored.mimeType, size: stored.size }, recording.voice);
       onClose();
     } catch (e: any) {
-      enqueueSnackbar(
-        e?.response?.status === 403
-          ? "Not enough storage for the recording."
-          : e?.response?.data?.message || "Couldn't send the voice message.",
-        { variant: "error" },
-      );
+      enqueueSnackbar(e?.response?.data?.message || "Couldn't send the voice message.", { variant: "error" });
       setUploading(false);
     }
   };

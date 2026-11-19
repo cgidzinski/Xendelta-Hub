@@ -3,6 +3,7 @@ import { User } from "../models/user";
 import { SocketManager } from "../infrastructure/SocketManager";
 import { sendPushToUser } from "./pushUtils";
 import { sendNotificationEmail } from "./emailUtils";
+import { isNotificationOn, type NotificationApp } from "@shared/notificationApps";
 
 // Multi-channel notification dispatch.
 //
@@ -24,6 +25,11 @@ export interface NotifyInput {
   /** MUI icon key rendered by the inbox UI. */
   icon?: string;
   channels?: NotifyChannel[];
+  /**
+   * Which app this is about. The person's per-app settings (Settings > Notifications) can switch off the in-app, push or
+   * email way of hearing about it. Leave it out for announcements that must always arrive.
+   */
+  app?: NotificationApp;
 }
 
 export interface NotifyResult {
@@ -36,7 +42,23 @@ export interface NotifyResult {
 export const DEFAULT_CHANNELS: NotifyChannel[] = ["inapp", "socket", "push"];
 
 export async function notify(userId: string, input: NotifyInput): Promise<NotifyResult> {
-  const { title, message, link, icon = "announcement", channels = DEFAULT_CHANNELS } = input;
+  const { title, message, link, icon = "announcement", app } = input;
+  let channels = input.channels ?? DEFAULT_CHANNELS;
+
+  // What this person has switched off for this app. "In the app" covers the bell and the live pop-up together.
+  if (app) {
+    try {
+      const prefs = await User.findById(userId).select("notificationPrefs").exec();
+      const muted = prefs?.notificationPrefs?.muted ?? [];
+      if (muted.length > 0) {
+        channels = channels.filter((c) =>
+          c === "inapp" || c === "socket" ? isNotificationOn(muted, app, "inapp") : isNotificationOn(muted, app, c),
+        );
+      }
+    } catch (e) {
+      console.error("Notification (preferences) failed:", e);
+    }
+  }
 
   const result: NotifyResult = {
     inapp: false,

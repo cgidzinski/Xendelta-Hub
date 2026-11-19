@@ -16,6 +16,7 @@ import type { XenSplitExchange, XenSplitMember } from "../../../../hooks/xenspli
 import { xsCardSx } from "./rowStyles";
 import UserName from "../../../../components/user/UserName";
 import UserAvatar from "../../../../components/user/UserAvatar";
+import { clickableRowProps } from "../../../../utils/keyboard";
 
 interface ExchangeListItemProps {
   exchange: XenSplitExchange;
@@ -60,7 +61,7 @@ export default function ExchangeListItem({
   return (
     <>
       <Box
-        onClick={() => setOpen(true)}
+        {...clickableRowProps(() => setOpen(true))}
         sx={{
           ...xsCardSx,
           display: "grid",

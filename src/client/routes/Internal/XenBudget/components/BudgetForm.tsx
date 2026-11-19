@@ -1,19 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  InputAdornment,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-  useMediaQuery,
-} from "@mui/material";
+import { Box, Button, IconButton, InputAdornment, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -33,6 +19,7 @@ import { budgetPeriodWindow } from "./budget/budgetForRange";
 import { directionOf } from "./budget/budgetKind";
 import { monthlyEquivalent, windowLabel } from "./budget/periodDisplay";
 import UserName from "../../../../components/user/UserName";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 /**
  * What a budget watches. Three values on one axis rather than a type plus a direction: a
@@ -87,7 +74,6 @@ interface BudgetFormProps {
 
 export default function BudgetForm({ open, onClose, book, budget, onSubmit, isSubmitting, onDelete }: BudgetFormProps) {
   const { enqueueSnackbar } = useSnackbar();
-  const isMobile = useMediaQuery("(max-width:600px)");
   const [measures, setMeasures] = useState<BudgetMeasures>("expense");
   const [categories, setCategories] = useState<string[]>([]);
   const [period, setPeriod] = useState<BudgetPeriod>("monthly");
@@ -175,194 +161,196 @@ export default function BudgetForm({ open, onClose, book, budget, onSubmit, isSu
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" fullScreen={isMobile}>
-      <DialogTitle>{budget ? "Edit budget" : "New budget"}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          {/* Type comes first: it decides which way the amount points - a
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xs"
+      title={budget ? "Edit budget" : "New budget"}
+      actions={
+        <>
+          {budget && onDelete && (
+            <Button
+              color="error"
+              sx={{ mr: "auto" }}
+              onClick={async () => {
+                try {
+                  await onDelete();
+                  onClose();
+                } catch (e) {
+                  enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete budget", { variant: "error" });
+                }
+              }}
+            >
+              Delete
+            </Button>
+          )}
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
+            {budget ? "Save" : "Create"}
+          </Button>
+        </>
+      }
+    >
+      <Stack spacing={2} sx={{ pt: 1 }}>
+        {/* Type comes first: it decides which way the amount points - a
                     ceiling on spending, a floor under income and saving - so every field
                     below reads differently, and picking it last would read backwards. */}
-          <TextField
-            select
-            fullWidth
-            label="Type"
-            value={measures}
-            onChange={(e) => setMeasures(e.target.value as BudgetMeasures)}
-            helperText={MEASURES_HELP[measures]}
-            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-          >
-            {MEASURES.map((m) => (
-              <MenuItem key={m.value} value={m.value}>
-                {m.label}
-              </MenuItem>
-            ))}
-          </TextField>
+        <TextField
+          select
+          fullWidth
+          label="Type"
+          value={measures}
+          onChange={(e) => setMeasures(e.target.value as BudgetMeasures)}
+          helperText={MEASURES_HELP[measures]}
+          slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+        >
+          {MEASURES.map((m) => (
+            <MenuItem key={m.value} value={m.value}>
+              {m.label}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          {/* Closed, not freeSolo: a budget on a category nothing is filed under
+        {/* Closed, not freeSolo: a budget on a category nothing is filed under
                     silently measures nothing, which is the worst way for this to fail.
                     Categories are registered in Settings and picked here. */}
-          <LabelPicker
-            multiple
-            kind="category"
-            registry={book.categories}
-            value={categories}
-            onChange={setCategories}
-            label="Categories"
-            noOptionsText="No categories left to add"
-            helperText={categories.length === 0 ? "Leave empty to cover every category." : undefined}
-          />
+        <LabelPicker
+          multiple
+          kind="category"
+          registry={book.categories}
+          value={categories}
+          onChange={setCategories}
+          label="Categories"
+          noOptionsText="No categories left to add"
+          helperText={categories.length === 0 ? "Leave empty to cover every category." : undefined}
+        />
 
-          <TextField
-            fullWidth
-            label={isFloor ? "Overall target" : "Overall amount"}
-            value={amount}
-            onChange={(e) => {
-              const clean = sanitizeAmount(e.target.value);
-              if (clean !== null) setAmount(clean);
-            }}
-            helperText={[
-              isFloor
-                ? "The target for everyone together. Leave empty to set targets only for the people below."
-                : "The limit for everyone together. Leave empty to cap only the people below.",
-              monthlyAmount !== undefined ? `≈ ${formatCurrency(monthlyAmount, currency)}/mo` : undefined,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-            slotProps={{
-              htmlInput: { inputMode: "decimal" },
-              input: {
-                startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>,
-              },
-            }}
-          />
+        <TextField
+          fullWidth
+          label={isFloor ? "Overall target" : "Overall amount"}
+          value={amount}
+          onChange={(e) => {
+            const clean = sanitizeAmount(e.target.value);
+            if (clean !== null) setAmount(clean);
+          }}
+          helperText={[
+            isFloor
+              ? "The target for everyone together. Leave empty to set targets only for the people below."
+              : "The limit for everyone together. Leave empty to cap only the people below.",
+            monthlyAmount !== undefined ? `≈ ${formatCurrency(monthlyAmount, currency)}/mo` : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          slotProps={{
+            htmlInput: { inputMode: "decimal" },
+            input: {
+              startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>,
+            },
+          }}
+        />
 
-          <Box>
-            <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
-              {isFloor ? "Per-person targets" : "Per-person limits"}
-            </Typography>
-            <Stack spacing={1.5}>
-              {subs.map((sub, index) => (
-                <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
-                  <TextField
-                    select
-                    size="small"
-                    label="Person"
-                    value={sub.person_id}
-                    onChange={(e) => setSub(index, { person_id: e.target.value })}
-                    sx={{ flex: 1, minWidth: 0 }}
-                    slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-                  >
-                    {book.members
-                      .filter(
-                        (m) => m.user_id === sub.person_id || availableMembers.some((a) => a.user_id === m.user_id),
-                      )
-                      .map((m) => (
-                        <MenuItem key={m.user_id} value={m.user_id}>
-                          <UserName user={m} />
-                        </MenuItem>
-                      ))}
-                  </TextField>
-                  <TextField
-                    size="small"
-                    label="Amount"
-                    value={sub.amount}
-                    onChange={(e) => {
-                      const clean = sanitizeAmount(e.target.value);
-                      if (clean !== null) setSub(index, { amount: clean });
-                    }}
-                    sx={{ width: 120, flexShrink: 0 }}
-                    slotProps={{
-                      htmlInput: { inputMode: "decimal" },
-                      input: {
-                        startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>,
-                      },
-                    }}
-                  />
-                  <IconButton
-                    size="small"
-                    aria-label="Remove limit"
-                    onClick={() => setSubs((c) => c.filter((_, i) => i !== index))}
-                    sx={{ mt: 0.5, flexShrink: 0 }}
-                  >
-                    <DeleteOutlineIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              ))}
-
-              <Box>
-                <Button
+        <Box>
+          <Typography variant="caption" sx={{ ...sectionLabelSx, mb: 1 }}>
+            {isFloor ? "Per-person targets" : "Per-person limits"}
+          </Typography>
+          <Stack spacing={1.5}>
+            {subs.map((sub, index) => (
+              <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
+                <TextField
+                  select
                   size="small"
-                  startIcon={<AddIcon />}
-                  disabled={availableMembers.length === 0}
-                  onClick={() => setSubs((c) => [...c, { person_id: availableMembers[0]?.user_id ?? "", amount: "" }])}
+                  label="Person"
+                  value={sub.person_id}
+                  onChange={(e) => setSub(index, { person_id: e.target.value })}
+                  sx={{ flex: 1, minWidth: 0 }}
+                  slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
                 >
-                  Add a person
-                </Button>
-              </Box>
-
-              {validSubs.length > 0 && numericAmount > 0 && (
-                <Typography variant="caption" color={overAllocated ? "warning.main" : "text.secondary"}>
-                  {overAllocated
-                    ? `${formatCurrency(allocated, currency)} of personal limits exceeds the ${formatCurrency(numericAmount, currency)} overall limit.`
-                    : `${formatCurrency(allocated, currency)} of ${formatCurrency(numericAmount, currency)} allocated · ${formatCurrency(Math.max(0, numericAmount - allocated), currency)} unassigned.`}
-                </Typography>
-              )}
-            </Stack>
-          </Box>
-
-          <TextField
-            select
-            fullWidth
-            label="Period"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
-            helperText={[
-              isFloor ? "Per-person targets use this same period." : "Per-person limits use this same period.",
-              previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-            slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
-          >
-            {PERIODS.map((p) => (
-              <MenuItem key={p.value} value={p.value}>
-                {p.label}
-              </MenuItem>
+                  {book.members
+                    .filter((m) => m.user_id === sub.person_id || availableMembers.some((a) => a.user_id === m.user_id))
+                    .map((m) => (
+                      <MenuItem key={m.user_id} value={m.user_id}>
+                        <UserName user={m} />
+                      </MenuItem>
+                    ))}
+                </TextField>
+                <TextField
+                  size="small"
+                  label="Amount"
+                  value={sub.amount}
+                  onChange={(e) => {
+                    const clean = sanitizeAmount(e.target.value);
+                    if (clean !== null) setSub(index, { amount: clean });
+                  }}
+                  sx={{ width: 120, flexShrink: 0 }}
+                  slotProps={{
+                    htmlInput: { inputMode: "decimal" },
+                    input: {
+                      startAdornment: <InputAdornment position="start">{getCurrencySymbol(currency)}</InputAdornment>,
+                    },
+                  }}
+                />
+                <IconButton
+                  size="small"
+                  aria-label="Remove limit"
+                  onClick={() => setSubs((c) => c.filter((_, i) => i !== index))}
+                  sx={{ mt: 0.5, flexShrink: 0 }}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Stack>
             ))}
-          </TextField>
 
-          {period === "custom" ? (
-            <>
-              <DatePicker label="Starts" value={startDate} onChange={setStartDate} />
-              <DatePicker label="Ends" value={endDate} onChange={setEndDate} />
-            </>
-          ) : (
-            <TextField fullWidth disabled label="Resets on" value={PERIOD_START_HINT[period]} />
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        {budget && onDelete && (
-          <Button
-            color="error"
-            sx={{ mr: "auto" }}
-            onClick={async () => {
-              try {
-                await onDelete();
-                onClose();
-              } catch (e) {
-                enqueueSnackbar(e instanceof Error ? e.message : "Failed to delete budget", { variant: "error" });
-              }
-            }}
-          >
-            Delete
-          </Button>
+            <Box>
+              <Button
+                size="small"
+                startIcon={<AddIcon />}
+                disabled={availableMembers.length === 0}
+                onClick={() => setSubs((c) => [...c, { person_id: availableMembers[0]?.user_id ?? "", amount: "" }])}
+              >
+                Add a person
+              </Button>
+            </Box>
+
+            {validSubs.length > 0 && numericAmount > 0 && (
+              <Typography variant="caption" color={overAllocated ? "warning.main" : "text.secondary"}>
+                {overAllocated
+                  ? `${formatCurrency(allocated, currency)} of personal limits exceeds the ${formatCurrency(numericAmount, currency)} overall limit.`
+                  : `${formatCurrency(allocated, currency)} of ${formatCurrency(numericAmount, currency)} allocated · ${formatCurrency(Math.max(0, numericAmount - allocated), currency)} unassigned.`}
+              </Typography>
+            )}
+          </Stack>
+        </Box>
+
+        <TextField
+          select
+          fullWidth
+          label="Period"
+          value={period}
+          onChange={(e) => setPeriod(e.target.value as BudgetPeriod)}
+          helperText={[
+            isFloor ? "Per-person targets use this same period." : "Per-person limits use this same period.",
+            previewWindowLabel ? `Current window: ${previewWindowLabel}` : undefined,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          slotProps={{ select: { MenuProps: STABLE_CURRENCY_MENU_PROPS } }}
+        >
+          {PERIODS.map((p) => (
+            <MenuItem key={p.value} value={p.value}>
+              {p.label}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        {period === "custom" ? (
+          <>
+            <DatePicker label="Starts" value={startDate} onChange={setStartDate} />
+            <DatePicker label="Ends" value={endDate} onChange={setEndDate} />
+          </>
+        ) : (
+          <TextField fullWidth disabled label="Resets on" value={PERIOD_START_HINT[period]} />
         )}
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={!canSubmit || isSubmitting} onClick={handleSubmit}>
-          {budget ? "Save" : "Create"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      </Stack>
+    </ResponsiveDialog>
   );
 }

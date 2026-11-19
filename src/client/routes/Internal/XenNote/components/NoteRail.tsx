@@ -3,6 +3,7 @@ import { Box, Button, ListItemButton, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import NotesIcon from "@mui/icons-material/Notes";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
@@ -12,8 +13,8 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import type { XenNoteCounts, XenNotebook } from "../../../../types/XenNote";
 import { swatchColor } from "../noteColors";
 
-/** Which notes are showing: everything, my private notes, one notebook, or the archive. */
-export type Scope = "all" | "none" | "archive" | string;
+/** Which notes are showing: everything, my private notes, one notebook, the archive, or the Trash. */
+export type Scope = "all" | "none" | "archive" | "trash" | string;
 
 interface NoteRailProps {
   scope: Scope;
@@ -154,6 +155,13 @@ export default function NoteRail({
         count={counts?.archived}
         selected={scope === "archive"}
         onClick={() => onScope("archive")}
+      />
+      <RailRow
+        icon={<DeleteOutlineIcon />}
+        text="Trash"
+        count={counts?.trash}
+        selected={scope === "trash"}
+        onClick={() => onScope("trash")}
       />
     </Box>
   );

@@ -1,16 +1,6 @@
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { useState } from "react";
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Button, IconButton, Stack, TextField, Typography } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import { useSnackbar } from "notistack";
@@ -168,21 +158,24 @@ export default function SavedMappings() {
         )}
       </ResponsiveDialog>
 
-      <Dialog open={!!deleting} onClose={() => setDeleting(null)}>
-        <DialogTitle>Delete this mapping?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            Deleting &ldquo;{deleting?.name}&rdquo; won&rsquo;t remove its past imports — they&rsquo;ll show as
-            &ldquo;Import&rdquo; in history.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button color="error" onClick={confirmDelete}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Delete this mapping?"
+        actions={
+          <>
+            <Button onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button color="error" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <Typography variant="body2" color="text.secondary">
+          Deleting &ldquo;{deleting?.name}&rdquo; won&rsquo;t remove its past imports — they&rsquo;ll show as
+          &ldquo;Import&rdquo; in history.
+        </Typography>
+      </ResponsiveDialog>
     </Stack>
   );
 }

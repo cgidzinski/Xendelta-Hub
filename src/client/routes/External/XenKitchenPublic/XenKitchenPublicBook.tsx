@@ -18,6 +18,7 @@ import BookCover from "../../Internal/XenKitchen/components/BookCover";
 import { ExportBookDialog } from "../../Internal/XenKitchen/components/ExportBookDialog";
 import { cookbookParams } from "../../Internal/XenKitchen/components/cookbook";
 import { BRAND_NAME } from "@shared/brand";
+import { clickableRowProps } from "../../../utils/keyboard";
 
 /** Read-only browse of a whole book behind /k/b/:token. Works signed out. */
 export default function XenKitchenPublicBook() {
@@ -66,7 +67,8 @@ export default function XenKitchenPublicBook() {
             direction="row"
             alignItems="center"
             spacing={1}
-            onClick={() => navigate("/")}
+            {...clickableRowProps(() => navigate("/"))}
+            aria-label="XenKitchen home"
             sx={{ cursor: "pointer" }}
           >
             <RestaurantMenuIcon color="primary" />

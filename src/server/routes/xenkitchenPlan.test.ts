@@ -216,3 +216,40 @@ describe("the shopping list", () => {
     expect((await list(me, book, "2026-03-08", "2026-03-02")).status).toBe(400);
   });
 });
+
+describe("copying a week's plan", () => {
+  const copy = (who: U, bookId: string, from: string, to: string) =>
+    api(who).post(`/books/${bookId}/plan/copy`, { from, to });
+
+  it("repeats every meal a week later, with its servings, and is safe to press twice", async () => {
+    const me = await createUser();
+    const book = await bookOf(me);
+    const soup = await recipe(me, book, "Soup", []);
+    const rice = await recipe(me, book, "Rice", []);
+    await add(me, book, { date: "2026-03-02", item_id: soup, servings: 6 });
+    await add(me, book, { date: "2026-03-02", item_id: rice });
+    await add(me, book, { date: "2026-03-08", item_id: soup });
+
+    const first = await copy(me, book, "2026-03-02", "2026-03-09");
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body.data).toEqual({ copied: 3, skipped: 0 });
+    const next = (await plan(me, book, "2026-03-09", "2026-03-15")).body.data.entries;
+    expect(next.map((e: any) => [e.date, e.title, e.servings])).toEqual([
+      ["2026-03-09", "Soup", 6],
+      ["2026-03-09", "Rice", null],
+      ["2026-03-15", "Soup", null],
+    ]);
+    // The original week is untouched, and a second press adds nothing.
+    expect((await plan(me, book, "2026-03-02", "2026-03-08")).body.data.entries).toHaveLength(3);
+    expect((await copy(me, book, "2026-03-02", "2026-03-09")).body.data).toEqual({ copied: 0, skipped: 3 });
+    expect((await plan(me, book, "2026-03-09", "2026-03-15")).body.data.entries).toHaveLength(3);
+  });
+
+  it("is for editors only, and refuses copying a week onto itself", async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const book = await bookOf(owner);
+    expect((await copy(owner, book, "2026-03-02", "2026-03-02")).status).toBe(400);
+    expect((await copy(stranger, book, "2026-03-02", "2026-03-09")).status).toBe(404);
+  });
+});

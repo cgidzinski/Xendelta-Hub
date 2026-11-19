@@ -141,6 +141,7 @@ async function settleStatement(statement: BillingStatementDocument): Promise<voi
             : `${formatWholeGems(due)}. Nothing is being charged yet.`;
       for (const userId of await recipients(account)) {
         await notify(userId, {
+          app: "billing",
           title: `${what} for ${statement.month}`,
           message: how,
           link: billingLink(account),
@@ -231,6 +232,7 @@ export async function warnNearFreeTier(now: Date = new Date()): Promise<number> 
     const left = ceilGems(statement.freeTierLeft);
     for (const userId of await recipients(account)) {
       await notify(userId, {
+        app: "billing",
         title:
           account.type === "community"
             ? "Most of your community's free allowance is in use"

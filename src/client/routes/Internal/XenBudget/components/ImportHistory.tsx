@@ -1,20 +1,11 @@
 import { useState } from "react";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Box, Button, DialogContentText, Stack, Typography } from "@mui/material";
 import { useSnackbar } from "notistack";
 import type { XenBudgetImportBatch } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetImports, useXenBudgetImport } from "../../../../hooks/xenbudget/useImport";
 import LoadingSpinner from "../../../../components/LoadingSpinner";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 interface ImportHistoryProps {
   bookId: string;
@@ -75,23 +66,26 @@ export default function ImportHistory({ bookId }: ImportHistoryProps) {
         ))}
       </Stack>
 
-      <Dialog open={!!confirming} onClose={() => setConfirming(null)}>
-        <DialogTitle>Delete this import?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            This permanently removes the {confirming?.remaining} item
-            {confirming?.remaining === 1 ? "" : "s"} still in the book from &ldquo;{confirming?.source_label}&rdquo;
-            {confirming?.imported_at ? `, imported ${new Date(confirming.imported_at).toLocaleDateString()}` : ""}.
-            Nothing else is touched.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirming(null)}>Cancel</Button>
-          <Button color="error" disabled={isUndoing} onClick={remove}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveDialog
+        open={!!confirming}
+        onClose={() => setConfirming(null)}
+        title="Delete this import?"
+        actions={
+          <>
+            <Button onClick={() => setConfirming(null)}>Cancel</Button>
+            <Button color="error" disabled={isUndoing} onClick={remove}>
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <DialogContentText>
+          This permanently removes the {confirming?.remaining} item
+          {confirming?.remaining === 1 ? "" : "s"} still in the book from &ldquo;{confirming?.source_label}&rdquo;
+          {confirming?.imported_at ? `, imported ${new Date(confirming.imported_at).toLocaleDateString()}` : ""}.
+          Nothing else is touched.
+        </DialogContentText>
+      </ResponsiveDialog>
     </Box>
   );
 }

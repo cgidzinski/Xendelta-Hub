@@ -1,24 +1,12 @@
 import { useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, DialogContentText, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import type { XenBudgetBook } from "../../../../hooks/xenbudget/types";
 import { useXenBudgetBackup } from "../../../../hooks/xenbudget/useBackup";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 
 interface BookBackupSectionProps {
   book: XenBudgetBook;
@@ -108,59 +96,63 @@ export default function BookBackupSection({ book, isCreator }: BookBackupSection
         </Button>
       </Stack>
 
-      <Dialog open={!!payload} onClose={() => setPayload(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Restore backup</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <DialogContentText>
-              <strong>{String((payload?.book as { name?: string })?.name ?? "")}</strong> — {itemCount} item
-              {itemCount === 1 ? "" : "s"} from {fileName}.
-            </DialogContentText>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Restore to"
-              value={target}
-              onChange={(e) => setTarget(e.target.value as typeof target)}
+      <ResponsiveDialog
+        open={!!payload}
+        onClose={() => setPayload(null)}
+        maxWidth="xs"
+        title="Restore backup"
+        actions={
+          <>
+            <Button onClick={() => setPayload(null)}>Cancel</Button>
+            <Button
+              variant="contained"
+              color={target === "everything" ? "error" : "primary"}
+              disabled={isRestoringHere || isRestoringAsNew}
+              onClick={doRestore}
             >
-              <MenuItem value="new">A new book</MenuItem>
-              <MenuItem value="items">This book — add missing items</MenuItem>
-              {isCreator && <MenuItem value="config">This book — import settings only</MenuItem>}
-              {isCreator && <MenuItem value="everything">This book — replace everything</MenuItem>}
-            </TextField>
-            {target === "items" && (
-              <Alert severity="info">
-                Items this book already has are skipped, so restoring over live data won&rsquo;t double anything.
-                Budgets, piggy banks, categories, flags and rules are left untouched.
-              </Alert>
-            )}
-            {target === "config" && (
-              <Alert severity="info">
-                Budgets, piggy banks, tagging rules and saved import mappings are replaced by the backup&rsquo;s;
-                categories and flags are merged by name. Items are left untouched.
-              </Alert>
-            )}
-            {target === "everything" && (
-              <Alert severity="warning">
-                Every item, budget, piggy bank, rule and saved import mapping in &ldquo;{book.name}&rdquo; is deleted
-                and replaced by the backup; categories and flags are merged by name. This cannot be undone.
-              </Alert>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPayload(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color={target === "everything" ? "error" : "primary"}
-            disabled={isRestoringHere || isRestoringAsNew}
-            onClick={doRestore}
+              Restore
+            </Button>
+          </>
+        }
+      >
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <DialogContentText>
+            <strong>{String((payload?.book as { name?: string })?.name ?? "")}</strong> — {itemCount} item
+            {itemCount === 1 ? "" : "s"} from {fileName}.
+          </DialogContentText>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Restore to"
+            value={target}
+            onChange={(e) => setTarget(e.target.value as typeof target)}
           >
-            Restore
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <MenuItem value="new">A new book</MenuItem>
+            <MenuItem value="items">This book — add missing items</MenuItem>
+            {isCreator && <MenuItem value="config">This book — import settings only</MenuItem>}
+            {isCreator && <MenuItem value="everything">This book — replace everything</MenuItem>}
+          </TextField>
+          {target === "items" && (
+            <Alert severity="info">
+              Items this book already has are skipped, so restoring over live data won&rsquo;t double anything. Budgets,
+              piggy banks, categories, flags and rules are left untouched.
+            </Alert>
+          )}
+          {target === "config" && (
+            <Alert severity="info">
+              Budgets, piggy banks, tagging rules and saved import mappings are replaced by the backup&rsquo;s;
+              categories and flags are merged by name. Items are left untouched.
+            </Alert>
+          )}
+          {target === "everything" && (
+            <Alert severity="warning">
+              Every item, budget, piggy bank, rule and saved import mapping in &ldquo;{book.name}&rdquo; is deleted and
+              replaced by the backup; categories and flags are merged by name. This cannot be undone.
+            </Alert>
+          )}
+        </Stack>
+      </ResponsiveDialog>
     </Box>
   );
 }

@@ -5,8 +5,10 @@ import { useNavigate } from "react-router-dom";
 import EmptyState from "../../../components/ui/EmptyState";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
+import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import SectionLabel from "../../../components/ui/SectionLabel";
+import { clickableRowProps } from "../../../utils/keyboard";
 import { useTitle } from "../../../hooks/useTitle";
 import { useStorageAppFiles } from "../../../hooks/storage/useStorage";
 import { formatFileSize } from "../../../utils/fileUtils";
@@ -25,7 +27,7 @@ export default function Storage() {
   const { data, isLoading, isError, error, refetch } = useStorageAppFiles();
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 960, mx: "auto" }}>
+    <PageContainer width="narrow">
       <PageHeader
         title="Storage"
         subtitle={
@@ -72,8 +74,9 @@ export default function Storage() {
                       py: 1,
                       cursor: "pointer",
                       "&:hover": { bgcolor: "action.hover" },
+                      "&:focus-visible": { outline: (t) => `2px solid ${t.palette.primary.main}`, outlineOffset: -2 },
                     }}
-                    onClick={() => navigate(storageFilePath(file._id))}
+                    {...clickableRowProps(() => navigate(storageFilePath(file._id)))}
                   >
                     <FileTypeIcon mimeType={file.mimeType} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -90,6 +93,6 @@ export default function Storage() {
           </Box>
         ))
       )}
-    </Box>
+    </PageContainer>
   );
 }
