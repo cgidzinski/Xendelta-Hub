@@ -67,7 +67,13 @@ const notes: Source = async (uid, q, rx) => {
   const found = await XenNote.find({
     archived: { $ne: true },
     $and: [
-      { $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }] },
+      {
+        $or: [
+          { notebook_id: null, owner_id: uid },
+          { notebook_id: { $in: books.map((b) => b._id) } },
+          { "members.user_id": uid },
+        ],
+      },
       {
         $or: [
           { title: rx },

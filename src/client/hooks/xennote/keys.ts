@@ -9,6 +9,8 @@ export const xennoteKeys = {
   /** The notes that link to one note with [[its title]]. */
   backlinks: (noteId: string) => [...xennoteKeys.all, "backlinks", noteId] as const,
   counts: () => [...xennoteKeys.all, "counts"] as const,
+  /** Who one note is open to. */
+  sharing: (noteId: string) => [...xennoteKeys.all, "sharing", noteId] as const,
   trash: () => [...xennoteKeys.all, "trash"] as const,
   versions: (noteId: string) => [...xennoteKeys.all, "versions", noteId] as const,
   version: (noteId: string, versionId: string) => [...xennoteKeys.all, "version", noteId, versionId] as const,

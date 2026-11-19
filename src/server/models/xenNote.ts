@@ -75,6 +75,9 @@ const noteSchema = new Schema({
   pinned: { type: Boolean, default: false },
   archived: { type: Boolean, default: false },
   labels: { type: [String], default: [] },
+  // People the note is shared with directly, as viewers or editors. The owner is `owner_id`; a note in a notebook is
+  // also open to that notebook's members (routes/xennote/shared.ts noteRole).
+  members: { type: [memberSchema], default: [] },
   share: {
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },
@@ -87,6 +90,7 @@ const noteSchema = new Schema({
 
 noteSchema.index({ notebook_id: 1, updated_at: -1 });
 noteSchema.index({ owner_id: 1, notebook_id: 1 });
+noteSchema.index({ "members.user_id": 1 });
 noteSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
 // The reminder job: notes with a reminder that has come due.
 noteSchema.index({ "reminders.at": 1 });

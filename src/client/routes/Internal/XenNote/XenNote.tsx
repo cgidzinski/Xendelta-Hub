@@ -62,6 +62,7 @@ import { NOTE_SORTS, isNoteSort, sortNotes, type NoteSort } from "./noteSort";
 import NoteCard from "./components/NoteCard";
 import NoteEditor from "./components/NoteEditor";
 import NoteTrash from "./components/NoteTrash";
+import NoteShareDialog from "./components/NoteShareDialog";
 import NoteBulkBar from "./components/NoteBulkBar";
 import NoteRail, { type Scope } from "./components/NoteRail";
 import NotebookDialog from "./components/NotebookDialog";
@@ -90,6 +91,7 @@ export default function XenNote() {
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
 
   const [scope, setScope] = useState<Scope>("all");
+  const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [label, setLabel] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
@@ -271,7 +273,8 @@ export default function XenNote() {
           onTogglePin={() => save(n._id, { pinned: !n.pinned })}
           onArchive={() => save(n._id, { archived: !n.archived })}
           onColor={(color) => save(n._id, { color })}
-          onDelete={() => removeNote(n)}
+          onDelete={n.can_manage ? () => removeNote(n) : undefined}
+          onShare={() => setShareNoteId(n._id)}
           resolveTitle={resolveTitle}
           onOpenLinked={openNoteById}
           selected={selecting ? selectedIds.includes(n._id) : undefined}
@@ -286,11 +289,13 @@ export default function XenNote() {
       ? "All notes"
       : scope === "none"
         ? "My notes"
-        : scope === "archive"
-          ? "Archive"
-          : scope === "trash"
-            ? "Trash"
-            : (openBook?.name ?? "Notes");
+        : scope === "shared"
+          ? "Shared with me"
+          : scope === "archive"
+            ? "Archive"
+            : scope === "trash"
+              ? "Trash"
+              : (openBook?.name ?? "Notes");
   const bookSubtitle = openBook
     ? `${openBook.note_count} ${openBook.note_count === 1 ? "note" : "notes"}${
         openBook.my_role
@@ -302,7 +307,7 @@ export default function XenNote() {
   const empty = !!notes && notes.length === 0;
   const startNotebookId =
     openBook && (openBook.my_role === "owner" || openBook.my_role === "editor") ? openBook._id : null;
-  const canWrite = scope !== "archive" && scope !== "trash" && (!openBook || !!startNotebookId);
+  const canWrite = scope !== "archive" && scope !== "trash" && scope !== "shared" && (!openBook || !!startNotebookId);
 
   const pickScope = (next: Scope) => {
     setScope(next);
@@ -614,6 +619,7 @@ export default function XenNote() {
         titles={titles}
         onOpenNote={openNoteById}
       />
+      <NoteShareDialog noteId={shareNoteId} onClose={() => setShareNoteId(null)} />
       <NotebookDialog
         open={!!notebookDialog}
         onClose={() => setNotebookDialog(null)}

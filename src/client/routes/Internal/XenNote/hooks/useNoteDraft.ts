@@ -165,15 +165,6 @@ export function useNoteDraft({ open, onClose, note, startType, startNotebookId, 
     }
   };
 
-  const shareAction = async (action: "enable" | "rotate" | "disable") => {
-    if (!live) return;
-    try {
-      setLive(await actions.shareNote.mutateAsync({ id: live._id, action }));
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't update the link", { variant: "error" });
-    }
-  };
-
   return {
     initial,
     draft,
@@ -190,6 +181,5 @@ export function useNoteDraft({ open, onClose, note, startType, startNotebookId, 
     remove,
     addPhotos,
     removePhoto,
-    shareAction,
   };
 }

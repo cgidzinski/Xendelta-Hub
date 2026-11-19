@@ -238,9 +238,9 @@ describe("notebooks and sharing", () => {
     expect(seen.find((n: any) => n._id === loose._id).updated_by_name).toBeNull();
     expect((await api(owner).get(`/notes/${shared._id}`)).body.data.note.updated_by_name).toBe(editor.user.username);
 
-    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 2, mine: 1, archived: 1, trash: 0 });
+    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 2, mine: 1, archived: 1, trash: 0, shared: 0 });
     // the editor sees the shared note but not the owner's private or archived ones
-    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 1, mine: 0, archived: 0, trash: 0 });
+    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 1, mine: 0, archived: 0, trash: 0, shared: 0 });
     expect((await api().get("/counts")).status).toBe(401);
   });
 

@@ -3,7 +3,7 @@ import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import HistoryIcon from "@mui/icons-material/History";
-import LinkIcon from "@mui/icons-material/Link";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import NotesIcon from "@mui/icons-material/Notes";
 
 interface NoteMoreMenuProps {
@@ -67,9 +67,9 @@ export default function NoteMoreMenu({
         }}
       >
         <ListItemIcon>
-          <LinkIcon fontSize="small" />
+          <ShareOutlinedIcon fontSize="small" />
         </ListItemIcon>
-        Public link
+        Share
       </MenuItem>
       <MenuItem
         sx={savedOnly}

@@ -20,6 +20,7 @@ import { alpha, useTheme } from "@mui/material/styles";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import LinkIcon from "@mui/icons-material/Link";
@@ -45,6 +46,8 @@ interface NoteCardProps {
   onArchive?: () => void;
   onColor?: (color: XenNote["color"]) => void;
   onDelete?: () => void;
+  /** Open the Share dialog for this note. */
+  onShare?: () => void;
   /**
    * Set while choosing notes for a bulk action: the card shows a tick box, and a tap ticks it instead of opening it.
    * A note the person can't edit shows no tick box and can't be chosen.
@@ -109,6 +112,7 @@ export default function NoteCard({
   onArchive,
   onColor,
   onDelete,
+  onShare,
   selected,
   onSelect,
 }: NoteCardProps) {
@@ -233,6 +237,12 @@ export default function NoteCard({
           </Stack>
         )}
 
+        {full?.owner_name && (
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", mt: 1.5 }}>
+            Shared by {full.owner_name}
+          </Typography>
+        )}
+
         {full?.updated_by_name && (
           <Box
             sx={{
@@ -331,7 +341,7 @@ export default function NoteCard({
           </IconButton>
         </Tooltip>
       )}
-      {selected === undefined && editable && (onArchive || onColor || onDelete) && (
+      {selected === undefined && editable && (onArchive || onColor || onDelete || onShare) && (
         <>
           <Tooltip title="More">
             <IconButton
@@ -385,6 +395,19 @@ export default function NoteCard({
                   <ArchiveOutlinedIcon fontSize="small" />
                 </ListItemIcon>
                 {full?.archived ? "Unarchive" : "Archive"}
+              </MenuItem>
+            )}
+            {onShare && (
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  onShare();
+                }}
+              >
+                <ListItemIcon>
+                  <ShareOutlinedIcon fontSize="small" />
+                </ListItemIcon>
+                Share
               </MenuItem>
             )}
             {onDelete && (

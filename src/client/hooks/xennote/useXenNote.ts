@@ -6,6 +6,7 @@ import type {
   XenNote,
   XenNoteBacklink,
   XenNoteCounts,
+  XenNoteSharing,
   TrashedXenNote,
   XenNoteInput,
   XenNoteVersionFull,
@@ -48,6 +49,15 @@ export const useXenNoteCounts = () =>
   useQuery({
     queryKey: xennoteKeys.counts(),
     queryFn: () => api.get<XenNoteCounts>("/api/xennote/counts"),
+    ...liveQuery,
+  });
+
+/** Who one note is open to (its owner, the people it is shared with, its link). Only fetched while `noteId` is set. */
+export const useXenNoteSharing = (noteId: string | undefined) =>
+  useQuery({
+    queryKey: xennoteKeys.sharing(noteId ?? ""),
+    queryFn: () => api.get<XenNoteSharing>(`/api/xennote/notes/${noteId}/sharing`),
+    enabled: !!noteId,
     ...liveQuery,
   });
 
@@ -233,6 +243,21 @@ export const useXenNoteActions = () => {
     onSuccess: refresh,
   });
 
+  const addNoteMembers = useMutation({
+    mutationFn: (v: { id: string; userIds: string[]; role: "editor" | "viewer" }) =>
+      api.post<XenNoteSharing>(`/api/xennote/notes/${v.id}/members`, { userIds: v.userIds, role: v.role }),
+    onSuccess: refresh,
+  });
+  const setNoteMemberRole = useMutation({
+    mutationFn: (v: { id: string; userId: string; role: "editor" | "viewer" }) =>
+      api.put<XenNoteSharing>(`/api/xennote/notes/${v.id}/members/${v.userId}`, { role: v.role }),
+    onSuccess: refresh,
+  });
+  const removeNoteMember = useMutation({
+    mutationFn: (v: { id: string; userId: string }) => api.delete(`/api/xennote/notes/${v.id}/members/${v.userId}`),
+    onSuccess: refresh,
+  });
+
   const createNotebook = useMutation({
     mutationFn: async (v: { name: string; color?: string }) =>
       (await api.post<{ notebook: XenNotebook }>("/api/xennote/notebooks", v)).notebook,
@@ -297,6 +322,9 @@ export const useXenNoteActions = () => {
     addImages,
     removeImage,
     shareNote,
+    addNoteMembers,
+    setNoteMemberRole,
+    removeNoteMember,
     createNotebook,
     updateNotebook,
     deleteNotebook,

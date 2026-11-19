@@ -185,6 +185,7 @@ export default function NoteEditor({
           onLabels={setLabelAnchor}
           onNotebook={setBookAnchor}
           onReminder={setReminderAnchor}
+          onShare={() => setShareOpen(true)}
           onDone={n.saveAndClose}
         />
       </Dialog>
@@ -250,12 +251,7 @@ export default function NoteEditor({
         onSet={n.setReminder}
       />
 
-      <NoteShareDialog
-        open={shareOpen}
-        token={live?.share?.enabled ? live.share.token : null}
-        onClose={() => setShareOpen(false)}
-        onAction={n.shareAction}
-      />
+      <NoteShareDialog noteId={shareOpen ? (live?._id ?? null) : null} onClose={() => setShareOpen(false)} />
     </>
   );
 }

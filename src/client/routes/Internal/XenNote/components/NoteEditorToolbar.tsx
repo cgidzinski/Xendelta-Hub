@@ -5,6 +5,7 @@ import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import type { XenNote } from "../../../../types/XenNote";
 
@@ -21,6 +22,8 @@ interface NoteEditorToolbarProps {
   onLabels: (anchor: HTMLElement) => void;
   onNotebook: (anchor: HTMLElement) => void;
   onReminder: (anchor: HTMLElement) => void;
+  /** Opens the Share dialog; for a read-only note it shows who has the note and lets the person leave it. */
+  onShare: () => void;
   onDone: () => void;
 }
 
@@ -36,6 +39,7 @@ export default function NoteEditorToolbar({
   onLabels,
   onNotebook,
   onReminder,
+  onShare,
   onDone,
 }: NoteEditorToolbarProps) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -103,6 +107,13 @@ export default function NoteEditorToolbar({
             onClick={(e) => onReminder(e.currentTarget)}
           >
             {reminderOn ? <NotificationsActiveIcon fontSize="small" /> : <NotificationsNoneIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+      )}
+      {readOnly && live && (
+        <Tooltip title="Share">
+          <IconButton size="small" aria-label="Share" onClick={onShare}>
+            <ShareOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
       )}
