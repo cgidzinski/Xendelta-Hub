@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { useSnackbar } from "notistack";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
+import PageContainer from "../../../components/ui/PageContainer";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { useTitle } from "../../../hooks/useTitle";
@@ -89,16 +90,16 @@ export default function FileDetail() {
 
   if (isError) {
     return (
-      <Box sx={{ p: 3 }}>
+      <PageContainer width="wide">
         <ErrorDisplay error={error ?? null} title="Couldn't load this file" onRetry={() => refetch()} />
-      </Box>
+      </PageContainer>
     );
   }
   if (isLoading || !file) {
     return (
-      <Box sx={{ p: 3 }}>
+      <PageContainer width="wide">
         <ListSkeleton />
-      </Box>
+      </PageContainer>
     );
   }
 
@@ -120,7 +121,7 @@ export default function FileDetail() {
   ];
 
   return (
-    <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 1.5, md: 3 }, maxWidth: 1400, mx: "auto" }}>
+    <PageContainer width="wide">
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
         <IconButton aria-label="Back" onClick={() => navigate(backTo)} edge="start">
           <ArrowBackIcon />
@@ -245,6 +246,6 @@ export default function FileDetail() {
           await updateFileSettings.mutateAsync({ fileId: file._id, settings: { name } });
         }}
       />
-    </Box>
+    </PageContainer>
   );
 }

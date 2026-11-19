@@ -125,9 +125,14 @@ function MonthCost({ overview }: { overview: BillingOverview }) {
               pointerEvents: "none",
             }}
           >
-            <Typography sx={{ fontWeight: 700, fontSize: 18, lineHeight: 1.1, textAlign: "center" }}>
-              {formatGems(current.usageGems)}
-            </Typography>
+            <Box sx={{ textAlign: "center" }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 18, lineHeight: 1.1 }}>
+                {formatGems(current.usageGems)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                so far
+              </Typography>
+            </Box>
           </Box>
         </Box>
         <Stack spacing={0.75} sx={{ minWidth: 140, flex: 1 }}>
@@ -199,7 +204,7 @@ function Statements({ overview }: { overview: BillingOverview }) {
                 {monthName(s.month)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {formatGems(s.usageGems)} used · {formatWholeGems(Math.round(s.freeTierUsed))} free
+                {formatGems(s.usageGems)} used · {formatGems(s.freeTierUsed)} from the free allowance
               </Typography>
             </Box>
             <Stack alignItems="flex-end" spacing={0.5}>
@@ -225,7 +230,7 @@ function HowBillingWorks({ overview, communityName }: { overview: BillingOvervie
     [
       "Files",
       `${gems(ratePer("storage"))} per GB a month`,
-      communityName ? "Channel files and emoji: the community" : "You (the community, in its channels)",
+      communityName ? "Channel files and emoji: the community" : "You, or the community for channel files",
     ],
     [
       "Calls",
@@ -275,8 +280,6 @@ interface BillingViewProps {
   overview: BillingOverview;
   /** The third summary card: your gems, or the community's fund. */
   balanceCard: ReactNode;
-  /** Who pays beyond the free allowance (not shown any more; the table says it). */
-  paidFrom?: string;
   /** "Trail Crew", for the notice; omitted for your own bill. */
   communityName?: string;
   /** Extra sections after the costs (a community's fund history). */
@@ -308,5 +311,3 @@ export function coverageText(overview: BillingOverview): string {
   if (months < 1) return "Less than a month at this pace";
   return `Covers about ${months} ${months === 1 ? "month" : "months"} at this pace`;
 }
-
-export { bigNumberSx };
