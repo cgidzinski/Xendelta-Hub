@@ -268,9 +268,9 @@ export default function NoteEditor({
   const remove = async () => {
     if (!live) return onClose();
     const ok = await confirm({
-      title: "Delete this note?",
-      message: "It's deleted for everyone who can see it, and can't be brought back.",
-      confirmLabel: "Delete note",
+      title: "Move this note to the Trash?",
+      message: "It disappears for everyone who can see it. You can bring it back from the Trash for 30 days.",
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     try {
