@@ -19,6 +19,8 @@ const PARAMS_EXEMPT: Record<string, string> = {};
 const BODY_EXEMPT: Record<string, string> = {
   "POST /api/user/link-google": "no body: authenticated trigger for an OAuth redirect flow",
   "POST /api/xennote/notes/:id/images": "multipart upload handled by multer, not JSON",
+  "POST /api/xendrive/trash/:fileId/restore": "no body: puts back the trashed file named by the path",
+  "POST /api/xennote/trash/:id/restore": "no body: puts back the trashed note named by the path",
   "POST /api/xennote/notes/:id/share": "no body: turns on the note's public link (path names the note)",
   "POST /api/xennote/notes/:id/share/rotate": "no body: replaces the note's public link (path names the note)",
   "POST /api/xennote/notebooks/:id/share": "no body: turns on the notebook's public link (path names the notebook)",
@@ -40,6 +42,8 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/xendrive/files/:fileId/share/rotate": "no body: replaces the file's link (path names the file)",
   "POST /api/xendrive/folders/:folderId/share/rotate":
     "no body: replaces the folder's public link (path names the folder)",
+  "POST /api/xenroutine/routines/:id/undo":
+    "no body: takes back the latest completion of the routine named by the path",
   "POST /api/xenlink/click/:slug": "no body: counts a click on the link named by the path",
   "POST /api/admin/backups": "no body: starts a backup of the whole database",
   "POST /api/admin/debug/trigger-error": "no body: throws on purpose to test error reporting",

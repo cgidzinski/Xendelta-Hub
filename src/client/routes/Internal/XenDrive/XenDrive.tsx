@@ -145,13 +145,13 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
 
   const removeFile = async (file: XenDriveFile) => {
     const ok = await confirm({
-      title: "Delete this file?",
-      message: `"${file.name}" will be deleted for good${file.shared ? ", and its link stops working" : ""}.`,
-      confirmLabel: "Delete file",
+      title: "Move this file to the Trash?",
+      message: `"${file.name}" is kept in the Trash for 30 days${file.shared ? ", and its link stops working meanwhile" : ""}.`,
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     actions.deleteFile.mutate(file._id, {
-      onSuccess: () => enqueueSnackbar("File deleted", { variant: "success" }),
+      onSuccess: () => enqueueSnackbar("File moved to Trash", { variant: "success" }),
       onError: (e: Error) => fail(e, "Couldn't delete the file"),
     });
   };
@@ -184,16 +184,19 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const bulkDelete = async () => {
     const deletable = selectedFiles;
     const chosenFolders = folders.filter((f) => selected.has(f._id));
+    if (!deletable.length && !chosenFolders.length) return;
+    // Files go to the Trash; a folder (and everything in it) is deleted for good.
     const parts = [
-      deletable.length ? `${deletable.length} ${deletable.length === 1 ? "file" : "files"}` : "",
+      deletable.length
+        ? `${deletable.length} ${deletable.length === 1 ? "file goes" : "files go"} to the Trash for 30 days.`
+        : "",
       chosenFolders.length
-        ? `${chosenFolders.length} ${chosenFolders.length === 1 ? "folder" : "folders"} and everything inside`
+        ? `${chosenFolders.length} ${chosenFolders.length === 1 ? "folder" : "folders"} and everything inside ${chosenFolders.length === 1 ? "is" : "are"} deleted for good.`
         : "",
     ].filter(Boolean);
-    if (!deletable.length && !chosenFolders.length) return;
     const ok = await confirm({
       title: `Delete ${deletable.length + chosenFolders.length} ${deletable.length + chosenFolders.length === 1 ? "item" : "items"}?`,
-      message: `${parts.join(" and ")} will be deleted for good.`,
+      message: parts.join(" "),
       confirmLabel: "Delete",
     });
     if (!ok) return;

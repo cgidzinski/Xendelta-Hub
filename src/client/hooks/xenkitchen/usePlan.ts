@@ -40,7 +40,7 @@ export const usePlan = (bookId: string | undefined, from: string, to: string) =>
   });
 
 /** Every plan mutation refetches the plan: the server decides what is still valid (a deleted recipe drops out). */
-function usePlanMutation<TVars>(fn: (v: TVars) => Promise<unknown>) {
+function usePlanMutation<TVars, TData = unknown>(fn: (v: TVars) => Promise<TData>) {
   const qc = useQueryClient();
   return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: planKeys.all }) });
 }
@@ -48,6 +48,16 @@ function usePlanMutation<TVars>(fn: (v: TVars) => Promise<unknown>) {
 export const useAddPlanEntry = () =>
   usePlanMutation((v: { bookId: string; date: string; item_id: string; servings?: number | null }) =>
     api.post(`/api/xenkitchen/books/${v.bookId}/plan`, { date: v.date, item_id: v.item_id, servings: v.servings }),
+  );
+
+/** Copy the week starting `from` onto the week starting `to` (both "yyyy-MM-dd"). Meals already there are left alone. */
+export const useCopyPlanWeek = () =>
+  usePlanMutation(
+    async (v: { bookId: string; from: string; to: string }) =>
+      await api.post<{ copied: number; skipped: number }>(`/api/xenkitchen/books/${v.bookId}/plan/copy`, {
+        from: v.from,
+        to: v.to,
+      }),
   );
 
 export const useUpdatePlanEntry = () =>

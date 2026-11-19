@@ -64,14 +64,14 @@ export default function FileDetail() {
   const remove = async () => {
     if (!file) return;
     const ok = await confirm({
-      title: "Delete this file?",
-      message: `"${file.name}" will be deleted for good${file.shared ? ", and its link stops working" : ""}.`,
-      confirmLabel: "Delete file",
+      title: "Move this file to the Trash?",
+      message: `"${file.name}" is kept in the Trash for 30 days${file.shared ? ", and its link stops working meanwhile" : ""}.`,
+      confirmLabel: "Move to Trash",
     });
     if (!ok) return;
     deleteFile.mutate(file._id, {
       onSuccess: () => {
-        enqueueSnackbar("File deleted", { variant: "success" });
+        enqueueSnackbar("File moved to Trash", { variant: "success" });
         navigate(backTo);
       },
       onError: (e: Error) => enqueueSnackbar(e.message || "Couldn't delete the file", { variant: "error" }),

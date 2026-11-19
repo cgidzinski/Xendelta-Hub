@@ -66,6 +66,8 @@ import {
   type XenDriveFileDocument,
 } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
+import { purgeDate } from "../utils/softDelete";
+import { deleteFilesForever } from "../utils/xendriveTrash";
 
 /** RFC 5987 header value so any file name (spaces, accents, quotes) downloads under its own name. */
 const attachment = (name: string) => `attachment; filename*=UTF-8''${encodeURIComponent(name)}`;
@@ -692,11 +694,77 @@ module.exports = function (app: express.Application) {
     validateParams(xenDriveFileIdParamSchema),
     async function (req: express.Request, res: express.Response) {
       const file = await ownFile(req.params.fileId as string, callerId(req));
-      // The pre-delete hook removes the stored bytes too.
-      await XenDriveFile.findByIdAndDelete(file.id);
-      return res.json({ status: true, message: "File deleted successfully" });
+      // Into the Trash for 30 days (its link stops working; the stored file still counts toward storage).
+      await XenDriveFile.updateOne({ _id: file._id }, { $set: { deleted_at: new Date(), deleted_by: callerId(req) } });
+      return res.json({ status: true, message: "File moved to Trash" });
     },
   );
+
+  // ---------------------------------------------------------------------------------------------
+  // Trash: files deleted in the last 30 days
+  // ---------------------------------------------------------------------------------------------
+
+  const trashedFiles = (userId: string) =>
+    XenDriveFile.find({ owner_id: userId, deleted_at: { $ne: null } }).setOptions({ includeDeleted: true });
+
+  app.get("/api/xendrive/trash", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const files = await withRecords(await trashedFiles(callerId(req)).sort({ deleted_at: -1 }).limit(500).exec());
+    return res.json({
+      status: true,
+      data: {
+        files: files.map((f) => ({
+          _id: f._id.toString(),
+          name: f.name,
+          mimeType: f.mimeType,
+          size: f.size,
+          deleted_at: (f.deleted_at as Date).toISOString(),
+          purge_at: purgeDate(f.deleted_at as Date).toISOString(),
+        })),
+      },
+    });
+  });
+
+  async function trashedFile(fileId: string, userId: string) {
+    const file = await XenDriveFile.findOne({ _id: fileId, owner_id: userId, deleted_at: { $ne: null } })
+      .setOptions({ includeDeleted: true })
+      .exec();
+    if (!file) throw new AppError(404, "File not found in the Trash");
+    return file;
+  }
+
+  app.post(
+    "/api/xendrive/trash/:fileId/restore",
+    authenticateToken,
+    validateParams(xenDriveFileIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const userId = callerId(req);
+      const file = await trashedFile(req.params.fileId as string, userId);
+      // Back in its folder, or at the top level if the folder has been deleted since.
+      const folderGone = file.folder_id && !(await XenDriveFolder.exists({ _id: file.folder_id, owner_id: userId }));
+      file.set("folder_id", folderGone ? null : file.folder_id);
+      file.set("deleted_at", null);
+      file.set("deleted_by", null);
+      await file.save();
+      return res.json({ status: true, message: "File restored", data: { backToTop: !!folderGone } });
+    },
+  );
+
+  app.delete(
+    "/api/xendrive/trash/:fileId",
+    authenticateToken,
+    validateParams(xenDriveFileIdParamSchema),
+    async function (req: express.Request, res: express.Response) {
+      const file = await trashedFile(req.params.fileId as string, callerId(req));
+      await deleteFilesForever([file._id]);
+      return res.json({ status: true, message: "File deleted for good" });
+    },
+  );
+
+  app.delete("/api/xendrive/trash", authenticateToken, async function (req: express.Request, res: express.Response) {
+    const files = await trashedFiles(callerId(req)).select("_id").lean();
+    const removed = await deleteFilesForever(files.map((f) => f._id));
+    return res.json({ status: true, message: "Trash emptied", data: { removed } });
+  });
 
   // ---------------------------------------------------------------------------------------------
   // Public: a single file's own link

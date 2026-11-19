@@ -13,6 +13,10 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  MenuItem,
+  FormControlLabel,
+  Switch,
+  Checkbox,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
@@ -21,6 +25,7 @@ import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import LinkIcon from "@mui/icons-material/Link";
 import {
   useCreateXenLink,
+  useDeleteManyXenLinks,
   useDeleteXenLink,
   useUpdateXenLink,
   useXenLink,
@@ -30,6 +35,7 @@ import {
 } from "../../../hooks/xenlink/useXenlink";
 import { SLUG_PATTERN } from "@shared/xenlink";
 import LinkList from "./components/LinkList";
+import { LINK_SORTS, filterLinks, sortLinks, type LinkSort } from "./linkView";
 import LinkQrCode from "./components/LinkQrCode";
 import LinkStatsChart from "./components/LinkStatsChart";
 import { format } from "date-fns";
@@ -42,6 +48,9 @@ export default function XenDrive() {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<LinkSort>("oldest");
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
   const [EditLinkDialogOpen, setEditLinkDialogOpen] = useState(false);
 
   const emptyXenLink: XenLink = { _id: "", name: "", url: "", slug: "", createdAt: new Date(), updatedAt: new Date() };
@@ -51,6 +60,30 @@ export default function XenDrive() {
   const { mutateAsync: updateXenLink, isPending: isUpdating } = useUpdateXenLink();
   const { mutateAsync: createXenLink } = useCreateXenLink();
   const { mutateAsync: deleteXenLink } = useDeleteXenLink();
+  const { mutateAsync: deleteManyXenLinks, isPending: isDeletingMany } = useDeleteManyXenLinks();
+  const visibleLinks = useMemo(() => sortLinks(filterLinks(links, search), sort), [links, search, sort]);
+
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected([]);
+  };
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const handleDeleteSelected = async () => {
+    const ok = await confirm({
+      title: `Delete ${selected.length} ${selected.length === 1 ? "link" : "links"}?`,
+      message: "They will stop working for anyone who has them, and their click stats are lost.",
+    });
+    if (!ok) return;
+    try {
+      const { deleted } = await deleteManyXenLinks(selected);
+      enqueueSnackbar(`${deleted} ${deleted === 1 ? "link" : "links"} deleted`, { variant: "success" });
+      stopSelecting();
+    } catch (e) {
+      enqueueSnackbar(e instanceof Error ? e.message : "Couldn't delete the links", { variant: "error" });
+    }
+  };
 
   const handleDeleteLink = async () => {
     const ok = await confirm({
@@ -96,6 +129,7 @@ export default function XenDrive() {
       ...(selectedLink.slug && selectedLink.slug !== original?.slug ? { slug: selectedLink.slug } : {}),
       // New links without an expiry send nothing; an edit sends the current value, null meaning "never".
       ...(selectedLink._id || selectedLink.expires_at ? { expiresAt: selectedLink.expires_at ?? null } : {}),
+      ...(selectedLink._id ? { paused: !!selectedLink.paused } : {}),
     };
     try {
       if (selectedLink._id) await updateXenLink({ ...input, _id: selectedLink._id });
@@ -202,6 +236,17 @@ export default function XenDrive() {
                 </Button>
               )}
             </Box>
+            {selectedLink._id && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={!!selectedLink.paused}
+                    onChange={(e) => setSelectedLink((prev) => ({ ...prev, paused: e.target.checked }))}
+                  />
+                }
+                label="Paused (nobody is sent on until you turn it back on)"
+              />
+            )}
             {selectedLink._id && stats && <LinkStatsChart stats={stats} />}
             {selectedLink._id && shareUrl && <LinkQrCode url={shareUrl} name={selectedLink.name} />}
             {selectedLink._id && (
@@ -258,8 +303,56 @@ export default function XenDrive() {
             </InputAdornment>
           ),
         }}
-        sx={{ mb: 4 }}
+        sx={{ mb: 2 }}
       />
+
+      {links.length > 1 && (
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 2, flexWrap: "wrap" }}>
+          <TextField
+            select
+            size="small"
+            label="Sort by"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as LinkSort)}
+            sx={{ minWidth: 220 }}
+          >
+            {LINK_SORTS.map((s) => (
+              <MenuItem key={s.value} value={s.value}>
+                {s.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Box sx={{ flex: 1 }} />
+          {selecting ? (
+            <>
+              <Checkbox
+                size="small"
+                aria-label="Select all shown"
+                checked={visibleLinks.length > 0 && selected.length === visibleLinks.length}
+                indeterminate={selected.length > 0 && selected.length < visibleLinks.length}
+                onChange={(e) => setSelected(e.target.checked ? visibleLinks.map((l) => l._id || "") : [])}
+              />
+              <Button
+                color="error"
+                variant="contained"
+                size="small"
+                startIcon={<DeleteIcon />}
+                disabled={selected.length === 0 || isDeletingMany}
+                onClick={handleDeleteSelected}
+              >
+                Delete {selected.length || ""}
+              </Button>
+              <Button size="small" onClick={stopSelecting}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button size="small" onClick={() => setSelecting(true)}>
+              Select
+            </Button>
+          )}
+        </Box>
+      )}
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -269,8 +362,10 @@ export default function XenDrive() {
 
       <LinkList
         search={search}
-        links={links}
+        links={visibleLinks}
+        selectedIds={selecting ? selected : undefined}
         handleLinkClick={(id) => {
+          if (selecting) return toggleSelected(id);
           setSelectedLink(links.find((link) => link._id === id) || emptyXenLink);
           setEditLinkDialogOpen(true);
         }}

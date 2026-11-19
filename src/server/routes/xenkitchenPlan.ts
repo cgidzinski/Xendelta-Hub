@@ -6,6 +6,7 @@ import {
   validateParams,
   validateQuery,
   xenKitchenPlanBookParamSchema,
+  xenKitchenPlanCopySchema,
   xenKitchenPlanCreateSchema,
   xenKitchenPlanEntryParamSchema,
   xenKitchenPlanRangeQuerySchema,
@@ -22,6 +23,9 @@ import { buildShoppingList } from "../../shared/xenkitchen/shopping";
 
 const MAX_PER_DAY = 12;
 const MAX_PER_BOOK = 2000;
+const DAY_MS = 86_400_000;
+const shiftDay = (d: string, days: number) =>
+  new Date(Date.parse(`${d}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 
 async function loadBook(uid: string, id: string, need: "view" | "edit") {
   const book = await XenKitchenBook.findById(id).lean();
@@ -105,6 +109,51 @@ module.exports = function (app: express.Application) {
       });
       planChanged(book);
       res.status(201).json({ status: true, data: { entry: serialize({ entry: entry.toObject(), item }) } });
+    },
+  );
+
+  // Copy one week's plan onto another: every meal moves by the same number of days. A meal already planned that day is
+  // not doubled (so pressing it twice is harmless), and a full day or plan just stops taking more.
+  app.post(
+    "/api/xenkitchen/books/:bookId/plan/copy",
+    authenticateToken,
+    validateParams(xenKitchenPlanBookParamSchema),
+    validate(xenKitchenPlanCopySchema),
+    async (req, res) => {
+      const bookId = req.params.bookId as string;
+      const { from, to } = xenKitchenPlanCopySchema.parse(req.body);
+      const book = await loadBook(callerId(req), bookId, "edit");
+      const offset = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+      const source = await planFor(bookId, from, shiftDay(from, 6));
+      const target = await XenKitchenPlan.find({ book_id: bookId, date: { $gte: to, $lte: shiftDay(to, 6) } }).lean();
+      const perDay = new Map<string, number>();
+      const taken = new Set<string>();
+      for (const e of target) {
+        perDay.set(e.date, (perDay.get(e.date) ?? 0) + 1);
+        taken.add(`${e.date}|${e.item_id}`);
+      }
+      let room = MAX_PER_BOOK - (await XenKitchenPlan.countDocuments({ book_id: bookId }));
+      const toCreate: Array<Record<string, unknown>> = [];
+      for (const { entry } of source) {
+        const date = shiftDay(entry.date, offset);
+        if (taken.has(`${date}|${entry.item_id}`)) continue;
+        if ((perDay.get(date) ?? 0) >= MAX_PER_DAY || room <= 0) continue;
+        perDay.set(date, (perDay.get(date) ?? 0) + 1);
+        taken.add(`${date}|${entry.item_id}`);
+        room--;
+        toCreate.push({
+          book_id: bookId,
+          date,
+          item_id: entry.item_id,
+          servings: entry.servings ?? null,
+          created_by: callerId(req),
+        });
+      }
+      if (toCreate.length > 0) {
+        await XenKitchenPlan.insertMany(toCreate);
+        planChanged(book);
+      }
+      res.json({ status: true, data: { copied: toCreate.length, skipped: source.length - toCreate.length } });
     },
   );
 

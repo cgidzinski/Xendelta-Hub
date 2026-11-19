@@ -8,6 +8,7 @@ import type {
   FolderStats,
   PublicFolderInfo,
   PublicFolderView,
+  TrashedXenDriveFile,
   XenDriveFile,
   XenDriveFolder,
 } from "../../types/XenDriveFile";
@@ -144,6 +145,37 @@ export const useXendriveRecent = () =>
       }>("/api/xendrive/recent"),
     ...liveQuery,
   });
+
+/** The files this person deleted in the last 30 days. */
+export const useXendriveTrash = () =>
+  useQuery({
+    queryKey: xendriveKeys.trash(),
+    queryFn: async () => (await api.get<{ files: TrashedXenDriveFile[] }>("/api/xendrive/trash")).files,
+    ...liveQuery,
+  });
+
+/** Bring a file back from the Trash, delete one for good, or empty the Trash. Each refreshes the drive and its usage. */
+export const useXendriveTrashActions = () => {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: xendriveKeys.all });
+    queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+  };
+  return {
+    restore: useMutation({
+      mutationFn: (id: string) => api.post(`/api/xendrive/trash/${id}/restore`),
+      onSuccess: refresh,
+    }),
+    deleteForever: useMutation({
+      mutationFn: (id: string) => api.delete(`/api/xendrive/trash/${id}`),
+      onSuccess: refresh,
+    }),
+    empty: useMutation({
+      mutationFn: () => api.delete<{ removed: number }>("/api/xendrive/trash"),
+      onSuccess: refresh,
+    }),
+  };
+};
 
 /** What deleting or sharing a folder involves. Only fetched while `folderId` is set. */
 export const useXendriveFolderStats = (folderId: string | null) =>
