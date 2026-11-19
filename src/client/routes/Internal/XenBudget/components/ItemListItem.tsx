@@ -1,4 +1,4 @@
-import { AvatarGroup, Box, Stack, Typography, alpha } from "@mui/material";
+import { AvatarGroup, Box, Checkbox, Stack, Typography, alpha } from "@mui/material";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
@@ -16,9 +16,18 @@ interface ItemListItemProps {
   categoryRegistry: XenBudgetLabel[];
   flagRegistry: XenBudgetLabel[];
   onClick: (item: XenBudgetItem) => void;
+  /** Set while choosing items for a bulk action: shows a tick box, and a tap ticks instead of opening the item. */
+  selected?: boolean;
 }
 
-export default function ItemListItem({ item, members, categoryRegistry, flagRegistry, onClick }: ItemListItemProps) {
+export default function ItemListItem({
+  item,
+  members,
+  categoryRegistry,
+  flagRegistry,
+  onClick,
+  selected,
+}: ItemListItemProps) {
   const isIncome = item.type === "income";
   const people = item.shares
     .map((s) => members.find((m) => m.user_id === s.user_id))
@@ -37,6 +46,15 @@ export default function ItemListItem({ item, members, categoryRegistry, flagRegi
         "&:hover": { bgcolor: "action.hover" },
       }}
     >
+      {selected !== undefined && (
+        <Checkbox
+          size="small"
+          checked={selected}
+          tabIndex={-1}
+          sx={{ p: 0.5, mr: -0.5 }}
+          slotProps={{ input: { "aria-label": `Select ${item.description}` } }}
+        />
+      )}
       <Box
         sx={{
           ...xbBadgeSx,

@@ -805,6 +805,22 @@ export const updateXenBudgetItemSchema = z.object({
   description: z.string().min(1).max(500).optional(),
 });
 
+// Several items at once: delete them, or give them all a category and/or add or remove flags. Up to 200 per request.
+const bulkIds = z.array(objectIdSchema).min(1, "Pick at least one item").max(200, "Up to 200 items at a time");
+export const xenBudgetBulkDeleteSchema = z.object({ ids: bulkIds });
+export const xenBudgetBulkUpdateSchema = z
+  .object({
+    ids: bulkIds,
+    // Replaces each item's categories with this one (the whole amount).
+    set_category: z.string().trim().min(1).max(50).optional(),
+    add_flags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+    remove_flags: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+  })
+  .refine(
+    (v) => v.set_category !== undefined || (v.add_flags?.length ?? 0) > 0 || (v.remove_flags?.length ?? 0) > 0,
+    "Choose what to change",
+  );
+
 // Web Push subscription schemas
 export const pushSubscribeSchema = z.object({
   endpoint: z.string().url("Endpoint must be a valid URL").max(2000, "Endpoint too long"),
@@ -855,6 +871,7 @@ export const updateXenRoutineSchema = z.object({
   interval: xenRoutineIntervalSchema.optional(),
   due_at: z.string().datetime({ offset: true }).optional(),
   enabled: z.boolean().optional(),
+  archived: z.boolean().optional(),
   remind_again_days: z.number().int().min(1).max(365).optional(),
 });
 

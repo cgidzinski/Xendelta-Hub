@@ -30,7 +30,7 @@ import DoneAllIcon from "@mui/icons-material/DoneAll";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import ProfileListItem from "../ProfileListItem";
 import GemBalance from "../GemBalance";
 import { useUserProfile } from "../../hooks/user/useUserProfile";
@@ -40,6 +40,7 @@ import { useNavBarSocket } from "../../hooks/useNavBarSocket";
 import NotificationModal from "../notifications/NotificationModal";
 import LoadingSpinner from "../LoadingSpinner";
 import { BRAND_NAME } from "@shared/brand";
+import { rememberRecentApp } from "../../utils/recentApps";
 
 const DRAWER_WIDTH = 240;
 
@@ -105,6 +106,7 @@ export default function BaseNavBar({
 }: BaseNavBarProps) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  useEffect(() => rememberRecentApp(pathname), [pathname]);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { profile } = useUserProfile();
