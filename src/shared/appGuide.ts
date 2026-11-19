@@ -328,6 +328,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Scale the servings and switch between metric and US units.",
       "Cook one step at a time in big text, with timers and the screen kept awake.",
       "Plan meals week by week.",
+      "Copy last week's meal plan onto this week, or repeat a meal on another day.",
       "Get a shopping list for the planned meals with the ingredients added up, and send it to XenNote to tick off in the shop.",
       "Organize recipes with categories, and mark favourites.",
       "Search and filter recipes by favourite or ingredient.",
