@@ -9,7 +9,7 @@ import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { format } from "date-fns";
 import { useSnackbar } from "notistack";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import ListSkeleton from "../../../components/ui/ListSkeleton";
+import DetailSkeleton from "../../../components/ui/DetailSkeleton";
 import PageContainer from "../../../components/ui/PageContainer";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
@@ -98,7 +98,7 @@ export default function FileDetail() {
   if (isLoading || !file) {
     return (
       <PageContainer width="wide">
-        <ListSkeleton />
+        <DetailSkeleton height={360} />
       </PageContainer>
     );
   }

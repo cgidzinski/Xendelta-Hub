@@ -62,7 +62,7 @@ export default function Overview() {
     <Box>
       <PageHeader title="Overview" subtitle="How the platform is doing, and what needs you" />
       {isLoading ? (
-        <ListSkeleton rows={4} height={110} />
+        <ListSkeleton rows={4} height={110} columns={{ xs: 2, md: 4 }} />
       ) : isError || !data ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load the overview" onRetry={() => refetch()} />
       ) : (

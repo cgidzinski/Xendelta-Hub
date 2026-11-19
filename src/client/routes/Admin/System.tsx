@@ -120,7 +120,7 @@ export default function System() {
     <Box>
       <PageHeader title="System" subtitle="Health, scheduled work, migrations and the tools" />
       {isLoading ? (
-        <ListSkeleton rows={4} height={100} />
+        <ListSkeleton rows={4} height={100} columns={{ xs: 2, md: 4 }} />
       ) : isError || !data ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load system information" onRetry={() => refetch()} />
       ) : (

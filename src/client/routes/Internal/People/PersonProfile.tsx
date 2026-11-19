@@ -15,7 +15,7 @@ import PageContainer from "../../../components/ui/PageContainer";
 import DetailHeader from "../../../components/ui/DetailHeader";
 import SectionCard from "../../../components/ui/SectionCard";
 import EmptyState from "../../../components/ui/EmptyState";
-import ListSkeleton from "../../../components/ui/ListSkeleton";
+import DetailSkeleton from "../../../components/ui/DetailSkeleton";
 import UserName from "../../../components/user/UserName";
 import UserAvatar from "../../../components/user/UserAvatar";
 import { GemIcon } from "../../../components/icons/GemIcon";
@@ -36,7 +36,7 @@ export default function PersonProfile() {
   if (isLoading) {
     return (
       <PageContainer width="narrow">
-        <ListSkeleton rows={3} height={96} />
+        <DetailSkeleton avatar height={160} />
       </PageContainer>
     );
   }

@@ -8,7 +8,7 @@ import BillingView, { coverageText, monthName } from "../../../../components/bil
 import GemAmount from "../../../../components/GemAmount";
 import SectionLabel from "../../../../components/ui/SectionLabel";
 import EmptyState from "../../../../components/ui/EmptyState";
-import ListSkeleton from "../../../../components/ui/ListSkeleton";
+import BillingSkeleton from "../../../../components/billing/BillingSkeleton";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
@@ -132,7 +132,7 @@ export default function BillingTab({ community }: { community: Community }) {
   const fund = useCommunityFund(community._id);
   const [donating, setDonating] = useState(false);
 
-  if (billing.isLoading) return <ListSkeleton rows={4} height={96} />;
+  if (billing.isLoading) return <BillingSkeleton />;
   if (billing.error) return <ErrorDisplay error={billing.error as Error} title="Couldn't load the community's bill" />;
   const overview = billing.data;
   if (!overview) return null;

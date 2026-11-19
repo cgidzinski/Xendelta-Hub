@@ -150,7 +150,7 @@ export default function Billing() {
         }
       />
       {isLoading && !data ? (
-        <ListSkeleton rows={4} height={100} />
+        <ListSkeleton rows={4} height={100} columns={{ xs: 2, md: 4 }} />
       ) : isError || !data ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load billing" onRetry={() => refetch()} />
       ) : (
