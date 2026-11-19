@@ -7,7 +7,7 @@ import type { XenDriveFile, XenDriveFolder } from "../../../../types/XenDriveFil
 import { formatFileSize } from "../../../../utils/fileUtils";
 import { formatModified, itemCountLabel } from "../lib/driveFormat";
 import { fileKindOf } from "../lib/fileKind";
-import { useFolderDrop } from "../lib/useFileDrop";
+import { itemDragProps, useFolderDrop } from "../lib/useFileDrop";
 import FileTypeIcon from "./FileTypeIcon";
 import LinkChips from "./LinkChips";
 import { clickableRowProps } from "../../../../utils/keyboard";
@@ -31,11 +31,16 @@ const reveal = {
 } as const;
 
 function FolderCard({ folder, h }: { folder: XenDriveFolder; h: DriveListHandlers }) {
-  const drop = useFolderDrop((files) => h.onDropFiles(folder._id, files));
+  const drop = useFolderDrop(
+    folder._id,
+    (files) => h.onDropFiles(folder._id, files),
+    (items) => h.onDropItems(folder._id, items),
+  );
   const selected = h.selected.has(folder._id);
   return (
     <Box
       {...drop.props}
+      {...itemDragProps(() => h.dragItems("folder", folder._id))}
       {...clickableRowProps(() => h.onOpenFolder(folder))}
       sx={[
         {
@@ -93,6 +98,7 @@ function FileCard({
   const kind = fileKindOf(file.mimeType);
   return (
     <Box
+      {...itemDragProps(() => h.dragItems("file", file._id))}
       {...clickableRowProps(() => h.onOpenFile(file))}
       sx={[
         {

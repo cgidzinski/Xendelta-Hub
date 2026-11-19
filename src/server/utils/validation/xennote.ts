@@ -21,6 +21,7 @@ const shareToken = z.string().regex(/^[A-Za-z0-9_-]{22}$/, "Invalid link");
 export const xenNoteIdParamSchema = z.object({ id: objectIdSchema });
 export const xenNoteMemberParamSchema = z.object({ id: objectIdSchema, userId: objectIdSchema });
 export const xenNoteImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });
+export const xenNoteVersionParamSchema = z.object({ id: objectIdSchema, versionId: objectIdSchema });
 export const xenNoteTokenParamSchema = z.object({ token: shareToken });
 
 export const xenNotebookSchema = z.object({
@@ -75,6 +76,30 @@ export const xenNoteCreateSchema = z
   .partial()
   .extend({ type: noteFields.type.default("text") });
 export const xenNoteUpdateSchema = z.object(noteFields).partial();
+
+// Several notes at once: archive or recolour them, add or remove a label, move them to a notebook (or out to private
+// notes with null), or send them to the Trash. Up to 100 at a time; notes the caller can't edit are left alone.
+const noteIds = z.array(objectIdSchema).min(1, "Pick at least one note").max(100, "Up to 100 notes at a time");
+const labelName = z.string().trim().min(1).max(MAX_LABEL_LENGTH);
+export const xenNoteBulkDeleteSchema = z.object({ ids: noteIds });
+export const xenNoteBulkUpdateSchema = z
+  .object({
+    ids: noteIds,
+    archived: z.boolean().optional(),
+    color: color.optional(),
+    add_label: labelName.optional(),
+    remove_label: labelName.optional(),
+    notebook_id: objectIdSchema.nullable().optional(),
+  })
+  .refine(
+    (v) =>
+      v.archived !== undefined ||
+      v.color !== undefined ||
+      v.add_label !== undefined ||
+      v.remove_label !== undefined ||
+      v.notebook_id !== undefined,
+    "Choose what to change",
+  );
 
 export const xenNoteListQuerySchema = z.object({
   // "none" = only my loose notes; an id = that notebook; omitted = everything I can see.

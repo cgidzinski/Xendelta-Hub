@@ -45,6 +45,12 @@ interface NoteCardProps {
   onArchive?: () => void;
   onColor?: (color: XenNote["color"]) => void;
   onDelete?: () => void;
+  /**
+   * Set while choosing notes for a bulk action: the card shows a tick box, and a tap ticks it instead of opening it.
+   * A note the person can't edit shows no tick box and can't be chosen.
+   */
+  selected?: boolean;
+  onSelect?: () => void;
 }
 
 const MAX_LINES = 8;
@@ -103,6 +109,8 @@ export default function NoteCard({
   onArchive,
   onColor,
   onDelete,
+  selected,
+  onSelect,
 }: NoteCardProps) {
   const theme = useTheme();
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -250,10 +258,47 @@ export default function NoteCard({
   return (
     <Card
       variant="outlined"
-      sx={[{ position: "relative", breakInside: "avoid", mb: 2, overflow: "hidden" }, noteSurfaceSx(note.color)]}
+      sx={[
+        { position: "relative", breakInside: "avoid", mb: 2, overflow: "hidden" },
+        noteSurfaceSx(note.color),
+        selected !== undefined && {
+          outline: 2,
+          outlineStyle: selected ? "solid" : "none",
+          outlineColor: "primary.main",
+        },
+      ]}
     >
-      {onOpen ? <CardActionArea onClick={onOpen}>{content}</CardActionArea> : content}
-      {editable && (
+      {selected !== undefined ? (
+        <CardActionArea
+          onClick={editable ? onSelect : undefined}
+          disabled={!editable}
+          sx={{ opacity: editable ? 1 : 0.5 }}
+        >
+          {content}
+        </CardActionArea>
+      ) : onOpen ? (
+        <CardActionArea onClick={onOpen}>{content}</CardActionArea>
+      ) : (
+        content
+      )}
+      {selected !== undefined && editable && (
+        <Checkbox
+          checked={selected}
+          onChange={onSelect}
+          size="small"
+          slotProps={{ input: { "aria-label": `Select ${note.title || "note"}` } }}
+          sx={{
+            position: "absolute",
+            top: 4,
+            left: 4,
+            zIndex: 1,
+            bgcolor: "background.paper",
+            borderRadius: 1.5,
+            p: 0.5,
+          }}
+        />
+      )}
+      {selected === undefined && editable && (
         <Tooltip title={pinned ? "Unpin" : "Pin"}>
           <IconButton
             size="small"
@@ -273,7 +318,7 @@ export default function NoteCard({
           </IconButton>
         </Tooltip>
       )}
-      {editable && (onArchive || onColor || onDelete) && (
+      {selected === undefined && editable && (onArchive || onColor || onDelete) && (
         <>
           <Tooltip title="More">
             <IconButton

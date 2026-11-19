@@ -45,6 +45,7 @@ const BlogPostDetail = lazyPage(() => import("./routes/External/BlogPublic/BlogP
 const Login = lazyPage(() => import("./routes/External/Auth/Login"));
 const Signup = lazyPage(() => import("./routes/External/Auth/Signup"));
 const Reset = lazyPage(() => import("./routes/External/Auth/Reset"));
+const ConfirmEmail = lazyPage(() => import("./routes/External/Auth/ConfirmEmail"));
 const AuthCallback = lazyPage(() => import("./routes/External/Auth/AuthCallback"));
 const XenNotePublicNote = lazyPage<object>(() =>
   import("./routes/External/XenNotePublic/XenNotePublic").then((m) => ({ default: m.XenNotePublicNote })),
@@ -134,6 +135,7 @@ const router = createBrowserRouter(
         }
         errorElement={<ErrorPage />}
       />
+      <Route path="/confirm-email" element={<ConfirmEmail />} errorElement={<ErrorPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} errorElement={<ErrorPage />} />
       {/* Landing page - public, redirects authenticated users */}
       <Route
