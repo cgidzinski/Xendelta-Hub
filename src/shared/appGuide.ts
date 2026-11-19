@@ -184,6 +184,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Switch between list and grid view, and act on several items at once.",
       "Sort your files by name, size or date.",
       "Rename, move, download and delete files and folders.",
+      "Bring back a deleted file from the Trash within 30 days.",
     ],
     tips: [
       {

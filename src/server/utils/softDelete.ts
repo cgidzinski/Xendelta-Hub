@@ -29,11 +29,12 @@ const FILTERED = [
 
 /**
  * The two fields, spread into the schema's definition (`...softDeleteFields`) so the schema-inferred type has them.
- * `deleted_at` null = not in the trash; `deleted_by` = who put it there.
+ * `deleted_at` unset or null = not in the trash; `deleted_by` = who put it there.
  */
 export const softDeleteFields = {
-  deleted_at: { type: Date, default: null },
-  deleted_by: { type: String, default: null },
+  // No default: a document that was never deleted stores nothing (a query for null still matches it).
+  deleted_at: { type: Date },
+  deleted_by: { type: String },
 };
 
 export function softDeletePlugin(schema: Schema): void {
