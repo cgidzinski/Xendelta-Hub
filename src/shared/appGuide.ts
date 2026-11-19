@@ -42,6 +42,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     features: [
       "See what needs your attention, and what happened in your shared spaces, on one Home page.",
       "Pin the apps you use to the top of Home, with a count of what is waiting in each.",
+      "Press Ctrl+K (or the search button) to jump to any app or page, or to find a person, note, file, recipe, routine, expense, link or budget item.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
       "Start a voice or video call with anyone in a chat or group, and share your screen during it, and pick which microphone or camera to use.",

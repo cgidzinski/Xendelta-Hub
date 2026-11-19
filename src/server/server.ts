@@ -261,6 +261,7 @@ require("./routes/xendrive.ts")(app);
 require("./routes/storage.ts")(app);
 require("./routes/xenlink.ts")(app);
 require("./routes/feedback.ts")(app);
+require("./routes/search.ts")(app);
 require("./routes/xensplit")(app);
 require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);
