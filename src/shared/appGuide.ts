@@ -185,6 +185,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Switch between list and grid view, and act on several items at once.",
       "Sort your files by name, size or date.",
       "Rename, move, download and delete files and folders.",
+      "Bring back a deleted file from the Trash within 30 days.",
     ],
     tips: [
       {
@@ -384,6 +385,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Share a note or a notebook with a link anyone can open.",
       "Set a reminder on a note and get a notification when it is due.",
       "Search and filter by type, label or notebook.",
+      "Bring back a deleted note from the Trash within 30 days.",
       "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
     ],
     tips: [

@@ -57,6 +57,19 @@ export interface XenNoteCounts {
   all: number;
   mine: number;
   archived: number;
+  /** Notes this person deleted that are still in the Trash. */
+  trash: number;
+}
+
+/** A note in the Trash: enough to recognise it, and when it goes for good. */
+export interface TrashedXenNote {
+  _id: string;
+  type: "text" | "checklist" | "image" | "link";
+  title: string;
+  preview: string;
+  color: string;
+  deleted_at: string;
+  purge_at: string;
 }
 
 /** What a public link shows: no owner, no sharing details. */

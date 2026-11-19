@@ -238,9 +238,9 @@ describe("notebooks and sharing", () => {
     expect(seen.find((n: any) => n._id === loose._id).updated_by_name).toBeNull();
     expect((await api(owner).get(`/notes/${shared._id}`)).body.data.note.updated_by_name).toBe(editor.user.username);
 
-    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 2, mine: 1, archived: 1 });
+    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 2, mine: 1, archived: 1, trash: 0 });
     // the editor sees the shared note but not the owner's private or archived ones
-    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 1, mine: 0, archived: 0 });
+    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 1, mine: 0, archived: 0, trash: 0 });
     expect((await api().get("/counts")).status).toBe(401);
   });
 
@@ -315,7 +315,10 @@ describe("photos", () => {
     expect(after.body.data.note.images).toHaveLength(1);
     expect(stored.size).toBe(1);
 
+    // Deleting moves the note to the Trash with its photo; removing it from there for good takes the photo too.
     expect((await api(me).del(`/notes/${n._id}`)).status).toBe(200);
+    expect(stored.size).toBe(1);
+    expect((await api(me).del(`/trash/${n._id}`)).status).toBe(200);
     expect(stored.size).toBe(0);
   });
 
