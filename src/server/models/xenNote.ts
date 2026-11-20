@@ -21,6 +21,11 @@ const notebookSchema = new Schema({
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },
   },
+  // Notebooks hold sections and pages (models/xenNotePage.ts). `pages_migrated_at` is set once the migration has
+  // turned this notebook's notes into pages (and is what its rollback looks for); `journal_template_id` is the page
+  // in the notebook's templates section used for new journal days.
+  journal_template_id: { type: Schema.Types.ObjectId, default: null },
+  pages_migrated_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -37,7 +42,7 @@ const checklistItemSchema = new Schema(
 
 // A reminder is personal: anyone who can see a note can set one for themselves, and only they are told. One per person
 // per note. `notified_at` is stamped when it has been sent, so a reminder goes out once.
-const reminderSchema = new Schema(
+export const reminderSchema = new Schema(
   {
     user_id: { type: String, required: true },
     at: { type: Date, required: true },
