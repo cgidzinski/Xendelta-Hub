@@ -101,7 +101,6 @@ export function registerPageSharingRoutes(app: any) {
           notify(id, {
             app: "xennote",
             title: "Page shared with you",
-            channels: ["inapp", "socket", "push"],
             message: `${me} shared ${what} with you as ${role === "viewer" ? "a viewer" : "an editor"}.`,
             link: `/internal/xennote/p/${page.id}`,
             icon: "sticky_note_2",
