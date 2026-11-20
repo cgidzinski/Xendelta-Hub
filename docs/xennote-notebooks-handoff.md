@@ -29,20 +29,22 @@ This handoff file and the mocks are on the Phase 4 branch.
 
 ## What to do next
 
-Continue from **Phase 5** in the issue (sharing, public pages, a "Shared with me" area, subscriptions and digests, share
-notifications). Then phases 6 to 13 in order; Phase 6 is the cutover release (migration), and Phase 13 can ship any time
+Continue from **Phase 5** in the issue (sharing, public pages, a "Shared with me" area, share notifications). Then phases
+6 to 13 in order; Phase 6 is the cutover release (migration), and Phase 13 can ship any time
 after phases 3 and 4. Phase 5 starts with **mocks**: the repo's rule (CLAUDE.md, "Adding a sub-app") is to mock new main
 screens before building. Add the new mocks to `docs/xennote-mocks/` in the same plain-HTML form, and get them agreed.
 
-Things deliberately deferred, all listed in the issue: block drag handles and drag-to-reorder (they wait for the live
+Things deliberately deferred, all listed in the issue: **subscriptions and digests** (subscribe to a page, section or
+notebook and get changes gathered into one update; it has its own deferred section on the issue and is to be built later,
+not in Phase 5), block drag handles and drag-to-reorder (they wait for the live
 co-editing project because TipTap's drag-handle package needs the collaboration packages as peers), page reminders (need
 the reminder job generalised, Phase 6), inline PDF preview, moving a page to another notebook, and cleaning up files that
 were uploaded but never used in a saved page.
 
 Open questions for the person who owns the product:
-- Subscriptions: each has its own digest interval (hourly, daily or weekly). It was written as "a different time per
-  subscription" and read as an interval. If a time of day was meant ("send this one at 9am"), that also needs the user's
-  time zone.
+- Subscriptions (deferred, but decide before building): each has its own digest interval (hourly, daily or weekly). It was
+  written as "a different time per subscription" and read as an interval. If a time of day was meant ("send this one at
+  9am"), that also needs the user's time zone.
 - Phone behaviour was only checked in desktop Chromium at phone size. It needs a real iPhone before the cutover.
 
 ## How the work is organised
