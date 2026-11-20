@@ -1,6 +1,29 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AvatarGroup, Box, Button, Chip, Drawer, IconButton, Tooltip, Typography, useMediaQuery } from "@mui/material";
+import { useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
+import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
+import { api } from "../../../../config/api";
+import { xennoteKeys } from "../../../../hooks/xennote/keys";
+import { downloadMarkdown } from "../../../../hooks/xennote/downloadMarkdown";
+import {
+  AvatarGroup,
+  Box,
+  Button,
+  Chip,
+  Drawer,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemText,
+  List,
+  ListItemButton,
+  Tooltip,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import NotesIcon from "@mui/icons-material/Notes";
@@ -33,7 +56,7 @@ import TagsMenu from "./TagsMenu";
 import PageView from "./PageView";
 import SectionNameDialog from "./SectionNameDialog";
 import SectionTabs from "./SectionTabs";
-import { activeSectionId, moveNeighbour, pageNodes, previousTopLevel } from "./pageTree";
+import { activeSectionId, moveNeighbour, pageNodes, pageTitle, previousTopLevel } from "./pageTree";
 
 const BOARD = "/internal/xennote";
 
@@ -62,6 +85,10 @@ export default function NotebookView() {
   useMarkSharedSeen("notebook", notebook?.my_role !== "owner" ? notebook?._id : undefined, tree?.viewed_at);
   useTitle(notebook?.name ?? "XenNote");
 
+  const queryClient = useQueryClient();
+  const [optionsMenu, setOptionsMenu] = useState<HTMLElement | null>(null);
+  const [templateDialog, setTemplateDialog] = useState<"create" | "journal" | null>(null);
+  const [toolBusy, setToolBusy] = useState(false);
   const [chosen, setChosen] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
@@ -72,6 +99,12 @@ export default function NotebookView() {
   const sections = tree?.sections ?? [];
   const pages = useMemo(() => tree?.pages ?? [], [tree]);
   const activeId = activeSectionId(sections, pages, pageId, chosen);
+  const activeSection = sections.find((s) => s.id === activeId);
+  const templateSection = sections.find((s) => s.kind === "templates");
+  const templates = pages.filter(
+    (page) => !!templateSection && page.section_id === templateSection.id && !page.archived,
+  );
+  const today = format(new Date(), "yyyy-MM-dd");
   const canEdit = notebook?.my_role === "owner" || notebook?.my_role === "editor";
   const fail = (e: unknown) => enqueueSnackbar((e as Error).message || "Couldn't save that", { variant: "error" });
 
@@ -83,8 +116,52 @@ export default function NotebookView() {
   const openBeside = (id: string | null) =>
     navigate({ pathname: location.pathname, search: id ? `?beside=${id}` : "" });
 
+  const runNotebookTool = async (run: () => Promise<void>) => {
+    setOptionsMenu(null);
+    setToolBusy(true);
+    try {
+      await run();
+    } catch (error) {
+      fail(error);
+    } finally {
+      setToolBusy(false);
+    }
+  };
+  const refreshTree = () => queryClient.invalidateQueries({ queryKey: xennoteKeys.tree(notebookId) });
+  const openToday = () =>
+    runNotebookTool(async () => {
+      const page = await api.post<{ id: string }>(`/api/xennote/notebooks/${notebookId}/journal`, { date: today });
+      await refreshTree();
+      openPage(page.id);
+    });
+  const openTemplates = () =>
+    runNotebookTool(async () => {
+      const id =
+        templateSection?.id ??
+        (await api.post<{ section: XenNoteSection }>(`/api/xennote/notebooks/${notebookId}/templates`)).section.id;
+      await refreshTree();
+      setChosen(id);
+      if (pageId || tag) closePage();
+    });
+  const useTemplate = (id: string | null) =>
+    runNotebookTool(async () => {
+      if (templateDialog === "journal") {
+        await api.put(`/api/xennote/notebooks/${notebookId}/journal-template`, { page_id: id });
+        await queryClient.invalidateQueries({ queryKey: xennoteKeys.notebooks() });
+        setTemplateDialog(null);
+      } else if (id && activeId) {
+        const page = await api.post<{ id: string }>(`/api/xennote/sections/${activeId}/from-template`, {
+          template_id: id,
+        });
+        await refreshTree();
+        setTemplateDialog(null);
+        openPage(page.id);
+      }
+    });
+
   const createPage = async (parentId: string | null) => {
     if (!activeId) return;
+    if (activeSection?.kind === "journal") return openToday();
     try {
       const made = await actions.createPage.mutateAsync({ sectionId: activeId, parent_id: parentId });
       openPage(made.page.id);
@@ -263,6 +340,39 @@ export default function NotebookView() {
               Share
             </Button>
           )}
+          <Tooltip title="Notebook tools">
+            <IconButton aria-label="Notebook tools" onClick={(e) => setOptionsMenu(e.currentTarget)}>
+              <MoreVertIcon />
+            </IconButton>
+          </Tooltip>
+          <Menu anchorEl={optionsMenu} open={!!optionsMenu} onClose={() => setOptionsMenu(null)}>
+            {(canEdit || pages.some((p) => p.journal_date === today)) && (
+              <MenuItem disabled={toolBusy} onClick={() => void openToday()}>
+                Today's page
+              </MenuItem>
+            )}
+            {(canEdit || !!templateSection) && (
+              <MenuItem disabled={toolBusy} onClick={() => void openTemplates()}>
+                Templates
+              </MenuItem>
+            )}
+            {canEdit && !!templates.length && (
+              <MenuItem
+                onClick={() => {
+                  setOptionsMenu(null);
+                  setTemplateDialog("journal");
+                }}
+              >
+                Journal template
+              </MenuItem>
+            )}
+            <MenuItem
+              disabled={toolBusy}
+              onClick={() => void runNotebookTool(() => downloadMarkdown("notebooks", notebookId, notebook.name))}
+            >
+              Export notebook as Markdown
+            </MenuItem>
+          </Menu>
           <Tooltip title="Notebook settings">
             <IconButton aria-label="Notebook settings" onClick={() => setNotebookDialog({})}>
               <SettingsOutlinedIcon />
@@ -329,7 +439,17 @@ export default function NotebookView() {
           }}
         />
       ) : (
-        list
+        <>
+          {activeSection?.kind === "journal" && (canEdit || pages.some((p) => p.journal_date === today)) && (
+            <Button startIcon={<TodayOutlinedIcon />} onClick={() => void openToday()} disabled={toolBusy}>
+              Today's page
+            </Button>
+          )}
+          {canEdit && activeSection?.kind === "normal" && !!templates.length && (
+            <Button onClick={() => setTemplateDialog("create")}>From template</Button>
+          )}
+          {list}
+        </>
       )}
     </Box>
   );
@@ -529,6 +649,36 @@ export default function NotebookView() {
           sectionDialog?.section ? renameSection(sectionDialog.section, name) : void addSection(name)
         }
       />
+      {templateDialog && (
+        <ResponsiveDialog
+          open
+          onClose={() => setTemplateDialog(null)}
+          title={templateDialog === "journal" ? "Journal template" : "Choose a template"}
+          actions={<Button onClick={() => setTemplateDialog(null)}>Close</Button>}
+        >
+          <List>
+            {templateDialog === "journal" && (
+              <ListItemButton
+                disabled={toolBusy}
+                selected={!notebook?.journal_template_id}
+                onClick={() => void useTemplate(null)}
+              >
+                <ListItemText primary="Blank page" />
+              </ListItemButton>
+            )}
+            {templates.map((item) => (
+              <ListItemButton
+                key={item.id}
+                disabled={toolBusy}
+                selected={templateDialog === "journal" && notebook?.journal_template_id === item.id}
+                onClick={() => void useTemplate(item.id)}
+              >
+                <ListItemText primary={pageTitle(item.title)} />
+              </ListItemButton>
+            ))}
+          </List>
+        </ResponsiveDialog>
+      )}
       <NotebookDialog
         open={!!notebookDialog}
         onClose={() => setNotebookDialog(null)}

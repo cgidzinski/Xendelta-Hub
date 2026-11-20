@@ -3,6 +3,9 @@ import { registerNotebookRoutes } from "./notebooks";
 import { registerNoteRoutes } from "./notes";
 import { registerNoteSharingRoutes } from "./noteSharing";
 import { registerNoteImageRoutes } from "./images";
+import { registerPageExportRoutes } from "./pageExport";
+import { registerPageHistoryRoutes } from "./pageHistory";
+import { registerPageTemplateRoutes } from "./pageTemplates";
 import { registerPageFileRoutes } from "./pageFiles";
 import { registerPageLinkRoutes } from "./pageLinks";
 import { registerPageSearchRoutes } from "./pageSearch";
@@ -35,6 +38,9 @@ module.exports = function (app: any) {
   registerPageLinkRoutes(app);
   registerPageSearchRoutes(app);
   registerPageRoutes(app);
+  registerPageHistoryRoutes(app);
+  registerPageExportRoutes(app);
+  registerPageTemplateRoutes(app);
   registerPageSharingRoutes(app);
   registerPageFileRoutes(app);
   // Before the note routes: a literal path must come before a :param one.

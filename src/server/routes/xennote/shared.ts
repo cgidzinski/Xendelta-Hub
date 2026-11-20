@@ -220,6 +220,7 @@ export async function serializeNotebook(book: NotebookDoc, uid: string, noteCoun
     color: book.color,
     my_role: role,
     note_count: noteCount,
+    journal_template_id: book.journal_template_id ? String(book.journal_template_id) : null,
     members: book.members.map((m) => ({
       user_id: m.user_id,
       role: m.role,
