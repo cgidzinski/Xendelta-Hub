@@ -11,7 +11,9 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  CLOCK_FORMATS,
   GRID_DIMENSION_LIMIT,
+  type ClockFormat,
   SEARCH_ENGINES,
   type SearchEngine,
   type WidgetRegion,
@@ -59,6 +61,7 @@ export function WidgetPicker({
 
 export interface WidgetPreferences {
   engine: SearchEngine;
+  clockFormat: ClockFormat;
   rows: number;
   columns: number;
 }
@@ -80,11 +83,12 @@ export function WidgetSettings({
   onSave: (preferences: WidgetPreferences) => void;
 }) {
   const [engine, setEngine] = useState(config.engine);
+  const [clockFormat, setClockFormat] = useState<ClockFormat>(config.clockFormat ?? "locale");
   const [rows, setRows] = useState(config.appearance.rows);
   const [columns, setColumns] = useState(config.appearance.columns);
   const slots = rows * columns;
   const hiddenCount = Math.max(0, linkCount - slots);
-  const hasPreferences = widget === "search" || widget === "links";
+  const hasPreferences = widget === "search" || widget === "links" || widget === "clock";
 
   return (
     <ResponsiveDialog
@@ -113,7 +117,7 @@ export function WidgetSettings({
         sx={{ pt: 1 }}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!saving && hasPreferences) onSave({ engine, rows, columns });
+          if (!saving && hasPreferences) onSave({ engine, rows, columns, clockFormat });
         }}
       >
         {error && <Alert severity="error">{error}</Alert>}
@@ -128,6 +132,21 @@ export function WidgetSettings({
             {SEARCH_ENGINES.map((name) => (
               <MenuItem key={name} value={name}>
                 {name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+        {widget === "clock" && (
+          <TextField
+            select
+            label="Time format"
+            value={clockFormat}
+            disabled={saving}
+            onChange={(event) => setClockFormat(event.target.value as ClockFormat)}
+          >
+            {CLOCK_FORMATS.map((format) => (
+              <MenuItem key={format} value={format}>
+                {format === "locale" ? "Device default" : format === "12-hour" ? "12-hour" : "24-hour"}
               </MenuItem>
             ))}
           </TextField>

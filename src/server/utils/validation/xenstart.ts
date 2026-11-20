@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CLOCK_FORMATS,
   GRID_DIMENSION_LIMIT,
   HUB_SECTIONS,
   parseQuickLinkUrl,
@@ -54,4 +55,5 @@ export const xenStartConfigSchema = z.strictObject({
   revision: z.number().int().nonnegative(),
   appearance: appearance.optional(),
   layout: layout.optional(),
+  clockFormat: z.enum(CLOCK_FORMATS).optional(),
 });

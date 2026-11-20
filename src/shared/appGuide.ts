@@ -394,7 +394,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Edit, remove, or rearrange your quick links.",
       "Place widgets for your pinned apps, items that need attention, or recent activity.",
       "Copy the address to set XenStart as your browser homepage.",
-      "Set a background image and place a clock anywhere on the page.",
+      "Set a background image and place a clock with seconds and your preferred time format.",
     ],
     tips: [
       {

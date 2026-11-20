@@ -18,7 +18,7 @@ import { validate, xenStartConfigSchema } from "../utils/validation";
 const path = "/api/xenstart";
 const conflict = () => new AppError(409, "XenStart changed in another tab. Review the latest settings and try again.");
 
-const projection = { _id: 0, links: 1, engine: 1, sections: 1, revision: 1, appearance: 1, layout: 1 };
+const projection = { _id: 0, links: 1, engine: 1, sections: 1, revision: 1, appearance: 1, layout: 1, clockFormat: 1 };
 
 function configResponse({
   links,
@@ -27,7 +27,9 @@ function configResponse({
   revision,
   appearance,
   layout,
-}: Omit<XenStartConfig, "appearance" | "layout"> & {
+  clockFormat,
+}: Omit<XenStartConfig, "appearance" | "layout" | "clockFormat"> & {
+  clockFormat?: XenStartConfig["clockFormat"] | null;
   layout?: XenStartConfig["layout"] | null;
   appearance?: { [K in keyof XenStartAppearance]?: XenStartAppearance[K] | null } | null;
 }): XenStartConfig {
@@ -38,6 +40,7 @@ function configResponse({
     sections: widgets ? HUB_SECTIONS.filter((widget) => widgets.includes(widget)) : sections,
     revision,
     ...(layout && { layout }),
+    ...(clockFormat && { clockFormat }),
     appearance: {
       rows: appearance?.rows ?? DEFAULT_APPEARANCE.rows,
       columns: appearance?.columns ?? DEFAULT_APPEARANCE.columns,

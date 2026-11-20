@@ -13,6 +13,9 @@ export type XenStartAppearance = typeof DEFAULT_APPEARANCE;
 export const SEARCH_ENGINES = ["Google", "DuckDuckGo", "Bing"] as const;
 export const HUB_SECTIONS = ["pinned", "attention", "activity"] as const;
 
+export const CLOCK_FORMATS = ["locale", "12-hour", "24-hour"] as const;
+export type ClockFormat = (typeof CLOCK_FORMATS)[number];
+
 export const WIDGET_REGIONS = ["top", "center", "left", "right", "bottom"] as const;
 export const WIDGET_TYPES = ["search", "links", "clock", ...HUB_SECTIONS] as const;
 export type WidgetRegion = (typeof WIDGET_REGIONS)[number];
@@ -35,6 +38,7 @@ export interface XenStartConfig {
   revision: number;
   appearance: XenStartAppearance;
   layout?: WidgetLayout;
+  clockFormat?: ClockFormat;
 }
 
 export const defaultXenStartConfig = (): XenStartConfig => ({

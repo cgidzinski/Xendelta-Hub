@@ -1,5 +1,5 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
-import { HUB_SECTIONS, SEARCH_ENGINES, WIDGET_TYPES } from "@shared/xenstart";
+import { CLOCK_FORMATS, HUB_SECTIONS, SEARCH_ENGINES, WIDGET_TYPES } from "@shared/xenstart";
 
 const quickLinkSchema = new Schema(
   {
@@ -16,6 +16,7 @@ const xenStartSchema = new Schema({
   engine: { type: String, enum: SEARCH_ENGINES, required: true },
   sections: { type: [String], enum: HUB_SECTIONS, default: [] },
   revision: { type: Number, required: true },
+  clockFormat: { type: String, enum: CLOCK_FORMATS },
   layout: {
     type: new Schema(
       {

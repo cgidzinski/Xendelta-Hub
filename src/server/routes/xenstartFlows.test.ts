@@ -60,6 +60,7 @@ describe("XenStart", () => {
       { ...initial, links: [a, a] },
       { ...initial, links: Array.from({ length: QUICK_LINK_LIMIT + 1 }, () => link("A")) },
       { ...initial, engine: "Other" },
+      { ...initial, clockFormat: "other" },
       { ...initial, sections: ["activity", "activity"] },
       { ...initial, sections: ["other"] },
     ];
@@ -160,5 +161,22 @@ describe("XenStart", () => {
     await save(token, { ...restored, layout: { ...layout, bottom: ["clock"] } }).expect(400);
     await save(token, { ...restored, layout: { ...layout, bottom: ["weather"] } }).expect(400);
     expect((await get(token).expect(200)).body.data).toEqual(restored);
+  });
+
+  it("keeps the clock format when an older client omits it or the clock is removed", async () => {
+    const { token } = await createUser();
+    const initial = defaultXenStartConfig();
+    const layout = widgetLayout(initial);
+    const saved = (
+      await save(token, {
+        ...initial,
+        clockFormat: "24-hour",
+        layout: { ...layout, top: ["clock"] },
+      }).expect(200)
+    ).body.data as XenStartConfig;
+    const { clockFormat: _clockFormat, ...olderClient } = saved;
+    const removed = (await save(token, { ...olderClient, layout }).expect(200)).body.data;
+    expect(removed.clockFormat).toBe("24-hour");
+    expect((await get(token).expect(200)).body.data.clockFormat).toBe("24-hour");
   });
 });

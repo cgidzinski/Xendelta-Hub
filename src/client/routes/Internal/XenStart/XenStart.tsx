@@ -10,7 +10,6 @@ import {
   Stack,
   Switch,
   TextField,
-  Typography,
 } from "@mui/material";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SearchIcon from "@mui/icons-material/Search";
@@ -130,7 +129,7 @@ export default function XenStart() {
 
   const renderWidget = (widget: WidgetType, region: WidgetRegion) => {
     const compact = region === "left" || region === "right";
-    if (widget === "clock") return <Clock compact={compact} />;
+    if (widget === "clock") return <Clock compact={compact} format={config?.clockFormat} />;
     if (widget === "search")
       return (
         <Box component="form" role="search" onSubmit={submitSearch} sx={{ maxWidth: 550, mx: "auto", width: "100%" }}>
@@ -188,6 +187,7 @@ export default function XenStart() {
   return (
     <Box
       component="main"
+      aria-label="XenStart"
       sx={{ position: "relative", isolation: "isolate", minHeight: "100dvh", px: { xs: 1.5, sm: 3 }, pb: 6 }}
     >
       {appearance.backgroundUrl && <BackgroundImage key={appearance.backgroundUrl} url={appearance.backgroundUrl} />}
@@ -249,9 +249,6 @@ export default function XenStart() {
         </Popover>
       </Box>
       <Box sx={{ pt: { xs: 3.25, sm: 6 } }}>
-        <Typography component="h1" variant="h4" textAlign="center" sx={{ mb: 3 }}>
-          XenStart
-        </Typography>
         {error && !dialog && (
           <Alert severity="error" sx={{ maxWidth: 800, mx: "auto", mb: 2 }}>
             {error}
@@ -386,13 +383,14 @@ export default function XenStart() {
               `xenstart-add-${dialog.region}`,
             )
           }
-          onSave={({ engine, rows, columns }) =>
+          onSave={({ engine, rows, columns, clockFormat }) =>
             void update((latest) => {
               if (!WIDGET_REGIONS.some((region) => widgetLayout(latest)[region].includes(dialog.widget)))
                 throw new Error("This widget was removed in another tab.");
               return {
                 ...latest,
                 engine: engine === dialog.base.engine ? latest.engine : engine,
+                clockFormat: clockFormat === (dialog.base.clockFormat ?? "locale") ? latest.clockFormat : clockFormat,
                 appearance: {
                   ...latest.appearance,
                   rows: rows === dialog.base.appearance.rows ? latest.appearance.rows : rows,
