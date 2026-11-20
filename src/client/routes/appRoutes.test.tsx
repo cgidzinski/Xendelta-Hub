@@ -9,6 +9,7 @@ import { xensplitRoutes } from "./Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./Internal/XenRoutine/routes";
 import { xenkitchenRoutes } from "./Internal/XenKitchen/routes";
 import { xenbudgetRoutes } from "./Internal/XenBudget/routes";
+import { xenstartRoutes } from "./Internal/XenStart/routes";
 import { xennoteRoutes } from "./Internal/XenNote/routes";
 
 // Every app in the registry (nav bar, home screen, pinning) must have routes, and the route
@@ -23,6 +24,7 @@ const ROUTES: Record<string, ReactNode> = {
   xenkitchen: xenkitchenRoutes,
   xenbudget: xenbudgetRoutes,
   xennote: xennoteRoutes,
+  xenstart: xenstartRoutes,
 };
 
 // Top-level paths only: nested routes are relative to their parent.
@@ -73,6 +75,7 @@ describe("app routes", () => {
     expect(hit("/internal/recipaint/abc/paint")).toEqual(["/internal", "recipaint/:id/paint"]);
     expect(hit("/internal/xendrive/file/f1")).toEqual(["/internal", "xendrive", "file/:fileId"]);
     expect(hit("/internal/xendrive/folder/d1")).toEqual(["/internal", "xendrive", "folder/:folderId"]);
+    expect(hit("/internal/xenstart")).toEqual(["/internal", "xenstart"]);
     expect(hit("/internal/xennote")).toEqual(["/internal", "xennote"]);
     expect(hit("/internal/xennote/b/nb1")).toEqual(["/internal", "xennote/b/:notebookId"]);
     expect(hit("/internal/xennote/b/nb1/p/p1")).toEqual(["/internal", "xennote/b/:notebookId/p/:pageId"]);

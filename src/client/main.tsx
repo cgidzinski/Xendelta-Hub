@@ -1,6 +1,13 @@
 import { Fragment } from "react";
 import * as ReactDOM from "react-dom/client";
-import { createRoutesFromElements, createBrowserRouter, RouterProvider, Route, Navigate } from "react-router-dom";
+import {
+  createRoutesFromElements,
+  createBrowserRouter,
+  RouterProvider,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
 import AppThemeProvider from "./theme/AppThemeProvider";
 import { QueryClient, QueryCache, MutationCache, QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -30,6 +37,7 @@ import { xensplitRoutes } from "./routes/Internal/Xensplit/routes";
 import { xenroutineRoutes } from "./routes/Internal/XenRoutine/routes";
 import { xenkitchenRoutes } from "./routes/Internal/XenKitchen/routes";
 import { xenbudgetRoutes } from "./routes/Internal/XenBudget/routes";
+import { xenstartRoutes } from "./routes/Internal/XenStart/routes";
 import { xennoteRoutes } from "./routes/Internal/XenNote/routes";
 import { NavBarProvider } from "./contexts/NavBarContext";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -203,49 +211,52 @@ const router = createBrowserRouter(
         path="/internal"
         element={
           <ProtectedRoute>
-            <NavBar />
+            <Outlet />
           </ProtectedRoute>
         }
         errorElement={<ErrorPage />}
       >
-        <Route index element={<Home />} />
-        {/* Settings split out of the old Profile page; the old address still lands somewhere useful. */}
-        <Route path="settings" element={<Settings />} />
-        <Route path="settings/:tab" element={<Settings />} />
-        <Route path="profile" element={<Navigate to="/internal/settings/account" replace />} />
-        <Route path="people" element={<People />} />
-        <Route path="people/:userId" element={<PersonProfile />} />
-        <Route path="chat" element={<ChatHome />} />
-        <Route path="messages" element={<Chat />} />
-        <Route path="messages/:conversationId" element={<Chat />} />
-        <Route path="communities" element={<Chat />} />
-        <Route path="communities/:communityId" element={<Chat />} />
-        <Route path="communities/:communityId/settings" element={<CommunitySettings />} />
-        <Route path="communities/:communityId/settings/:tab" element={<CommunitySettings />} />
-        <Route path="communities/:communityId/:channelId" element={<Chat />} />
-        <Route path="notifications" element={<Notifications />} />
-        {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
-        <Route path="share" element={<Share />} />
-        <Route path="about" element={<About />} />
-        {/* The About page used to be called What's new: keep old links working */}
-        <Route path="whats-new" element={<WhatsNewRedirect />} />
-        <Route path="feedback" element={<Feedback />} />
-        <Route path="blog" element={<InternalBlog />} />
-        <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
-        {recipaintRoutes}
-        {xendriveRoutes}
-        {storageRoutes}
-        {/* XenDrive was called XenBox: keep old bookmarks working */}
-        <Route path="xenbox/*" element={<Navigate to="/internal/xendrive" replace />} />
-        {xenlinkRoutes}
-        <Route path="shop" element={<Shop />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="billing" element={<Billing />} />
-        {xensplitRoutes}
-        {xenroutineRoutes}
-        {xenkitchenRoutes}
-        {xenbudgetRoutes}
-        {xennoteRoutes}
+        {xenstartRoutes}
+        <Route element={<NavBar />}>
+          <Route index element={<Home />} />
+          {/* Settings split out of the old Profile page; the old address still lands somewhere useful. */}
+          <Route path="settings" element={<Settings />} />
+          <Route path="settings/:tab" element={<Settings />} />
+          <Route path="profile" element={<Navigate to="/internal/settings/account" replace />} />
+          <Route path="people" element={<People />} />
+          <Route path="people/:userId" element={<PersonProfile />} />
+          <Route path="chat" element={<ChatHome />} />
+          <Route path="messages" element={<Chat />} />
+          <Route path="messages/:conversationId" element={<Chat />} />
+          <Route path="communities" element={<Chat />} />
+          <Route path="communities/:communityId" element={<Chat />} />
+          <Route path="communities/:communityId/settings" element={<CommunitySettings />} />
+          <Route path="communities/:communityId/settings/:tab" element={<CommunitySettings />} />
+          <Route path="communities/:communityId/:channelId" element={<Chat />} />
+          <Route path="notifications" element={<Notifications />} />
+          {/* Where something shared into the app from another app (the manifest's share_target) is saved */}
+          <Route path="share" element={<Share />} />
+          <Route path="about" element={<About />} />
+          {/* The About page used to be called What's new: keep old links working */}
+          <Route path="whats-new" element={<WhatsNewRedirect />} />
+          <Route path="feedback" element={<Feedback />} />
+          <Route path="blog" element={<InternalBlog />} />
+          <Route path="blog/:slug" element={<InternalBlogPostDetail />} />
+          {recipaintRoutes}
+          {xendriveRoutes}
+          {storageRoutes}
+          {/* XenDrive was called XenBox: keep old bookmarks working */}
+          <Route path="xenbox/*" element={<Navigate to="/internal/xendrive" replace />} />
+          {xenlinkRoutes}
+          <Route path="shop" element={<Shop />} />
+          <Route path="inventory" element={<Inventory />} />
+          <Route path="billing" element={<Billing />} />
+          {xensplitRoutes}
+          {xenroutineRoutes}
+          {xenkitchenRoutes}
+          {xenbudgetRoutes}
+          {xennoteRoutes}
+        </Route>
       </Route>
       {/* Admin routes - require the admin role; AdminLayout is the sidebar shell */}
       <Route

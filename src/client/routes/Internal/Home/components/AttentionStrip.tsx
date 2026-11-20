@@ -69,7 +69,7 @@ export default function AttentionStrip({ cards }: { cards: AttentionCard[] }) {
   return (
     <Box component="section" aria-label="Needs attention">
       <SectionLabel>Needs attention</SectionLabel>
-      <Box sx={{ display: "grid", gap: 1.25, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+      <Box sx={{ display: "grid", gap: 1.25, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))" }}>
         {shown.map((card) => (
           <AttentionCardView key={card.key} card={card} />
         ))}

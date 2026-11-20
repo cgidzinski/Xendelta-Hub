@@ -1,3 +1,5 @@
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
+import { XENSTART_PATH } from "@shared/xenstart";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import BrushIcon from "@mui/icons-material/Brush";
 import FolderIcon from "@mui/icons-material/Folder";
@@ -28,6 +30,13 @@ export const toggledPins = (pinned: string[], key: string): string[] =>
   pinned.includes(key) ? pinned.filter((k) => k !== key) : [...pinned, key];
 
 export const APPS_REGISTRY: AppRegistryItem[] = [
+  {
+    key: "xenstart",
+    label: "XenStart",
+    icon: HomeOutlinedIcon,
+    path: XENSTART_PATH,
+    description: "Search the web and open your favorite sites",
+  },
   {
     key: "recipaint",
     label: "Recipaint",

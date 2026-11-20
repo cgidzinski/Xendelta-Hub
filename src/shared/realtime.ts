@@ -53,6 +53,7 @@ export interface RealtimeEvents {
   "xensplit:groups_updated": undefined;
   "xenbudget:book_update": { bookId: string };
   "xenbudget:books_updated": undefined;
+  "xenstart:update": undefined;
   "xennote:update": undefined;
   /** A notebook's sections or pages changed (created, renamed, moved, deleted, shared): refetch its tree. */
   "xennote:notebook_update": { notebookId: string };
