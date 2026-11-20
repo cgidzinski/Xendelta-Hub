@@ -60,4 +60,74 @@ describe("model indexes", () => {
     expect(indexes.find((i) => i.unique && i.key.communityId)?.key).toEqual({ communityId: 1, userId: 1 });
     expect(indexes.find((i) => i.expireAfterSeconds)?.key).toEqual({ createdAt: 1 });
   });
+
+  it("notebook pages are indexed for the tree, backlinks, tags and search", async () => {
+    await import("./xenNotePage.js");
+    const keys = await indexKeys("XenNotePage");
+    expect(keys).toContain("section_id,parent_id,order");
+    expect(keys).toContain("links");
+    expect(keys).toContain("notebook_id,tags");
+    expect(keys).toContain("notebook_id,unresolved");
+    expect(keys).toContain("share.token");
+    const text = (await mongoose.model("XenNotePage").collection.indexes()).find((i) => i.name === "page_text");
+    expect(text?.weights).toEqual({ title: 10, tags: 5, search_text: 1 });
+  });
+
+  it("a notebook has one journal page per day, one journal section and one templates section", async () => {
+    const { XenNotePage, XenNoteSection } = await import("./xenNotePage.js");
+    await XenNotePage.init();
+    await XenNoteSection.init();
+    const notebook = new mongoose.Types.ObjectId();
+    const section = new mongoose.Types.ObjectId();
+    const page = (extra: object) =>
+      XenNotePage.create({ notebook_id: notebook, section_id: section, order: "a0", ...extra });
+
+    // Pages without a journal day can repeat; a day can't.
+    await page({ title: "one" });
+    await page({ title: "two" });
+    await page({ journal_date: "2026-11-20" });
+    await expect(page({ journal_date: "2026-11-20" })).rejects.toThrow(/duplicate key/);
+    await page({ journal_date: "2026-11-21" });
+
+    const sec = (extra: object) => XenNoteSection.create({ notebook_id: notebook, name: "s", order: "a0", ...extra });
+    await sec({});
+    await sec({});
+    await sec({ kind: "journal" });
+    await expect(sec({ kind: "journal" })).rejects.toThrow(/duplicate key/);
+    await sec({ kind: "templates" });
+    await expect(sec({ kind: "templates" })).rejects.toThrow(/duplicate key/);
+  });
+
+  it("pages are found by a text search over title, tags and text", async () => {
+    const { XenNotePage } = await import("./xenNotePage.js");
+    await XenNotePage.init();
+    const notebook = new mongoose.Types.ObjectId();
+    const section = new mongoose.Types.ObjectId();
+    await XenNotePage.create({
+      notebook_id: notebook,
+      section_id: section,
+      order: "a0",
+      title: "Quarterly planning",
+      search_text: "agenda and the open risks",
+    });
+    const found = await XenNotePage.find({ notebook_id: notebook, $text: { $search: "risks" } });
+    expect(found.map((p) => p.title)).toEqual(["Quarterly planning"]);
+  });
+
+  it("a page's body and its versions belong to one page each", async () => {
+    const { XenNotePageBody, XenNotePageVersion } = await import("./xenNotePage.js");
+    await XenNotePageBody.init();
+    const pageId = new mongoose.Types.ObjectId();
+    const doc = { type: "doc", content: [{ type: "paragraph", attrs: {} }] };
+    await XenNotePageBody.create({ page_id: pageId, doc });
+    await expect(XenNotePageBody.create({ page_id: pageId, doc })).rejects.toThrow(/duplicate key/);
+    // An empty attrs object is kept, not dropped.
+    const stored = await XenNotePageBody.findOne({ page_id: pageId }).lean();
+    expect(stored?.doc).toEqual(doc);
+    expect(stored?.schema_version).toBe(1);
+    await XenNotePageVersion.init();
+    expect((await XenNotePageVersion.collection.indexes()).find((i) => i.expireAfterSeconds)?.key).toEqual({
+      captured_at: 1,
+    });
+  });
 });
