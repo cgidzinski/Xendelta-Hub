@@ -107,7 +107,7 @@ describe("query keys", () => {
         else if (
           /\.tsx?$/.test(name) &&
           !/keys\.ts$|\.test\./.test(name) &&
-          /\["(xensplit|xenbudget|xendrive|xennote|chat|people|communities|emoji)"[,\]]/.test(
+          /\["(xensplit|xenbudget|xendrive|xennote|xenstart|chat|people|communities|emoji)"[,\]]/.test(
             readFileSync(full, "utf8"),
           )
         )

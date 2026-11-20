@@ -21,6 +21,7 @@ export const API_KEY_APPS: Record<string, readonly string[]> = {
   xenroutine: ["/api/xenroutine"],
   xenkitchen: ["/api/xenkitchen"],
   xennote: ["/api/xennote"],
+  xenstart: ["/api/xenstart"],
 };
 
 export const API_KEY_APP_KEYS = Object.keys(API_KEY_APPS);

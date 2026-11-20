@@ -12,6 +12,8 @@ interface QuickPanelProps {
   counts: Record<string, number>;
   /** Per sub-app: how much is in it, shown quietly under the name. */
   totals?: Record<string, number>;
+  readOnly?: boolean;
+  compact?: boolean;
 }
 
 const gridSx = {
@@ -25,7 +27,13 @@ const gridSx = {
  * with an Edit button. Edit swaps the tiles for every app, each a toggle that pins or unpins it; Done goes back to just the
  * pinned ones. There is no limit on how many are pinned. With none pinned the app shows its default two.
  */
-export default function QuickPanel({ pinnedApps, counts, totals = {} }: QuickPanelProps) {
+export default function QuickPanel({
+  pinnedApps,
+  counts,
+  totals = {},
+  readOnly = false,
+  compact = false,
+}: QuickPanelProps) {
   const navigate = useNavigate();
   const { setPinnedApps, isUpdating } = usePinnedApps();
   const [editing, setEditing] = useState(false);
@@ -36,16 +44,22 @@ export default function QuickPanel({ pinnedApps, counts, totals = {} }: QuickPan
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
         <SectionLabel>Pinned apps</SectionLabel>
-        <Button size="small" onClick={() => setEditing((v) => !v)}>
-          {editing ? "Done" : "Edit"}
-        </Button>
+        {!readOnly && (
+          <Button size="small" onClick={() => setEditing((v) => !v)}>
+            {editing ? "Done" : "Edit"}
+          </Button>
+        )}
       </Box>
       {editing && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
           Tap an app to pin it, or tap a pinned one to unpin it.
         </Typography>
       )}
-      <Box component="nav" aria-label={editing ? "Choose pinned apps" : "Pinned apps"} sx={gridSx}>
+      <Box
+        component="nav"
+        aria-label={editing ? "Choose pinned apps" : "Pinned apps"}
+        sx={{ ...gridSx, ...(compact && { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }) }}
+      >
         {shown.map((app) => (
           <AppTile
             key={app.key}

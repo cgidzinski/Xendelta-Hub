@@ -29,6 +29,7 @@ export const LIVE_ROOTS = [
   "xennote",
   "xenroutine",
   "xensplit",
+  "xenstart",
 ] as const;
 
 export type LiveRoot = (typeof LIVE_ROOTS)[number];

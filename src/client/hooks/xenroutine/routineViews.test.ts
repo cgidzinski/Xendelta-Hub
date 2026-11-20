@@ -5,6 +5,7 @@ import {
   projectOccurrences,
   recentCompletions,
   routineStatusBucket,
+  routinesDueToday,
   stepsLabel,
 } from "./routineViews";
 import type { Routine } from "./useRoutines";
@@ -39,6 +40,21 @@ describe("routineStatusBucket", () => {
     expect(routineStatusBucket({ due_at: iso(3) }, now)).toBe("soon");
     expect(routineStatusBucket({ due_at: iso(20) }, now)).toBe("month");
     expect(routineStatusBucket({ due_at: iso(45) }, now)).toBe("later");
+  });
+});
+
+describe("routinesDueToday", () => {
+  it("includes only active current routines due by the end of the local day in due order", () => {
+    const localNow = new Date(2026, 5, 10, 12);
+    const lateToday = routine({ _id: "today", due_at: new Date(2026, 5, 10, 23, 59).toISOString() });
+    const overdue = routine({ _id: "past", due_at: new Date(2026, 5, 9, 16).toISOString() });
+    const tomorrow = routine({ _id: "tomorrow", due_at: new Date(2026, 5, 11).toISOString(), status: "due_soon" });
+    expect(
+      routinesDueToday(
+        [lateToday, tomorrow, { ...overdue, enabled: false }, { ...overdue, archived: true }, overdue],
+        localNow,
+      ).map((item) => item._id),
+    ).toEqual(["past", "today"]);
   });
 });
 
