@@ -81,6 +81,24 @@ describe("notes that link to a note", () => {
     await note(outsider, { title: "Hidden link", body: "[[Family plan]]" });
     await note(member, { title: "Member's own", body: "[[Family plan]]" });
 
+    expect((await linkedFrom(member, target._id)).sort()).toEqual(["Member's own", "Shared link"]);
+    expect(await linkedFrom(owner, target._id)).toEqual(["Shared link"]);
+  });
+
+  it("refuses a note the caller can't see, and needs sign-in", async () => {
+    const [me, stranger] = await Promise.all([createUser(), createUser()]);
+    const mine = await note(me, { title: "Private" });
+    expect((await api(stranger).get(`/notes/${mine._id}/backlinks`)).status).toBe(404);
+    expect((await request(t.app).get(`/api/xennote/notes/${mine._id}/backlinks`)).status).toBe(401);
+    expect((await api(me).get(`/notes/not-an-id/backlinks`)).status).toBe(400);
+  });
+
+  it("returns only what the list needs, never the body", async () => {
+    const me = await createUser();
+    const target = await note(me, { title: "Hub" });
+    await note(me, { title: "Linker", body: "secret words [[Hub]]" });
+    const res = await api(me).get(`/notes/${target._id}/backlinks`);
+    expect(Object.keys(res.body.data.notes[0]).sort()).toEqual(["_id", "title", "type", "updated_at"]);
     expect(JSON.stringify(res.body)).not.toContain("secret words");
   });
 });
