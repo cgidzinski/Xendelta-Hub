@@ -7,6 +7,7 @@
 import multer from "multer";
 import { AppError } from "../utils/http";
 import { CUSTOM_EMOJI_MAX_UPLOAD_BYTES, CUSTOM_EMOJI_MIMES } from "@shared/emoji";
+import { MAX_ATTACHMENT_SIZE } from "@shared/xennote/pages";
 import { Request } from "express";
 import {
   MAX_FILE_SIZE,
@@ -88,6 +89,13 @@ export const uploadXenNoteImages = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_XENNOTE_IMAGE_SIZE },
   fileFilter: (req, file, cb) => (file.mimetype === "image/webp" ? cb(null, true) : imageFileFilter(req, file, cb)),
+});
+
+// Memory-storage multer for files attached to a notebook page: any type, up to MAX_ATTACHMENT_SIZE each. Images are
+// resized server-side before storage (routes/xennote/pageFiles.ts); everything else is stored as it came.
+export const uploadXenNotePageFiles = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ATTACHMENT_SIZE },
 });
 
 // Photos attached when marking a routine done: images only, resized server-side before storage.

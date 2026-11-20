@@ -43,6 +43,8 @@ const BIG_JSON = express.json({ limit: "100mb" });
 app.use("/api/xendrive/chunk", BIG_JSON);
 app.use("/api/xenbudget", BIG_JSON);
 app.use("/api/admin", BIG_JSON);
+// A notebook page's text can be up to 1 MB of JSON (shared/xennote/pages.ts), a little more with the request around it.
+app.use("/api/xennote/pages", express.json({ limit: "2mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(passport.initialize());
@@ -129,7 +131,11 @@ mongoConnection.on("connected", async () => {
       name: "xennote-trash-purge",
       everyMs: 6 * 60 * 60 * 1000,
       runOnStart: true,
-      handler: async () => void (await purgeExpiredNotes()),
+      handler: async () => {
+        await purgeExpiredNotes();
+        // …and the sections and pages of notebooks, the same way (utils/xenNotePages.ts).
+        await require("./utils/xenNotePages").purgeExpiredPages();
+      },
     });
     // Files that have been in the Trash for 30 days are removed for good (utils/xendriveTrash.ts).
     const { purgeExpiredFiles } = require("./utils/xendriveTrash");

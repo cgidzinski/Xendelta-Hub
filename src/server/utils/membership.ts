@@ -28,6 +28,12 @@ export const memberFields = {
 /** A plain member schema (no app-specific extras). */
 export const memberSchema = new Schema(memberFields, { _id: false });
 
+const ROLE_RANK: Record<MemberRole, number> = { owner: 3, editor: 2, viewer: 1 };
+
+/** The strongest of several roles (a person can get one from a notebook and another from a page), or null when none. */
+export const bestRole = (roles: Array<MemberRole | null | undefined>): MemberRole | null =>
+  roles.reduce<MemberRole | null>((top, r) => (r && (!top || ROLE_RANK[r] > ROLE_RANK[top]) ? r : top), null);
+
 type Maybe<T> = T | null | undefined;
 
 export function roleOf(doc: Maybe<HasMembers>, userId: string): MemberRole | null {

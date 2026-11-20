@@ -31,7 +31,9 @@ export const Callout = TipTapNode.create({
     return {
       tone: {
         default: "info",
-        parseHTML: (el) => el.getAttribute("data-tone") ?? "info",
+        // The element is a DOM node in the editor; the server never calls this, and its types have no DOM.
+        parseHTML: (el) =>
+          (el as unknown as { getAttribute(name: string): string | null }).getAttribute("data-tone") ?? "info",
         renderHTML: (attrs) => ({ "data-tone": attrs.tone }),
       },
     };
@@ -238,7 +240,8 @@ export function stripUnsafeLinks(doc: JSONContent): JSONContent {
     let next = node;
     if (node.marks?.some((m) => m.type === "link")) {
       const marks = node.marks.filter((m) => m.type !== "link" || isSafeUrl(String(m.attrs?.href ?? "")));
-      next = { ...next, marks: marks.length ? marks : undefined };
+      const { marks: _before, ...rest } = next;
+      next = marks.length ? { ...rest, marks } : rest;
     }
     if (node.type === "bookmark" && !isSafeUrl(String(node.attrs?.url ?? ""))) {
       next = { ...next, attrs: { ...node.attrs, url: "" } };
