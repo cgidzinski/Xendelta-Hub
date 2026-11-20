@@ -9,3 +9,5 @@ package-lock.json
 *.md
 # Hand-formatted on purpose
 .github/workflows/*.yml
+# Static design mocks (docs/xennote-mocks), kept as exported
+docs/xennote-mocks
