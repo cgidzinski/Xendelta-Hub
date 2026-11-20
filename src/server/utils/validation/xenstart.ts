@@ -5,6 +5,10 @@ import {
   HUB_SECTIONS,
   parseQuickLinkUrl,
   QUICK_LINK_LIMIT,
+  MAX_REGION_PADDING,
+  REGION_ALIGNMENTS,
+  REGION_HEIGHT_SHARES,
+  REGION_PADDING_STEP,
   SEARCH_ENGINES,
   WIDGET_REGIONS,
   WIDGET_TYPES,
@@ -42,6 +46,18 @@ const layout = z
     return new Set(widgets).size === widgets.length;
   }, "Each widget can only be placed once.");
 
+const regionPresentation = {
+  alignment: z.enum(REGION_ALIGNMENTS).optional(),
+  paddingTop: z.number().int().min(0).max(MAX_REGION_PADDING).multipleOf(REGION_PADDING_STEP).optional(),
+};
+const middleRegion = z
+  .strictObject({
+    ...regionPresentation,
+    height: z.literal(REGION_HEIGHT_SHARES).nullable().optional(),
+  })
+  .optional();
+const sideRegion = z.strictObject(regionPresentation).optional();
+
 export const xenStartConfigSchema = z.strictObject({
   links: z
     .array(quickLink)
@@ -55,5 +71,14 @@ export const xenStartConfigSchema = z.strictObject({
   revision: z.number().int().nonnegative(),
   appearance: appearance.optional(),
   layout: layout.optional(),
+  regionStyles: z
+    .strictObject({
+      top: middleRegion,
+      center: middleRegion,
+      bottom: middleRegion,
+      left: sideRegion,
+      right: sideRegion,
+    })
+    .optional(),
   clockFormat: z.enum(CLOCK_FORMATS).optional(),
 });

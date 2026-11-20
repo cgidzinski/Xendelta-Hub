@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { defaultXenStartConfig, QUICK_LINK_LIMIT, widgetLayout, type XenStartConfig } from "@shared/xenstart";
+import {
+  defaultXenStartConfig,
+  QUICK_LINK_LIMIT,
+  widgetLayout,
+  type WidgetLayout,
+  type XenStartConfig,
+} from "@shared/xenstart";
 import { createUser, startTestApp, type TestApp } from "../testing/testApp";
 
 let t: TestApp;
@@ -21,6 +27,30 @@ const get = (token: string) => request(t.app).get(path).set(auth(token));
 const save = (token: string, config: XenStartConfig) => request(t.app).put(path).set(auth(token)).send(config);
 
 describe("XenStart", () => {
+  it("persists region overrides, retains them on older requests, and resets without moving widgets", async () => {
+    const { token } = await createUser();
+    const initial = defaultXenStartConfig();
+    const layout: WidgetLayout = { ...widgetLayout(initial), top: ["clock"], bottom: ["today"] };
+    const preferences = {
+      top: { alignment: "center", height: 2 },
+      bottom: { height: null, alignment: "start", paddingTop: 48 },
+      right: { paddingTop: 16 },
+    } as const;
+    const saved = (await save(token, { ...initial, layout, regionStyles: preferences }).expect(200)).body.data;
+    expect((await get(token).expect(200)).body.data).toMatchObject({ regionStyles: preferences, layout });
+    const { regionStyles: _regionStyles, ...oldRequest } = saved;
+    const retained = (await save(token, oldRequest).expect(200)).body.data;
+    expect(retained.regionStyles).toEqual(preferences);
+    await save(token, { ...retained, regionStyles: { right: { height: 2 } } }).expect(400);
+    await save(token, { ...retained, regionStyles: { bottom: { paddingTop: 7 } } }).expect(400);
+    await save(token, { ...retained, regionStyles: { top: { height: 5 } } }).expect(400);
+    await save(token, { ...saved, regionStyles: {} }).expect(409);
+    await save(token, {
+      ...retained,
+      regionStyles: { top: { height: 1 }, bottom: { alignment: "end", paddingTop: 0 } },
+    }).expect(200);
+    expect((await get(token).expect(200)).body.data).toMatchObject({ regionStyles: {}, layout });
+  });
   it("persists quick-link changes and preferences for the current account", async () => {
     const [user, other] = await Promise.all([createUser(), createUser()]);
     const token = user.token;

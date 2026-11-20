@@ -9,6 +9,7 @@ import {
   defaultXenStartConfig,
   searchUrl,
   widgetLayout,
+  mergeRegionStyles,
   WIDGET_REGIONS,
   WIDGET_TYPES,
   type QuickLink,
@@ -282,6 +283,7 @@ export default function XenStart() {
           <HubWidgetProvider enabled={placed.includes("pinned") || placed.includes("attention")}>
             <WidgetBoard
               layout={layout}
+              styles={config?.regionStyles}
               editing={editing}
               saving={saving}
               canAdd={available.length > 0}
@@ -334,13 +336,19 @@ export default function XenStart() {
       {dialog?.kind === "settings" && (
         <SettingsDialog
           initialBackground={dialog.base.appearance.backgroundUrl}
+          initialRegionStyles={dialog.base.regionStyles}
           onClose={closeDialog}
           saving={saving}
           error={error}
-          onSave={(backgroundUrl) =>
+          onSave={(backgroundUrl, regionStyles) =>
             void update(
               (latest) => ({
                 ...latest,
+                regionStyles: mergeRegionStyles(
+                  dialog.base.regionStyles ?? {},
+                  regionStyles,
+                  latest.regionStyles ?? {},
+                ),
                 appearance: {
                   ...latest.appearance,
                   backgroundUrl:

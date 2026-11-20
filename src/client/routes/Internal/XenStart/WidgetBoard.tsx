@@ -2,8 +2,15 @@ import type { ReactNode } from "react";
 import { Box, ButtonBase, IconButton, Stack, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import { WIDGET_REGIONS, type WidgetLayout, type WidgetRegion, type WidgetType } from "@shared/xenstart";
+import {
+  WIDGET_REGIONS,
+  type RegionStyles,
+  type WidgetLayout,
+  type WidgetRegion,
+  type WidgetType,
+} from "@shared/xenstart";
 import { RADIUS } from "../../../theme";
+import { desktopGrid, regionSizing } from "./regionLayout";
 
 export const widgetNames: Record<WidgetType, string> = {
   search: "Search",
@@ -25,6 +32,7 @@ export const regionNames: Record<WidgetRegion, string> = {
 
 interface Props {
   layout: WidgetLayout;
+  styles?: RegionStyles;
   editing: boolean;
   saving: boolean;
   canAdd: boolean;
@@ -33,25 +41,29 @@ interface Props {
   renderWidget: (widget: WidgetType, region: WidgetRegion) => ReactNode;
 }
 
-export default function WidgetBoard({ layout, editing, saving, canAdd, onAdd, onEdit, renderWidget }: Props) {
+export default function WidgetBoard({
+  layout,
+  styles = {},
+  editing,
+  saving,
+  canAdd,
+  onAdd,
+  onEdit,
+  renderWidget,
+}: Props) {
   return (
     <Box
-      sx={{
+      sx={(theme) => ({
         display: "grid",
         flexGrow: { md: 1 },
         alignItems: "start",
         gap: { xs: 2, md: 2.5 },
-        gridTemplateColumns: {
-          xs: "minmax(0, 1fr)",
-          md: "minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr)",
-        },
-        gridTemplateAreas: {
-          md: '"left top right" "left center right" "left bottom right"',
-        },
-        gridTemplateRows: { md: "minmax(min-content, 1fr) auto minmax(min-content, 1fr)" },
-      }}
+        gridTemplateColumns: "minmax(0, 1fr)",
+        [theme.breakpoints.up("md")]: desktopGrid(styles),
+      })}
     >
       {WIDGET_REGIONS.map((region) => {
+        const { paddingTop, justifyContent } = regionSizing(region, styles);
         if (!editing && !layout[region].length) return null;
         return (
           <Stack
@@ -59,10 +71,13 @@ export default function WidgetBoard({ layout, editing, saving, canAdd, onAdd, on
             component="section"
             aria-label={`${regionNames[region]} widgets`}
             spacing={2}
+            useFlexGap
             sx={{
               minWidth: 0,
               gridArea: { md: region },
-              alignSelf: { md: region === "bottom" ? "end" : "start" },
+              alignSelf: { md: "stretch" },
+              justifyContent: { md: justifyContent },
+              pt: { md: `${paddingTop}px` },
             }}
           >
             {editing && (

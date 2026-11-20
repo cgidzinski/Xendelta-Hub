@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Alert, Box, Button, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
-import { parseQuickLinkUrl, XENSTART_PATH, type QuickLink } from "@shared/xenstart";
+import { parseQuickLinkUrl, XENSTART_PATH, type QuickLink, type RegionStyles } from "@shared/xenstart";
 import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { BackgroundImage } from "./Appearance";
+import RegionLayoutSettings from "./RegionLayoutSettings";
 
 interface DialogProps {
   onClose: () => void;
@@ -104,12 +105,18 @@ export function LinkDialog({
 
 export function SettingsDialog({
   initialBackground,
+  initialRegionStyles,
   onClose,
   onSave,
   saving,
   error,
-}: DialogProps & { initialBackground: string; onSave: (backgroundUrl: string) => void }) {
+}: DialogProps & {
+  initialBackground: string;
+  initialRegionStyles?: RegionStyles;
+  onSave: (backgroundUrl: string, regionStyles: RegionStyles) => void;
+}) {
   const [tab, setTab] = useState("general");
+  const [regionStyles, setRegionStyles] = useState(initialRegionStyles ?? {});
   const [value, setValue] = useState(initialBackground);
   const [preview, setPreview] = useState(initialBackground);
   const [backgroundError, setBackgroundError] = useState(false);
@@ -155,7 +162,7 @@ export function SettingsDialog({
             setTab("appearance");
             return;
           }
-          onSave(backgroundUrl);
+          onSave(backgroundUrl, regionStyles);
         }}
       >
         {error && <Alert severity="error">{error}</Alert>}
@@ -167,6 +174,7 @@ export function SettingsDialog({
           sx={{ borderBottom: "1px solid", borderColor: "divider" }}
         >
           <Tab id="xenstart-general-tab" aria-controls="xenstart-general-panel" value="general" label="General" />
+          <Tab id="xenstart-layout-tab" aria-controls="xenstart-layout-panel" value="layout" label="Layout" />
           <Tab
             id="xenstart-appearance-tab"
             aria-controls="xenstart-appearance-panel"
@@ -202,6 +210,9 @@ export function SettingsDialog({
               />
             )}
           </Stack>
+        </Box>
+        <Box id="xenstart-layout-panel" role="tabpanel" aria-labelledby="xenstart-layout-tab" hidden={tab !== "layout"}>
+          <RegionLayoutSettings styles={regionStyles} onChange={setRegionStyles} saving={saving} />
         </Box>
         <Box
           id="xenstart-appearance-panel"
