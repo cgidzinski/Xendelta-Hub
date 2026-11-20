@@ -118,7 +118,6 @@ export function registerNotebookRoutes(app: any) {
           notify(id, {
             app: "xennote",
             title: "Notebook shared with you",
-            channels: ["inapp", "socket", "push"],
             message: `${me} shared the notebook "${book.name}" with you as ${role === "viewer" ? "a viewer" : "an editor"}.`,
             link: `/internal/xennote?notebook=${book.id}`,
             icon: "menu_book",
