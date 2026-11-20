@@ -114,7 +114,7 @@ function EntryRow({ entry }: { entry: FeedEntry }) {
 }
 
 /** What happened in the person's shared spaces, grouped by day, with a filter per app and a "N new" pill. */
-export default function ActivityFeed() {
+export default function ActivityFeed({ showTips = true }: { showTips?: boolean }) {
   const [app, setApp] = useState<string | undefined>();
   const feed = useFeed(app);
   const { count, reset } = useNewFeedCount();
@@ -199,7 +199,7 @@ export default function ActivityFeed() {
               sx={{ py: 4 }}
             />
           </Card>
-          <DidYouKnow app={app ?? undefined} />
+          {showTips && <DidYouKnow app={app ?? undefined} />}
         </>
       ) : (
         <>

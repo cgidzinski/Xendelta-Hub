@@ -54,6 +54,7 @@ export interface RealtimeEvents {
   "xenbudget:book_update": { bookId: string };
   "xenbudget:books_updated": undefined;
   "xennote:update": undefined;
+  "xenstart:update": undefined;
   /** A recipe, category or meal-plan entry in a book changed. */
   "xenkitchen:book_update": { bookId: string };
   /** The books themselves changed: one was created, renamed or deleted, or its people changed. */

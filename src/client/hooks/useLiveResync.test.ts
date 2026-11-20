@@ -19,6 +19,7 @@ const APPS_THAT_PUSH_EVENTS = [
   "xennote",
   "xenroutine",
   "xensplit",
+  "xenstart",
 ];
 
 describe("live resync", () => {

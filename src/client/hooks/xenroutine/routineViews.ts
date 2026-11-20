@@ -137,6 +137,15 @@ export function recentCompletions(
   return out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 }
 
+/** Current occurrences due by the end of the local calendar day, oldest first. */
+export function routinesDueToday(routines: Routine[], now: Date = new Date()): Routine[] {
+  return routines
+    .filter(
+      (routine) => routine.enabled && !routine.archived && differenceInCalendarDays(new Date(routine.due_at), now) <= 0,
+    )
+    .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
+}
+
 export function dueText(r: Pick<Routine, "due_at"> | Date, now: Date = new Date()): string {
   const due = r instanceof Date ? r : new Date(r.due_at);
   const days = differenceInCalendarDays(due, now);
