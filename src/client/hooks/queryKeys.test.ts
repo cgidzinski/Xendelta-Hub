@@ -63,6 +63,15 @@ describe("query keys", () => {
     expect(xennoteKeys.publicNote("t")).toEqual(["xennote", "public-note", "t"]);
   });
 
+  it("XenNote notebook keys sit under [xennote], so refetching everything reaches them", () => {
+    expect(xennoteKeys.tree("nb")).toEqual(["xennote", "tree", "nb"]);
+    expect(xennoteKeys.page("p1")).toEqual(["xennote", "page", "p1"]);
+    expect(xennoteKeys.notebookTrash("nb")).toEqual(["xennote", "notebook-trash", "nb"]);
+    for (const key of [xennoteKeys.tree("nb"), xennoteKeys.page("p1"), xennoteKeys.notebookTrash("nb")]) {
+      expect(key.slice(0, 1)).toEqual([...xennoteKeys.all]);
+    }
+  });
+
   it("chat keys nest under one root, so one invalidation reaches all of them", () => {
     expect(chatKeys.conversations()).toEqual(["chat", "conversations"]);
     expect(chatKeys.messages("c1")).toEqual(["chat", "messages", "c1"]);

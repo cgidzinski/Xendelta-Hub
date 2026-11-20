@@ -163,7 +163,7 @@ export function registerPageRoutes(app: any) {
     async (req: Request, res: Response) => {
       const uid = callerId(req);
       const { page, notebook, parent } = await loadPage(req, req.params.id as string, "edit");
-      const { doc, base_rev } = xenNotePageBodySchema.parse(req.body);
+      const { doc, base_rev, client_id } = xenNotePageBodySchema.parse(req.body);
 
       const checked = checkPageDoc(doc);
       if (!checked.ok) throw new AppError(400, checked.reason);
@@ -215,6 +215,7 @@ export function registerPageRoutes(app: any) {
         notebookId: notebook.id as string,
         rev: saved.rev,
         by: uid,
+        client: client_id,
       });
       res.json({ status: true, message: "Saved", data: { rev: saved.rev, conflict } });
     },

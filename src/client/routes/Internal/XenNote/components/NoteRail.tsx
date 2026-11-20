@@ -28,6 +28,10 @@ interface NoteRailProps {
   onNewNotebook: () => void;
   /** Start a note in whatever is open; omitted when the open view can't take new notes (archive, read-only). */
   onNewNote?: () => void;
+  /** What the new button says (a notebook's screen starts pages, not notes). */
+  newLabel?: string;
+  /** When given, a notebook opens as sections and pages (its own screen) instead of filtering the board. */
+  onOpenNotebook?: (id: string) => void;
 }
 
 /** One row of the rail: icon, name, and a count on the right. */
@@ -78,6 +82,8 @@ export default function NoteRail({
   onLabel,
   onNewNotebook,
   onNewNote,
+  newLabel = "New note",
+  onOpenNotebook,
 }: NoteRailProps) {
   const theme = useTheme();
   return (
@@ -88,7 +94,7 @@ export default function NoteRail({
     >
       {onNewNote && (
         <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={onNewNote} sx={railNewButtonSx}>
-          New note
+          {newLabel}
         </Button>
       )}
 
@@ -134,7 +140,7 @@ export default function NoteRail({
             text={b.name}
             count={b.note_count}
             selected={scope === b._id}
-            onClick={() => onScope(b._id)}
+            onClick={() => (onOpenNotebook ? onOpenNotebook(b._id) : onScope(b._id))}
           />
         );
       })}

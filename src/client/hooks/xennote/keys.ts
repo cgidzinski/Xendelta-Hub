@@ -17,5 +17,11 @@ export const xennoteKeys = {
   labels: () => [...xennoteKeys.all, "labels"] as const,
   publicNote: (token: string) => [...xennoteKeys.all, "public-note", token] as const,
   sharedLink: (kind: string, token: string) => [...xennoteKeys.all, "shared-link", kind, token] as const,
+  /** A notebook's sections and the pages in them (no bodies). */
+  tree: (notebookId: string) => [...xennoteKeys.all, "tree", notebookId] as const,
+  /** One page with its text. */
+  page: (pageId: string) => [...xennoteKeys.all, "page", pageId] as const,
+  /** What was deleted from a notebook's sections and pages. */
+  notebookTrash: (notebookId: string) => [...xennoteKeys.all, "notebook-trash", notebookId] as const,
   publicNotebook: (token: string) => [...xennoteKeys.all, "public-notebook", token] as const,
 };

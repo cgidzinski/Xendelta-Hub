@@ -458,11 +458,12 @@ describe("a page's text", () => {
     await addPerson(owner, nb, friend, "viewer");
     const made = await newPage(owner, section);
     const spy = vi.spyOn(SocketManager.getInstance(), "notifyXenNotePageUpdate");
-    await api(owner).put(`/pages/${made.page.id}/body`, { doc: doc(p("x")), base_rev: 0 });
+    await api(owner).put(`/pages/${made.page.id}/body`, { doc: doc(p("x")), base_rev: 0, client_id: "editor-1" });
     expect(spy).toHaveBeenCalledTimes(1);
     const [audience, event] = spy.mock.calls[0];
     expect(audience.sort()).toEqual([uid(owner), uid(friend)].sort());
-    expect(event).toEqual({ pageId: made.page.id, notebookId: nb, rev: 1, by: uid(owner) });
+    // `client` names the editor that saved, so an open editor can tell its own saves from another tab's.
+    expect(event).toEqual({ pageId: made.page.id, notebookId: nb, rev: 1, by: uid(owner), client: "editor-1" });
     spy.mockRestore();
   });
 });

@@ -200,7 +200,10 @@ export class SocketManager {
   }
 
   // Tell people that a page's text was saved (`by` is who saved it), so an open copy can reload or warn
-  notifyXenNotePageUpdate(userIds: string[], page: { pageId: string; notebookId: string; rev: number; by: string }) {
+  notifyXenNotePageUpdate(
+    userIds: string[],
+    page: { pageId: string; notebookId: string; rev: number; by: string; client?: string },
+  ) {
     this.emit(userIds, "xennote:page_update", page);
   }
 
