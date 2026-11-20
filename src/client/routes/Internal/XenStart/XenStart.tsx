@@ -16,7 +16,18 @@ import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { Link, useLocation } from "react-router-dom";
-import { DEFAULT_APPEARANCE, searchUrl, type QuickLink, type XenStartConfig } from "@shared/xenstart";
+import {
+  DEFAULT_APPEARANCE,
+  defaultXenStartConfig,
+  searchUrl,
+  widgetLayout,
+  WIDGET_REGIONS,
+  WIDGET_TYPES,
+  type QuickLink,
+  type WidgetRegion,
+  type WidgetType,
+  type XenStartConfig,
+} from "@shared/xenstart";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenStart } from "../../../hooks/xenstart/useXenStart";
@@ -26,7 +37,11 @@ import { LinkDialog, SettingsDialog } from "./Dialogs";
 import QuickLinks, { quickLinkColumns } from "./QuickLinks";
 import { BackgroundImage, Clock } from "./Appearance";
 
-const HubSections = lazy(() => import("./HubSections"));
+import HubWidgetProvider from "./HubWidgetProvider";
+import WidgetBoard from "./WidgetBoard";
+import { WidgetPicker, WidgetSettings } from "./WidgetDialogs";
+
+const HubWidget = lazy(() => import("./HubSections"));
 const iconSx = {
   bgcolor: "background.paper",
   border: "1px solid",
@@ -36,7 +51,10 @@ const iconSx = {
 } as const;
 const conflictMessage = "XenStart changed in another tab. Review your changes and save again.";
 type Dialog =
-  { kind: "link"; link: QuickLink | null; base: XenStartConfig } | { kind: "settings"; base: XenStartConfig };
+  | { kind: "link"; link: QuickLink | null; base: XenStartConfig }
+  | { kind: "settings"; base: XenStartConfig }
+  | { kind: "picker"; region: WidgetRegion; base: XenStartConfig }
+  | { kind: "widget"; widget: WidgetType; region: WidgetRegion; base: XenStartConfig };
 
 export default function XenStart() {
   useTitle("XenStart");
@@ -45,6 +63,9 @@ export default function XenStart() {
   const { query, save } = useXenStart();
   const config = query.data;
   const appearance = config?.appearance ?? DEFAULT_APPEARANCE;
+  const layout = widgetLayout(config ?? defaultXenStartConfig());
+  const placed = WIDGET_REGIONS.flatMap((region) => layout[region]);
+  const available = WIDGET_TYPES.filter((widget) => !placed.includes(widget));
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -66,7 +87,7 @@ export default function XenStart() {
     if (dialog?.kind === "settings") requestAnimationFrame(() => settingsButton.current?.focus());
   };
 
-  const update = async (apply: (latest: XenStartConfig) => XenStartConfig, base?: XenStartConfig) => {
+  const update = async (apply: (latest: XenStartConfig) => XenStartConfig, base?: XenStartConfig, focusId?: string) => {
     if (!config || saving) return;
     setError("");
     if (base && !retryAfterConflict && base.revision !== config.revision) {
@@ -77,7 +98,13 @@ export default function XenStart() {
     try {
       await save.mutateAsync(apply(config));
       setDialog(null);
-      if (dialog?.kind === "settings") requestAnimationFrame(() => settingsButton.current?.focus());
+      if (dialog?.kind === "settings" || focusId) {
+        requestAnimationFrame(() => {
+          const target = focusId ? document.getElementById(focusId) : null;
+          if (target && !target.matches(":disabled")) target.focus();
+          else settingsButton.current?.focus();
+        });
+      }
     } catch (error) {
       setRetryAfterConflict(true);
       setError(error instanceof Error ? error.message : "Couldn't save XenStart.");
@@ -99,6 +126,63 @@ export default function XenStart() {
       links.splice(toIndex, 0, ...links.splice(fromIndex, 1));
       return { ...latest, links };
     });
+  };
+
+  const renderWidget = (widget: WidgetType, region: WidgetRegion) => {
+    const compact = region === "left" || region === "right";
+    if (widget === "clock") return <Clock compact={compact} />;
+    if (widget === "search")
+      return (
+        <Box component="form" role="search" onSubmit={submitSearch} sx={{ maxWidth: 550, mx: "auto", width: "100%" }}>
+          <TextField
+            fullWidth
+            type="search"
+            placeholder={config ? `Search with ${config.engine}` : "Search the web"}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            slotProps={{
+              input: {
+                sx: { bgcolor: "background.paper", borderRadius: RADIUS.pill, pl: 2 },
+                startAdornment: (
+                  <InputAdornment position="start" sx={{ mr: 1.25, color: "text.secondary" }}>
+                    <SearchIcon fontSize="small" aria-hidden />
+                  </InputAdornment>
+                ),
+              },
+              htmlInput: { "aria-label": "Web search", enterKeyHint: "search" },
+            }}
+          />
+        </Box>
+      );
+    if (widget === "links")
+      return (
+        <Box component="section" aria-label="Quick links">
+          {config ? (
+            <QuickLinks
+              links={config.links}
+              rows={appearance.rows}
+              columns={appearance.columns}
+              compact={compact}
+              editing={editing}
+              saving={saving}
+              onMove={move}
+              onEdit={(link) => openDialog({ kind: "link", link, base: config })}
+            />
+          ) : (
+            <ListSkeleton
+              rows={appearance.rows * appearance.columns}
+              columns={quickLinkColumns(appearance.columns)}
+              height={78}
+              gap={1}
+            />
+          )}
+        </Box>
+      );
+    return (
+      <Suspense fallback={null}>
+        <HubWidget widget={widget} compact={compact} />
+      </Suspense>
+    );
   };
 
   return (
@@ -164,64 +248,35 @@ export default function XenStart() {
           </Stack>
         </Popover>
       </Box>
-      <Box sx={{ mx: "auto", maxWidth: 800, pt: { xs: 3.25, sm: 6 } }}>
-        <Typography component="h1" variant="h4" textAlign="center" sx={{ mb: 2 }}>
+      <Box sx={{ pt: { xs: 3.25, sm: 6 } }}>
+        <Typography component="h1" variant="h4" textAlign="center" sx={{ mb: 3 }}>
           XenStart
         </Typography>
-        {appearance.showClock && <Clock />}
-        <Box component="form" role="search" onSubmit={submitSearch} sx={{ maxWidth: 550, mx: "auto", mb: 4 }}>
-          <TextField
-            fullWidth
-            type="search"
-            placeholder={config ? `Search with ${config.engine}` : "Search the web"}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            slotProps={{
-              input: {
-                sx: { bgcolor: "background.paper", borderRadius: RADIUS.pill, pl: 2 },
-                startAdornment: (
-                  <InputAdornment position="start" sx={{ mr: 1.25, color: "text.secondary" }}>
-                    <SearchIcon fontSize="small" aria-hidden />
-                  </InputAdornment>
-                ),
-              },
-              htmlInput: { "aria-label": "Web search", enterKeyHint: "search" },
-            }}
-          />
-        </Box>
-        <Box component="section" aria-label="Quick links">
-          {error && !dialog && (
-            <Alert severity="error" sx={{ mb: 1.5 }}>
-              {error}
-            </Alert>
-          )}
-          {config ? (
-            <QuickLinks
-              links={config.links}
-              rows={appearance.rows}
-              columns={appearance.columns}
+        {error && !dialog && (
+          <Alert severity="error" sx={{ maxWidth: 800, mx: "auto", mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        {query.isError && !config ? (
+          <Alert
+            severity="error"
+            sx={{ maxWidth: 800, mx: "auto" }}
+            action={<Button onClick={() => void query.refetch()}>Retry</Button>}
+          >
+            Couldn't load XenStart.
+          </Alert>
+        ) : (
+          <HubWidgetProvider enabled={placed.includes("pinned") || placed.includes("attention")}>
+            <WidgetBoard
+              layout={layout}
               editing={editing}
               saving={saving}
-              onMove={move}
-              onEdit={(link) => openDialog({ kind: "link", link, base: config })}
+              canAdd={available.length > 0}
+              onAdd={(region) => config && openDialog({ kind: "picker", region, base: config })}
+              onEdit={(widget, region) => config && openDialog({ kind: "widget", widget, region, base: config })}
+              renderWidget={renderWidget}
             />
-          ) : query.isError ? (
-            <Alert severity="error" action={<Button onClick={() => void query.refetch()}>Retry</Button>}>
-              Couldn't load XenStart.
-            </Alert>
-          ) : (
-            <ListSkeleton
-              rows={appearance.rows * appearance.columns}
-              columns={quickLinkColumns(appearance.columns)}
-              height={78}
-              gap={1}
-            />
-          )}
-        </Box>
-        {!!config?.sections.length && (
-          <Suspense fallback={null}>
-            <HubSections sections={config.sections} />
-          </Suspense>
+          </HubWidgetProvider>
         )}
       </Box>
       {dialog?.kind === "link" && (
@@ -265,37 +320,83 @@ export default function XenStart() {
       )}
       {dialog?.kind === "settings" && (
         <SettingsDialog
-          initialEngine={dialog.base.engine}
-          initialSections={dialog.base.sections}
-          initialAppearance={dialog.base.appearance}
+          initialBackground={dialog.base.appearance.backgroundUrl}
+          onClose={closeDialog}
+          saving={saving}
+          error={error}
+          onSave={(backgroundUrl) =>
+            void update(
+              (latest) => ({
+                ...latest,
+                appearance: {
+                  ...latest.appearance,
+                  backgroundUrl:
+                    backgroundUrl === dialog.base.appearance.backgroundUrl
+                      ? latest.appearance.backgroundUrl
+                      : backgroundUrl,
+                },
+              }),
+              dialog.base,
+            )
+          }
+        />
+      )}
+      {dialog?.kind === "picker" && (
+        <WidgetPicker
+          region={dialog.region}
+          available={available}
+          onClose={closeDialog}
+          saving={saving}
+          error={error}
+          onAdd={(widget) =>
+            void update(
+              (latest) => {
+                const current = widgetLayout(latest);
+                if (WIDGET_REGIONS.some((region) => current[region].includes(widget)))
+                  throw new Error("This widget is already on the page.");
+                return { ...latest, layout: { ...current, [dialog.region]: [...current[dialog.region], widget] } };
+              },
+              dialog.base,
+              `xenstart-edit-${widget}`,
+            )
+          }
+        />
+      )}
+      {dialog?.kind === "widget" && (
+        <WidgetSettings
+          widget={dialog.widget}
+          config={dialog.base}
           linkCount={config?.links.length ?? 0}
           onClose={closeDialog}
           saving={saving}
           error={error}
-          onSave={(engine, sections, preferences) =>
+          onRemove={() =>
+            void update(
+              (latest) => {
+                const current = widgetLayout(latest);
+                const region = WIDGET_REGIONS.find((region) => current[region].includes(dialog.widget));
+                return region
+                  ? {
+                      ...latest,
+                      layout: { ...current, [region]: current[region].filter((widget) => widget !== dialog.widget) },
+                    }
+                  : latest;
+              },
+              dialog.base,
+              `xenstart-add-${dialog.region}`,
+            )
+          }
+          onSave={({ engine, rows, columns }) =>
             void update((latest) => {
-              // On a retry, apply only the switches this user changed.
-              const current = new Set(latest.sections);
-              for (const section of dialog.base.sections) if (!sections.includes(section)) current.delete(section);
-              for (const section of sections) if (!dialog.base.sections.includes(section)) current.add(section);
+              if (!WIDGET_REGIONS.some((region) => widgetLayout(latest)[region].includes(dialog.widget)))
+                throw new Error("This widget was removed in another tab.");
               return {
                 ...latest,
                 engine: engine === dialog.base.engine ? latest.engine : engine,
-                sections: [...current],
                 appearance: {
-                  rows: preferences.rows === dialog.base.appearance.rows ? latest.appearance.rows : preferences.rows,
-                  columns:
-                    preferences.columns === dialog.base.appearance.columns
-                      ? latest.appearance.columns
-                      : preferences.columns,
-                  showClock:
-                    preferences.showClock === dialog.base.appearance.showClock
-                      ? latest.appearance.showClock
-                      : preferences.showClock,
-                  backgroundUrl:
-                    preferences.backgroundUrl === dialog.base.appearance.backgroundUrl
-                      ? latest.appearance.backgroundUrl
-                      : preferences.backgroundUrl,
+                  ...latest.appearance,
+                  rows: rows === dialog.base.appearance.rows ? latest.appearance.rows : rows,
+                  columns: columns === dialog.base.appearance.columns ? latest.appearance.columns : columns,
                 },
               };
             }, dialog.base)

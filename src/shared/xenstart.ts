@@ -13,6 +13,12 @@ export type XenStartAppearance = typeof DEFAULT_APPEARANCE;
 export const SEARCH_ENGINES = ["Google", "DuckDuckGo", "Bing"] as const;
 export const HUB_SECTIONS = ["pinned", "attention", "activity"] as const;
 
+export const WIDGET_REGIONS = ["top", "center", "left", "right", "bottom"] as const;
+export const WIDGET_TYPES = ["search", "links", "clock", ...HUB_SECTIONS] as const;
+export type WidgetRegion = (typeof WIDGET_REGIONS)[number];
+export type WidgetType = (typeof WIDGET_TYPES)[number];
+export type WidgetLayout = Record<WidgetRegion, WidgetType[]>;
+
 export type SearchEngine = (typeof SEARCH_ENGINES)[number];
 export type HubSection = (typeof HUB_SECTIONS)[number];
 
@@ -28,6 +34,7 @@ export interface XenStartConfig {
   sections: HubSection[];
   revision: number;
   appearance: XenStartAppearance;
+  layout?: WidgetLayout;
 }
 
 export const defaultXenStartConfig = (): XenStartConfig => ({
@@ -37,6 +44,18 @@ export const defaultXenStartConfig = (): XenStartConfig => ({
   revision: 0,
   appearance: { ...DEFAULT_APPEARANCE },
 });
+
+export function widgetLayout(config: XenStartConfig): WidgetLayout {
+  return (
+    config.layout ?? {
+      top: [],
+      center: config.appearance.showClock ? ["clock", "search", "links"] : ["search", "links"],
+      left: [],
+      right: [],
+      bottom: HUB_SECTIONS.filter((widget) => config.sections.includes(widget)),
+    }
+  );
+}
 
 export function parseQuickLinkUrl(value: string): URL | null {
   if (!/^https?:\/\//i.test(value.trim())) return null;

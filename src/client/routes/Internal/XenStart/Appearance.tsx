@@ -34,7 +34,7 @@ export function BackgroundImage({ url, preview = false }: { url: string; preview
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
-export function Clock() {
+export function Clock({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let timer: number;
@@ -60,7 +60,7 @@ export function Clock() {
         display: "block",
         mb: 2,
         textAlign: "center",
-        fontSize: "clamp(2rem, 8vw, 4rem)",
+        fontSize: compact ? "clamp(1.5rem, 6vw, 2.4rem)" : "clamp(2rem, 8vw, 4rem)",
         fontWeight: 500,
         fontVariantNumeric: "tabular-nums",
         lineHeight: 1.15,

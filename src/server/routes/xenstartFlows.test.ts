@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { defaultXenStartConfig, QUICK_LINK_LIMIT, type XenStartConfig } from "@shared/xenstart";
+import { defaultXenStartConfig, QUICK_LINK_LIMIT, widgetLayout, type XenStartConfig } from "@shared/xenstart";
 import { createUser, startTestApp, type TestApp } from "../testing/testApp";
 
 let t: TestApp;
@@ -101,5 +101,64 @@ describe("XenStart", () => {
     for (const patch of [{ columns: 7 }, { rows: 0 }, { backgroundUrl: "http://example.com/photo.jpg" }]) {
       await save(token, { ...initial, appearance: { ...appearance, ...patch } }).expect(400);
     }
+  });
+
+  it("carries forward legacy placements and keeps widget preferences across place, remove and re-add", async () => {
+    const { token } = await createUser();
+    const initial = defaultXenStartConfig();
+    expect(widgetLayout(initial).center).toEqual(["search", "links"]);
+    const links = [link("First"), link("Second")];
+    const legacy = (
+      await save(token, {
+        ...initial,
+        links,
+        engine: "Bing",
+        sections: ["activity", "pinned"],
+        appearance: { ...initial.appearance, rows: 3, showClock: true },
+      }).expect(200)
+    ).body.data as XenStartConfig;
+    expect(widgetLayout(legacy)).toEqual({
+      top: [],
+      center: ["clock", "search", "links"],
+      left: [],
+      right: [],
+      bottom: ["pinned", "activity"],
+    });
+
+    const empty = { top: [], center: [], left: [], right: [], bottom: [] };
+    const removed = (await save(token, { ...legacy, layout: empty }).expect(200)).body.data as XenStartConfig;
+    expect((await get(token).expect(200)).body.data).toMatchObject({
+      layout: empty,
+      links,
+      engine: "Bing",
+      sections: [],
+      appearance: { rows: 3, showClock: false },
+    });
+
+    const { layout: _layout, ...olderClient } = removed;
+    const updated = (
+      await save(token, {
+        ...olderClient,
+        sections: ["pinned"],
+        appearance: { ...removed.appearance, showClock: true },
+      }).expect(200)
+    ).body.data;
+    expect(updated.layout).toEqual(empty);
+    expect(updated.sections).toEqual([]);
+    expect(updated.appearance.showClock).toBe(false);
+
+    const layout = { ...empty, top: ["search"], right: ["links", "clock"], left: ["pinned"] } as const;
+    const restored = (await save(token, { ...updated, layout }).expect(200)).body.data;
+    expect(restored).toMatchObject({
+      layout,
+      links,
+      engine: "Bing",
+      sections: ["pinned"],
+      appearance: { rows: 3, showClock: true },
+    });
+    await save(token, { ...updated, layout: empty }).expect(409);
+    await save(token, { ...restored, layout: { ...layout, bottom: ["clock"] } }).expect(400);
+    await save(token, { ...restored, layout: { ...layout, bottom: ["weather"] } }).expect(400);
+    expect((await get(token).expect(200)).body.data).toEqual(restored);
   });
 });

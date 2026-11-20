@@ -1,38 +1,9 @@
 import { useState, type FormEvent } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Divider,
-  FormControlLabel,
-  MenuItem,
-  Stack,
-  Switch,
-  Tab,
-  Tabs,
-  TextField,
-  Typography,
-} from "@mui/material";
-import {
-  GRID_DIMENSION_LIMIT,
-  HUB_SECTIONS,
-  parseQuickLinkUrl,
-  SEARCH_ENGINES,
-  XENSTART_PATH,
-  type HubSection,
-  type QuickLink,
-  type SearchEngine,
-  type XenStartAppearance,
-} from "@shared/xenstart";
+import { Alert, Box, Button, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { parseQuickLinkUrl, XENSTART_PATH, type QuickLink } from "@shared/xenstart";
 import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
-import { BackgroundImage } from "./Appearance";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
-
-const sectionLabels: Record<HubSection, string> = {
-  pinned: "Pinned apps",
-  attention: "Needs attention",
-  activity: "Activity",
-};
+import { BackgroundImage } from "./Appearance";
 
 interface DialogProps {
   onClose: () => void;
@@ -132,33 +103,21 @@ export function LinkDialog({
 }
 
 export function SettingsDialog({
-  initialEngine,
-  initialSections,
-  initialAppearance,
-  linkCount,
+  initialBackground,
   onClose,
   onSave,
   saving,
   error,
-}: DialogProps & {
-  initialEngine: SearchEngine;
-  initialSections: HubSection[];
-  initialAppearance: XenStartAppearance;
-  linkCount: number;
-  onSave: (engine: SearchEngine, sections: HubSection[], appearance: XenStartAppearance) => void;
-}) {
-  const [engine, setEngine] = useState(initialEngine);
-  const [sections, setSections] = useState(initialSections);
-  const [appearance, setAppearance] = useState(initialAppearance);
+}: DialogProps & { initialBackground: string; onSave: (backgroundUrl: string) => void }) {
   const [tab, setTab] = useState("general");
-  const [preview, setPreview] = useState(initialAppearance.backgroundUrl);
+  const [value, setValue] = useState(initialBackground);
+  const [preview, setPreview] = useState(initialBackground);
   const [backgroundError, setBackgroundError] = useState(false);
-  const slots = appearance.rows * appearance.columns;
-  const hiddenLinks = Math.max(0, linkCount - slots);
-  const backgroundUrl = appearance.backgroundUrl.trim();
+  const backgroundUrl = value.trim();
   const validBackground = !backgroundUrl || parseQuickLinkUrl(backgroundUrl)?.protocol === "https:";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const homepage = new URL(XENSTART_PATH, window.location.origin).href;
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(homepage);
@@ -196,7 +155,7 @@ export function SettingsDialog({
             setTab("appearance");
             return;
           }
-          onSave(engine, sections, { ...appearance, backgroundUrl });
+          onSave(backgroundUrl);
         }}
       >
         {error && <Alert severity="error">{error}</Alert>}
@@ -207,138 +166,57 @@ export function SettingsDialog({
           variant="fullWidth"
           sx={{ borderBottom: "1px solid", borderColor: "divider" }}
         >
-          {["General", "Layout", "Appearance"].map((name) => (
-            <Tab
-              key={name}
-              label={name}
-              value={name.toLowerCase()}
-              id={`xenstart-tab-${name.toLowerCase()}`}
-              aria-controls={`xenstart-panel-${name.toLowerCase()}`}
-              sx={{ minWidth: 0, px: 1 }}
-            />
-          ))}
+          <Tab id="xenstart-general-tab" aria-controls="xenstart-general-panel" value="general" label="General" />
+          <Tab
+            id="xenstart-appearance-tab"
+            aria-controls="xenstart-appearance-panel"
+            value="appearance"
+            label="Appearance"
+          />
         </Tabs>
         <Box
-          id="xenstart-panel-general"
+          id="xenstart-general-panel"
           role="tabpanel"
-          aria-labelledby="xenstart-tab-general"
+          aria-labelledby="xenstart-general-tab"
           hidden={tab !== "general"}
         >
-          <Stack spacing={2}>
-            <TextField
-              select
-              disabled={saving}
-              label="Search engine"
-              value={engine}
-              onChange={(event) => setEngine(event.target.value as SearchEngine)}
-            >
-              {SEARCH_ENGINES.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <Stack component="fieldset" sx={{ m: 0, p: 0, border: 0 }}>
-              <Typography component="legend" variant="subtitle2">
-                Hub sections
-              </Typography>
-              {HUB_SECTIONS.map((section) => (
-                <FormControlLabel
-                  key={section}
-                  label={sectionLabels[section]}
-                  labelPlacement="start"
-                  sx={{ mx: 0, justifyContent: "space-between" }}
-                  control={
-                    <Switch
-                      disabled={saving}
-                      checked={sections.includes(section)}
-                      onChange={(_, checked) =>
-                        setSections((current) =>
-                          checked ? [...current, section] : current.filter((item) => item !== section),
-                        )
-                      }
-                    />
-                  }
-                />
-              ))}
-            </Stack>
-            <Divider />
-            <Stack spacing={1} alignItems="flex-start">
-              <Typography variant="body2" color="text.secondary">
-                Paste this address into your browser’s homepage settings.
-              </Typography>
-              <Button variant="outlined" onClick={() => void copy()}>
-                Copy homepage URL
-              </Button>
-              {copyState === "copied" && (
-                <Typography role="status" variant="body2">
-                  Homepage URL copied.
-                </Typography>
-              )}
-              {copyState === "failed" && (
-                <TextField
-                  label="Homepage URL"
-                  fullWidth
-                  value={homepage}
-                  slotProps={{ input: { readOnly: true } }}
-                  onFocus={(event) => event.target.select()}
-                />
-              )}
-            </Stack>
-          </Stack>
-        </Box>
-        <Box id="xenstart-panel-layout" role="tabpanel" aria-labelledby="xenstart-tab-layout" hidden={tab !== "layout"}>
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={2}>
-              {(["rows", "columns"] as const).map((dimension) => (
-                <TextField
-                  key={dimension}
-                  select
-                  fullWidth
-                  disabled={saving}
-                  label={dimension === "rows" ? "Rows" : "Columns"}
-                  value={appearance[dimension]}
-                  onChange={(event) => setAppearance({ ...appearance, [dimension]: Number(event.target.value) })}
-                >
-                  {Array.from({ length: GRID_DIMENSION_LIMIT }, (_, index) => index + 1).map((count) => (
-                    <MenuItem key={count} value={count}>
-                      {count}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              ))}
-            </Stack>
+          <Stack spacing={1} alignItems="flex-start">
             <Typography variant="body2" color="text.secondary">
-              {hiddenLinks
-                ? `${slots} visible slots. ${hiddenLinks} saved ${hiddenLinks === 1 ? "link stays" : "links stay"} hidden until there’s room again.`
-                : `${slots} slots. Tiles wrap into fewer columns on smaller screens.`}
+              Paste this address into your browser’s homepage settings.
             </Typography>
+            <Button variant="outlined" onClick={() => void copy()}>
+              Copy homepage URL
+            </Button>
+            {copyState === "copied" && (
+              <Typography role="status" variant="body2">
+                Homepage URL copied.
+              </Typography>
+            )}
+            {copyState === "failed" && (
+              <TextField
+                label="Homepage URL"
+                fullWidth
+                value={homepage}
+                slotProps={{ input: { readOnly: true } }}
+                onFocus={(event) => event.target.select()}
+              />
+            )}
           </Stack>
         </Box>
         <Box
-          id="xenstart-panel-appearance"
+          id="xenstart-appearance-panel"
           role="tabpanel"
-          aria-labelledby="xenstart-tab-appearance"
+          aria-labelledby="xenstart-appearance-tab"
           hidden={tab !== "appearance"}
         >
           <Stack spacing={2}>
-            <FormControlLabel
-              label="Show clock"
-              control={
-                <Switch
-                  checked={appearance.showClock}
-                  disabled={saving}
-                  onChange={(_, checked) => setAppearance({ ...appearance, showClock: checked })}
-                />
-              }
-            />
             <TextField
               label="Background image URL"
               placeholder="https://example.com/photo.jpg"
-              value={appearance.backgroundUrl}
+              value={value}
               disabled={saving}
               onChange={(event) => {
-                setAppearance({ ...appearance, backgroundUrl: event.target.value });
+                setValue(event.target.value);
                 setBackgroundError(false);
                 if (!event.target.value.trim()) setPreview("");
               }}
@@ -362,7 +240,7 @@ export function SettingsDialog({
                 <Button
                   disabled={saving}
                   onClick={() => {
-                    setAppearance({ ...appearance, backgroundUrl: "" });
+                    setValue("");
                     setPreview("");
                     setBackgroundError(false);
                   }}

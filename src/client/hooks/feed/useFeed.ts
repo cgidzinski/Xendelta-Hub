@@ -22,17 +22,19 @@ export const useFeed = (app?: string) =>
   });
 
 /** What is waiting on the person, kept fresh when the things it is made from change. */
-export const useAttention = () => {
+export const useAttention = (enabled = true) => {
   const keys = [feedKeys.attention()];
-  useSocketInvalidate("xensplit:groups_updated", keys);
-  useSocketInvalidate("xensplit:group_update", keys);
-  useSocketInvalidate("xenbudget:book_update", keys);
-  useSocketInvalidate("chat:message", keys);
-  useSocketInvalidate("chat:read", keys);
+  const shouldRefresh = () => enabled;
+  useSocketInvalidate("xensplit:groups_updated", keys, shouldRefresh);
+  useSocketInvalidate("xensplit:group_update", keys, shouldRefresh);
+  useSocketInvalidate("xenbudget:book_update", keys, shouldRefresh);
+  useSocketInvalidate("chat:message", keys, shouldRefresh);
+  useSocketInvalidate("chat:read", keys, shouldRefresh);
   return useQuery({
     queryKey: feedKeys.attention(),
     queryFn: () => api.get<AttentionResponse>("/api/feed/attention"),
     staleTime: 30_000,
+    enabled,
   });
 };
 

@@ -22,7 +22,10 @@ const CHECKS: Record<string, (userId: string) => Promise<unknown>> = {
   xenkitchen: (id) => XenKitchenItem.exists({ created_by: id }),
   xennote: (id) => XenNote.exists({ owner_id: id }),
   xenstart: (id) =>
-    XenStart.exists({ owner_id: id, $or: [{ "links.0": { $exists: true } }, { "sections.0": { $exists: true } }] }),
+    XenStart.exists({
+      owner_id: id,
+      $or: [{ "links.0": { $exists: true } }, { "sections.0": { $exists: true } }, { layout: { $exists: true } }],
+    }),
 };
 
 export const TRACKED_APPS = Object.keys(CHECKS);

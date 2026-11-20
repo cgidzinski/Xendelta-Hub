@@ -5,6 +5,8 @@ import {
   parseQuickLinkUrl,
   QUICK_LINK_LIMIT,
   SEARCH_ENGINES,
+  WIDGET_REGIONS,
+  WIDGET_TYPES,
 } from "@shared/xenstart";
 
 const quickLink = z.object({
@@ -25,6 +27,20 @@ const appearance = z.strictObject({
   showClock: z.boolean(),
 });
 
+const region = z.array(z.enum(WIDGET_TYPES)).max(WIDGET_TYPES.length);
+const layout = z
+  .strictObject({
+    top: region,
+    center: region,
+    left: region,
+    right: region,
+    bottom: region,
+  })
+  .refine((regions) => {
+    const widgets = WIDGET_REGIONS.flatMap((key) => regions[key]);
+    return new Set(widgets).size === widgets.length;
+  }, "Each widget can only be placed once.");
+
 export const xenStartConfigSchema = z.strictObject({
   links: z
     .array(quickLink)
@@ -37,4 +53,5 @@ export const xenStartConfigSchema = z.strictObject({
     .refine((sections) => new Set(sections).size === sections.length, "Hub sections must be unique."),
   revision: z.number().int().nonnegative(),
   appearance: appearance.optional(),
+  layout: layout.optional(),
 });

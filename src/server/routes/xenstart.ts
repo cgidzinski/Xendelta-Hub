@@ -3,6 +3,8 @@ import type { z } from "zod";
 import { MongoServerError } from "mongodb";
 import {
   DEFAULT_APPEARANCE,
+  HUB_SECTIONS,
+  WIDGET_REGIONS,
   defaultXenStartConfig,
   type XenStartAppearance,
   type XenStartConfig,
@@ -16,7 +18,7 @@ import { validate, xenStartConfigSchema } from "../utils/validation";
 const path = "/api/xenstart";
 const conflict = () => new AppError(409, "XenStart changed in another tab. Review the latest settings and try again.");
 
-const projection = { _id: 0, links: 1, engine: 1, sections: 1, revision: 1, appearance: 1 };
+const projection = { _id: 0, links: 1, engine: 1, sections: 1, revision: 1, appearance: 1, layout: 1 };
 
 function configResponse({
   links,
@@ -24,19 +26,23 @@ function configResponse({
   sections,
   revision,
   appearance,
-}: Omit<XenStartConfig, "appearance"> & {
+  layout,
+}: Omit<XenStartConfig, "appearance" | "layout"> & {
+  layout?: XenStartConfig["layout"] | null;
   appearance?: { [K in keyof XenStartAppearance]?: XenStartAppearance[K] | null } | null;
 }): XenStartConfig {
+  const widgets = layout && WIDGET_REGIONS.flatMap((region) => layout[region]);
   return {
     links,
     engine,
-    sections,
+    sections: widgets ? HUB_SECTIONS.filter((widget) => widgets.includes(widget)) : sections,
     revision,
+    ...(layout && { layout }),
     appearance: {
       rows: appearance?.rows ?? DEFAULT_APPEARANCE.rows,
       columns: appearance?.columns ?? DEFAULT_APPEARANCE.columns,
       backgroundUrl: appearance?.backgroundUrl ?? DEFAULT_APPEARANCE.backgroundUrl,
-      showClock: appearance?.showClock ?? DEFAULT_APPEARANCE.showClock,
+      showClock: widgets?.includes("clock") ?? appearance?.showClock ?? DEFAULT_APPEARANCE.showClock,
     },
   };
 }

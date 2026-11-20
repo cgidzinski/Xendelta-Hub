@@ -32,6 +32,7 @@ function LinkIconImage({ origin }: { origin: string }) {
 interface QuickLinksProps {
   links: QuickLink[];
   rows: number;
+  compact?: boolean;
   columns: number;
   editing: boolean;
   saving: boolean;
@@ -39,7 +40,16 @@ interface QuickLinksProps {
   onMove: (from: string, to: string) => void;
 }
 
-export default function QuickLinks({ links, rows, columns, editing, saving, onEdit, onMove }: QuickLinksProps) {
+export default function QuickLinks({
+  links,
+  rows,
+  columns,
+  compact,
+  editing,
+  saving,
+  onEdit,
+  onMove,
+}: QuickLinksProps) {
   const visible = links.slice(0, rows * columns);
   const grid = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; pointer: number } | null>(null);
@@ -76,7 +86,7 @@ export default function QuickLinks({ links, rows, columns, editing, saving, onEd
         gridTemplateColumns: Object.fromEntries(
           Object.entries(quickLinkColumns(columns)).map(([breakpoint, count]) => [
             breakpoint,
-            `repeat(${count}, minmax(0, 1fr))`,
+            `repeat(${compact ? Math.min(count, 2) : count}, minmax(0, 1fr))`,
           ]),
         ),
         gap: 1,

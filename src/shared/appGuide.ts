@@ -392,16 +392,19 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Search the web with Google, DuckDuckGo, or Bing.",
       "Choose how many quick links to show and keep hidden links for later.",
       "Edit, remove, or rearrange your quick links.",
-      "Show your pinned apps, items that need attention, or recent activity below your links.",
+      "Place widgets for your pinned apps, items that need attention, or recent activity.",
       "Copy the address to set XenStart as your browser homepage.",
-      "Set a background image and show a clock above search.",
+      "Set a background image and place a clock anywhere on the page.",
     ],
     tips: [
       {
         text: "Turn on Edit mode in the settings popover to add, edit, or reorder links.",
         link: "/internal/xenstart",
       },
-      { text: "Open Settings to choose which sections from Home to show.", link: "/internal/xenstart" },
+      {
+        text: "In Edit mode, use a region’s plus button to choose a widget for that spot.",
+        link: "/internal/xenstart",
+      },
     ],
   },
   xennote: {
