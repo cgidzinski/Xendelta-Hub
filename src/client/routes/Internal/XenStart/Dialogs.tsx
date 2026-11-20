@@ -141,14 +141,10 @@ export function SettingsDialog({
       maxWidth="xs"
       title="Settings"
       onClose={onClose}
-      slotProps={
-        tab === "layout"
-          ? {
-              container: { sx: { justifyContent: { md: "flex-end" } } },
-              backdrop: { sx: { backgroundColor: { md: "transparent" } } },
-            }
-          : undefined
-      }
+      slotProps={{
+        container: { sx: { alignItems: { md: "flex-start" }, justifyContent: { md: "flex-end" } } },
+        backdrop: { sx: { backgroundColor: { md: "transparent" } } },
+      }}
       actions={
         <>
           <Button onClick={onClose}>Cancel</Button>
