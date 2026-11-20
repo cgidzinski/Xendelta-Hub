@@ -1,4 +1,5 @@
 import { Extension, type Editor, type Range } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
 import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/suggestion";
 import { filterSlashItems, type SlashItem, type SlashItemId } from "./slashItems";
 
@@ -36,6 +37,7 @@ export const SlashCommand = Extension.create<SlashOptions>({
     return [
       Suggestion<SlashItem, SlashItem>({
         editor: this.editor,
+        pluginKey: new PluginKey("slashCommand"),
         char: "/",
         items: ({ query }) => filterSlashItems(query),
         command: ({ editor, range, props }) => options.run(props.id, editor, range),

@@ -4,6 +4,8 @@ import { registerNoteRoutes } from "./notes";
 import { registerNoteSharingRoutes } from "./noteSharing";
 import { registerNoteImageRoutes } from "./images";
 import { registerPageFileRoutes } from "./pageFiles";
+import { registerPageLinkRoutes } from "./pageLinks";
+import { registerPageSearchRoutes } from "./pageSearch";
 import { registerPageRoutes } from "./pages";
 import { registerPageSharingRoutes } from "./pageSharing";
 import { registerPageTrashRoutes } from "./pageTrash";
@@ -25,6 +27,9 @@ module.exports = function (app: any) {
   // Notebook sections and pages (the notebook tree, then pages, their people, files and trash).
   registerSectionRoutes(app);
   registerPageTrashRoutes(app);
+  // Literal paths (/pages/peek, /pages/suggest, /search) before the /pages/:id routes.
+  registerPageLinkRoutes(app);
+  registerPageSearchRoutes(app);
   registerPageRoutes(app);
   registerPageSharingRoutes(app);
   registerPageFileRoutes(app);

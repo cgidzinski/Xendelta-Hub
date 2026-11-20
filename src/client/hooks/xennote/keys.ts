@@ -21,6 +21,15 @@ export const xennoteKeys = {
   tree: (notebookId: string) => [...xennoteKeys.all, "tree", notebookId] as const,
   /** One page with its text. */
   page: (pageId: string) => [...xennoteKeys.all, "page", pageId] as const,
+  /** What a link to one page should show (its name, or that it is locked). */
+  peek: (pageId: string) => [...xennoteKeys.all, "peek", pageId] as const,
+  peekAll: () => [...xennoteKeys.all, "peek"] as const,
+  /** The pages that link to one page, and those that only mention it. */
+  pageBacklinks: (pageId: string) => [...xennoteKeys.all, "page-backlinks", pageId] as const,
+  pageUnlinked: (pageId: string) => [...xennoteKeys.all, "page-unlinked", pageId] as const,
+  /** Page search, by text, notebook and tag. */
+  pageSearch: (q: string, notebook?: string, tag?: string) =>
+    [...xennoteKeys.all, "page-search", q, notebook ?? "", tag ?? ""] as const,
   /** What was deleted from a notebook's sections and pages. */
   notebookTrash: (notebookId: string) => [...xennoteKeys.all, "notebook-trash", notebookId] as const,
   publicNotebook: (token: string) => [...xennoteKeys.all, "public-notebook", token] as const,

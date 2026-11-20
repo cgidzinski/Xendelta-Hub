@@ -10,6 +10,7 @@ import { XenRoutine } from "../models/xenRoutine";
 import { XenSplit } from "../models/xenSplit";
 import { XenBudgetBook, XenBudgetItem } from "../models/xenBudget";
 import { PUBLIC_USER_FIELDS } from "../utils/publicUser";
+import { searchPages } from "../utils/xenNotePageSearch";
 
 // Global search (the Ctrl+K palette): one query across what a person can reach in every app. Each source answers for
 // itself, only ever with things the caller can open, and a few at a time; one that fails is logged and left out so the
@@ -102,6 +103,22 @@ const notes: Source = async (uid, q, rx) => {
         link: `/internal/xennote?note=${n._id}`,
       };
     }),
+  };
+};
+
+// Notebook pages: by name, then by what they say. Only pages the person can see (utils/xenNotePageSearch.ts).
+const pages: Source = async (uid, q) => {
+  const found = await searchPages(uid, { q, limit: SEARCH_PER_SOURCE });
+  return {
+    kind: "pages",
+    label: "Pages",
+    hits: found.map((p) => ({
+      id: p.id,
+      title: p.title.trim() || "Untitled page",
+      subtitle: [clip(p.snippet, 70), p.notebook_name].filter(Boolean).join(" · ") || undefined,
+      // Someone who was added to the page alone opens it by itself, without the notebook around it.
+      link: p.in_notebook ? `/internal/xennote/b/${p.notebook_id}/p/${p.id}` : `/internal/xennote/p/${p.id}`,
+    })),
   };
 };
 
@@ -265,7 +282,7 @@ const budgets: Source = async (uid, _q, rx) => {
   };
 };
 
-const SOURCES: Source[] = [notes, files, recipes, splits, budgets, routines, links, people];
+const SOURCES: Source[] = [notes, pages, files, recipes, splits, budgets, routines, links, people];
 
 /** Search every source for `query` (at least SEARCH_MIN characters) on behalf of `uid`. Empty groups are left out. */
 export async function searchEverything(uid: string, query: string): Promise<SearchGroup[]> {
