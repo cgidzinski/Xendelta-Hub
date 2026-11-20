@@ -291,6 +291,7 @@ require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
 require("./routes/xenkitchenPlan.ts")(app);
 require("./routes/xennote")(app);
+require("./routes/xenstart.ts").default(app);
 require("./routes/feed")(app);
 
 // vite-express appends its static handler at listen() time - after this module has

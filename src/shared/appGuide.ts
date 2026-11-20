@@ -12,6 +12,7 @@ export const GUIDE_APPS = [
   "xenroutine",
   "xenkitchen",
   "xennote",
+  "xenstart",
 ] as const;
 
 /** An app's key, or "hub" for the parts that belong to no single app (Home, people, messages, notifications). */
@@ -381,6 +382,25 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         text: "Add a cover photo in a book's settings, and it shows when you pick between your books.",
         link: "/internal/xenkitchen",
       },
+    ],
+  },
+  xenstart: {
+    about:
+      "XenStart is a browser homepage for your favorite sites and web searches. You can also bring in your pinned apps, activity, and items that need attention from Home.",
+    pitch: { text: "Try XenStart as a browser homepage for your favorite sites.", link: "/internal/xenstart" },
+    features: [
+      "Search the web with Google, DuckDuckGo, or Bing.",
+      "Save up to 12 quick links to your favorite sites.",
+      "Edit, remove, or rearrange your quick links.",
+      "Show your pinned apps, items that need attention, or recent activity below your links.",
+      "Copy the address to set XenStart as your browser homepage.",
+    ],
+    tips: [
+      {
+        text: "Turn on Link editing in the settings popover to change the order of your links.",
+        link: "/internal/xenstart",
+      },
+      { text: "Open Settings to choose which sections from Home to show.", link: "/internal/xenstart" },
     ],
   },
   xennote: {
