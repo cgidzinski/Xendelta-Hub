@@ -9,6 +9,7 @@ import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useAuth } from "../../../../contexts/AuthContext";
 import type { SearchedUser } from "../../../../hooks/people/usePeople";
 import { noteShareUrl, useXenNoteActions, useXenNoteSharing } from "../../../../hooks/xennote/useXenNote";
+import type { XenNoteSharing } from "../../../../types/XenNote";
 import UserAvatar from "../../../../components/user/UserAvatar";
 import UserName from "../../../../components/user/UserName";
 
@@ -123,7 +124,8 @@ export default function NoteShareDialog({ noteId, onClose }: NoteShareDialogProp
     </Box>
   );
 
-  const peopleTab = (
+  // Built from the loaded data, so nothing reads it while the request is still in flight.
+  const renderPeopleTab = (d: XenNoteSharing) => (
     <Stack spacing={2.5}>
       {manage && (
         <Stack spacing={1.5}>
@@ -131,7 +133,7 @@ export default function NoteShareDialog({ noteId, onClose }: NoteShareDialogProp
             value={picked}
             onChange={setPicked}
             label="Add people"
-            excludeUserIds={[data!.owner.user_id, ...data!.members.map((m) => m.user_id)]}
+            excludeUserIds={[d.owner.user_id, ...d.members.map((m) => m.user_id)]}
           />
           <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
             <TextField
@@ -159,8 +161,8 @@ export default function NoteShareDialog({ noteId, onClose }: NoteShareDialogProp
         </Stack>
       )}
       <Box>
-        {row("owner", person(data!.owner, "Owner"))}
-        {data!.members.map((m) => {
+        {row("owner", person(d.owner, "Owner"))}
+        {d.members.map((m) => {
           return row(
             m.user_id,
             person(m, m.role === "editor" ? "Editor" : "Viewer"),
@@ -186,15 +188,15 @@ export default function NoteShareDialog({ noteId, onClose }: NoteShareDialogProp
             ) : undefined,
           );
         })}
-        {manage && data!.members.length === 0 && (
+        {manage && d.members.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ py: 1.5 }}>
             Only you can open this note. Add someone above to share it.
           </Typography>
         )}
       </Box>
-      {data!.notebook && (
+      {d.notebook && (
         <Typography variant="caption" color="text.secondary">
-          Everyone in the notebook “{data!.notebook.name}” can also open this note.
+          Everyone in the notebook “{d.notebook.name}” can also open this note.
         </Typography>
       )}
     </Stack>
@@ -300,7 +302,7 @@ export default function NoteShareDialog({ noteId, onClose }: NoteShareDialogProp
               }
             />
           </Tabs>
-          <Box sx={{ minHeight: 280 }}>{tab === "people" ? peopleTab : linkTab}</Box>
+          <Box sx={{ minHeight: 280 }}>{tab === "people" ? renderPeopleTab(data) : linkTab}</Box>
         </>
       )}
     </ResponsiveDialog>
