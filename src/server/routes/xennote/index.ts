@@ -4,6 +4,7 @@ import { registerNoteRoutes } from "./notes";
 import { registerNoteSharingRoutes } from "./noteSharing";
 import { registerNoteImageRoutes } from "./images";
 import { registerPageExportRoutes } from "./pageExport";
+import { registerPageGraphRoutes } from "./pageGraph";
 import { registerPageHistoryRoutes } from "./pageHistory";
 import { registerPageTemplateRoutes } from "./pageTemplates";
 import { registerPageFileRoutes } from "./pageFiles";
@@ -37,6 +38,7 @@ module.exports = function (app: any) {
   // Literal paths (/pages/peek, /pages/suggest, /search) before the /pages/:id routes.
   registerPageLinkRoutes(app);
   registerPageSearchRoutes(app);
+  registerPageGraphRoutes(app);
   registerPageRoutes(app);
   registerPageHistoryRoutes(app);
   registerPageExportRoutes(app);

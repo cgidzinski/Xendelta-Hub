@@ -110,3 +110,8 @@ export const xenNoteSearchQuerySchema = z.object({
 export const xenNoteJournalSchema = z.object({ date: z.string().refine(isJournalDate, "Choose a valid journal date") });
 export const xenNoteJournalTemplateSchema = z.object({ page_id: objectIdSchema.nullable() });
 export const xenNoteTemplateUseSchema = z.object({ template_id: objectIdSchema });
+
+export const xenNoteGraphQuerySchema = z.object({
+  notebook: objectIdSchema.optional(),
+  mergeTags: z.enum(["true", "false"]).optional(),
+});
