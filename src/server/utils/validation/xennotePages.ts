@@ -122,3 +122,9 @@ export const xenNoteBlockParamSchema = z.object({ id: objectIdSchema, blockId })
 export const xenNotePublicBlockParamSchema = xenNoteBlockParamSchema.extend({
   token: z.string().regex(/^[a-z0-9_-]{22,64}$/i),
 });
+
+export const xenNoteTasksQuerySchema = z.object({
+  notebook: objectIdSchema.optional(),
+  done: z.enum(["true", "false"]).optional(),
+});
+export const xenNoteToggleTaskSchema = z.object({ checked: z.boolean() });
