@@ -1,3 +1,4 @@
+import { getNotificationIcon } from "../../../components/notifications/notificationIcon";
 import { clickableRowProps } from "../../../utils/keyboard";
 import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useMemo, useState } from "react";
@@ -16,10 +17,6 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import PersonIcon from "@mui/icons-material/Person";
-import SecurityIcon from "@mui/icons-material/Security";
-import AnnouncementIcon from "@mui/icons-material/Announcement";
-import LockIcon from "@mui/icons-material/Lock";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import CloseIcon from "@mui/icons-material/Close";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
@@ -35,22 +32,9 @@ import { APPS_REGISTRY } from "../../../constants/apps";
 
 /** The app a notification came from, read off its link ("/internal/xensplit/..."), or null for hub notices. */
 const appOf = (n: Notification) =>
-  APPS_REGISTRY.find((a) => n.link === a.path || n.link?.startsWith(`${a.path}/`)) ?? null;
-
-const getNotificationIcon = (icon: string) => {
-  switch (icon) {
-    case "person":
-      return <PersonIcon />;
-    case "security":
-      return <SecurityIcon />;
-    case "announcement":
-      return <AnnouncementIcon />;
-    case "lock":
-      return <LockIcon />;
-    default:
-      return <NotificationsIcon />;
-  }
-};
+  APPS_REGISTRY.find(
+    (a) => n.link === a.path || n.link?.startsWith(`${a.path}/`) || n.link?.startsWith(`${a.path}?`),
+  ) ?? null;
 
 export default function Notifications() {
   useTitle("Notifications");

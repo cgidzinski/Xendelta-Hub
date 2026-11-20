@@ -8,6 +8,9 @@ const SharedPageView = lazyPage(() => import("./notebook/SharedPageView"));
 const XenNoteSharedNote = lazyPage<object>(() =>
   import("./XenNoteShared").then((m) => ({ default: m.XenNoteSharedNote })),
 );
+const XenNoteSharedPublicPage = lazyPage<object>(() =>
+  import("./XenNoteShared").then((m) => ({ default: m.XenNoteSharedPublicPage })),
+);
 const XenNoteSharedNotebook = lazyPage<object>(() =>
   import("./XenNoteShared").then((m) => ({ default: m.XenNoteSharedNotebook })),
 );
@@ -22,6 +25,7 @@ export const xennoteRoutes = (
     <Route path="xennote/p/:pageId" element={<SharedPageView />} />
     {/* A public link opened by a signed-in person who is not a member: read-only, but inside the app */}
     <Route path="xennote/shared/:token" element={<XenNoteSharedNote />} />
+    <Route path="xennote/shared/p/:token" element={<XenNoteSharedPublicPage />} />
     <Route path="xennote/shared/b/:token" element={<XenNoteSharedNotebook />} />
   </>
 );

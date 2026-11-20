@@ -19,6 +19,7 @@ export interface XenNoteSection {
 
 /** A notebook's sections and the pages in them, without bodies: one small response for the whole notebook. */
 export interface NotebookTree {
+  viewed_at?: string;
   sections: XenNoteSection[];
   pages: PageTreeEntry[];
 }
@@ -50,6 +51,7 @@ export interface PageFileInfo {
 
 /** A page with its text, as the person opening it sees it. */
 export interface XenNotePageDetail {
+  viewed_at?: string;
   page: XenNotePageMeta;
   doc: JSONContent;
   /** The files the text refers to, by file id. */
@@ -57,6 +59,7 @@ export interface XenNotePageDetail {
   /** Null for someone who was added to this page alone: they see the page, not the notebook around it. */
   notebook: { id: string; name: string } | null;
   section: { id: string; name: string; kind: SectionKind } | null;
+  children?: Array<{ id: string; title: string }>;
 }
 
 /** What a link to a page shows: its current name, or that the person can't open it. */
@@ -115,4 +118,37 @@ export interface UploadedPageFile extends PageFileInfo {
 export interface PageBodySaved {
   rev: number;
   conflict: boolean;
+}
+
+export interface PagePeople {
+  can_manage: boolean;
+  token: string | null;
+  members: Array<SharePerson & { role: "editor" | "viewer" }>;
+  notebook: { id: string; name: string } | null;
+}
+
+export interface SharePerson {
+  user_id: string;
+  username: string;
+  avatar: string | null;
+  cosmetics?: import("@shared/cosmetics").Cosmetics;
+}
+
+export interface SharedXenNoteGroup {
+  sender: SharePerson | null;
+  items: Array<{
+    kind: "notebook" | "page";
+    id: string;
+    title: string;
+    role: NoteRole;
+    status: "new" | "changed" | null;
+  }>;
+}
+
+export interface PublicPage {
+  id: string;
+  title: string;
+  updated_at?: string;
+  doc: JSONContent;
+  files: Record<string, PageFileInfo>;
 }

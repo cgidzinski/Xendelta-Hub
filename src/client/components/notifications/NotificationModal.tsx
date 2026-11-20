@@ -1,9 +1,5 @@
+import { getNotificationIcon } from "./notificationIcon";
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box } from "@mui/material";
-import PersonIcon from "@mui/icons-material/Person";
-import SecurityIcon from "@mui/icons-material/Security";
-import AnnouncementIcon from "@mui/icons-material/Announcement";
-import LockIcon from "@mui/icons-material/Lock";
-import NotificationsIcon from "@mui/icons-material/Notifications";
 import CloseIcon from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
 import { formatDistance } from "date-fns";
@@ -14,21 +10,6 @@ interface NotificationModalProps {
   open: boolean;
   onClose: () => void;
 }
-
-const getNotificationIcon = (icon: string) => {
-  switch (icon) {
-    case "person":
-      return <PersonIcon />;
-    case "security":
-      return <SecurityIcon />;
-    case "announcement":
-      return <AnnouncementIcon />;
-    case "lock":
-      return <LockIcon />;
-    default:
-      return <NotificationsIcon />;
-  }
-};
 
 export default function NotificationModal({ notification, open, onClose }: NotificationModalProps) {
   const navigate = useNavigate();

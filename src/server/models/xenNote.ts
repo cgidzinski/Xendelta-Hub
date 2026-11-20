@@ -1,5 +1,5 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
-import { memberSchema } from "../utils/membership";
+import { memberFields, memberSchema } from "../utils/membership";
 import { softDeleteFields, softDeletePlugin } from "../utils/softDelete";
 import {
   MAX_BODY,
@@ -13,10 +13,19 @@ import {
 // A notebook groups notes and is the unit of sharing: people are members of it (standard
 // membership shape, utils/membership.ts) and see every note in it. A note with no notebook is a loose
 // note that only its owner sees.
+export const xenNoteShareMemberSchema = new Schema(
+  {
+    ...memberFields,
+    added_by: { type: String },
+    seen_at: { type: Date },
+  },
+  { _id: false },
+);
+
 const notebookSchema = new Schema({
   name: { type: String, required: true, maxlength: 60 },
   color: { type: String, enum: NOTE_COLORS, default: "default" },
-  members: { type: [memberSchema], default: [] },
+  members: { type: [xenNoteShareMemberSchema], default: [] },
   share: {
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },
@@ -24,6 +33,7 @@ const notebookSchema = new Schema({
   // Notebooks hold sections and pages (models/xenNotePage.ts). `pages_migrated_at` is set once the migration has
   // turned this notebook's notes into pages (and is what its rollback looks for); `journal_template_id` is the page
   // in the notebook's templates section used for new journal days.
+  content_updated_at: { type: Date },
   journal_template_id: { type: Schema.Types.ObjectId, default: null },
   pages_migrated_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },

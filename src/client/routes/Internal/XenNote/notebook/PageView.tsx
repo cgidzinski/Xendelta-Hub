@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Box, Button, Chip, IconButton, InputBase, TextField, Tooltip, Typography } from "@mui/material";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -12,10 +13,12 @@ import { MAX_PAGE_ALIASES, MAX_PAGE_TAGS, MAX_PAGE_TITLE, normalizeTag } from "@
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import DetailSkeleton from "../../../../components/ui/DetailSkeleton";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
+import { useMarkSharedSeen } from "../../../../hooks/xennote/usePageSharing";
 import { useNotebookPageActions, useXenNotePage } from "../../../../hooks/xennote/usePages";
 import { useTitle } from "../../../../hooks/useTitle";
 import type { DraftLabel } from "../editor/pageDraft";
 import type { PageLinksValue } from "../editor/pageLinksContext";
+import PageShareDialog from "./PageShareDialog";
 import PageReferences from "./PageReferences";
 import NoteColorPopover from "../components/NoteColorPopover";
 import { pageTitle } from "./pageTree";
@@ -101,10 +104,12 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
   const actions = useNotebookPageActions(page?.notebook_id ?? "");
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
+  const [shareOpen, setShareOpen] = useState(false);
   const [label, setLabel] = useState<DraftLabel>("Saved");
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [tag, setTag] = useState("");
   const [alias, setAlias] = useState("");
+  useMarkSharedSeen("page", data && !data.notebook ? page?.id : undefined, data?.viewed_at);
   useTitle(page ? pageTitle(page.title) : "XenNote");
 
   const fail = (e: unknown) => enqueueSnackbar((e as Error).message || "Couldn't save that", { variant: "error" });
@@ -214,6 +219,11 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
             </Tooltip>
           </>
         )}
+        <Tooltip title="Share">
+          <IconButton aria-label="Share page" onClick={() => setShareOpen(true)}>
+            <ShareOutlinedIcon />
+          </IconButton>
+        </Tooltip>
         {page.can_manage && (
           <Tooltip title="Delete">
             <IconButton aria-label="Delete page" onClick={() => void remove()}>
@@ -325,6 +335,28 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
       <Suspense fallback={<DetailSkeleton height={280} />}>
         <PageEditor key={page.id} detail={data} onLabel={setLabel} links={links} />
       </Suspense>
+
+      {!!data.children?.length && (
+        <Box sx={{ mt: 2 }}>
+          <Typography component="h2" variant="subtitle2">
+            Sub-pages
+          </Typography>
+          {data.children.map((child) => (
+            <Button key={child.id} onClick={() => links?.onOpenPage(child.id)}>
+              {pageTitle(child.title)}
+            </Button>
+          ))}
+        </Box>
+      )}
+
+      {shareOpen && (
+        <PageShareDialog
+          pageId={page.id}
+          title={pageTitle(page.title)}
+          onClose={() => setShareOpen(false)}
+          onLeave={onGone}
+        />
+      )}
 
       <PageReferences pageId={page.id} onOpenPage={links?.onOpenPage ?? (() => undefined)} />
 

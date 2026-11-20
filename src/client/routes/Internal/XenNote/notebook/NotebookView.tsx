@@ -20,6 +20,7 @@ import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { railPanelSx } from "../../../../components/ui/railStyles";
 import { useTitle } from "../../../../hooks/useTitle";
 import { useXenNoteCounts, useXenNotebooks } from "../../../../hooks/xennote/useXenNote";
+import { useMarkSharedSeen } from "../../../../hooks/xennote/usePageSharing";
 import { useNotebookPageActions, useNotebookTree } from "../../../../hooks/xennote/usePages";
 import type { PageTreeEntry, XenNoteSection } from "../../../../types/XenNotePage";
 import NoteRail from "../components/NoteRail";
@@ -58,6 +59,7 @@ export default function NotebookView() {
   const { data: tree, isPending, isError, error, refetch } = useNotebookTree(notebookId);
   const actions = useNotebookPageActions(notebookId);
   const notebook = notebooks.find((b) => b._id === notebookId) ?? null;
+  useMarkSharedSeen("notebook", notebook?.my_role !== "owner" ? notebook?._id : undefined, tree?.viewed_at);
   useTitle(notebook?.name ?? "XenNote");
 
   const [chosen, setChosen] = useState<string | null>(null);
@@ -207,6 +209,7 @@ export default function NotebookView() {
   const rail = (
     <NoteRail
       scope={notebookId}
+      showShared
       onScope={(scope) =>
         navigate(notebooks.some((b) => b._id === scope) ? `${BOARD}/b/${scope}` : `${BOARD}?scope=${scope}`)
       }
@@ -531,6 +534,7 @@ export default function NotebookView() {
         onClose={() => setNotebookDialog(null)}
         notebook={notebook}
         initialTab={notebookDialog?.tab}
+        usesPages
         onGone={() => navigate(BOARD)}
       />
     </>
