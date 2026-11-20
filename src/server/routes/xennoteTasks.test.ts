@@ -1,5 +1,5 @@
 import request from "supertest";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createUser, startTestApp, type TestApp } from "../testing/testApp";
 import { up } from "../../../migrations/1796200000000-xennote-task-index";
@@ -38,8 +38,9 @@ it("backfills tasks and lets editors tick them without replacing other text", as
   };
   const created = await route("put", `/pages/${page}/body`).send({ base_rev: 0, doc });
   expect(created.status, JSON.stringify(created.body)).toBe(200);
-  const row = await mongoose.model("XenNotePage").findById(page).lean();
-  await mongoose.connection.collection("xennotepages").updateOne({ _id: row?._id }, { $unset: { task_items: "" } });
+  await mongoose.connection
+    .collection("xennotepages")
+    .updateOne({ _id: new Types.ObjectId(page) }, { $unset: { task_items: "" } });
   await up(mongoose.connection);
   await up(mongoose.connection);
   await post(`/notebooks/${book}/members`, { userIds: [viewer.user.id], role: "viewer" });
