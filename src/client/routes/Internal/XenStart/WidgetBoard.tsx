@@ -34,35 +34,21 @@ interface Props {
 }
 
 export default function WidgetBoard({ layout, editing, saving, canAdd, onAdd, onEdit, renderWidget }: Props) {
-  const left = editing || layout.left.length > 0;
-  const right = editing || layout.right.length > 0;
-  const center = editing || layout.center.length > 0;
-  const middle = [
-    ...(left ? [["left", "minmax(0, 1fr)"]] : []),
-    ...(center ? [["center", "minmax(0, 2.5fr)"]] : []),
-    ...(right ? [["right", "minmax(0, 1fr)"]] : []),
-  ];
-  const edges = (["top", "bottom"] as const).filter((region) => editing || layout[region].length > 0);
-  const areas = [
-    ...(edges.includes("top") ? ['"' + middle.map(() => "top").join(" ") + '"'] : []),
-    '"' + middle.map(([name]) => name).join(" ") + '"',
-    ...(edges.includes("bottom") ? ['"' + middle.map(() => "bottom").join(" ") + '"'] : []),
-  ];
-  const template = middle.length ? areas.join(" ") : edges.map((region) => `"${region}"`).join(" ");
-
   return (
     <Box
       sx={{
         display: "grid",
+        flexGrow: { md: 1 },
         alignItems: "start",
         gap: { xs: 2, md: 2.5 },
         gridTemplateColumns: {
           xs: "minmax(0, 1fr)",
-          md: middle.map(([, width]) => width).join(" ") || "minmax(0, 1fr)",
+          md: "minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr)",
         },
-        gridTemplateAreas: { md: template || undefined },
-        mx: "auto",
-        maxWidth: left || right ? 1280 : 800,
+        gridTemplateAreas: {
+          md: '"left top right" "left center right" "left bottom right"',
+        },
+        gridTemplateRows: { md: "minmax(min-content, 1fr) auto minmax(min-content, 1fr)" },
       }}
     >
       {WIDGET_REGIONS.map((region) => {
@@ -73,7 +59,11 @@ export default function WidgetBoard({ layout, editing, saving, canAdd, onAdd, on
             component="section"
             aria-label={`${regionNames[region]} widgets`}
             spacing={2}
-            sx={{ minWidth: 0, gridArea: { md: region } }}
+            sx={{
+              minWidth: 0,
+              gridArea: { md: region },
+              alignSelf: { md: region === "bottom" ? "end" : "start" },
+            }}
           >
             {editing && (
               <Typography variant="overline" color="text.secondary">

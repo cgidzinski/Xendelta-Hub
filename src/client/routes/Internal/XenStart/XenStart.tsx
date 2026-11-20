@@ -1,16 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  FormControlLabel,
-  IconButton,
-  InputAdornment,
-  Popover,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
+import { Alert, Box, Button, IconButton, InputAdornment, Popover, Stack, TextField } from "@mui/material";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -195,7 +184,15 @@ export default function XenStart() {
     <Box
       component="main"
       aria-label="XenStart"
-      sx={{ position: "relative", isolation: "isolate", minHeight: "100dvh", px: { xs: 1.5, sm: 3 }, pb: 6 }}
+      sx={{
+        position: "relative",
+        isolation: "isolate",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100dvh",
+        px: { xs: 1.5, sm: 3 },
+        pb: 6,
+      }}
     >
       {appearance.backgroundUrl && <BackgroundImage key={appearance.backgroundUrl} url={appearance.backgroundUrl} />}
       <Box sx={{ display: "flex", justifyContent: "space-between", pt: { xs: 1.25, sm: 1.75 } }}>
@@ -241,21 +238,18 @@ export default function XenStart() {
           }}
         >
           <Stack>
-            <FormControlLabel
-              label="Edit mode"
-              labelPlacement="start"
-              sx={{ mx: 1, justifyContent: "space-between" }}
-              control={
-                <Switch
-                  checked={editing}
-                  disabled={!config || saving}
-                  onChange={(_, checked) => {
-                    setEditing(checked);
-                    setAnchor(null);
-                  }}
-                />
-              }
-            />
+            {!editing && (
+              <Button
+                sx={{ justifyContent: "flex-start", px: 1 }}
+                disabled={!config || saving}
+                onClick={() => {
+                  setEditing(true);
+                  setAnchor(null);
+                }}
+              >
+                Enter edit mode
+              </Button>
+            )}
             <Button
               sx={{ justifyContent: "flex-start", px: 1 }}
               disabled={!config}
@@ -270,7 +264,7 @@ export default function XenStart() {
           </Stack>
         </Popover>
       </Box>
-      <Box sx={{ pt: { xs: 3.25, sm: 6 } }}>
+      <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, pt: { xs: 3.25, sm: 6 } }}>
         {error && !dialog && (
           <Alert severity="error" sx={{ maxWidth: 800, mx: "auto", mb: 2 }}>
             {error}
