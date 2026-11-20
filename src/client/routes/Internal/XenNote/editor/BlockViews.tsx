@@ -22,11 +22,7 @@ function BlockView({ node }: NodeViewProps) {
   const token = scope?.token;
   const kind = scope?.kind;
   const key = xennoteKeys.blockPreview(pageId, blockId, token, kind);
-  useSocketInvalidate(
-    "xennote:page_update",
-    [key],
-    (event) => !token && event.notebookId !== undefined && event.pageId === pageId,
-  );
+  useSocketInvalidate<{ pageId: string }>("xennote:page_update", [key], (event) => !token && event.pageId === pageId);
   const preview = useQuery({
     queryKey: key,
     queryFn: () =>
