@@ -385,7 +385,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
   },
   xennote: {
     about:
-      "XenNote is for quick notes, checklists, photos and links, in notebooks you can share with the people around you.",
+      "Use loose notes for quick notes, checklists, photos and links. Organize longer work in shareable notebooks.",
     pitch: { text: "Try XenNote for quick notes and checklists you can share.", link: "/internal/xennote" },
     features: [
       "Write notes, checklists and link notes.",
@@ -409,7 +409,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Add structured properties to pages and show matching pages in a live table.",
       "Open a note link while signed in and it opens right in the app, ready to edit if you are an editor.",
       "Set a reminder on a note or page and get a notification when it is due.",
-      "Search and filter by type, label or notebook.",
+      "Search loose notes and filter them by type or label.",
       "Bring back a deleted note from the Trash within 30 days.",
       "See how a note used to read and put an earlier version back, from its last 20.",
       "Archive, recolour or delete a note from its card, and sort the board by last edit, date created or title.",
