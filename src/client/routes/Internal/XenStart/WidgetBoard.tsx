@@ -9,6 +9,7 @@ export const widgetNames: Record<WidgetType, string> = {
   search: "Search",
   links: "Quick links",
   clock: "Clock",
+  today: "Today",
   pinned: "Pinned apps",
   attention: "Needs attention",
   activity: "Activity",

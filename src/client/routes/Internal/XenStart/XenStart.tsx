@@ -41,6 +41,7 @@ import WidgetBoard from "./WidgetBoard";
 import { WidgetPicker, WidgetSettings } from "./WidgetDialogs";
 
 const HubWidget = lazy(() => import("./HubSections"));
+const TodayWidget = lazy(() => import("./TodayWidget"));
 const iconSx = {
   bgcolor: "background.paper",
   border: "1px solid",
@@ -129,6 +130,12 @@ export default function XenStart() {
 
   const renderWidget = (widget: WidgetType, region: WidgetRegion) => {
     const compact = region === "left" || region === "right";
+    if (widget === "today")
+      return (
+        <Suspense fallback={<ListSkeleton rows={2} height={48} />}>
+          <TodayWidget />
+        </Suspense>
+      );
     if (widget === "clock") return <Clock compact={compact} format={config?.clockFormat} />;
     if (widget === "search")
       return (

@@ -148,7 +148,7 @@ describe("XenStart", () => {
     expect(updated.sections).toEqual([]);
     expect(updated.appearance.showClock).toBe(false);
 
-    const layout = { ...empty, top: ["search"], right: ["links", "clock"], left: ["pinned"] } as const;
+    const layout = { ...empty, top: ["search"], right: ["links", "clock"], left: ["pinned", "today"] } as const;
     const restored = (await save(token, { ...updated, layout }).expect(200)).body.data;
     expect(restored).toMatchObject({
       layout,
