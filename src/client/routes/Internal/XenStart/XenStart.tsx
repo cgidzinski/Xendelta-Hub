@@ -195,17 +195,32 @@ export default function XenStart() {
         <IconButton component={Link} to="/internal" aria-label="Open Hub Home" color="primary" sx={iconSx}>
           <HomeOutlinedIcon fontSize="small" />
         </IconButton>
-        <IconButton
-          ref={settingsButton}
-          onClick={(event) => setAnchor(event.currentTarget)}
-          aria-label="XenStart settings"
-          aria-expanded={Boolean(anchor)}
-          aria-controls={anchor ? "xenstart-options" : undefined}
-          color="primary"
-          sx={iconSx}
-        >
-          <SettingsOutlinedIcon fontSize="small" />
-        </IconButton>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {editing && (
+            <Button
+              variant="contained"
+              disabled={saving}
+              onClick={() => {
+                setEditing(false);
+                settingsButton.current?.focus();
+              }}
+              sx={{ minHeight: 44, borderRadius: RADIUS.pill, px: 2 }}
+            >
+              Done
+            </Button>
+          )}
+          <IconButton
+            ref={settingsButton}
+            onClick={(event) => setAnchor(event.currentTarget)}
+            aria-label="XenStart settings"
+            aria-expanded={Boolean(anchor)}
+            aria-controls={anchor ? "xenstart-options" : undefined}
+            color="primary"
+            sx={iconSx}
+          >
+            <SettingsOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Stack>
         <Popover
           id="xenstart-options"
           open={Boolean(anchor)}
