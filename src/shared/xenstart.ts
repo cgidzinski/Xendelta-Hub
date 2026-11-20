@@ -1,5 +1,15 @@
 export const XENSTART_PATH = "/internal/xenstart";
-export const QUICK_LINK_LIMIT = 12;
+export const GRID_DIMENSION_LIMIT = 6;
+export const QUICK_LINK_LIMIT = GRID_DIMENSION_LIMIT ** 2;
+
+export const DEFAULT_APPEARANCE = {
+  rows: 2,
+  columns: 6,
+  backgroundUrl: "",
+  showClock: false,
+};
+
+export type XenStartAppearance = typeof DEFAULT_APPEARANCE;
 export const SEARCH_ENGINES = ["Google", "DuckDuckGo", "Bing"] as const;
 export const HUB_SECTIONS = ["pinned", "attention", "activity"] as const;
 
@@ -17,6 +27,7 @@ export interface XenStartConfig {
   engine: SearchEngine;
   sections: HubSection[];
   revision: number;
+  appearance: XenStartAppearance;
 }
 
 export const defaultXenStartConfig = (): XenStartConfig => ({
@@ -24,6 +35,7 @@ export const defaultXenStartConfig = (): XenStartConfig => ({
   engine: "Google",
   sections: [],
   revision: 0,
+  appearance: { ...DEFAULT_APPEARANCE },
 });
 
 export function parseQuickLinkUrl(value: string): URL | null {

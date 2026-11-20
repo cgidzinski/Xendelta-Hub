@@ -16,7 +16,7 @@ import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { Link, useLocation } from "react-router-dom";
-import { QUICK_LINK_LIMIT, searchUrl, type QuickLink, type XenStartConfig } from "@shared/xenstart";
+import { DEFAULT_APPEARANCE, searchUrl, type QuickLink, type XenStartConfig } from "@shared/xenstart";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenStart } from "../../../hooks/xenstart/useXenStart";
@@ -24,6 +24,7 @@ import { RADIUS } from "../../../theme";
 import { rememberRecentApp } from "../../../utils/recentApps";
 import { LinkDialog, SettingsDialog } from "./Dialogs";
 import QuickLinks, { quickLinkColumns } from "./QuickLinks";
+import { BackgroundImage, Clock } from "./Appearance";
 
 const HubSections = lazy(() => import("./HubSections"));
 const iconSx = {
@@ -43,6 +44,7 @@ export default function XenStart() {
   useEffect(() => rememberRecentApp(pathname), [pathname]);
   const { query, save } = useXenStart();
   const config = query.data;
+  const appearance = config?.appearance ?? DEFAULT_APPEARANCE;
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -100,7 +102,11 @@ export default function XenStart() {
   };
 
   return (
-    <Box component="main" sx={{ minHeight: "100dvh", px: { xs: 1.5, sm: 3 }, pb: 6 }}>
+    <Box
+      component="main"
+      sx={{ position: "relative", isolation: "isolate", minHeight: "100dvh", px: { xs: 1.5, sm: 3 }, pb: 6 }}
+    >
+      {appearance.backgroundUrl && <BackgroundImage key={appearance.backgroundUrl} url={appearance.backgroundUrl} />}
       <Box sx={{ display: "flex", justifyContent: "space-between", pt: { xs: 1.25, sm: 1.75 } }}>
         <IconButton component={Link} to="/internal" aria-label="Open Hub Home" color="primary" sx={iconSx}>
           <HomeOutlinedIcon fontSize="small" />
@@ -162,6 +168,7 @@ export default function XenStart() {
         <Typography component="h1" variant="h4" textAlign="center" sx={{ mb: 2 }}>
           XenStart
         </Typography>
+        {appearance.showClock && <Clock />}
         <Box component="form" role="search" onSubmit={submitSearch} sx={{ maxWidth: 550, mx: "auto", mb: 4 }}>
           <TextField
             fullWidth
@@ -191,6 +198,8 @@ export default function XenStart() {
           {config ? (
             <QuickLinks
               links={config.links}
+              rows={appearance.rows}
+              columns={appearance.columns}
               editing={editing}
               saving={saving}
               onMove={move}
@@ -201,7 +210,12 @@ export default function XenStart() {
               Couldn't load XenStart.
             </Alert>
           ) : (
-            <ListSkeleton rows={QUICK_LINK_LIMIT} columns={quickLinkColumns} height={78} gap={1} />
+            <ListSkeleton
+              rows={appearance.rows * appearance.columns}
+              columns={quickLinkColumns(appearance.columns)}
+              height={78}
+              gap={1}
+            />
           )}
         </Box>
         {!!config?.sections.length && (
@@ -219,7 +233,8 @@ export default function XenStart() {
           onSave={(label, url) =>
             void update((latest) => {
               if (!dialog.link) {
-                if (latest.links.length >= QUICK_LINK_LIMIT) throw new Error("Your quick-link grid is full.");
+                if (latest.links.length >= latest.appearance.rows * latest.appearance.columns)
+                  throw new Error("Your quick-link grid is full.");
                 return { ...latest, links: [...latest.links, { id: crypto.randomUUID(), label, url }] };
               }
               const original = dialog.link;
@@ -252,10 +267,12 @@ export default function XenStart() {
         <SettingsDialog
           initialEngine={dialog.base.engine}
           initialSections={dialog.base.sections}
+          initialAppearance={dialog.base.appearance}
+          linkCount={config?.links.length ?? 0}
           onClose={closeDialog}
           saving={saving}
           error={error}
-          onSave={(engine, sections) =>
+          onSave={(engine, sections, preferences) =>
             void update((latest) => {
               // On a retry, apply only the switches this user changed.
               const current = new Set(latest.sections);
@@ -265,6 +282,21 @@ export default function XenStart() {
                 ...latest,
                 engine: engine === dialog.base.engine ? latest.engine : engine,
                 sections: [...current],
+                appearance: {
+                  rows: preferences.rows === dialog.base.appearance.rows ? latest.appearance.rows : preferences.rows,
+                  columns:
+                    preferences.columns === dialog.base.appearance.columns
+                      ? latest.appearance.columns
+                      : preferences.columns,
+                  showClock:
+                    preferences.showClock === dialog.base.appearance.showClock
+                      ? latest.appearance.showClock
+                      : preferences.showClock,
+                  backgroundUrl:
+                    preferences.backgroundUrl === dialog.base.appearance.backgroundUrl
+                      ? latest.appearance.backgroundUrl
+                      : preferences.backgroundUrl,
+                },
               };
             }, dialog.base)
           }

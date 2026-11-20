@@ -82,4 +82,24 @@ describe("XenStart", () => {
       expect((await get(token).expect(200)).body.data).toEqual(winner?.body.data);
     }
   });
+
+  it("keeps links when the grid shrinks and restores their order when it grows", async () => {
+    const { token } = await createUser();
+    const initial = defaultXenStartConfig();
+    const links = Array.from({ length: 15 }, (_, index) => link(`Link ${index + 1}`));
+    const appearance = { rows: 3, columns: 5, backgroundUrl: "https://example.com/photo.jpg", showClock: true };
+    const expanded = (await save(token, { ...initial, links, appearance }).expect(200)).body.data;
+    const shrunk = (await save(token, { ...expanded, appearance: { ...appearance, rows: 1, columns: 2 } }).expect(200))
+      .body.data;
+    expect((await get(token).expect(200)).body.data).toEqual({ ...shrunk, links });
+    const { appearance: _preferences, ...olderClient } = shrunk;
+    const legacySave = await request(t.app).put(path).set(auth(token)).send(olderClient).expect(200);
+    expect(legacySave.body.data.appearance).toEqual(shrunk.appearance);
+    await save(token, { ...legacySave.body.data, appearance }).expect(200);
+    expect((await get(token).expect(200)).body.data).toMatchObject({ links, appearance });
+
+    for (const patch of [{ columns: 7 }, { rows: 0 }, { backgroundUrl: "http://example.com/photo.jpg" }]) {
+      await save(token, { ...initial, appearance: { ...appearance, ...patch } }).expect(400);
+    }
+  });
 });

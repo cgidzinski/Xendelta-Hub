@@ -5,12 +5,12 @@ import LinkIcon from "@mui/icons-material/Link";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { parseQuickLinkUrl, QUICK_LINK_LIMIT, type QuickLink } from "@shared/xenstart";
+import { DEFAULT_APPEARANCE, parseQuickLinkUrl, type QuickLink } from "@shared/xenstart";
 import { RADIUS } from "../../../theme";
 
-const columns = { xs: 3, sm: 4, md: 6 };
-
-export const quickLinkColumns = columns;
+export function quickLinkColumns(columns = DEFAULT_APPEARANCE.columns) {
+  return { xs: Math.min(columns, 3), sm: Math.min(columns, 4), md: columns };
+}
 
 function LinkIconImage({ origin }: { origin: string }) {
   const [failed, setFailed] = useState(false);
@@ -31,13 +31,16 @@ function LinkIconImage({ origin }: { origin: string }) {
 
 interface QuickLinksProps {
   links: QuickLink[];
+  rows: number;
+  columns: number;
   editing: boolean;
   saving: boolean;
   onEdit: (link: QuickLink | null) => void;
   onMove: (from: string, to: string) => void;
 }
 
-export default function QuickLinks({ links, editing, saving, onEdit, onMove }: QuickLinksProps) {
+export default function QuickLinks({ links, rows, columns, editing, saving, onEdit, onMove }: QuickLinksProps) {
+  const visible = links.slice(0, rows * columns);
   const grid = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; pointer: number } | null>(null);
   const [target, setTarget] = useState<string>();
@@ -70,15 +73,16 @@ export default function QuickLinks({ links, editing, saving, onEdit, onMove }: Q
       ref={grid}
       sx={{
         display: "grid",
-        gridTemplateColumns: {
-          xs: "repeat(3, minmax(0, 1fr))",
-          sm: "repeat(4, minmax(0, 1fr))",
-          md: "repeat(6, minmax(0, 1fr))",
-        },
+        gridTemplateColumns: Object.fromEntries(
+          Object.entries(quickLinkColumns(columns)).map(([breakpoint, count]) => [
+            breakpoint,
+            `repeat(${count}, minmax(0, 1fr))`,
+          ]),
+        ),
         gap: 1,
       }}
     >
-      {links.map((link, index) => {
+      {visible.map((link, index) => {
         const origin = parseQuickLinkUrl(link.url)?.origin ?? "";
         const label = (
           <>
@@ -88,8 +92,8 @@ export default function QuickLinks({ links, editing, saving, onEdit, onMove }: Q
             </Typography>
           </>
         );
-        const earlier = links[index - 1];
-        const later = links[index + 1];
+        const earlier = visible[index - 1];
+        const later = visible[index + 1];
         return (
           <Box
             key={link.id}
@@ -170,7 +174,7 @@ export default function QuickLinks({ links, editing, saving, onEdit, onMove }: Q
           </Box>
         );
       })}
-      {Array.from({ length: QUICK_LINK_LIMIT - links.length }, (_, i) =>
+      {Array.from({ length: rows * columns - visible.length }, (_, i) =>
         editing ? (
           <ButtonBase
             key={i}
