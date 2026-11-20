@@ -35,13 +35,12 @@ interface NotebookDialogProps {
   /** Called after the notebook is deleted or the person leaves it, so the board can step back. */
   onGone?: () => void;
   /** Which tab to open on (the board's Share button opens People). */
-  usesPages?: boolean;
   initialTab?: "general" | "people" | "link";
 }
 
 const ROLE_HELP: Record<"editor" | "viewer", string> = {
-  editor: "Can read, add, edit and delete notes",
-  viewer: "Can read notes only",
+  editor: "Can read, add, edit and delete pages",
+  viewer: "Can read pages only",
 };
 
 /** Create a notebook, or manage one: its name and colour, who can see it, and its public link. */
@@ -51,9 +50,7 @@ export default function NotebookDialog({
   onClose,
   onGone,
   initialTab = "general",
-  usesPages = false,
 }: NotebookDialogProps) {
-  const content = usesPages ? "pages" : "notes";
   const theme = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
@@ -109,9 +106,7 @@ export default function NotebookDialog({
     if (!live) return;
     const ok = await confirm({
       title: `Delete "${live.name}"?`,
-      message: usesPages
-        ? "Everything in this notebook is deleted for everyone. This can't be undone."
-        : `All ${live.note_count} notes in it are deleted for everyone, with their photos. This can't be undone.`,
+      message: "Everything in this notebook is deleted for everyone. This can't be undone.",
       confirmLabel: "Delete notebook",
     });
     if (!ok) return;
@@ -160,8 +155,8 @@ export default function NotebookDialog({
     const ok = await confirm({
       title: self ? `Leave "${live.name}"?` : `Remove ${username}?`,
       message: self
-        ? `You'll lose access to its ${content} unless someone adds you again.`
-        : `They'll lose access to this notebook's ${content}.`,
+        ? `You'll lose access to its pages unless someone adds you again.`
+        : `They'll lose access to this notebook's pages.`,
       confirmLabel: self ? "Leave" : "Remove",
     });
     if (!ok) return;
@@ -259,7 +254,7 @@ export default function NotebookDialog({
       {live && tab === "people" && (
         <Stack spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            Everyone here sees every note in this notebook, including ones added later. Private notes stay private.
+            Members can open all pages in this notebook, including ones added later.
           </Typography>
           {owner && (
             <Stack spacing={1.5}>
@@ -282,7 +277,7 @@ export default function NotebookDialog({
                   <MenuItem value="viewer">Viewer</MenuItem>
                 </TextField>
                 <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-                  {usesPages ? ROLE_HELP[newRole].replace("notes", "pages") : ROLE_HELP[newRole]}
+                  {ROLE_HELP[newRole]}
                 </Typography>
                 <Button
                   variant="contained"
@@ -339,7 +334,7 @@ export default function NotebookDialog({
       {live && tab === "link" && owner && (
         <Stack spacing={2}>
           <Typography variant="body2" color="text.secondary">
-            A public link lets anyone with it read this notebook's notes. They can't change anything or see who is in
+            A public link lets anyone with it read this notebook's pages. They can't change anything or see who is in
             it.
           </Typography>
           {shareToken ? (

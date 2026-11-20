@@ -23,7 +23,6 @@ export interface XenNoteLink {
 export interface XenNote {
   _id: string;
   owner_id: string;
-  notebook_id: string | null; // null = a private loose note
   type: NoteType;
   title: string;
   body: string;
@@ -37,14 +36,13 @@ export interface XenNote {
   /** My own reminder on this note (other people's aren't shown). `sent` once it has gone out. */
   reminder: { at: string; sent: boolean } | null;
   can_edit: boolean;
-  /** Whether I may delete, move or share it (the owner of a loose note, an editor of its notebook). */
+  /** Whether I may delete or share it. */
   can_manage: boolean;
   share: { enabled: boolean; token: string | null } | null; // only for people who can edit
-  /** Who owns a note someone shared with me directly; null for my own notes and notebook notes. */
+  /** Who owns a note someone shared with me directly; null for my own notes. */
   owner_name: string | null;
-  /** How many people it is shared with directly (a notebook's members are not counted). */
+  /** How many people it is shared with directly. */
   shared_with: number;
-  updated_by_name: string | null; // who last changed it, in a shared notebook
   created_at: string;
   updated_at: string;
 }
@@ -54,7 +52,6 @@ export interface XenNoteBacklink {
   _id: string;
   title: string;
   type: NoteType;
-  notebook_id: string | null;
   updated_at: string;
 }
 
@@ -80,8 +77,6 @@ export interface XenNoteSharing {
     cosmetics?: Cosmetics;
     role: "editor" | "viewer";
   }>;
-  /** The notebook the note sits in, when the person is in it too: its members can also read the note. */
-  notebook: { id: string; name: string } | null;
   /** The note's public link; only for the person who manages it. */
   share: { enabled: boolean; token: string | null } | null;
 }
@@ -116,7 +111,7 @@ export interface XenNotebook {
   name: string;
   color: NoteColor;
   my_role: NoteRole | null;
-  note_count: number;
+  page_count: number;
   journal_template_id?: string | null;
   members: XenNotebookMember[];
   share: { enabled: boolean; token: string | null } | null; // owner only
@@ -125,12 +120,12 @@ export interface XenNotebook {
 
 /** The body sent to create or update a note. */
 export type XenNoteInput = Partial<
-  Pick<XenNote, "type" | "title" | "body" | "color" | "pinned" | "archived" | "labels" | "notebook_id">
+  Pick<XenNote, "type" | "title" | "body" | "color" | "pinned" | "archived" | "labels">
 > & { checklist?: XenNoteItem[]; link?: XenNoteLink };
 
 export interface NoteFilters {
-  /** "none" = my private notes; an id = that notebook; undefined = everything I can see. */
-  notebook?: string;
+  /** Omit the scope to see every accessible loose note. */
+  scope?: "mine" | "shared";
   archived?: boolean;
   label?: string;
   q?: string;

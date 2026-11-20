@@ -5,7 +5,6 @@ import { XenNote, XenNotebook } from "../../models/xenNote";
 import { XenNotePage, XenNotePageBody, XenNoteSection } from "../../models/xenNotePage";
 import { emptyDoc } from "../../../shared/xennote/pageSchema";
 import { fileMapFor } from "./pages";
-import { existsLegacyNote, migratedLink } from "./legacy";
 import { serializePublicNote } from "./shared";
 
 const visible = { archived: { $ne: true } };
@@ -25,11 +24,9 @@ export function registerPublicNoteRoutes(app: any) {
     validateParams(xenNoteTokenParamSchema),
     async (req: Request, res: Response) => {
       const token = req.params.token as string;
-      const note = await existsLegacyNote(token);
-      if (note) return res.json({ status: true, data: { note: await serializePublicNote(note) } });
-      const page = await migratedLink(token);
-      if (!page || !(await XenNotebook.exists({ _id: page.notebook_id }))) throw new AppError(404, "Link not found");
-      return res.json({ status: true, data: { page_id: page.id as string } });
+      const note = await XenNote.findOne({ "share.token": token, "share.enabled": true });
+      if (!note) throw new AppError(404, "Link not found");
+      res.json({ status: true, data: { note: await serializePublicNote(note) } });
     },
   );
 
@@ -39,10 +36,7 @@ export function registerPublicNoteRoutes(app: any) {
     async (req: Request, res: Response) => {
       const book = await XenNotebook.findOne({ "share.token": req.params.token, "share.enabled": true });
       if (!book) throw new AppError(404, "Link not found");
-      const [notes, sections, pages] = await Promise.all([
-        XenNote.find({ notebook_id: book._id, ...visible })
-          .sort({ pinned: -1, updated_at: -1 })
-          .limit(500),
+      const [sections, pages] = await Promise.all([
         XenNoteSection.find({ notebook_id: book._id }, "name order").sort({ order: 1, _id: 1 }).lean(),
         XenNotePage.find({ notebook_id: book._id, ...visible }, "title section_id parent_id order")
           .sort({ order: 1, _id: 1 })
@@ -55,7 +49,6 @@ export function registerPublicNoteRoutes(app: any) {
         status: true,
         data: {
           notebook: { name: book.name, color: book.color },
-          notes: await Promise.all(notes.map((n) => serializePublicNote(n))),
           sections: sections.map((s) => ({ id: String(s._id), name: s.name })),
           pages: inSection
             .filter((p) => !p.parent_id || roots.has(String(p.parent_id)))

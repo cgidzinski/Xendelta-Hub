@@ -285,13 +285,11 @@ export default function NotebookView() {
   // ---- the rail: the same one as the board, so moving between them feels like one place
   const rail = (
     <NoteRail
-      scope={notebookId}
+      activeNotebookId={notebookId}
       showShared
       onOpenTasks={() => navigate(`${BOARD}/tasks`)}
       onOpenGraph={() => navigate(`${BOARD}/graph`)}
-      onScope={(scope) =>
-        navigate(notebooks.some((b) => b._id === scope) ? `${BOARD}/b/${scope}` : `${BOARD}?scope=${scope}`)
-      }
+      onScope={(scope) => navigate(`${BOARD}?scope=${scope}`)}
       counts={counts}
       notebooks={notebooks}
       labels={[]}
@@ -688,7 +686,6 @@ export default function NotebookView() {
         onClose={() => setNotebookDialog(null)}
         notebook={notebook}
         initialTab={notebookDialog?.tab}
-        usesPages
         onGone={() => navigate(BOARD)}
       />
     </>

@@ -19,7 +19,6 @@ import { registerPageTrashRoutes } from "./pageTrash";
 import { registerSectionRoutes } from "./sections";
 import { registerPublicNoteRoutes } from "./public";
 import { registerSharedItemsRoutes } from "./sharedItems";
-import { registerLegacyNoteRoutes } from "./legacy";
 import { registerSharedLinkRoutes } from "./resolve";
 import { registerNoteTrashRoutes } from "./trash";
 import { registerNoteVersionRoutes } from "./versions";
@@ -33,7 +32,6 @@ module.exports = function (app: any) {
   app.use("/api/xennote", authenticateToken);
   // Before the note routes: literal paths first.
   registerSharedLinkRoutes(app);
-  registerLegacyNoteRoutes(app);
   registerSharedItemsRoutes(app);
   registerNotebookRoutes(app);
   // Notebook sections and pages (the notebook tree, then pages, their people, files and trash).

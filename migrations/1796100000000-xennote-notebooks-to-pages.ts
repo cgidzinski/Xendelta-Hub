@@ -49,6 +49,11 @@ interface LegacyVersion extends NoteToDocInput {
 const stamp = "notebook-pages";
 
 export async function up(connection: Connection): Promise<void> {
+  if (
+    await connection.collection("xennote_migration_state").findOne({ name: stamp, contracted_at: { $exists: true } })
+  ) {
+    throw new Error("The XenNote notebook-note cleanup has already started");
+  }
   const books = connection.collection<Notebook>("xennotebooks");
   const notes = connection.collection<LegacyNote>("xennotes");
   const backups = connection.collection<LegacyNote>("xennotes_premigration");
@@ -197,6 +202,11 @@ export async function up(connection: Connection): Promise<void> {
 }
 
 export async function down(connection: Connection): Promise<void> {
+  if (
+    await connection.collection("xennote_migration_state").findOne({ name: stamp, contracted_at: { $exists: true } })
+  ) {
+    throw new Error("The XenNote notebook-note cleanup has already started");
+  }
   const books = connection.collection<Notebook>("xennotebooks");
   const notes = connection.collection<LegacyNote>("xennotes");
   const backups = connection.collection<LegacyNote>("xennotes_premigration");

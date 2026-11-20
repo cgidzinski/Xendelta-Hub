@@ -49,27 +49,12 @@ describe("bulk update", () => {
     expect(back.find((n) => n.title === "A").labels).toEqual([]);
   });
 
-  it("moves notes into a notebook and back out to private notes", async () => {
-    const me = await createUser();
-    const book = (await api(me).post("/notebooks", { name: "Home" })).body.data.notebook;
-    const a = await note(me, { title: "A" });
-    const b = await note(me, { title: "B" });
-
-    expect((await bulk(me, { ids: [a._id, b._id], notebook_id: book._id })).body.data.updated).toBe(2);
-    expect((await notes(me, `?notebook=${book._id}`)).map((n) => n.title).sort()).toEqual(["A", "B"]);
-    expect(await notes(me, "?notebook=none")).toEqual([]);
-
-    await bulk(me, { ids: [a._id], notebook_id: null });
-    expect((await notes(me, "?notebook=none")).map((n) => n.title)).toEqual(["A"]);
-  });
-
-  it("only changes what the caller can edit, and refuses a notebook they can't write to", async () => {
+  it("only changes what the caller can edit", async () => {
     const owner = await createUser();
     const viewer = await createUser();
     const stranger = await createUser();
-    const book = (await api(owner).post("/notebooks", { name: "Team" })).body.data.notebook;
-    await api(owner).post(`/notebooks/${book._id}/members`, { userIds: [String(viewer.user._id)], role: "viewer" });
-    const shared = await note(owner, { title: "Shared", notebook_id: book._id });
+    const shared = await note(owner, { title: "Shared" });
+    await api(owner).post(`/notes/${shared._id}/members`, { userIds: [viewer.user.id], role: "viewer" });
     const mine = await note(viewer, { title: "Mine" });
     const theirs = await note(stranger, { title: "Theirs" });
 
@@ -78,9 +63,6 @@ describe("bulk update", () => {
     expect((await notes(viewer)).find((n) => n.title === "Mine").color).toBe("blue");
     expect((await notes(owner)).find((n) => n.title === "Shared").color).not.toBe("blue");
     expect((await notes(stranger))[0].color).not.toBe("blue");
-
-    // Can't move into a notebook the caller can only view.
-    expect((await bulk(viewer, { ids: [mine._id], notebook_id: book._id })).status).toBe(403);
   });
 
   it("refuses an empty request and a malformed one", async () => {

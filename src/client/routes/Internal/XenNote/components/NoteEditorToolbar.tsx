@@ -2,7 +2,6 @@ import { useRef } from "react";
 import { Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
-import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
@@ -20,14 +19,13 @@ interface NoteEditorToolbarProps {
   onAddPhotos: (files: File[]) => void;
   onColor: (anchor: HTMLElement) => void;
   onLabels: (anchor: HTMLElement) => void;
-  onNotebook?: (anchor: HTMLElement) => void;
   onReminder: (anchor: HTMLElement) => void;
   /** Opens the Share dialog; for a read-only note it shows who has the note and lets the person leave it. */
   onShare: () => void;
   onDone: () => void;
 }
 
-/** The bar under the note: photos, colour, labels, notebook, reminder, the autosave status and Done. */
+/** The bar under the note: photos, colour, labels, reminder, the autosave status and Done. */
 export default function NoteEditorToolbar({
   readOnly,
   live,
@@ -37,7 +35,6 @@ export default function NoteEditorToolbar({
   onAddPhotos,
   onColor,
   onLabels,
-  onNotebook,
   onReminder,
   onShare,
   onDone,
@@ -91,13 +88,6 @@ export default function NoteEditorToolbar({
               <LabelOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          {onNotebook && (
-            <Tooltip title="Notebook">
-              <IconButton size="small" aria-label="Notebook" onClick={(e) => onNotebook(e.currentTarget)}>
-                <MenuBookOutlinedIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
         </>
       )}
       {live && (

@@ -10,7 +10,6 @@ import PageHeader from "../../../components/ui/PageHeader";
 import { railItemSx } from "../../../components/ui/railStyles";
 import { useTitle } from "../../../hooks/useTitle";
 import { rememberReturnTo } from "../../../utils/returnTo";
-import NoteCard from "../../Internal/XenNote/components/NoteCard";
 import { pageTitle } from "../../Internal/XenNote/notebook/pageTree";
 
 const PublicPageReader = lazy(() => import("../../Internal/XenNote/editor/PublicPageReader"));
@@ -120,7 +119,7 @@ export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook;
     [data.pages, data.sections],
   );
   const first = orderedPages.find((section) => section.pages.length)?.pages[0]?.id;
-  const selected = requested === "notes" && data.notes.length ? null : (requested ?? first);
+  const selected = requested ?? first;
   const publicId = selected && data.pages.some((p) => p.id === selected) ? selected : undefined;
   const { data: detail, isLoading, isError } = usePublicPage(publicId ? token : undefined, publicId);
   const titles = useMemo(() => new Map(data.pages.map((page) => [page.id, page.title])), [data.pages]);
@@ -165,21 +164,9 @@ export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook;
                   </List>
                 </Box>
               ))}
-            {!!data.notes.length && (
-              <ListItemButton selected={!selected} onClick={() => setParams({ page: "notes" })} sx={railItemSx}>
-                <ListItemText primary="Notes" />
-              </ListItemButton>
-            )}
           </Box>
           <Box sx={{ px: { xs: 2, sm: 5 }, py: 3, minHeight: 280 }}>
-            {!selected && data.notes.length ? (
-              <>
-                <PageHeader title="Notes" />
-                {data.notes.map((note) => (
-                  <NoteCard key={note._id} note={note} />
-                ))}
-              </>
-            ) : !selected ? (
+            {!selected ? (
               <EmptyState title="No pages yet" description="This shared notebook is empty." />
             ) : isLoading ? (
               <DetailSkeleton height={260} />

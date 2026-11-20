@@ -92,7 +92,7 @@ export const ACTIVITY = defineActivity({
   },
   "xennote.notebook_shared": {
     app: "xennote",
-    link: (e) => `/internal/xennote?notebook=${e.object.id}`,
+    link: (e) => `/internal/xennote/b/${e.object.id}`,
     summary: (e) => `${who(e)} shared the notebook ${where(e)} with you`,
   },
   "xennote.page_shared": {

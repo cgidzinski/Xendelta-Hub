@@ -102,10 +102,9 @@ describe("draftFromNote / hostOf", () => {
       pinned: true,
       archived: false,
       labels: ["x"],
-      notebook_id: "nb",
     } as unknown as XenNote;
     const d = draftFromNote(note);
-    expect(d).toMatchObject({ type: "checklist", color: "blue", pinned: true, notebook_id: "nb", labels: ["x"] });
+    expect(d).toMatchObject({ type: "checklist", color: "blue", pinned: true, labels: ["x"] });
     d.checklist[0].done = false; // editing the draft must not touch the note
     expect(note.checklist[0].done).toBe(true);
   });
