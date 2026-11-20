@@ -1,6 +1,4 @@
-import { rejectMigratedNote, requireLegacyNotebook } from "./legacy";
 import type { Request, Response } from "express";
-import { recordActivity } from "../../activity";
 import { Types } from "mongoose";
 import {
   validate,
@@ -17,24 +15,21 @@ import {
 import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
-import { roleOf } from "../../utils/membership";
 import { contentChanged, contentOf, keepVersion } from "../../utils/xenNoteVersions";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
 import { linkFirstMention, mentionSnippet } from "../../../shared/xennote/linkMention";
 import { markdownToDoc } from "../../../shared/xennote/convert/v1";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
-  canManageNote,
   escapeRegex,
   loadNote,
-  loadNotebook,
-  myNotebooks,
   namesForNotes,
   noteRole,
+  noteUsers,
   notifyChange,
+  notifyNoteUsers,
   serializeNote,
   visibleNotesFilter,
-  type NotebookDoc,
   type NoteDoc,
 } from "./shared";
 
@@ -66,71 +61,21 @@ function applyFields(note: NoteDoc, body: Record<string, any>) {
   else if (!note.link?.url) throw new AppError(400, "Add a web address for the link");
 }
 
-/**
- * Move a note to another notebook (needs edit there) or out to a private loose note (only the person who wrote it).
- * Returns where it is now, or `undefined` when it is already there. A moved note stops using its old public link.
- */
-async function moveNote(req: Request, note: NoteDoc, to: string | null) {
-  const uid = callerId(req);
-  const from = note.notebook_id ? String(note.notebook_id) : null;
-  if (to === from) return undefined;
-  // Someone a note was shared with can change it, but where it lives is up to the person who owns it.
-  if (!note.notebook_id && note.owner_id !== uid)
-    throw new AppError(403, "Only the person who wrote a note can move it");
-  let destination = null;
-  if (to) {
-    destination = await loadNotebook(req, to, "edit");
-    await requireLegacyNotebook(destination);
-  } else if (note.owner_id !== uid) {
-    throw new AppError(403, "Only the person who wrote a note can make it private");
-  }
-  note.notebook_id = to ? new Types.ObjectId(to) : null;
-  note.share = { enabled: false, token: note.share?.token };
-  return { destination };
-}
-
-const memberIds = (note: NoteDoc) => note.members.map((m) => m.user_id);
-
 export function registerNoteRoutes(app: any) {
-  // The notes among `ids` that the caller may change (including ones shared with them as an editor), each with the
-  // notebook it sits in when they belong to it (null otherwise).
-  async function editableAmong(
-    uid: string,
-    ids: string[],
-  ): Promise<Array<{ note: NoteDoc; notebook: NotebookDoc | null }>> {
-    const [notes, books] = await Promise.all([XenNote.find({ _id: { $in: ids } }), myNotebooks(uid)]);
-    const byId = new Map<string, NotebookDoc>(books.map((b) => [b.id as string, b]));
-    const found: Array<{ note: NoteDoc; notebook: NotebookDoc | null }> = [];
-    for (const note of notes) {
-      const notebook = note.notebook_id ? (byId.get(String(note.notebook_id)) ?? null) : null;
-      const role = noteRole(note.toObject(), notebook?.toObject() ?? null, uid);
-      if (role === "owner" || role === "editor") found.push({ note, notebook });
-    }
-    return found;
+  async function editableAmong(uid: string, ids: string[]) {
+    const notes = await XenNote.find({ _id: { $in: ids }, ...visibleNotesFilter(uid) });
+    return notes.filter((note) => {
+      const role = noteRole(note, uid);
+      return role === "owner" || role === "editor";
+    });
   }
 
   // Change several notes at once. Notes the caller can't edit are skipped, and the count says how many were changed.
   app.post("/api/xennote/notes/bulk-update", validate(xenNoteBulkUpdateSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
     const body = xenNoteBulkUpdateSchema.parse(req.body);
-    for (const id of body.ids) await rejectMigratedNote(req, id);
     const targets = await editableAmong(uid, body.ids);
-    // Checked for the lot before anything changes: a private move needs every note to be the caller's own.
-    if (body.notebook_id === null && targets.some((t) => t.note.owner_id !== uid && t.note.notebook_id)) {
-      throw new AppError(403, "Only the person who wrote a note can make it private");
-    }
-    // Where a note lives is up to whoever manages it, so a move that includes one they can only edit refuses all of it.
-    if (
-      body.notebook_id !== undefined &&
-      targets.some((t) => !canManageNote(t.note.toObject(), t.notebook?.toObject() ?? null, uid))
-    ) {
-      throw new AppError(403, "Only the person who owns a note can move it");
-    }
-    // A destination the caller can't write to refuses the whole request before any note moves.
-    if (body.notebook_id) await requireLegacyNotebook(await loadNotebook(req, body.notebook_id, "edit"));
-
-    const touched = new Map<string, NotebookDoc | null>();
-    for (const { note, notebook } of targets) {
+    for (const note of targets) {
       if (body.archived !== undefined) note.archived = body.archived;
       if (body.color !== undefined) note.color = body.color;
       if (body.add_label !== undefined) note.labels = normalizeLabels([...note.labels, body.add_label]);
@@ -138,13 +83,10 @@ export function registerNoteRoutes(app: any) {
         const gone = body.remove_label.toLowerCase();
         note.labels = note.labels.filter((l) => l.toLowerCase() !== gone);
       }
-      const moved = body.notebook_id !== undefined ? await moveNote(req, note, body.notebook_id) : undefined;
       note.updated_by = uid;
       await note.save();
-      touched.set(String(notebook?.id ?? `loose:${note.owner_id}`), notebook);
-      if (moved?.destination) touched.set(String(moved.destination.id), moved.destination);
     }
-    for (const [key, book] of touched) notifyChange(book, key.startsWith("loose:") ? key.slice(6) : uid);
+    if (targets.length) notifyNoteUsers(targets.flatMap(noteUsers));
     res.json({
       status: true,
       message: "Notes updated",
@@ -156,19 +98,14 @@ export function registerNoteRoutes(app: any) {
   app.post("/api/xennote/notes/bulk-delete", validate(xenNoteBulkDeleteSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
     const { ids } = xenNoteBulkDeleteSchema.parse(req.body);
-    for (const id of ids) await rejectMigratedNote(req, id);
-    const targets = (await editableAmong(uid, ids)).filter((t) =>
-      canManageNote(t.note.toObject(), t.notebook?.toObject() ?? null, uid),
-    );
+    const targets = await XenNote.find({ _id: { $in: ids }, owner_id: uid });
     const now = new Date();
-    const touched = new Map<string, NotebookDoc | null>();
-    for (const { note, notebook } of targets) {
+    for (const note of targets) {
       note.deleted_at = now;
       note.deleted_by = uid;
       await note.save();
-      touched.set(String(notebook?.id ?? `loose:${note.owner_id}`), notebook);
     }
-    for (const [key, book] of touched) notifyChange(book, key.startsWith("loose:") ? key.slice(6) : uid);
+    if (targets.length) notifyNoteUsers(targets.flatMap(noteUsers));
     res.json({
       status: true,
       message: "Notes moved to Trash",
@@ -178,23 +115,10 @@ export function registerNoteRoutes(app: any) {
 
   app.get("/api/xennote/notes", validateQuery(xenNoteListQuerySchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
-    const { notebook, archived, label, q } = req.query as Record<string, string | undefined>;
-
-    const books = await myNotebooks(uid);
-    const booksById = new Map(books.map((b) => [b.id as string, b.toObject()]));
-    const mine = { notebook_id: null, owner_id: uid };
-
-    let scope: Record<string, unknown>;
-    if (notebook === "none") scope = mine;
-    else if (notebook === "shared") scope = { "members.user_id": uid };
-    else if (notebook) {
-      await requireLegacyNotebook(await loadNotebook(req, notebook, "view"));
-      scope = { notebook_id: new Types.ObjectId(notebook) };
-    } else {
-      scope = visibleNotesFilter(uid, books);
-    }
-
-    const and: Record<string, unknown>[] = [scope, { archived: archived === "true" ? true : { $ne: true } }];
+    const { scope, archived, label, q } = req.query as Record<string, string | undefined>;
+    const access =
+      scope === "mine" ? { owner_id: uid } : scope === "shared" ? { "members.user_id": uid } : visibleNotesFilter(uid);
+    const and: Record<string, unknown>[] = [access, { archived: archived === "true" ? true : { $ne: true } }];
     if (label) and.push({ labels: { $regex: `^${escapeRegex(label)}$`, $options: "i" } });
     if (q && q.trim()) {
       const rx = { $regex: escapeRegex(q.trim()), $options: "i" };
@@ -217,7 +141,7 @@ export function registerNoteRoutes(app: any) {
       notes.map((n) =>
         serializeNote(n, {
           uid,
-          role: noteRole(n.toObject(), n.notebook_id ? (booksById.get(String(n.notebook_id)) ?? null) : null, uid),
+          role: noteRole(n, uid),
           names,
         }),
       ),
@@ -228,11 +152,10 @@ export function registerNoteRoutes(app: any) {
   // How many notes each part of the rail holds: everything, my private ones, and the archive.
   app.get("/api/xennote/counts", async (req: Request, res: Response) => {
     const uid = callerId(req);
-    const books = await myNotebooks(uid);
-    const visible = visibleNotesFilter(uid, books);
+    const visible = visibleNotesFilter(uid);
     const [all, mine, archived, trash, shared] = await Promise.all([
       XenNote.countDocuments({ ...visible, archived: { $ne: true } }),
-      XenNote.countDocuments({ notebook_id: null, owner_id: uid, archived: { $ne: true } }),
+      XenNote.countDocuments({ owner_id: uid, archived: { $ne: true } }),
       XenNote.countDocuments({ ...visible, archived: true }),
       XenNote.countDocuments({ deleted_by: uid, deleted_at: { $ne: null } }).setOptions({ includeDeleted: true }),
       XenNote.countDocuments({ "members.user_id": uid, archived: { $ne: true } }),
@@ -242,12 +165,11 @@ export function registerNoteRoutes(app: any) {
 
   app.get("/api/xennote/labels", async (req: Request, res: Response) => {
     const uid = callerId(req);
-    const books = await myNotebooks(uid);
     const rows = await XenNote.aggregate<{ _id: string; n: number }>([
       {
         $match: {
           archived: { $ne: true },
-          ...visibleNotesFilter(uid, books),
+          ...visibleNotesFilter(uid),
         },
       },
       { $unwind: "$labels" },
@@ -259,27 +181,14 @@ export function registerNoteRoutes(app: any) {
 
   app.post("/api/xennote/notes", validate(xenNoteCreateSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
-    const notebookId: string | null = req.body.notebook_id ?? null;
-    const book = notebookId ? await loadNotebook(req, notebookId, "edit") : null;
-    if (book) await requireLegacyNotebook(book);
-
-    const note = new XenNote({ owner_id: uid, notebook_id: notebookId, updated_by: uid });
+    const note = new XenNote({ owner_id: uid, updated_by: uid });
     applyFields(note, req.body);
     await note.save();
-    notifyChange(book, uid);
-    if (book) {
-      await recordActivity({
-        actor: uid,
-        verb: "xennote.note_created",
-        object: { type: "note", id: note.id, label: note.title || undefined },
-        space: { app: "xennote", id: book.id, label: book.name },
-        audience: "space",
-      });
-    }
+    notifyChange(note);
     res.json({
       status: true,
       message: "Note saved",
-      data: { note: await serializeNote(note, { uid, role: book ? roleOf(book.toObject(), uid) : "owner" }) },
+      data: { note: await serializeNote(note, { uid, role: "owner" }) },
     });
   });
 
@@ -303,18 +212,17 @@ export function registerNoteRoutes(app: any) {
       const title = note.title.trim();
       if (!title) return res.json({ status: true, data: { notes: [] } });
 
-      const books = await myNotebooks(uid);
       // A cheap filter in the database (the words between brackets, spaces matched loosely), then the exact check below.
       const words = title.split(/\s+/).map(escapeRegex).join("\\s+");
       const candidates = await XenNote.find({
         _id: { $ne: note._id },
         archived: { $ne: true },
-        ...visibleNotesFilter(uid, books),
+        ...visibleNotesFilter(uid),
         body: { $regex: `\\[\\[\\s*${words}\\s*(\\||\\]\\])`, $options: "i" },
       })
         .sort({ updated_at: -1 })
         .limit(100)
-        .select("title type notebook_id body updated_at");
+        .select("title type body updated_at");
       const notes = candidates
         .filter((n) => linksTo(n.body, title))
         .slice(0, 50)
@@ -322,7 +230,6 @@ export function registerNoteRoutes(app: any) {
           _id: n.id as string,
           title: n.title,
           type: n.type,
-          notebook_id: n.notebook_id ? String(n.notebook_id) : null,
           updated_at: n.updated_at.toISOString(),
         }));
       res.json({ status: true, data: { notes } });
@@ -337,7 +244,6 @@ export function registerNoteRoutes(app: any) {
       const { note } = await loadNote(req, req.params.id as string, "view");
       const title = note.title.trim();
       if (!title) return res.json({ status: true, data: { notes: [] } });
-      const books = await myNotebooks(uid);
       const target = { id: String(note._id), title, aliases: [] };
       const words = title.split(/\s+/).map(escapeRegex).join("\\s+");
       const possible = await XenNote.find(
@@ -345,7 +251,7 @@ export function registerNoteRoutes(app: any) {
           _id: { $ne: note._id },
           type: "text",
           archived: { $ne: true },
-          ...visibleNotesFilter(uid, books),
+          ...visibleNotesFilter(uid),
           body: { $regex: words, $options: "i" },
         },
         "title body",
@@ -369,17 +275,7 @@ export function registerNoteRoutes(app: any) {
     validate(xenNoteUpdateSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
-      let destination = notebook;
-      if (req.body.notebook_id !== undefined && !canManageNote(note.toObject(), notebook?.toObject() ?? null, uid)) {
-        throw new AppError(403, "Only the person who owns a note can move it");
-      }
-
-      // Moving a note: into another notebook (needs edit there) or out to a private loose note (author only)
-      if (req.body.notebook_id !== undefined) {
-        const moved = await moveNote(req, note, req.body.notebook_id);
-        if (moved) destination = moved.destination;
-      }
+      const { note, role } = await loadNote(req, req.params.id as string, "edit");
 
       // What the note said before this edit, so a change to its wording can be looked at and undone later.
       const before = contentOf(note);
@@ -393,16 +289,12 @@ export function registerNoteRoutes(app: any) {
           console.error("xennote version failed:", e),
         );
       }
-      notifyChange(notebook, note.owner_id, memberIds(note));
-      if (destination && destination !== notebook) notifyChange(destination, note.owner_id, memberIds(note));
+      notifyChange(note);
       res.json({
         status: true,
         message: "Note saved",
         data: {
-          note: await serializeNote(note, {
-            uid,
-            role: noteRole(note.toObject(), destination?.toObject() ?? null, uid),
-          }),
+          note: await serializeNote(note, { uid, role }),
         },
       });
     },
@@ -411,11 +303,11 @@ export function registerNoteRoutes(app: any) {
   // Deleting a note moves it to the Trash, where the person who deleted it can restore it for 30 days. Its photos stay
   // with it until it is removed for good.
   app.delete("/api/xennote/notes/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
-    const { note, notebook } = await loadNote(req, req.params.id as string, "manage");
+    const { note } = await loadNote(req, req.params.id as string, "manage");
     note.deleted_at = new Date();
     note.deleted_by = callerId(req);
     await note.save();
-    notifyChange(notebook, note.owner_id, memberIds(note));
+    notifyChange(note);
     res.json({ status: true, message: "Note moved to Trash" });
   });
 

@@ -27,7 +27,7 @@ export const useXenNotes = (filters: NoteFilters = {}) => {
     queryKey: xennoteKeys.notes(filters),
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (filters.notebook) params.set("notebook", filters.notebook);
+      if (filters.scope) params.set("scope", filters.scope);
       if (filters.archived) params.set("archived", "true");
       if (filters.label) params.set("label", filters.label);
       if (filters.q?.trim()) params.set("q", filters.q.trim());
@@ -39,12 +39,14 @@ export const useXenNotes = (filters: NoteFilters = {}) => {
   });
 };
 
-export const useXenNotebooks = () =>
-  useQuery({
+export const useXenNotebooks = () => {
+  useSocketInvalidate("xennote:notebook_update", [xennoteKeys.notebooks()]);
+  return useQuery({
     queryKey: xennoteKeys.notebooks(),
     queryFn: async () => (await api.get<{ notebooks: XenNotebook[] }>("/api/xennote/notebooks")).notebooks,
     ...liveQuery,
   });
+};
 
 export const useXenNoteCounts = () =>
   useQuery({
@@ -149,7 +151,7 @@ export const useXenNoteMentions = (noteId: string) =>
 export const usePublicNote = (token: string | undefined) =>
   useQuery({
     queryKey: xennoteKeys.publicNote(token ?? ""),
-    queryFn: () => api.get<{ note?: PublicXenNote; page_id?: string }>(`/api/xennote/public/note/${token}`),
+    queryFn: async () => (await api.get<{ note: PublicXenNote }>(`/api/xennote/public/note/${token}`)).note,
     enabled: !!token,
     retry: false,
   });
@@ -160,7 +162,6 @@ export interface SharedLinkAccess {
   role: "owner" | "editor" | "viewer" | null;
   note_id?: string;
   page_id?: string;
-  has_pages?: boolean;
   notebook_id: string | null;
 }
 
@@ -174,7 +175,6 @@ export const useSharedLinkAccess = (kind: "note" | "notebook" | "page", token: s
 
 export interface PublicNotebook {
   notebook: { name: string; color: string };
-  notes: PublicXenNote[];
   sections: Array<{ id: string; name: string }>;
   pages: Array<{ id: string; title: string; section_id: string; parent_id: string | null }>;
 }
@@ -235,13 +235,8 @@ export const useXenNoteActions = () => {
   });
   // Several notes at once: archive, colour, label or move them, or send them to the Trash.
   const bulkUpdateNotes = useMutation({
-    mutationFn: (v: {
-      ids: string[];
-      archived?: boolean;
-      color?: string;
-      add_label?: string;
-      notebook_id?: string | null;
-    }) => api.post<{ updated: number; skipped: number }>("/api/xennote/notes/bulk-update", v),
+    mutationFn: (v: { ids: string[]; archived?: boolean; color?: string; add_label?: string }) =>
+      api.post<{ updated: number; skipped: number }>("/api/xennote/notes/bulk-update", v),
     onSuccess: refresh,
   });
   const bulkDeleteNotes = useMutation({

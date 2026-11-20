@@ -72,18 +72,16 @@ const noteFields = {
     .array(z.string().max(MAX_LABEL_LENGTH * 2))
     .max(MAX_LABELS * 3)
     .transform((l) => normalizeLabels(l)),
-  // Where the note lives: a notebook id, or null for a private loose note.
-  notebook_id: objectIdSchema.nullable(),
 };
 
 export const xenNoteCreateSchema = z
   .object(noteFields)
   .partial()
-  .extend({ type: noteFields.type.default("text") });
-export const xenNoteUpdateSchema = z.object(noteFields).partial();
+  .extend({ type: noteFields.type.default("text") })
+  .strict();
+export const xenNoteUpdateSchema = z.object(noteFields).partial().strict();
 
-// Several notes at once: archive or recolour them, add or remove a label, move them to a notebook (or out to private
-// notes with null), or send them to the Trash. Up to 100 at a time; notes the caller can't edit are left alone.
+// Bulk edits apply only to notes the caller can edit.
 const noteIds = z.array(objectIdSchema).min(1, "Pick at least one note").max(100, "Up to 100 notes at a time");
 const labelName = z.string().trim().min(1).max(MAX_LABEL_LENGTH);
 export const xenNoteBulkDeleteSchema = z.object({ ids: noteIds });
@@ -94,28 +92,25 @@ export const xenNoteBulkUpdateSchema = z
     color: color.optional(),
     add_label: labelName.optional(),
     remove_label: labelName.optional(),
-    notebook_id: objectIdSchema.nullable().optional(),
   })
+  .strict()
   .refine(
     (v) =>
-      v.archived !== undefined ||
-      v.color !== undefined ||
-      v.add_label !== undefined ||
-      v.remove_label !== undefined ||
-      v.notebook_id !== undefined,
+      v.archived !== undefined || v.color !== undefined || v.add_label !== undefined || v.remove_label !== undefined,
     "Choose what to change",
   );
 
-export const xenNoteListQuerySchema = z.object({
-  // "none" = only my loose notes; "shared" = notes shared with me directly; an id = that notebook; omitted = everything I can see.
-  notebook: z.union([z.literal("none"), z.literal("shared"), objectIdSchema]).optional(),
-  archived: z.enum(["true", "false"]).optional(),
-  label: z
-    .string()
-    .max(MAX_LABEL_LENGTH * 2)
-    .optional(),
-  q: z.string().max(200).optional(),
-});
+export const xenNoteListQuerySchema = z
+  .object({
+    scope: z.enum(["mine", "shared"]).optional(),
+    archived: z.enum(["true", "false"]).optional(),
+    label: z
+      .string()
+      .max(MAX_LABEL_LENGTH * 2)
+      .optional(),
+    q: z.string().max(200).optional(),
+  })
+  .strict();
 
 // A reminder time (ISO), or null to remove it. It must be a real time in the future, within five years.
 const FIVE_YEARS_MS = 5 * 365 * 86_400_000;

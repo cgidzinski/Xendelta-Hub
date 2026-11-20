@@ -34,7 +34,7 @@ export function registerNoteImageRoutes(app: any) {
     uploadXenNoteImages.array("images", MAX_NOTE_IMAGES),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook, role } = await loadNote(req, req.params.id as string, "edit");
+      const { note, role } = await loadNote(req, req.params.id as string, "edit");
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       if (files.length === 0) throw new AppError(400, "Choose at least one photo");
       if (note.images.length + files.length > MAX_NOTE_IMAGES) {
@@ -62,7 +62,7 @@ export function registerNoteImageRoutes(app: any) {
         await removeAppFiles(stored.map((f) => f._id));
         throw error;
       }
-      notifyChange(notebook, note.owner_id);
+      notifyChange(note);
       res.json({
         status: true,
         message: "Photos added",
@@ -76,14 +76,14 @@ export function registerNoteImageRoutes(app: any) {
     validateParams(xenNoteImageParamSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook, role } = await loadNote(req, req.params.id as string, "edit");
+      const { note, role } = await loadNote(req, req.params.id as string, "edit");
       const image = note.images.find((i) => String(i._id) === req.params.imageId);
       if (!image) throw new AppError(404, "Photo not found");
       await removeNotePhotos([image]);
       note.images.pull(image._id);
       note.updated_by = uid;
       await note.save();
-      notifyChange(notebook, note.owner_id);
+      notifyChange(note);
       res.json({
         status: true,
         message: "Photo removed",

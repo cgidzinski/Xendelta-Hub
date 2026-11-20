@@ -109,20 +109,4 @@ describe("the note Trash", () => {
     expect(await purgeExpiredNotes()).toBeGreaterThanOrEqual(1);
     expect((await trash(me)).map((n) => n.title)).toEqual(["Recent"]);
   });
-
-  it("can't restore into a notebook the person can no longer write to", async () => {
-    const owner = await createUser();
-    const editor = await createUser();
-    const book = (await api(owner).post("/notebooks", { name: "Shared" })).body.data.notebook;
-    const shared = await api(owner).post(`/notebooks/${book._id}/members`, {
-      userIds: [String(editor.user._id)],
-      role: "editor",
-    });
-    expect(shared.status, JSON.stringify(shared.body)).toBe(200);
-    const n = (await api(editor).post("/notes", { type: "text", title: "Team", notebook_id: book._id })).body.data.note;
-    expect((await api(editor).del(`/notes/${n._id}`)).status).toBe(200);
-
-    await api(owner).del(`/notebooks/${book._id}/members/${editor.user._id}`);
-    expect((await api(editor).post(`/trash/${n._id}/restore`)).status).toBe(403);
-  });
 });

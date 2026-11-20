@@ -56,10 +56,10 @@ export function registerNoteVersionRoutes(app: any) {
   );
 
   async function version(req: Request, need: "view" | "edit") {
-    const { note, notebook } = await loadNote(req, req.params.id as string, need);
+    const { note } = await loadNote(req, req.params.id as string, need);
     const v = await XenNoteVersion.findOne({ _id: req.params.versionId, note_id: note._id });
     if (!v) throw new AppError(404, "Version not found");
-    return { note, notebook, v };
+    return { note, v };
   }
 
   app.get(
@@ -92,7 +92,7 @@ export function registerNoteVersionRoutes(app: any) {
     validateParams(xenNoteVersionParamSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook, v } = await version(req, "edit");
+      const { note, v } = await version(req, "edit");
       await keepVersion(note._id, contentOf(note), note.updated_at, note.updated_by ?? note.owner_id, true);
       note.type = v.type;
       note.title = v.title;
@@ -104,7 +104,7 @@ export function registerNoteVersionRoutes(app: any) {
       note.link = { url: v.link?.url ?? "", title: v.link?.title ?? "", description: v.link?.description ?? "" };
       note.updated_by = uid;
       await note.save();
-      notifyChange(notebook, note.owner_id);
+      notifyChange(note);
       res.json({ status: true, message: "Version restored" });
     },
   );

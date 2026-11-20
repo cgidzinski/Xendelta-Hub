@@ -91,7 +91,7 @@ describe("XenNote page and notebook sharing", () => {
     expect((await call("get", `/public/page/${next}`)).status).toBe(404);
   });
 
-  it("keeps legacy notebook links and limits the public tree and reader to that notebook's visible pages", async () => {
+  it("limits shared notebooks to their visible pages", async () => {
     const owner = await createUser();
     const book = await notebook(owner, "Work");
     const unrelated = await notebook(owner, "Private");
@@ -101,13 +101,12 @@ describe("XenNote page and notebook sharing", () => {
     const hiddenChild = await page(owner, book.section, "Hidden child", hidden);
     const foreign = await page(owner, unrelated.section, "Outside");
     await call("put", `/pages/${hidden}`, owner).send({ archived: true });
-    await call("post", "/notes", owner).send({ type: "text", title: "Old note", notebook_id: book.id });
     const token = (await call("post", `/notebooks/${book.id}/share`, owner)).body.data.notebook.share.token;
     const view = await call("get", `/public/notebook/${token}`);
     expect(view.body.data.sections).toEqual([{ id: book.section, name: "Plans" }]);
     expect(view.body.data.pages.map((entry: { id: string }) => entry.id)).toEqual(expect.arrayContaining([id, child]));
     expect(view.body.data.pages).toHaveLength(2);
-    expect(view.body.data.notes).toMatchObject([{ title: "Old note" }]);
+    expect(view.body.data.notes).toBeUndefined();
     for (const excluded of [hidden, hiddenChild, foreign]) {
       expect((await call("get", `/public/notebook/${token}/pages/${excluded}`)).status).toBe(404);
     }
@@ -135,7 +134,7 @@ describe("XenNote page and notebook sharing", () => {
       expect((await call("post", `/pages/${id}/people`, owner).send(people)).status).toBe(200);
 
       const notifications = await mongoose.model("Notification").find({ userId: guest.user.id }).lean();
-      const links = [`/internal/xennote?notebook=${book.id}`, `/internal/xennote/p/${id}`];
+      const links = [`/internal/xennote/b/${book.id}`, `/internal/xennote/p/${id}`];
       expect(notifications).toHaveLength(2);
       expect(notifications.map((item) => item.link)).toEqual(expect.arrayContaining(links));
       expect(sendPush).toHaveBeenCalledTimes(2);

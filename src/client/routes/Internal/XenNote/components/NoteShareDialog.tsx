@@ -194,11 +194,6 @@ export default function NoteShareDialog({ noteId, onClose }: NoteShareDialogProp
           </Typography>
         )}
       </Box>
-      {d.notebook && (
-        <Typography variant="caption" color="text.secondary">
-          Everyone in the notebook “{d.notebook.name}” can also open this note.
-        </Typography>
-      )}
     </Stack>
   );
 

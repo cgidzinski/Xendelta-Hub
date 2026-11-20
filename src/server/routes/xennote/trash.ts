@@ -1,8 +1,7 @@
 import type { Request, Response } from "express";
 import { validateParams, xenNoteIdParamSchema } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
-import { XenNote, XenNotebook } from "../../models/xenNote";
-import { canEdit } from "../../utils/membership";
+import { XenNote } from "../../models/xenNote";
 import { purgeDate } from "../../utils/softDelete";
 import { deleteNotesForever } from "../../utils/xenNoteTrash";
 import { notifyChange, type NoteDoc } from "./shared";
@@ -57,16 +56,10 @@ export function registerNoteTrashRoutes(app: any) {
     validateParams(xenNoteIdParamSchema),
     async (req: Request, res: Response) => {
       const note = await trashedNote(req);
-      const uid = callerId(req);
-      // Back where it was, if the person can still write there.
-      const notebook = note.notebook_id ? await XenNotebook.findById(note.notebook_id) : null;
-      if (note.notebook_id && (!notebook || !canEdit(notebook.toObject(), uid))) {
-        throw new AppError(403, "You can't put it back in that notebook any more");
-      }
       note.deleted_at = null;
       note.deleted_by = null;
       await note.save();
-      notifyChange(notebook, note.owner_id);
+      notifyChange(note);
       res.json({ status: true, message: "Note restored" });
     },
   );

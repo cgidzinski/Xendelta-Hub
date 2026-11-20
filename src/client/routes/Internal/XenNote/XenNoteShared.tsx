@@ -1,9 +1,8 @@
-import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { Alert, Box, Button, Stack } from "@mui/material";
+import { useNavigate, useParams } from "react-router-dom";
+import { Alert, Button } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
-import EmptyState from "../../../components/ui/EmptyState";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useTitle } from "../../../hooks/useTitle";
 import { SharedNotebookReader, SharedPageReader } from "../../External/XenNotePublic/SharedPageReader";
@@ -22,16 +21,14 @@ function OpenXenNote() {
 }
 
 /**
- * A note someone shared by link, opened by a signed-in person who is not a member of its notebook. It sits inside the
+ * A note someone shared by link, opened by a signed-in person who has read-only access by link. It sits inside the
  * app (with its menus) but is read-only: the link lets you read, never change.
  */
 export function XenNoteSharedNote() {
   const { token } = useParams<{ token: string }>();
-  const { data, isLoading, isError } = usePublicNote(token);
-  const note = data?.note;
+  const { data: note, isLoading, isError } = usePublicNote(token);
   useTitle(note?.title ? `${note.title} - XenNote` : "Shared note - XenNote");
 
-  if (data?.page_id) return <Navigate to={`/n/p/${token}`} replace />;
   if (isLoading) {
     return (
       <PageContainer width="narrow">
@@ -58,7 +55,7 @@ export function XenNoteSharedNote() {
   );
 }
 
-/** A notebook someone shared by link, opened by a signed-in person who is not in it: its notes, read-only. */
+/** A notebook someone shared by link, opened by a signed-in person who is not in it: its pages, read-only. */
 export function XenNoteSharedNotebook() {
   const { token } = useParams<{ token: string }>();
   const { data, isLoading, isError } = usePublicNotebook(token);
@@ -78,27 +75,7 @@ export function XenNoteSharedNotebook() {
       </PageContainer>
     );
   }
-  if (data.sections.length) return <SharedNotebookReader data={data} signedIn />;
-  return (
-    <PageContainer>
-      <PageHeader
-        title={data.notebook.name}
-        subtitle={`Shared with you by link · ${data.notes.length} ${data.notes.length === 1 ? "note" : "notes"} · read-only`}
-        actions={<OpenXenNote />}
-      />
-      {data.notes.length === 0 ? (
-        <EmptyState title="Nothing here yet" description="There are no notes in this notebook yet." />
-      ) : (
-        <Box sx={{ columnCount: { xs: 1, sm: 2, md: 3 }, columnGap: 2 }}>
-          {data.notes.map((n) => (
-            <Stack key={n._id} sx={{ breakInside: "avoid" }}>
-              <NoteCard note={n} />
-            </Stack>
-          ))}
-        </Box>
-      )}
-    </PageContainer>
-  );
+  return <SharedNotebookReader data={data} signedIn />;
 }
 
 export function XenNoteSharedPublicPage() {

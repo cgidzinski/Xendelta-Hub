@@ -12,22 +12,21 @@ import {
   xenNotebookUpdateSchema,
 } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
-import { XenNote, XenNotebook } from "../../models/xenNote";
+import { XenNotePage } from "../../models/xenNotePage";
+import { XenNotebook } from "../../models/xenNote";
 import { User } from "../../models/user";
 import { notify } from "../../utils/notificationUtils";
 import { randomToken } from "../../utils/tokens";
-import { removeNotePhotos } from "../../utils/xenNoteFiles";
 import { SocketManager } from "../../infrastructure/SocketManager";
 import { changeRole, removeMember } from "../../utils/membership";
 import { MAX_NOTEBOOKS_OWNED, MAX_NOTEBOOK_PEOPLE } from "../../../shared/xennote/notes";
-import { removeVersionsOf } from "../../utils/xenNoteVersions";
 import { deleteNotebookPages } from "../../utils/xenNotePages";
 import { loadNotebook, myNotebooks, serializeNotebook } from "./shared";
 import { addRefused } from "../../social/policy";
 
-/** How many un-archived notes each notebook holds. */
-async function noteCounts(ids: string[]): Promise<Map<string, number>> {
-  const rows = await XenNote.aggregate<{ _id: unknown; n: number }>([
+/** How many unarchived pages each notebook holds. */
+async function pageCounts(ids: string[]): Promise<Map<string, number>> {
+  const rows = await XenNotePage.aggregate<{ _id: unknown; n: number }>([
     { $match: { notebook_id: { $in: ids.map((id) => new Types.ObjectId(id)) }, archived: { $ne: true } } },
     { $group: { _id: "$notebook_id", n: { $sum: 1 } } },
   ]);
@@ -38,7 +37,7 @@ export function registerNotebookRoutes(app: any) {
   app.get("/api/xennote/notebooks", async (req: Request, res: Response) => {
     const uid = callerId(req);
     const books = await myNotebooks(uid);
-    const counts = await noteCounts(books.map((b) => b.id));
+    const counts = await pageCounts(books.map((b) => b.id));
     const data = await Promise.all(books.map((b) => serializeNotebook(b, uid, counts.get(b.id) ?? 0)));
     res.json({ status: true, message: "Notebooks retrieved", data: { notebooks: data } });
   });
@@ -66,7 +65,7 @@ export function registerNotebookRoutes(app: any) {
       book.content_updated_at = new Date();
       await book.save();
       SocketManager.getInstance().notifyXenNoteUpdate(book.members.map((m) => m.user_id));
-      const counts = await noteCounts([book.id]);
+      const counts = await pageCounts([book.id]);
       res.json({
         status: true,
         message: "Saved",
@@ -75,16 +74,12 @@ export function registerNotebookRoutes(app: any) {
     },
   );
 
-  // Deleting a notebook deletes every note in it, and their photos, and its sections, pages and their files.
+  // Deleting a notebook also deletes its sections, pages, and page files.
   app.delete(
     "/api/xennote/notebooks/:id",
     validateParams(xenNoteIdParamSchema),
     async (req: Request, res: Response) => {
       const book = await loadNotebook(req, req.params.id as string, "manage");
-      const notes = await XenNote.find({ notebook_id: book._id }, "images").setOptions({ includeDeleted: true }).lean();
-      await removeVersionsOf(notes.map((n) => n._id));
-      await removeNotePhotos(notes.flatMap((n) => n.images));
-      await XenNote.deleteMany({ notebook_id: book._id });
       await deleteNotebookPages(book._id);
       const people = book.members.map((m) => m.user_id);
       await book.deleteOne();
@@ -119,7 +114,7 @@ export function registerNotebookRoutes(app: any) {
             app: "xennote",
             title: "Notebook shared with you",
             message: `${me} shared the notebook "${book.name}" with you as ${role === "viewer" ? "a viewer" : "an editor"}.`,
-            link: `/internal/xennote?notebook=${book.id}`,
+            link: `/internal/xennote/b/${book.id}`,
             icon: "menu_book",
           }),
         ),
@@ -134,7 +129,7 @@ export function registerNotebookRoutes(app: any) {
           audience: { users: added },
         });
       }
-      const counts = await noteCounts([book.id]);
+      const counts = await pageCounts([book.id]);
       res.json({
         status: true,
         message: added.length ? `Added ${added.length}` : "Already members",
@@ -154,7 +149,7 @@ export function registerNotebookRoutes(app: any) {
       book.set("members", result.members);
       await book.save();
       SocketManager.getInstance().notifyXenNoteUpdate(book.members.map((m) => m.user_id));
-      const counts = await noteCounts([book.id]);
+      const counts = await pageCounts([book.id]);
       res.json({
         status: true,
         message: "Saved",
@@ -176,7 +171,7 @@ export function registerNotebookRoutes(app: any) {
       await book.save();
       SocketManager.getInstance().notifyXenNoteUpdate(before);
       const stillIn = book.members.some((m) => m.user_id === callerId(req));
-      const counts = await noteCounts([book.id]);
+      const counts = await pageCounts([book.id]);
       res.json({
         status: true,
         message: "Removed",
@@ -195,7 +190,7 @@ export function registerNotebookRoutes(app: any) {
         token: action === "enable" && book.share?.token ? book.share.token : randomToken(16),
       };
     await book.save();
-    const counts = await noteCounts([book.id]);
+    const counts = await pageCounts([book.id]);
     res.json({
       status: true,
       data: { notebook: await serializeNotebook(book, callerId(req), counts.get(book.id) ?? 0) },

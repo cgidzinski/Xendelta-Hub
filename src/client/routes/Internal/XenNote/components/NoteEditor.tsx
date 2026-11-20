@@ -4,7 +4,7 @@ import { Button, Dialog, DialogContent, Stack, Typography, useMediaQuery, useThe
 import { formatDistanceToNow } from "date-fns";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
-import type { XenNote, XenNotebook } from "../../../../types/XenNote";
+import type { XenNote } from "../../../../types/XenNote";
 import { useNoteDraft } from "../hooks/useNoteDraft";
 import { changeType } from "../noteDraft";
 import { noteSurfaceSx } from "../noteColors";
@@ -17,7 +17,6 @@ import NoteHistoryDialog from "./NoteHistoryDialog";
 import NoteLabelPopover from "./NoteLabelPopover";
 import NoteLinkFields from "./NoteLinkFields";
 import NoteMoreMenu from "./NoteMoreMenu";
-import NoteNotebookMenu from "./NoteNotebookMenu";
 import NotePhotoGrid from "./NotePhotoGrid";
 import NoteReminderMenu from "./NoteReminderMenu";
 import NoteShareDialog from "./NoteShareDialog";
@@ -32,11 +31,7 @@ interface NoteEditorProps {
   onClose: () => void;
   /** The note to edit; null starts a new one. */
   note: XenNote | null;
-  /** A new note starts as this type (the quick-add buttons). */
   startType?: NoteType;
-  /** A new note starts in this notebook (when one is open on the board). */
-  startNotebookId?: string | null;
-  notebooks: XenNotebook[];
   labelSuggestions: string[];
   /** Every note with a title, newest first: what a [[link]] can point to and what typing "[[" suggests. */
   titles?: Array<{ _id: string; title: string }>;
@@ -54,15 +49,13 @@ export default function NoteEditor({
   onClose,
   note,
   startType,
-  startNotebookId,
-  notebooks,
   labelSuggestions,
   titles = [],
   onOpenNote,
 }: NoteEditorProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const n = useNoteDraft({ open, onClose, note, startType, startNotebookId, onOpenNote });
+  const n = useNoteDraft({ open, onClose, note, startType, onOpenNote });
   const { draft, setDraft, set, live, readOnly } = n;
 
   const [editing, setEditing] = useState(false);
@@ -83,7 +76,6 @@ export default function NoteEditor({
   const viewing = readOnly || (!!note && !editing);
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
-  const [bookAnchor, setBookAnchor] = useState<HTMLElement | null>(null);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [reminderAnchor, setReminderAnchor] = useState<HTMLElement | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -91,7 +83,6 @@ export default function NoteEditor({
 
   const isList = draft.type === "checklist";
   const linkError = draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim());
-  const writableNotebooks = notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor");
   const photoCount = (live?.images.length ?? 0) + draft.pendingImages.length;
   const isBlank = !draft.body.trim() && draft.checklist.every((i) => !i.text.trim());
 
@@ -210,11 +201,8 @@ export default function NoteEditor({
                 onRemovePending={(i) => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
               />
             )}
-            {(draft.labels.length > 0 || draft.notebook_id) && (
+            {draft.labels.length > 0 && (
               <NoteChips
-                notebookName={
-                  draft.notebook_id ? (notebooks.find((b) => b._id === draft.notebook_id)?.name ?? "Notebook") : null
-                }
                 labels={draft.labels}
                 readOnly={viewing}
                 onRemoveLabel={(label) => set({ labels: draft.labels.filter((l) => l !== label) })}
@@ -233,7 +221,6 @@ export default function NoteEditor({
           onAddPhotos={n.addPhotos}
           onColor={setColorAnchor}
           onLabels={setLabelAnchor}
-          onNotebook={notebooks.length ? setBookAnchor : undefined}
           onReminder={setReminderAnchor}
           onShare={() => setShareOpen(true)}
           onDone={n.saveAndClose}
@@ -256,17 +243,6 @@ export default function NoteEditor({
         value={draft.labels}
         onChange={(labels) => set({ labels })}
         onClose={() => setLabelAnchor(null)}
-      />
-
-      <NoteNotebookMenu
-        anchor={bookAnchor}
-        notebooks={writableNotebooks}
-        value={draft.notebook_id}
-        onPick={(notebookId) => {
-          set({ notebook_id: notebookId });
-          setBookAnchor(null);
-        }}
-        onClose={() => setBookAnchor(null)}
       />
 
       <NoteMoreMenu
