@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { Box, TextField, Button, Typography, Card, CardContent, FormControlLabel, Switch } from "@mui/material";
 import { Delete as DeleteIcon, Save as SaveIcon } from "@mui/icons-material";
 import { Recipe } from "../../../../types/Recipe";
@@ -6,6 +6,8 @@ import { RecipeStep } from "../../../../types/RecipeStep";
 import { cleanPaints } from "@shared/recipaint/paints";
 import ImageUploader from "./ImageUploader";
 import StepEditor from "./StepEditor";
+import { stepsReducer } from "./stepsReducer";
+import { STEP_ITEM_ATTR, useStepDrag } from "./useStepDrag";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
 
 export interface RecipeFormData {
@@ -26,51 +28,6 @@ interface RecipeFormProps {
   isDeleting?: boolean;
 }
 
-type StepAction =
-  | { type: "reset"; steps: RecipeStep[] }
-  | { type: "add" }
-  | { type: "update"; index: number; step: RecipeStep }
-  | { type: "delete"; index: number }
-  | { type: "move"; index: number; direction: "up" | "down" };
-
-const emptyStep = (index: number): RecipeStep => ({
-  index,
-  stepName: "",
-  method: "",
-  images: [],
-  text: "",
-  paints: [],
-});
-
-// `index` is persisted on each step, so anything that shifts positions has to renumber.
-const reindex = (steps: RecipeStep[]): RecipeStep[] =>
-  steps.map((step, i) => (step.index === i ? step : { ...step, index: i }));
-
-function stepsReducer(steps: RecipeStep[], action: StepAction): RecipeStep[] {
-  switch (action.type) {
-    case "reset":
-      return action.steps;
-    case "add":
-      return [...steps, emptyStep(steps.length)];
-    case "update": {
-      // Replace one entry so the other steps keep their object identity and memoized
-      // StepEditors skip re-rendering - otherwise every keystroke re-rendered every step.
-      const next = [...steps];
-      next[action.index] = action.step;
-      return next;
-    }
-    case "delete":
-      return reindex(steps.filter((_, i) => i !== action.index));
-    case "move": {
-      const target = action.direction === "up" ? action.index - 1 : action.index + 1;
-      if (target < 0 || target >= steps.length) return steps;
-      const next = [...steps];
-      [next[action.index], next[target]] = [next[target], next[action.index]];
-      return reindex(next);
-    }
-  }
-}
-
 export default function RecipeForm({
   recipe,
   onSave,
@@ -84,6 +41,8 @@ export default function RecipeForm({
   const [showcase, setShowcase] = useState<string[]>(recipe.showcase || []);
   const [steps, dispatchSteps] = useReducer(stepsReducer, recipe.steps || []);
   const [isPublic, setIsPublic] = useState(recipe.isPublic || false);
+  const moveStep = useCallback((from: number, to: number) => dispatchSteps({ type: "moveTo", from, to }), []);
+  const { listRef, drag, start: startDrag } = useStepDrag(moveStep);
   // Removed images are deleted by the server when the save lands (it compares the recipe before and after), so
   // abandoning an edit never breaks the saved recipe.
 
@@ -192,16 +151,49 @@ export default function RecipeForm({
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
             Steps
           </Typography>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 2 }}>
+          <Box ref={listRef} sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 2 }}>
             {steps.map((step, index) => (
-              <StepEditor
+              // The wrapper carries the drag styling so the memoized StepEditor's props don't change mid-drag.
+              <Box
                 key={`step-${index}`}
-                step={step}
-                index={index}
-                canMoveUp={index > 0}
-                canMoveDown={index < steps.length - 1}
-                dispatch={dispatchSteps}
-              />
+                {...{ [STEP_ITEM_ATTR]: "" }}
+                sx={{
+                  position: "relative",
+                  opacity: drag?.from === index ? 0.5 : 1,
+                  transition: "opacity 120ms",
+                  ...dropLineSx(
+                    drag?.slot === index
+                      ? "top"
+                      : drag?.slot === steps.length && index === steps.length - 1
+                        ? "bottom"
+                        : null,
+                  ),
+                }}
+              >
+                {/* While dragging, each card shows only its header and step name so several fit on screen. */}
+                <Box
+                  sx={
+                    drag
+                      ? {
+                          maxHeight: COLLAPSED_STEP_HEIGHT,
+                          overflow: "hidden",
+                          borderRadius: 2,
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                        }
+                      : undefined
+                  }
+                >
+                  <StepEditor
+                    step={step}
+                    index={index}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < steps.length - 1}
+                    dispatch={dispatchSteps}
+                    onDragHandle={steps.length > 1 ? startDrag : undefined}
+                  />
+                </Box>
+              </Box>
             ))}
             {steps.length === 0 && (
               <Typography variant="body2" color="text.secondary">
@@ -218,4 +210,26 @@ export default function RecipeForm({
   );
 }
 
-export type { StepAction };
+export type { StepAction } from "./stepsReducer";
+
+/** A step card cut off just below its Step Name field (px). */
+const COLLAPSED_STEP_HEIGHT = 112;
+
+/** A line in the gap above or below a step card, showing where a dragged step will land. */
+function dropLineSx(edge: "top" | "bottom" | null) {
+  if (!edge) return {};
+  return {
+    "&::after": {
+      content: '""',
+      position: "absolute",
+      left: 0,
+      right: 0,
+      // Centred in the 16px gap between cards.
+      [edge]: "-9px",
+      height: "3px",
+      borderRadius: 1,
+      bgcolor: "primary.main",
+      pointerEvents: "none",
+    },
+  };
+}

@@ -163,6 +163,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try Recipaint to keep your paint recipes in one place.", link: "/internal/recipaint" },
     features: [
       "Keep paint recipes with a description, steps and the paints used in each step.",
+      "Drag steps to put them in a different order.",
       "Add photos to a recipe and flip through them.",
       "Mark which paints you own, from a built-in catalogue or your own custom paints.",
       "Paint along: follow a recipe one step at a time, with big images, the paints for that step and a progress bar.",
