@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PagePropertiesDialog from "./PagePropertiesDialog";
 import PageHistoryDialog from "./PageHistoryDialog";
 import { downloadMarkdown } from "../../../../hooks/xennote/downloadMarkdown";
 import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
@@ -140,6 +141,7 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
   });
   const [blockBacklinks, setBlockBacklinks] = useState(false);
   const [pageMenu, setPageMenu] = useState<HTMLElement | null>(null);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [label, setLabel] = useState<DraftLabel>("Saved");
@@ -283,6 +285,16 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
           </IconButton>
         </Tooltip>
         <Menu anchorEl={pageMenu} open={!!pageMenu} onClose={() => setPageMenu(null)}>
+          {(page.can_edit || !!data.properties?.length) && (
+            <MenuItem
+              onClick={() => {
+                setPageMenu(null);
+                setPropertiesOpen(true);
+              }}
+            >
+              Page properties
+            </MenuItem>
+          )}
           <MenuItem
             onClick={() => {
               setPageMenu(null);
@@ -448,6 +460,14 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
             }}
           />
         </Suspense>
+      )}
+      {propertiesOpen && (
+        <PagePropertiesDialog
+          pageId={page.id}
+          properties={data.properties ?? []}
+          editable={page.can_edit}
+          onClose={() => setPropertiesOpen(false)}
+        />
       )}
       {historyOpen && <PageHistoryDialog id={page.id} editable={page.can_edit} onClose={() => setHistoryOpen(false)} />}
       {shareOpen && (

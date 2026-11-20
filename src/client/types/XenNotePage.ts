@@ -1,3 +1,4 @@
+import type { PageProperty } from "@shared/xennote/properties";
 import type { JSONContent } from "@tiptap/core";
 import type { NoteColor } from "@shared/xennote/notes";
 import type { PageTreeEntry, SectionKind } from "@shared/xennote/pages";
@@ -52,6 +53,7 @@ export interface PageFileInfo {
 /** A page with its text, as the person opening it sees it. */
 export interface XenNotePageDetail {
   viewed_at?: string;
+  properties?: PageProperty[];
   reminder?: { at: string; sent: boolean } | null;
   page: XenNotePageMeta;
   doc: JSONContent;

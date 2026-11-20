@@ -14,7 +14,8 @@ export type SlashItemId =
   | "divider"
   | "file"
   | "blockRef"
-  | "blockEmbed";
+  | "blockEmbed"
+  | "pageQuery";
 
 export interface SlashItem {
   id: SlashItemId;
@@ -25,6 +26,12 @@ export interface SlashItem {
 }
 
 export const SLASH_ITEMS: readonly SlashItem[] = [
+  {
+    id: "pageQuery",
+    title: "Page query",
+    description: "Show pages matching a property filter",
+    keywords: ["query", "properties"],
+  },
   {
     id: "blockRef",
     title: "Block reference",

@@ -6,6 +6,7 @@ import { registerNoteImageRoutes } from "./images";
 import { registerPageExportRoutes } from "./pageExport";
 import { registerBlockRoutes, registerPublicBlockRoutes } from "./pageBlocks";
 import { registerPageGraphRoutes } from "./pageGraph";
+import { registerPagePropertyRoutes } from "./pageProperties";
 import { registerTaskRoutes } from "./pageTasks";
 import { registerPageHistoryRoutes } from "./pageHistory";
 import { registerPageTemplateRoutes } from "./pageTemplates";
@@ -46,6 +47,7 @@ module.exports = function (app: any) {
   registerBlockRoutes(app);
   registerPageHistoryRoutes(app);
   registerTaskRoutes(app);
+  registerPagePropertyRoutes(app);
   registerPageExportRoutes(app);
   registerPageTemplateRoutes(app);
   registerPageSharingRoutes(app);
