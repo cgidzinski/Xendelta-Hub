@@ -8,6 +8,7 @@ import {
   XenNoteSection,
   type XenNotePageAttrs,
 } from "../models/xenNotePage";
+import { deriveTasks } from "../../shared/xennote/tasks";
 import { blockTarget, deriveBlockRefs } from "../../shared/xennote/blockReferences";
 import { deriveFromDoc } from "../../shared/xennote/deriveFromDoc";
 import { MAX_PAGE_TAGS, MAX_PAGE_VERSIONS, PAGE_SCHEMA_VERSION } from "../../shared/xennote/pages";
@@ -233,6 +234,7 @@ export async function writePageBody(
   uid: string,
   baseRev: number,
   restoredTitle?: string,
+  requireCurrentRev = false,
 ): Promise<{ rev: number; conflict: boolean }> {
   const checked = checkPageDoc(docInput);
   if (!checked.ok) throw new AppError(400, checked.reason);
@@ -243,6 +245,8 @@ export async function writePageBody(
 
   const before = await XenNotePageBody.findOne({ page_id: page._id }).lean();
   const conflict = baseRev !== page.rev;
+  if (requireCurrentRev && (conflict || before?.rev !== baseRev))
+    throw new AppError(409, "The page just changed. Try again.");
   if (before && (restoredTitle !== undefined || JSON.stringify(before.doc) !== JSON.stringify(clean))) {
     await keepPageVersion(
       page._id,
@@ -253,7 +257,7 @@ export async function writePageBody(
 
   const now = new Date();
   const saved = await XenNotePage.findOneAndUpdate(
-    { _id: page._id },
+    { _id: page._id, ...(requireCurrentRev ? { rev: baseRev } : {}) },
     {
       $set: {
         ...(restoredTitle === undefined ? {} : { title: restoredTitle }),
@@ -266,6 +270,7 @@ export async function writePageBody(
         search_text: derived.search_text,
         excerpt: derived.excerpt,
         todo: derived.todo,
+        task_items: deriveTasks(clean),
         word_count: derived.word_count,
         updated_by: uid,
         updated_at: now,
@@ -274,10 +279,27 @@ export async function writePageBody(
     },
     { new: true },
   );
-  if (!saved) throw new AppError(404, "Page not found");
+  if (!saved) {
+    if (requireCurrentRev) throw new AppError(409, "The page just changed. Try again.");
+    throw new AppError(404, "Page not found");
+  }
   await XenNotePageBody.findOneAndUpdate(
     { page_id: page._id },
-    { $set: { doc: clean, schema_version: PAGE_SCHEMA_VERSION, rev: saved.rev, updated_at: now } },
+    [
+      {
+        $set: Object.fromEntries(
+          Object.entries({
+            doc: clean,
+            schema_version: PAGE_SCHEMA_VERSION,
+            rev: saved.rev,
+            updated_at: now,
+          }).map(([field, value]) => [
+            field,
+            { $cond: [{ $lte: [{ $ifNull: ["$rev", -1] }, saved.rev] }, { $literal: value }, "$" + field] },
+          ]),
+        ),
+      },
+    ],
     { upsert: true },
   );
   return { rev: saved.rev, conflict };

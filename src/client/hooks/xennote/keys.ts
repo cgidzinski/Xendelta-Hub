@@ -32,6 +32,7 @@ export const xennoteKeys = {
     [...xennoteKeys.all, "page-search", q, notebook ?? "", tag ?? ""] as const,
   /** What was deleted from a notebook's sections and pages. */
   notebookTrash: (notebookId: string) => [...xennoteKeys.all, "notebook-trash", notebookId] as const,
+  tasks: (book: string | undefined, done: boolean) => [...xennoteKeys.all, "tasks", book ?? "", done] as const,
   graph: (book: string | undefined, merge: boolean) => [...xennoteKeys.all, "graph", book ?? "", merge] as const,
   blockSearch: (query: string) => [...xennoteKeys.all, "block-search", query] as const,
   pageBlocks: (page: string) => [...xennoteKeys.all, "page-blocks", page] as const,
