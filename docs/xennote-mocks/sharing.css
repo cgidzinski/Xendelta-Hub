@@ -13,7 +13,6 @@
   --ochre: #b45309;
   --radius-button: 6px;
   --radius-card: 8px;
-  --radius-dialog: 10px;
 }
 
 * { box-sizing: border-box; }
@@ -77,9 +76,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 .notification-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: 32px; max-width: 1120px; margin: 0 auto; padding: 32px 24px; }
 .title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.outline-action, .primary-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 12px; white-space: nowrap; border-radius: var(--radius-button); font-weight: 500; }
-.outline-action { border: 1px solid var(--divider); color: var(--primary); }
-.primary-action { background: var(--primary); color: var(--surface); }
+.outline-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 12px; white-space: nowrap; border-radius: var(--radius-button); font-weight: 500; border: 1px solid var(--divider); color: var(--primary); }
 .filters { display: flex; gap: 8px; margin: 16px 0; }
 .notification-row { background: color-mix(in srgb, var(--primary-tint) 22%, var(--surface)); }
 .timestamp { color: var(--muted); font-size: 12px; }
@@ -91,13 +88,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 .push-card > span { color: var(--muted); }
 .push-app { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
 .push-app strong { color: var(--primary); }
-.modal { display: none; position: fixed; inset: 0; padding: 24px; place-items: center; background: color-mix(in srgb, var(--text) 44%, transparent); }
-.modal:target { display: grid; }
-.dialog { width: min(100%, 560px); border-radius: var(--radius-dialog); }
-.dialog header { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 1px solid var(--divider); }
-.dialog header h2 { font-size: 18px; }
-.dialog-body { padding: 24px; display: grid; gap: 14px; }
-.dialog footer { display: flex; justify-content: flex-end; gap: 8px; padding: 0 24px 18px; }
 
 @media (max-width: 700px) {
   .app-bar { height: 56px; gap: 12px; padding: 0 12px; }
@@ -111,5 +101,4 @@ ul { margin: 0; padding: 0; list-style: none; }
   .notification-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 24px 16px; }
   .notification-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; }
   .notification-row .timestamp { grid-column: 2; }
-  .modal { padding: 16px; }
 }
