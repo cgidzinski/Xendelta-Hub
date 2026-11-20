@@ -76,6 +76,7 @@ describe("app routes", () => {
     expect(hit("/internal/xennote")).toEqual(["/internal", "xennote"]);
     expect(hit("/internal/xennote/b/nb1")).toEqual(["/internal", "xennote/b/:notebookId"]);
     expect(hit("/internal/xennote/b/nb1/p/p1")).toEqual(["/internal", "xennote/b/:notebookId/p/:pageId"]);
+    expect(hit("/internal/xennote/b/nb1/t/q4")).toEqual(["/internal", "xennote/b/:notebookId/t/:tag"]);
     expect(hit("/internal/xennote/p/p1")).toEqual(["/internal", "xennote/p/:pageId"]);
     // The older shared-link routes next to them still match.
     expect(hit("/internal/xennote/shared/abc")).toEqual(["/internal", "xennote/shared/:token"]);

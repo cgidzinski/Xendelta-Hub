@@ -8,13 +8,15 @@ import StarBorderIcon from "@mui/icons-material/StarBorder";
 import StarIcon from "@mui/icons-material/Star";
 import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import { closeSnackbar, useSnackbar } from "notistack";
-import { MAX_PAGE_TAGS, MAX_PAGE_TITLE, normalizeTag } from "@shared/xennote/pages";
+import { MAX_PAGE_ALIASES, MAX_PAGE_TAGS, MAX_PAGE_TITLE, normalizeTag } from "@shared/xennote/pages";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import DetailSkeleton from "../../../../components/ui/DetailSkeleton";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useNotebookPageActions, useXenNotePage } from "../../../../hooks/xennote/usePages";
 import { useTitle } from "../../../../hooks/useTitle";
 import type { DraftLabel } from "../editor/pageDraft";
+import type { PageLinksValue } from "../editor/pageLinksContext";
+import PageReferences from "./PageReferences";
 import NoteColorPopover from "../components/NoteColorPopover";
 import { pageTitle } from "./pageTree";
 
@@ -88,10 +90,12 @@ interface PageViewProps {
   onBack?: () => void;
   /** The page was deleted, or can't be opened any more. */
   onGone: () => void;
+  /** What links and tags in the text do, and where "linked from" opens a page. */
+  links?: PageLinksValue;
 }
 
 /** One page: its title, tags, actions and text. */
-export default function PageView({ pageId, onBack, onGone }: PageViewProps) {
+export default function PageView({ pageId, onBack, onGone, links }: PageViewProps) {
   const { data, isPending, isError, error, refetch } = useXenNotePage(pageId);
   const page = data?.page;
   const actions = useNotebookPageActions(page?.notebook_id ?? "");
@@ -100,6 +104,7 @@ export default function PageView({ pageId, onBack, onGone }: PageViewProps) {
   const [label, setLabel] = useState<DraftLabel>("Saved");
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [tag, setTag] = useState("");
+  const [alias, setAlias] = useState("");
   useTitle(page ? pageTitle(page.title) : "XenNote");
 
   const fail = (e: unknown) => enqueueSnackbar((e as Error).message || "Couldn't save that", { variant: "error" });
@@ -114,6 +119,19 @@ export default function PageView({ pageId, onBack, onGone }: PageViewProps) {
     setTag("");
     if (!clean || page.tags_manual.includes(clean) || page.tags_manual.length >= MAX_PAGE_TAGS) return;
     actions.updatePage.mutate({ id: page.id, tags_manual: [...page.tags_manual, clean] }, { onError: fail });
+  };
+
+  const addAlias = () => {
+    const clean = alias.trim().replace(/\s+/g, " ");
+    setAlias("");
+    if (
+      !clean ||
+      page.aliases.some((a) => a.toLowerCase() === clean.toLowerCase()) ||
+      page.aliases.length >= MAX_PAGE_ALIASES
+    ) {
+      return;
+    }
+    actions.updatePage.mutate({ id: page.id, aliases: [...page.aliases, clean] }, { onError: fail });
   };
 
   const remove = async () => {
@@ -218,6 +236,7 @@ export default function PageView({ pageId, onBack, onGone }: PageViewProps) {
             size="small"
             variant="outlined"
             label={`#${t}`}
+            onClick={links ? () => links.onOpenTag(t) : undefined}
             onDelete={
               page.can_edit
                 ? () =>
@@ -230,7 +249,13 @@ export default function PageView({ pageId, onBack, onGone }: PageViewProps) {
           />
         ))}
         {inlineTags.map((t) => (
-          <Chip key={t} size="small" variant="outlined" label={`#${t}`} />
+          <Chip
+            key={t}
+            size="small"
+            variant="outlined"
+            label={`#${t}`}
+            onClick={links ? () => links.onOpenTag(t) : undefined}
+          />
         ))}
         {page.can_edit && (
           <TextField
@@ -252,9 +277,56 @@ export default function PageView({ pageId, onBack, onGone }: PageViewProps) {
         )}
       </Box>
 
+      {(page.aliases.length > 0 || page.can_edit) && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mb: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            Also called
+          </Typography>
+          {page.aliases.map((a) => (
+            <Chip
+              key={a}
+              size="small"
+              label={a}
+              onDelete={
+                page.can_edit
+                  ? () =>
+                      actions.updatePage.mutate(
+                        { id: page.id, aliases: page.aliases.filter((x) => x !== a) },
+                        { onError: fail },
+                      )
+                  : undefined
+              }
+            />
+          ))}
+          {page.can_edit && (
+            <TextField
+              size="small"
+              variant="standard"
+              placeholder="Add another name"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addAlias();
+                }
+              }}
+              onBlur={addAlias}
+              slotProps={{
+                htmlInput: { "aria-label": "Add another name", maxLength: MAX_PAGE_TITLE },
+                input: { disableUnderline: true },
+              }}
+              sx={{ width: 160 }}
+            />
+          )}
+        </Box>
+      )}
+
       <Suspense fallback={<DetailSkeleton height={280} />}>
-        <PageEditor key={page.id} detail={data} onLabel={setLabel} />
+        <PageEditor key={page.id} detail={data} onLabel={setLabel} links={links} />
       </Suspense>
+
+      <PageReferences pageId={page.id} onOpenPage={links?.onOpenPage ?? (() => undefined)} />
 
       <NoteColorPopover
         anchor={colorAnchor}

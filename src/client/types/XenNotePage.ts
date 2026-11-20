@@ -59,6 +59,54 @@ export interface XenNotePageDetail {
   section: { id: string; name: string; kind: SectionKind } | null;
 }
 
+/** What a link to a page shows: its current name, or that the person can't open it. */
+export type PagePeek =
+  | { id: string; locked: true }
+  | {
+      id: string;
+      locked: false;
+      title: string;
+      notebook_id: string;
+      section_id: string;
+      color: string;
+      icon: string | null;
+      archived: boolean;
+    };
+
+/** A page found by search or offered while typing a link. */
+export interface PageHit {
+  id: string;
+  title: string;
+  notebook_id: string;
+  /** Null unless the person is in the page's notebook. */
+  notebook_name: string | null;
+  in_notebook: boolean;
+  section_id: string;
+  section_name: string | null;
+  color: string;
+  icon: string | null;
+  tags: string[];
+  snippet: string;
+  matched_alias: string | null;
+  updated_at: string;
+}
+
+/** A page that links to another, or mentions it, with the words around it. */
+export interface PageReference {
+  id: string;
+  title: string;
+  snippet: string;
+}
+export interface Backlink extends PageReference {
+  notebook_id: string;
+  notebook_name: string | null;
+  in_notebook: boolean;
+}
+export interface UnlinkedMention extends PageReference {
+  /** Whether "Link it" will work for this person (it edits that page). */
+  can_edit: boolean;
+}
+
 export interface UploadedPageFile extends PageFileInfo {
   id: string;
 }
