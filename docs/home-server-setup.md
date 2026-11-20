@@ -402,7 +402,9 @@ Two clones on the same CT, same runner, different folder/port/PM2 process each:
 
 Each folder has its **own** `.env` — staging points at its own Mongo DB / R2 buckets / secrets so test data never touches prod (`PORT` and `PUBLIC_URL` also differ per the table above).
 
-Both deploy workflows run `npm run db:migrate` (ts-migrate-mongoose) between `npm ci` and the build, so each environment applies pending MongoDB migrations to its own database before restarting. `set -euo pipefail` aborts the deploy if a migration fails. See `migrations/README.md` for authoring migrations; the server also re-runs pending migrations once on boot as a non-fatal safety net.
+Staging uses PR CI for type checking and tests. The staging deploy installs dependencies, builds the selected branch, uploads source maps, and applies pending migrations before restarting. The production deploy also runs type checking and tests before building.
+
+Both deploy workflows run `npm run db:migrate` (ts-migrate-mongoose) after the build and before restarting, so each environment applies pending MongoDB migrations to its own database. `set -euo pipefail` aborts the deploy if a migration fails. See `migrations/README.md` for authoring migrations. The server also re-runs pending migrations once on boot as a non-fatal safety net.
 
 `evg31337.com` was the original test domain before `xendelta.com` became the real one — `staging.evg31337.com` still redirects to `staging.xendelta.com` as a backup, but `staging.xendelta.com` is the canonical hostname staging is actually served from (used for anything hostname-sensitive, e.g. the Bugsnag source map upload's `--base-url` in `deploy-staging.yml`).
 
