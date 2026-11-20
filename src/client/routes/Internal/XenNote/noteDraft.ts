@@ -19,7 +19,6 @@ export interface NoteDraft {
   pinned: boolean;
   archived: boolean;
   labels: string[];
-  notebook_id: string | null;
   /** Photos chosen for a note that has not been saved yet; uploaded right after it is created. */
   pendingImages: File[];
 }
@@ -36,7 +35,6 @@ export const emptyDraft = (overrides: Partial<NoteDraft> = {}): NoteDraft => ({
   pinned: false,
   archived: false,
   labels: [],
-  notebook_id: null,
   pendingImages: [],
   ...overrides,
 });
@@ -51,7 +49,6 @@ export const draftFromNote = (note: XenNote): NoteDraft => ({
   pinned: note.pinned,
   archived: note.archived,
   labels: [...note.labels],
-  notebook_id: note.notebook_id,
   pendingImages: [],
 });
 
@@ -94,7 +91,6 @@ export function toInput(d: NoteDraft): XenNoteInput {
     pinned: d.pinned,
     archived: d.archived,
     labels: normalizeLabels(d.labels),
-    notebook_id: d.notebook_id,
   };
   if (d.type === "checklist") return { ...base, body: "", checklist: d.checklist.filter((i) => i.text.trim()) };
   if (d.type === "link") return { ...base, body: "", link: d.link };

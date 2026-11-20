@@ -96,10 +96,9 @@ export async function runNoteReminders(now: Date = new Date()): Promise<void> {
       kind: "note",
       items: notes,
       canRead: async (note, uid) => {
-        const fresh = await XenNote.findById(note._id, "owner_id notebook_id members").lean();
+        const fresh = await XenNote.findById(note._id, "owner_id members").lean();
         if (!fresh) return false;
-        const book = fresh.notebook_id ? await bookFor(String(fresh.notebook_id)) : null;
-        return !!noteRole(fresh, book, uid);
+        return !!noteRole(fresh, uid);
       },
       claim: async (id, uid, at, time) =>
         (await XenNote.updateOne(pending(id, uid, at), { $set: { "reminders.$.notified_at": time } })).modifiedCount ===

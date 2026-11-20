@@ -3,6 +3,10 @@ import request from "supertest";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { createUser, startTestApp, type TestApp } from "../testing/testApp";
 import { down, up } from "../../../migrations/1796100000000-xennote-notebooks-to-pages";
+import {
+  down as reverseContract,
+  up as contract,
+} from "../../../migrations/1796300000000-xennote-contract-notebook-notes";
 import { runNoteReminders } from "../utils/xenNoteReminders";
 
 let app: TestApp;
@@ -111,23 +115,11 @@ describe("XenNote notebook cutover", () => {
     expect(await all.collection("xennotepagebodies").findOne({ page_id: id })).toEqual(body);
     expect(await all.collection("xennotesections").countDocuments({ notebook_id: book })).toBe(2);
 
-    expect((await api("get", `/locate/${id}`, owner)).body.data).toEqual({
-      kind: "page",
-      id: String(id),
-      notebook_id: String(book),
-    });
-    expect((await api("get", `/locate/${id}`, guest)).body.data.notebook_id).toBeNull();
-    expect((await api("get", `/locate/${id}`, stranger)).status).toBe(404);
-    expect((await api("get", `/locate/${loose}`, owner)).body.data.kind).toBe("note");
-    expect((await api("get", `/notes/${id}`, owner)).status).toBe(410);
-    expect((await api("get", `/notes/${id}`, stranger)).status).toBe(404);
-    expect((await api("get", `/notes?notebook=${book}`, owner)).status).toBe(410);
-    expect(
-      (await api("post", "/notes", owner).send({ title: "Old client", notebook_id: String(book), type: "text" }))
-        .status,
-    ).toBe(410);
-    expect((await api("get", `/public/note/${token}`)).body.data.page_id).toBe(String(id));
-    expect((await api("get", `/shared/note/${token}`, guest)).body.data).toMatchObject({
+    expect((await api("get", `/pages/${id}`, owner)).status).toBe(200);
+    expect((await api("get", `/pages/${id}`, guest)).status).toBe(200);
+    expect((await api("get", `/pages/${id}`, stranger)).status).toBe(404);
+    expect((await api("get", `/public/page/${token}`)).body.data.id).toBe(String(id));
+    expect((await api("get", `/shared/page/${token}`, guest)).body.data).toMatchObject({
       access: "member",
       role: "viewer",
       page_id: String(id),
@@ -153,7 +145,98 @@ describe("XenNote notebook cutover", () => {
     expect(await all.collection("xennotepages").countDocuments({ notebook_id: book })).toBe(0);
     expect(await all.collection("xennotesections").countDocuments({ notebook_id: book })).toBe(1);
     expect(await all.collection("xennoteversions").findOne({ _id: history })).not.toBeNull();
-    expect((await api("get", `/locate/${id}`, guest)).body.data.kind).toBe("note");
     expect(await all.collection("xennotes").findOne({ _id: loose })).not.toBeNull();
+  }, 120_000);
+
+  it("drops legacy data after cutover and keeps the notebook pages and loose notes intact", async () => {
+    const [owner, viewer] = await Promise.all([createUser(), createUser()]);
+    const all = mongoose.connection;
+    const notes = all.collection("xennotes");
+    const books = all.collection("xennotebooks");
+    const versions = all.collection("xennoteversions");
+    const pages = all.collection("xennotepages");
+    const bodies = all.collection("xennotepagebodies");
+    const pageVersions = all.collection("xennotepageversions");
+    const book = new Types.ObjectId();
+    const legacy = new Types.ObjectId();
+    const loose = new Types.ObjectId();
+    const blocked = new Types.ObjectId();
+    const pageToken = "c".repeat(22);
+    const noteToken = "d".repeat(22);
+    const bookToken = "e".repeat(22);
+    const at = new Date();
+    const ownerId = owner.user.id;
+
+    await books.insertOne({
+      _id: book,
+      name: "Cleanup",
+      members: [{ user_id: ownerId, role: "owner" }],
+      share: { enabled: true, token: bookToken },
+    });
+    await notes.insertMany([
+      {
+        _id: legacy,
+        owner_id: ownerId,
+        notebook_id: book,
+        title: "Migrated",
+        share: { enabled: true, token: pageToken },
+      },
+      { _id: loose, owner_id: ownerId, notebook_id: null, title: "Loose", share: { enabled: true, token: noteToken } },
+    ]);
+    await notes.createIndex({ notebook_id: 1, updated_at: -1 });
+    await notes.createIndex({ owner_id: 1, notebook_id: 1 });
+    const migratedHistory = new Types.ObjectId();
+    const looseHistory = new Types.ObjectId();
+    await versions.insertMany([
+      { _id: migratedHistory, note_id: legacy, title: "Before", at, captured_at: at },
+      { _id: looseHistory, note_id: loose, title: "Loose before", at, captured_at: at },
+    ]);
+
+    await expect(contract(all)).rejects.toThrow("must be migrated");
+    await up(all);
+    const body = await bodies.findOne({ page_id: legacy });
+
+    await notes.insertOne({ _id: blocked, owner_id: ownerId, notebook_id: book, deleted_at: at });
+    await expect(contract(all)).rejects.toThrow("have not been migrated");
+    expect(await all.collection("xennotes_premigration").findOne({ _id: legacy })).not.toBeNull();
+    expect(await versions.findOne({ _id: migratedHistory })).not.toBeNull();
+    await notes.deleteOne({ _id: blocked });
+
+    await contract(all);
+    await contract(all);
+    await expect(reverseContract()).rejects.toThrow("irreversible");
+    await expect(down(all)).rejects.toThrow("cleanup has already started");
+    expect(await all.db!.listCollections({ name: "xennotes_premigration" }).hasNext()).toBe(false);
+    const indexes = (await notes.listIndexes().toArray()).map((index) => index.name);
+    expect(indexes).not.toContain("notebook_id_1_updated_at_-1");
+    expect(indexes).not.toContain("owner_id_1_notebook_id_1");
+    expect(await notes.findOne({ _id: loose })).toMatchObject({ title: "Loose" });
+    expect((await notes.findOne({ _id: loose }))?.notebook_id).toBeUndefined();
+    expect(await versions.findOne({ _id: migratedHistory })).toBeNull();
+    expect(await versions.findOne({ _id: looseHistory })).not.toBeNull();
+    expect((await books.findOne({ _id: book }))?.pages_migrated_at).toBeUndefined();
+    expect((await books.findOne({ _id: book }))?.notes_migration_section_id).toBeUndefined();
+    expect((await pages.findOne({ _id: legacy }))?.migrated_from_note).toBeUndefined();
+    expect(await bodies.findOne({ page_id: legacy })).toEqual(body);
+    const history = await pageVersions.findOne({ _id: migratedHistory });
+    expect(history).toMatchObject({ page_id: legacy, title: "Before" });
+    expect(history?.migrated_from_note).toBeUndefined();
+
+    expect((await api("get", `/locate/${legacy}`, owner)).status).toBe(404);
+    expect((await api("get", `/notes/${legacy}`, owner)).status).toBe(404);
+    expect((await api("get", `/notes?notebook=${book}`, owner)).status).toBe(400);
+    expect((await api("post", "/notes", owner).send({ notebook_id: String(book) })).status).toBe(400);
+    expect((await api("put", `/notes/${loose}`, owner).send({ notebook_id: String(book) })).status).toBe(400);
+    expect(
+      (await api("post", "/notes/bulk-update", owner).send({ ids: [String(loose)], notebook_id: null })).status,
+    ).toBe(400);
+    expect((await api("get", `/public/note/${pageToken}`)).status).toBe(404);
+    expect((await api("get", `/shared/note/${pageToken}`, owner)).status).toBe(404);
+    expect((await api("get", `/public/page/${pageToken}`)).body.data.id).toBe(String(legacy));
+    expect((await api("get", `/public/note/${noteToken}`)).body.data.note.title).toBe("Loose");
+    expect((await api("get", `/shared/note/${noteToken}`, viewer)).body.data.access).toBe("link");
+    const notebook = (await api("get", `/public/notebook/${bookToken}`)).body.data;
+    expect(notebook.pages).toEqual([expect.objectContaining({ id: String(legacy) })]);
+    expect(notebook.notes).toBeUndefined();
   }, 120_000);
 });

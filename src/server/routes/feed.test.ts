@@ -130,21 +130,14 @@ describe("Home feed", () => {
     expect(seen.filter((l) => /^E\d$/.test(l))).toEqual(["E0", "E1", "E2", "E3", "E4"]);
   });
 
-  it("tells people they were added to a notebook, and shows new notes to its members", async () => {
+  it("tells people they were added to a notebook", async () => {
     const [a, b] = await Promise.all([createUser(), createUser()]);
     const nb = await call("post", "/api/xennote/notebooks", a).send({ name: "Cabin" });
     const notebookId = (nb.body.data.notebook ?? nb.body.data)._id;
     await call("post", `/api/xennote/notebooks/${notebookId}/members`, a).send({ userIds: [id(b)], role: "editor" });
-    await call("post", "/api/xennote/notes", a).send({
-      notebook_id: notebookId,
-      type: "text",
-      title: "Packing",
-      body: "x",
-    });
 
     const verbs = (await feed(b)).entries.map((e: any) => e.verb);
     expect(verbs).toContain("xennote.notebook_shared");
-    expect(verbs).toContain("xennote.note_created");
   });
 
   it("validates the feed routes' input", async () => {

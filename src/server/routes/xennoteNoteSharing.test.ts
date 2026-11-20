@@ -31,7 +31,7 @@ const share = (owner: U, noteId: string, to: U, role: "editor" | "viewer") =>
   api(owner).post(`/notes/${noteId}/members`, { userIds: [id(to)], role });
 
 describe("sharing a note with people", () => {
-  it("lets a viewer read it, under Shared with me, but not change, delete, move or re-share it", async () => {
+  it("lets a viewer read it, under Shared with me, but not change, delete or re-share it", async () => {
     const owner = await createUser();
     const viewer = await createUser();
     const n = await mkNote(owner);
@@ -45,10 +45,10 @@ describe("sharing a note with people", () => {
     expect(seen).toMatchObject({ title: "Plan", can_edit: false, shared_with: 1, share: null });
     expect(seen.owner_name).toBe(owner.user.username);
 
-    const listed = (await api(viewer).get("/notes?notebook=shared")).body.data.notes;
+    const listed = (await api(viewer).get("/notes?scope=shared")).body.data.notes;
     expect(listed.map((x: any) => x._id)).toEqual([n._id]);
     expect((await api(viewer).get("/notes")).body.data.notes).toHaveLength(1); // also on All notes
-    expect((await api(viewer).get("/notes?notebook=none")).body.data.notes).toHaveLength(0); // but not "My notes"
+    expect((await api(viewer).get("/notes?scope=mine")).body.data.notes).toHaveLength(0); // but not "My notes"
     expect((await api(viewer).get("/counts")).body.data).toMatchObject({ all: 1, mine: 0, shared: 1 });
 
     expect((await api(viewer).put(`/notes/${n._id}`, { title: "Mine now" })).status).toBe(403);
@@ -57,7 +57,7 @@ describe("sharing a note with people", () => {
     expect((await api(viewer).post(`/notes/${n._id}/share`)).status).toBe(403);
   });
 
-  it("lets an editor change the wording, but not delete, move or share it", async () => {
+  it("lets an editor change the wording, but not delete or share it", async () => {
     const owner = await createUser();
     const editor = await createUser();
     const n = await mkNote(owner);
@@ -69,8 +69,6 @@ describe("sharing a note with people", () => {
     expect((await api(owner).get(`/notes/${n._id}`)).body.data.note.body).toBe("edited by editor");
 
     expect((await api(editor).del(`/notes/${n._id}`)).status).toBe(403);
-    const book = (await api(editor).post("/notebooks", { name: "Theirs" })).body.data.notebook;
-    expect((await api(editor).put(`/notes/${n._id}`, { notebook_id: book._id })).status).toBe(403);
     expect((await api(editor).post("/notes/bulk-delete", { ids: [n._id] })).body.data).toMatchObject({ deleted: 0 });
     expect((await share(editor, n._id, await createUser(), "viewer")).status).toBe(403);
   });
@@ -113,23 +111,9 @@ describe("sharing a note with people", () => {
     await share(owner, n._id, a, "viewer");
 
     const s = (await api(owner).get(`/notes/${n._id}/sharing`)).body.data;
-    expect(s).toMatchObject({ can_manage: true, owner: { user_id: id(owner) }, notebook: null });
+    expect(s).toMatchObject({ can_manage: true, owner: { user_id: id(owner) } });
     expect(s.members).toHaveLength(1);
     expect((await api(a).get(`/notes/${n._id}/sharing`)).body.data).toMatchObject({ can_manage: false, share: null });
     expect((await api(stranger).get(`/notes/${n._id}/sharing`)).status).toBe(404);
-  });
-
-  it("shares a note that sits in a notebook with someone who is not in the notebook", async () => {
-    const owner = await createUser();
-    const guest = await createUser();
-    const book = (await api(owner).post("/notebooks", { name: "Work" })).body.data.notebook;
-    const n = await mkNote(owner, { notebook_id: book._id });
-    await share(owner, n._id, guest, "viewer");
-
-    expect((await api(guest).get(`/notes/${n._id}`)).status).toBe(200);
-    expect((await api(guest).get(`/notes?notebook=${book._id}`)).status).toBe(404); // the notebook itself stays closed
-    const other = await mkNote(owner, { notebook_id: book._id, title: "Other" });
-    expect((await api(guest).get(`/notes/${other._id}`)).status).toBe(404);
-    expect((await api(guest).get("/notes")).body.data.notes.map((x: any) => x._id)).toEqual([n._id]);
   });
 });

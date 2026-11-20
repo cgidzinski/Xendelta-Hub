@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { escapeRegex } from "@shared/regex";
 import { User } from "../models/user";
-import { XenNote, XenNotebook } from "../models/xenNote";
+import { XenNote } from "../models/xenNote";
 import { XenDriveFile } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { XenLink } from "../models/xenlink";
@@ -63,18 +63,10 @@ const people: Source = async (uid, q) => {
 };
 
 const notes: Source = async (uid, q, rx) => {
-  const books = await XenNotebook.find({ "members.user_id": uid }, "_id name").lean();
-  const names = new Map(books.map((b) => [String(b._id), b.name]));
   const found = await XenNote.find({
     archived: { $ne: true },
     $and: [
-      {
-        $or: [
-          { notebook_id: null, owner_id: uid },
-          { notebook_id: { $in: books.map((b) => b._id) } },
-          { "members.user_id": uid },
-        ],
-      },
+      { $or: [{ owner_id: uid }, { "members.user_id": uid }] },
       {
         $or: [
           { title: rx },
@@ -95,11 +87,10 @@ const notes: Source = async (uid, q, rx) => {
     label: "Notes",
     hits: found.map((n) => {
       const inBody = n.body && rx.test(n.body) ? around(n.body, q) : "";
-      const where = n.notebook_id ? names.get(String(n.notebook_id)) : undefined;
       return {
         id: String(n._id),
         title: n.title || clip(n.body || n.checklist[0]?.text || n.link?.title || "Untitled note", 60),
-        subtitle: [inBody, where].filter(Boolean).join(" · ") || undefined,
+        subtitle: inBody || undefined,
         link: `/internal/xennote?note=${n._id}`,
       };
     }),

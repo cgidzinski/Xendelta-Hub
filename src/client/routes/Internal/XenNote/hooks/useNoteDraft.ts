@@ -14,7 +14,6 @@ interface UseNoteDraftOptions {
   /** The note to edit; null starts a new one. */
   note: XenNote | null;
   startType?: NoteType;
-  startNotebookId?: string | null;
   onOpenNote?: (id: string) => void;
 }
 
@@ -22,7 +21,7 @@ interface UseNoteDraftOptions {
  * The state behind the note editor: the draft being typed, the note as the server holds it (`live`), autosave,
  * saving on close, and the actions that change the note outside the draft (photos, reminder, public link, delete).
  */
-export function useNoteDraft({ open, onClose, note, startType, startNotebookId, onOpenNote }: UseNoteDraftOptions) {
+export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: UseNoteDraftOptions) {
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
   const actions = useXenNoteActions();
@@ -33,12 +32,11 @@ export function useNoteDraft({ open, onClose, note, startType, startNotebookId, 
         ? draftFromNote(note)
         : emptyDraft({
             type: startType ?? "text",
-            notebook_id: startNotebookId ?? null,
             checklist: startType === "checklist" ? [{ text: "", done: false }] : [],
           }),
     // The draft is reset each time the dialog opens, for a given note or a fresh start
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, note?._id, startType, startNotebookId],
+    [open, note?._id, startType],
   );
   const [draft, setDraft] = useState<NoteDraft>(initial);
   const [saving, setSaving] = useState(false);
@@ -117,7 +115,7 @@ export function useNoteDraft({ open, onClose, note, startType, startNotebookId, 
     if (readOnly || (await persist())) onOpenNote?.(id);
   };
 
-  // My reminder on this note. Personal, so it works in a notebook I can only view too; it isn't part of the draft.
+  // My reminder on this note. Personal, so it works on a note I can only view too; it isn't part of the draft.
   const setReminder = async (at: string | null) => {
     if (!live) return;
     try {

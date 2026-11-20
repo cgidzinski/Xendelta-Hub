@@ -29,7 +29,6 @@ const loaded: XenNoteSharing = {
   can_manage: true,
   owner: { user_id: "u1", username: "Chris", avatar: null },
   members: [{ user_id: "u2", username: "Sam", avatar: null, role: "editor" }],
-  notebook: null,
   share: { enabled: false, token: null },
 };
 

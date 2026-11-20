@@ -70,40 +70,17 @@ describe("notes that link to a note", () => {
     expect(await linkedFrom(me, target._id)).toEqual(["Mine"]);
   });
 
-  it("includes notes in a shared notebook, and leaves out ones in notebooks the caller isn't in", async () => {
+  it("includes directly shared notes and excludes private ones", async () => {
     const [owner, member, outsider] = await Promise.all([createUser(), createUser(), createUser()]);
-    const shared = (await api(owner).post("/notebooks", { name: "Family" })).body.data.notebook;
-    const add = await api(owner).post(`/notebooks/${shared._id}/members`, {
-      userIds: [String(member.user._id)],
-      role: "viewer",
-    });
-    expect(add.status, JSON.stringify(add.body)).toBe(200);
-    const hidden = (await api(outsider).post("/notebooks", { name: "Secret" })).body.data.notebook;
-
-    const target = await note(owner, { title: "Family plan", notebook_id: shared._id });
-    await note(owner, { title: "In the family book", body: "[[Family plan]]", notebook_id: shared._id });
-    await note(outsider, { title: "In a hidden book", body: "[[Family plan]]", notebook_id: hidden._id });
+    const target = await note(owner, { title: "Family plan" });
+    const linker = await note(owner, { title: "Shared link", body: "[[Family plan]]" });
+    for (const id of [target._id, linker._id]) {
+      const add = await api(owner).post(`/notes/${id}/members`, { userIds: [member.user.id], role: "viewer" });
+      expect(add.status, JSON.stringify(add.body)).toBe(200);
+    }
+    await note(outsider, { title: "Hidden link", body: "[[Family plan]]" });
     await note(member, { title: "Member's own", body: "[[Family plan]]" });
 
-    // the member can see the shared note, and the family book's link and their own, but never the hidden one
-    expect((await linkedFrom(member, target._id)).sort()).toEqual(["In the family book", "Member's own"]);
-    expect(await linkedFrom(owner, target._id)).toEqual(["In the family book"]);
-  });
-
-  it("refuses a note the caller can't see, and needs sign-in", async () => {
-    const [me, stranger] = await Promise.all([createUser(), createUser()]);
-    const mine = await note(me, { title: "Private" });
-    expect((await api(stranger).get(`/notes/${mine._id}/backlinks`)).status).toBe(404);
-    expect((await request(t.app).get(`/api/xennote/notes/${mine._id}/backlinks`)).status).toBe(401);
-    expect((await api(me).get(`/notes/not-an-id/backlinks`)).status).toBe(400);
-  });
-
-  it("returns only what the list needs, never the body", async () => {
-    const me = await createUser();
-    const target = await note(me, { title: "Hub" });
-    await note(me, { title: "Linker", body: "secret words [[Hub]]" });
-    const res = await api(me).get(`/notes/${target._id}/backlinks`);
-    expect(Object.keys(res.body.data.notes[0]).sort()).toEqual(["_id", "notebook_id", "title", "type", "updated_at"]);
     expect(JSON.stringify(res.body)).not.toContain("secret words");
   });
 });

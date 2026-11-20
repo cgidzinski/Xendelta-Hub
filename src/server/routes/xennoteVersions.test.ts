@@ -106,9 +106,8 @@ describe("note versions", () => {
     const owner = await createUser();
     const viewer = await createUser();
     const stranger = await createUser();
-    const book = (await api(owner).post("/notebooks", { name: "Team" })).body.data.notebook;
-    await api(owner).post(`/notebooks/${book._id}/members`, { userIds: [String(viewer.user._id)], role: "viewer" });
-    const n = await make(owner, { title: "v1", body: "first", notebook_id: book._id });
+    const n = await make(owner, { title: "v1", body: "first" });
+    await api(owner).post(`/notes/${n._id}/members`, { userIds: [viewer.user.id], role: "viewer" });
     await api(owner).put(`/notes/${n._id}`, { title: "v2" });
     const [v] = await versions(owner, n._id);
 

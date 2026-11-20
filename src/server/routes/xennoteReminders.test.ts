@@ -31,18 +31,16 @@ const api = (who: U) => ({
   put: (url: string, body: object) => request(t.app).put(`/api/xennote${url}`).set(as(who)).send(body),
 });
 const note = async (who: U, body: object) => (await api(who).post("/notes", body)).body.data.note;
-const sharedBook = async (owner: U, others: Array<[U, "editor" | "viewer"]>) => {
-  const book = (await api(owner).post("/notebooks", { name: "Home" })).body.data.notebook;
+const share = async (owner: U, noteId: string, others: Array<[U, "editor" | "viewer"]>) => {
   for (const [who, role] of others) {
-    const r = await api(owner).post(`/notebooks/${book._id}/members`, { userIds: [String(who.user._id)], role });
+    const r = await api(owner).post(`/notes/${noteId}/members`, { userIds: [who.user.id], role });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   }
-  return book as { _id: string };
 };
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000);
 const remind = (who: U, id: string, at: Date | null) =>
   api(who).put(`/notes/${id}/reminder`, { at: at ? at.toISOString() : null });
-// Reminders only: being added to a notebook sends its own notification.
+// Reminders only: being added to a note sends its own notification.
 const inbox = (who: U) =>
   mongoose
     .model("Notification")
@@ -92,14 +90,15 @@ describe("setting a reminder", () => {
     expect((await remind(me, n._id, new Date(Date.now() + 10 * 365 * 86_400_000))).status).toBe(400);
   });
 
-  it("is personal: others in the notebook neither see it nor have theirs changed, and it doesn't touch the note", async () => {
+  it("is personal: other readers neither see it nor have theirs changed, and it doesn't touch the note", async () => {
     const [owner, editor, viewer] = await Promise.all([createUser(), createUser(), createUser()]);
-    const book = await sharedBook(owner, [
+    const n = await note(owner, { title: "Shared list" });
+    await share(owner, n._id, [
       [editor, "editor"],
       [viewer, "viewer"],
     ]);
-    const n = await note(owner, { title: "Shared list", notebook_id: book._id });
 
+    const before = (await api(owner).get(`/notes/${n._id}`)).body.data.note.updated_at;
     await remind(owner, n._id, inHours(3));
     const viewerSet = await remind(viewer, n._id, inHours(5)); // a viewer can remind themselves
     expect(viewerSet.status).toBe(200);
@@ -112,7 +111,7 @@ describe("setting a reminder", () => {
     );
 
     // Setting reminders is not an edit: the note's updated time is unchanged.
-    expect((await seen(owner)).updated_at).toBe(n.updated_at);
+    expect((await seen(owner)).updated_at).toBe(before);
     await remind(viewer, n._id, null);
     expect((await seen(owner)).reminder).not.toBeNull();
   });
@@ -171,11 +170,11 @@ describe("sending reminders", () => {
 
   it("sends each person their own, and not to people who didn't ask", async () => {
     const [owner, editor, bystander] = await Promise.all([createUser(), createUser(), createUser()]);
-    const book = await sharedBook(owner, [
+    const n = await note(owner, { title: "Plan", body: "Book the venue" });
+    await share(owner, n._id, [
       [editor, "editor"],
       [bystander, "viewer"],
     ]);
-    const n = await note(owner, { title: "Plan", body: "Book the venue", notebook_id: book._id });
     await remind(owner, n._id, inHours(1));
     await remind(editor, n._id, inHours(2));
 
@@ -190,13 +189,13 @@ describe("sending reminders", () => {
 
   it("doesn't tell someone who can no longer see the note", async () => {
     const [owner, member] = await Promise.all([createUser(), createUser()]);
-    const book = await sharedBook(owner, [[member, "editor"]]);
-    const n = await note(owner, { title: "Secret plans", notebook_id: book._id });
+    const n = await note(owner, { title: "Secret plans" });
+    await share(owner, n._id, [[member, "editor"]]);
     await remind(member, n._id, inHours(1));
 
     await mongoose
-      .model("XenNotebook")
-      .updateOne({ _id: book._id }, { $pull: { members: { user_id: String(member.user._id) } } });
+      .model("XenNote")
+      .updateOne({ _id: n._id }, { $pull: { members: { user_id: String(member.user._id) } } });
     await runNoteReminders(inHours(2));
     expect(await inbox(member)).toHaveLength(0);
     // and it is used up, not retried every minute
