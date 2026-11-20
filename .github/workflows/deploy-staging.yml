@@ -27,8 +27,7 @@ jobs:
           SHA=$(git rev-parse HEAD)
           # Quiet on purpose: npm's deprecation notices and the 280-line asset list are not news on every deploy.
           npm ci --no-audit --no-fund --loglevel=error
-          npm run type-check
-          npm test
+          # PR CI runs type checking and tests. Staging builds the selected branch for manual verification.
           VITE_BUGSNAG_APP_VERSION="$SHA" npm run build -- --logLevel warn
           npx bugsnag-source-maps upload-browser \
             --api-key "$VITE_BUGSNAG_API_KEY" \
