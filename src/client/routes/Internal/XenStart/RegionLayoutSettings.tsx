@@ -67,7 +67,7 @@ export default function RegionLayoutSettings({ styles, onChange, saving }: Props
       <Stack>
         <Typography variant="subtitle2">{regionNames[selected]} region</Typography>
         <Typography variant="caption" color="text.secondary">
-          These settings apply to the desktop layout.
+          The desktop layout updates as you make changes. Save settings to keep them.
         </Typography>
       </Stack>
       {(CENTER_REGIONS as readonly WidgetRegion[]).includes(selected) && (
@@ -75,6 +75,7 @@ export default function RegionLayoutSettings({ styles, onChange, saving }: Props
           select
           size="small"
           label="Height"
+          helperText="Auto fits the content. Shares divide the available height."
           value={style.height === null ? "auto" : String(style.height)}
           disabled={saving}
           onChange={(event) => {

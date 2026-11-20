@@ -105,18 +105,19 @@ export function LinkDialog({
 
 export function SettingsDialog({
   initialBackground,
-  initialRegionStyles,
+  regionStyles,
+  onRegionStylesChange,
   onClose,
   onSave,
   saving,
   error,
 }: DialogProps & {
   initialBackground: string;
-  initialRegionStyles?: RegionStyles;
-  onSave: (backgroundUrl: string, regionStyles: RegionStyles) => void;
+  regionStyles: RegionStyles;
+  onRegionStylesChange: (styles: RegionStyles) => void;
+  onSave: (backgroundUrl: string) => void;
 }) {
   const [tab, setTab] = useState("general");
-  const [regionStyles, setRegionStyles] = useState(initialRegionStyles ?? {});
   const [value, setValue] = useState(initialBackground);
   const [preview, setPreview] = useState(initialBackground);
   const [backgroundError, setBackgroundError] = useState(false);
@@ -140,6 +141,14 @@ export function SettingsDialog({
       maxWidth="xs"
       title="Settings"
       onClose={onClose}
+      slotProps={
+        tab === "layout"
+          ? {
+              container: { sx: { justifyContent: { md: "flex-end" } } },
+              backdrop: { sx: { backgroundColor: { md: "transparent" } } },
+            }
+          : undefined
+      }
       actions={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -162,7 +171,7 @@ export function SettingsDialog({
             setTab("appearance");
             return;
           }
-          onSave(backgroundUrl, regionStyles);
+          onSave(backgroundUrl);
         }}
       >
         {error && <Alert severity="error">{error}</Alert>}
@@ -212,7 +221,7 @@ export function SettingsDialog({
           </Stack>
         </Box>
         <Box id="xenstart-layout-panel" role="tabpanel" aria-labelledby="xenstart-layout-tab" hidden={tab !== "layout"}>
-          <RegionLayoutSettings styles={regionStyles} onChange={setRegionStyles} saving={saving} />
+          <RegionLayoutSettings styles={regionStyles} onChange={onRegionStylesChange} saving={saving} />
         </Box>
         <Box
           id="xenstart-appearance-panel"

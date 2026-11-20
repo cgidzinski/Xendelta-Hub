@@ -55,11 +55,10 @@ export default function WidgetBoard({
     <Box
       sx={(theme) => ({
         display: "grid",
-        flexGrow: { md: 1 },
         alignItems: "start",
         gap: { xs: 2, md: 2.5 },
         gridTemplateColumns: "minmax(0, 1fr)",
-        [theme.breakpoints.up("md")]: desktopGrid(styles),
+        [theme.breakpoints.up("md")]: { ...desktopGrid(styles), flexGrow: 1 },
       })}
     >
       {WIDGET_REGIONS.map((region) => {

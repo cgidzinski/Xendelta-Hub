@@ -13,6 +13,7 @@ import {
   WIDGET_REGIONS,
   WIDGET_TYPES,
   type QuickLink,
+  type RegionStyles,
   type WidgetRegion,
   type WidgetType,
   type XenStartConfig,
@@ -42,7 +43,7 @@ const iconSx = {
 const conflictMessage = "XenStart changed in another tab. Review your changes and save again.";
 type Dialog =
   | { kind: "link"; link: QuickLink | null; base: XenStartConfig }
-  | { kind: "settings"; base: XenStartConfig }
+  | { kind: "settings"; base: XenStartConfig; regionStyles: RegionStyles }
   | { kind: "picker"; region: WidgetRegion; base: XenStartConfig }
   | { kind: "widget"; widget: WidgetType; region: WidgetRegion; base: XenStartConfig };
 
@@ -61,6 +62,10 @@ export default function XenStart() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const regionStyles =
+    dialog?.kind === "settings"
+      ? mergeRegionStyles(dialog.base.regionStyles ?? {}, dialog.regionStyles, config?.regionStyles ?? {})
+      : config?.regionStyles;
   const [error, setError] = useState("");
   const [retryAfterConflict, setRetryAfterConflict] = useState(false);
   const saving = save.isPending;
@@ -257,7 +262,7 @@ export default function XenStart() {
               onClick={() => {
                 if (!config) return;
                 setAnchor(null);
-                openDialog({ kind: "settings", base: config });
+                openDialog({ kind: "settings", base: config, regionStyles: config.regionStyles ?? {} });
               }}
             >
               Settings
@@ -283,7 +288,7 @@ export default function XenStart() {
           <HubWidgetProvider enabled={placed.includes("pinned") || placed.includes("attention")}>
             <WidgetBoard
               layout={layout}
-              styles={config?.regionStyles}
+              styles={regionStyles}
               editing={editing}
               saving={saving}
               canAdd={available.length > 0}
@@ -336,19 +341,18 @@ export default function XenStart() {
       {dialog?.kind === "settings" && (
         <SettingsDialog
           initialBackground={dialog.base.appearance.backgroundUrl}
-          initialRegionStyles={dialog.base.regionStyles}
+          regionStyles={dialog.regionStyles}
+          onRegionStylesChange={(styles) =>
+            setDialog((current) => (current?.kind === "settings" ? { ...current, regionStyles: styles } : current))
+          }
           onClose={closeDialog}
           saving={saving}
           error={error}
-          onSave={(backgroundUrl, regionStyles) =>
+          onSave={(backgroundUrl) =>
             void update(
               (latest) => ({
                 ...latest,
-                regionStyles: mergeRegionStyles(
-                  dialog.base.regionStyles ?? {},
-                  regionStyles,
-                  latest.regionStyles ?? {},
-                ),
+                regionStyles,
                 appearance: {
                   ...latest.appearance,
                   backgroundUrl:
