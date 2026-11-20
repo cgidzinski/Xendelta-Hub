@@ -1,16 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  FormControlLabel,
-  IconButton,
-  InputAdornment,
-  Popover,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
+import { Alert, Box, Button, IconButton, InputAdornment, Popover, Stack, TextField } from "@mui/material";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -20,9 +9,11 @@ import {
   defaultXenStartConfig,
   searchUrl,
   widgetLayout,
+  mergeRegionStyles,
   WIDGET_REGIONS,
   WIDGET_TYPES,
   type QuickLink,
+  type RegionStyles,
   type WidgetRegion,
   type WidgetType,
   type XenStartConfig,
@@ -52,7 +43,7 @@ const iconSx = {
 const conflictMessage = "XenStart changed in another tab. Review your changes and save again.";
 type Dialog =
   | { kind: "link"; link: QuickLink | null; base: XenStartConfig }
-  | { kind: "settings"; base: XenStartConfig }
+  | { kind: "settings"; base: XenStartConfig; regionStyles: RegionStyles }
   | { kind: "picker"; region: WidgetRegion; base: XenStartConfig }
   | { kind: "widget"; widget: WidgetType; region: WidgetRegion; base: XenStartConfig };
 
@@ -71,6 +62,10 @@ export default function XenStart() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const regionStyles =
+    dialog?.kind === "settings"
+      ? mergeRegionStyles(dialog.base.regionStyles ?? {}, dialog.regionStyles, config?.regionStyles ?? {})
+      : config?.regionStyles;
   const [error, setError] = useState("");
   const [retryAfterConflict, setRetryAfterConflict] = useState(false);
   const saving = save.isPending;
@@ -195,7 +190,15 @@ export default function XenStart() {
     <Box
       component="main"
       aria-label="XenStart"
-      sx={{ position: "relative", isolation: "isolate", minHeight: "100dvh", px: { xs: 1.5, sm: 3 }, pb: 6 }}
+      sx={{
+        position: "relative",
+        isolation: "isolate",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100dvh",
+        px: { xs: 1.5, sm: 3 },
+        pb: 6,
+      }}
     >
       {appearance.backgroundUrl && <BackgroundImage key={appearance.backgroundUrl} url={appearance.backgroundUrl} />}
       <Box sx={{ display: "flex", justifyContent: "space-between", pt: { xs: 1.25, sm: 1.75 } }}>
@@ -241,28 +244,25 @@ export default function XenStart() {
           }}
         >
           <Stack>
-            <FormControlLabel
-              label="Edit mode"
-              labelPlacement="start"
-              sx={{ mx: 1, justifyContent: "space-between" }}
-              control={
-                <Switch
-                  checked={editing}
-                  disabled={!config || saving}
-                  onChange={(_, checked) => {
-                    setEditing(checked);
-                    setAnchor(null);
-                  }}
-                />
-              }
-            />
+            {!editing && (
+              <Button
+                sx={{ justifyContent: "flex-start", px: 1 }}
+                disabled={!config || saving}
+                onClick={() => {
+                  setEditing(true);
+                  setAnchor(null);
+                }}
+              >
+                Enter edit mode
+              </Button>
+            )}
             <Button
               sx={{ justifyContent: "flex-start", px: 1 }}
               disabled={!config}
               onClick={() => {
                 if (!config) return;
                 setAnchor(null);
-                openDialog({ kind: "settings", base: config });
+                openDialog({ kind: "settings", base: config, regionStyles: config.regionStyles ?? {} });
               }}
             >
               Settings
@@ -270,7 +270,7 @@ export default function XenStart() {
           </Stack>
         </Popover>
       </Box>
-      <Box sx={{ pt: { xs: 3.25, sm: 6 } }}>
+      <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, pt: { xs: 3.25, sm: 6 } }}>
         {error && !dialog && (
           <Alert severity="error" sx={{ maxWidth: 800, mx: "auto", mb: 2 }}>
             {error}
@@ -288,6 +288,7 @@ export default function XenStart() {
           <HubWidgetProvider enabled={placed.includes("pinned") || placed.includes("attention")}>
             <WidgetBoard
               layout={layout}
+              styles={regionStyles}
               editing={editing}
               saving={saving}
               canAdd={available.length > 0}
@@ -340,6 +341,10 @@ export default function XenStart() {
       {dialog?.kind === "settings" && (
         <SettingsDialog
           initialBackground={dialog.base.appearance.backgroundUrl}
+          regionStyles={dialog.regionStyles}
+          onRegionStylesChange={(styles) =>
+            setDialog((current) => (current?.kind === "settings" ? { ...current, regionStyles: styles } : current))
+          }
           onClose={closeDialog}
           saving={saving}
           error={error}
@@ -347,6 +352,7 @@ export default function XenStart() {
             void update(
               (latest) => ({
                 ...latest,
+                regionStyles,
                 appearance: {
                   ...latest.appearance,
                   backgroundUrl:

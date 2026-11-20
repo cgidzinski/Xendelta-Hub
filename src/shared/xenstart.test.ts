@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { searchUrl } from "./xenstart";
+import { mergeRegionStyles, regionStyle, searchUrl } from "./xenstart";
+
+describe("region layout preferences", () => {
+  it("preserves the original layout and only applies fields changed by this draft", () => {
+    expect(regionStyle("top")).toEqual({ height: 1, alignment: "start", paddingTop: 0 });
+    expect(regionStyle("center").height).toBeNull();
+    expect(regionStyle("bottom").alignment).toBe("end");
+    expect(
+      mergeRegionStyles(
+        { top: { alignment: "center" } },
+        { bottom: { paddingTop: 32 } },
+        { top: { alignment: "center", height: 2 }, left: { paddingTop: 8 } },
+      ),
+    ).toEqual({ top: { height: 2 }, bottom: { paddingTop: 32 }, left: { paddingTop: 8 } });
+  });
+});
 
 describe("XenStart search", () => {
   it.each([

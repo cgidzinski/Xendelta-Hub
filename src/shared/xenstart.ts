@@ -22,6 +22,57 @@ export type WidgetRegion = (typeof WIDGET_REGIONS)[number];
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 export type WidgetLayout = Record<WidgetRegion, WidgetType[]>;
 
+export const CENTER_REGIONS = ["top", "center", "bottom"] as const;
+export const REGION_ALIGNMENTS = ["start", "center", "end"] as const;
+export const REGION_HEIGHT_SHARES = [1, 2, 3, 4] as const;
+export const REGION_PADDING_STEP = 8;
+export const MAX_REGION_PADDING = 160;
+
+export interface RegionStyle {
+  height?: (typeof REGION_HEIGHT_SHARES)[number] | null;
+  alignment?: (typeof REGION_ALIGNMENTS)[number];
+  paddingTop?: number;
+}
+
+export type RegionStyles = Partial<Record<WidgetRegion, RegionStyle>>;
+
+export function regionStyle(region: WidgetRegion, styles: RegionStyles = {}): Required<RegionStyle> {
+  return {
+    height: region === "top" || region === "bottom" ? 1 : null,
+    alignment: region === "bottom" ? "end" : "start",
+    paddingTop: 0,
+    ...styles[region],
+  };
+}
+
+export function withRegionStyle(styles: RegionStyles, region: WidgetRegion, style: RegionStyle): RegionStyles {
+  const defaults = regionStyle(region);
+  const overrides: RegionStyle = {};
+  if (style.height !== undefined && style.height !== defaults.height) overrides.height = style.height;
+  if (style.alignment !== undefined && style.alignment !== defaults.alignment) overrides.alignment = style.alignment;
+  if (style.paddingTop !== undefined && style.paddingTop !== defaults.paddingTop)
+    overrides.paddingTop = style.paddingTop;
+  const next = { ...styles };
+  if (Object.keys(overrides).length) next[region] = overrides;
+  else delete next[region];
+  return next;
+}
+
+export function mergeRegionStyles(base: RegionStyles, draft: RegionStyles, latest: RegionStyles): RegionStyles {
+  let next = latest;
+  for (const region of WIDGET_REGIONS) {
+    const original = regionStyle(region, base);
+    const edited = regionStyle(region, draft);
+    const current = regionStyle(region, latest);
+    next = withRegionStyle(next, region, {
+      height: edited.height === original.height ? current.height : edited.height,
+      alignment: edited.alignment === original.alignment ? current.alignment : edited.alignment,
+      paddingTop: edited.paddingTop === original.paddingTop ? current.paddingTop : edited.paddingTop,
+    });
+  }
+  return next;
+}
+
 export type SearchEngine = (typeof SEARCH_ENGINES)[number];
 export type HubSection = (typeof HUB_SECTIONS)[number];
 
@@ -38,6 +89,7 @@ export interface XenStartConfig {
   revision: number;
   appearance: XenStartAppearance;
   layout?: WidgetLayout;
+  regionStyles?: RegionStyles;
   clockFormat?: ClockFormat;
 }
 
