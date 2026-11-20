@@ -5,7 +5,6 @@ import { AppError, callerId } from "../../utils/http";
 import { uploadXenNoteImages } from "../../config/multer";
 import { storeAppFiles, removeAppFiles } from "../../utils/appFiles";
 import { XENNOTE_SOURCE, removeNotePhotos } from "../../utils/xenNoteFiles";
-import { roleOf } from "../../utils/membership";
 import { MAX_NOTE_IMAGES } from "../../../shared/xennote/notes";
 import { loadNote, notifyChange, serializeNote } from "./shared";
 
@@ -33,7 +32,7 @@ export function registerNoteImageRoutes(app: any) {
     uploadXenNoteImages.array("images", MAX_NOTE_IMAGES),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
+      const { note, notebook, role } = await loadNote(req, req.params.id as string, "edit");
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
       if (files.length === 0) throw new AppError(400, "Choose at least one photo");
       if (note.images.length + files.length > MAX_NOTE_IMAGES) {
@@ -65,7 +64,7 @@ export function registerNoteImageRoutes(app: any) {
       res.json({
         status: true,
         message: "Photos added",
-        data: { note: await serializeNote(note, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }) },
+        data: { note: await serializeNote(note, { uid, role }) },
       });
     },
   );
@@ -75,7 +74,7 @@ export function registerNoteImageRoutes(app: any) {
     validateParams(xenNoteImageParamSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
+      const { note, notebook, role } = await loadNote(req, req.params.id as string, "edit");
       const image = note.images.find((i) => String(i._id) === req.params.imageId);
       if (!image) throw new AppError(404, "Photo not found");
       await removeNotePhotos([image]);
@@ -86,7 +85,7 @@ export function registerNoteImageRoutes(app: any) {
       res.json({
         status: true,
         message: "Photo removed",
-        data: { note: await serializeNote(note, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }) },
+        data: { note: await serializeNote(note, { uid, role }) },
       });
     },
   );

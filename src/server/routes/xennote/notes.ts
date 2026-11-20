@@ -16,18 +16,21 @@ import {
 import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
-import { canEdit, roleOf } from "../../utils/membership";
+import { roleOf } from "../../utils/membership";
 import { contentChanged, contentOf, keepVersion } from "../../utils/xenNoteVersions";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
+  canManageNote,
   escapeRegex,
   loadNote,
   loadNotebook,
   myNotebooks,
   namesForNotes,
+  noteRole,
   notifyChange,
   serializeNote,
+  visibleNotesFilter,
   type NotebookDoc,
   type NoteDoc,
 } from "./shared";
@@ -68,6 +71,9 @@ async function moveNote(req: Request, note: NoteDoc, to: string | null) {
   const uid = callerId(req);
   const from = note.notebook_id ? String(note.notebook_id) : null;
   if (to === from) return undefined;
+  // Someone a note was shared with can change it, but where it lives is up to the person who owns it.
+  if (!note.notebook_id && note.owner_id !== uid)
+    throw new AppError(403, "Only the person who wrote a note can move it");
   let destination = null;
   if (to) {
     destination = await loadNotebook(req, to, "edit");
@@ -79,8 +85,11 @@ async function moveNote(req: Request, note: NoteDoc, to: string | null) {
   return { destination };
 }
 
+const memberIds = (note: NoteDoc) => note.members.map((m) => m.user_id);
+
 export function registerNoteRoutes(app: any) {
-  // The notes among `ids` that the caller may change, each with the notebook it sits in (null for a loose note).
+  // The notes among `ids` that the caller may change (including ones shared with them as an editor), each with the
+  // notebook it sits in when they belong to it (null otherwise).
   async function editableAmong(
     uid: string,
     ids: string[],
@@ -89,12 +98,9 @@ export function registerNoteRoutes(app: any) {
     const byId = new Map<string, NotebookDoc>(books.map((b) => [b.id as string, b]));
     const found: Array<{ note: NoteDoc; notebook: NotebookDoc | null }> = [];
     for (const note of notes) {
-      if (!note.notebook_id) {
-        if (note.owner_id === uid) found.push({ note, notebook: null });
-        continue;
-      }
-      const notebook = byId.get(String(note.notebook_id));
-      if (notebook && canEdit(notebook.toObject(), uid)) found.push({ note, notebook });
+      const notebook = note.notebook_id ? (byId.get(String(note.notebook_id)) ?? null) : null;
+      const role = noteRole(note.toObject(), notebook?.toObject() ?? null, uid);
+      if (role === "owner" || role === "editor") found.push({ note, notebook });
     }
     return found;
   }
@@ -107,6 +113,13 @@ export function registerNoteRoutes(app: any) {
     // Checked for the lot before anything changes: a private move needs every note to be the caller's own.
     if (body.notebook_id === null && targets.some((t) => t.note.owner_id !== uid && t.note.notebook_id)) {
       throw new AppError(403, "Only the person who wrote a note can make it private");
+    }
+    // Where a note lives is up to whoever manages it, so a move that includes one they can only edit refuses all of it.
+    if (
+      body.notebook_id !== undefined &&
+      targets.some((t) => !canManageNote(t.note.toObject(), t.notebook?.toObject() ?? null, uid))
+    ) {
+      throw new AppError(403, "Only the person who owns a note can move it");
     }
     // A destination the caller can't write to refuses the whole request before any note moves.
     if (body.notebook_id) await loadNotebook(req, body.notebook_id, "edit");
@@ -134,11 +147,13 @@ export function registerNoteRoutes(app: any) {
     });
   });
 
-  // Send several notes to the Trash. Notes the caller can't edit are skipped.
+  // Send several notes to the Trash. Notes the caller doesn't manage (shared with them, say) are skipped.
   app.post("/api/xennote/notes/bulk-delete", validate(xenNoteBulkDeleteSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
     const { ids } = xenNoteBulkDeleteSchema.parse(req.body);
-    const targets = await editableAmong(uid, ids);
+    const targets = (await editableAmong(uid, ids)).filter((t) =>
+      canManageNote(t.note.toObject(), t.notebook?.toObject() ?? null, uid),
+    );
     const now = new Date();
     const touched = new Map<string, NotebookDoc | null>();
     for (const { note, notebook } of targets) {
@@ -160,16 +175,17 @@ export function registerNoteRoutes(app: any) {
     const { notebook, archived, label, q } = req.query as Record<string, string | undefined>;
 
     const books = await myNotebooks(uid);
-    const roles = new Map(books.map((b) => [b.id, roleOf(b.toObject(), uid)]));
+    const booksById = new Map(books.map((b) => [b.id as string, b.toObject()]));
     const mine = { notebook_id: null, owner_id: uid };
 
     let scope: Record<string, unknown>;
     if (notebook === "none") scope = mine;
+    else if (notebook === "shared") scope = { "members.user_id": uid };
     else if (notebook) {
       await loadNotebook(req, notebook, "view");
       scope = { notebook_id: new Types.ObjectId(notebook) };
     } else {
-      scope = { $or: [mine, { notebook_id: { $in: books.map((b) => b._id) } }] };
+      scope = visibleNotesFilter(uid, books);
     }
 
     const and: Record<string, unknown>[] = [scope, { archived: archived === "true" ? true : { $ne: true } }];
@@ -193,7 +209,11 @@ export function registerNoteRoutes(app: any) {
     const names = await namesForNotes(notes);
     const data = await Promise.all(
       notes.map((n) =>
-        serializeNote(n, { uid, role: n.notebook_id ? (roles.get(String(n.notebook_id)) ?? null) : "owner", names }),
+        serializeNote(n, {
+          uid,
+          role: noteRole(n.toObject(), n.notebook_id ? (booksById.get(String(n.notebook_id)) ?? null) : null, uid),
+          names,
+        }),
       ),
     );
     res.json({ status: true, message: "Notes retrieved", data: { notes: data } });
@@ -203,16 +223,15 @@ export function registerNoteRoutes(app: any) {
   app.get("/api/xennote/counts", async (req: Request, res: Response) => {
     const uid = callerId(req);
     const books = await myNotebooks(uid);
-    const visible = {
-      $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }],
-    };
-    const [all, mine, archived, trash] = await Promise.all([
+    const visible = visibleNotesFilter(uid, books);
+    const [all, mine, archived, trash, shared] = await Promise.all([
       XenNote.countDocuments({ ...visible, archived: { $ne: true } }),
       XenNote.countDocuments({ notebook_id: null, owner_id: uid, archived: { $ne: true } }),
       XenNote.countDocuments({ ...visible, archived: true }),
       XenNote.countDocuments({ deleted_by: uid, deleted_at: { $ne: null } }).setOptions({ includeDeleted: true }),
+      XenNote.countDocuments({ "members.user_id": uid, archived: { $ne: true } }),
     ]);
-    res.json({ status: true, message: "Counts retrieved", data: { all, mine, archived, trash } });
+    res.json({ status: true, message: "Counts retrieved", data: { all, mine, archived, trash, shared } });
   });
 
   app.get("/api/xennote/labels", async (req: Request, res: Response) => {
@@ -222,7 +241,7 @@ export function registerNoteRoutes(app: any) {
       {
         $match: {
           archived: { $ne: true },
-          $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }],
+          ...visibleNotesFilter(uid, books),
         },
       },
       { $unwind: "$labels" },
@@ -259,10 +278,10 @@ export function registerNoteRoutes(app: any) {
 
   app.get("/api/xennote/notes/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
-    const { note, notebook } = await loadNote(req, req.params.id as string, "view");
+    const { note, role } = await loadNote(req, req.params.id as string, "view");
     res.json({
       status: true,
-      data: { note: await serializeNote(note, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }) },
+      data: { note: await serializeNote(note, { uid, role }) },
     });
   });
 
@@ -283,7 +302,7 @@ export function registerNoteRoutes(app: any) {
       const candidates = await XenNote.find({
         _id: { $ne: note._id },
         archived: { $ne: true },
-        $or: [{ notebook_id: null, owner_id: uid }, { notebook_id: { $in: books.map((b) => b._id) } }],
+        ...visibleNotesFilter(uid, books),
         body: { $regex: `\\[\\[\\s*${words}\\s*(\\||\\]\\])`, $options: "i" },
       })
         .sort({ updated_at: -1 })
@@ -311,6 +330,9 @@ export function registerNoteRoutes(app: any) {
       const uid = callerId(req);
       const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
       let destination = notebook;
+      if (req.body.notebook_id !== undefined && !canManageNote(note.toObject(), notebook?.toObject() ?? null, uid)) {
+        throw new AppError(403, "Only the person who owns a note can move it");
+      }
 
       // Moving a note: into another notebook (needs edit there) or out to a private loose note (author only)
       if (req.body.notebook_id !== undefined) {
@@ -330,13 +352,16 @@ export function registerNoteRoutes(app: any) {
           console.error("xennote version failed:", e),
         );
       }
-      notifyChange(notebook, note.owner_id);
-      if (destination && destination !== notebook) notifyChange(destination, note.owner_id);
+      notifyChange(notebook, note.owner_id, memberIds(note));
+      if (destination && destination !== notebook) notifyChange(destination, note.owner_id, memberIds(note));
       res.json({
         status: true,
         message: "Note saved",
         data: {
-          note: await serializeNote(note, { uid, role: destination ? roleOf(destination.toObject(), uid) : "owner" }),
+          note: await serializeNote(note, {
+            uid,
+            role: noteRole(note.toObject(), destination?.toObject() ?? null, uid),
+          }),
         },
       });
     },
@@ -345,11 +370,11 @@ export function registerNoteRoutes(app: any) {
   // Deleting a note moves it to the Trash, where the person who deleted it can restore it for 30 days. Its photos stay
   // with it until it is removed for good.
   app.delete("/api/xennote/notes/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
-    const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
+    const { note, notebook } = await loadNote(req, req.params.id as string, "manage");
     note.deleted_at = new Date();
     note.deleted_by = callerId(req);
     await note.save();
-    notifyChange(notebook, note.owner_id);
+    notifyChange(notebook, note.owner_id, memberIds(note));
     res.json({ status: true, message: "Note moved to Trash" });
   });
 
@@ -361,7 +386,7 @@ export function registerNoteRoutes(app: any) {
     validate(xenNoteReminderSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { note, notebook } = await loadNote(req, req.params.id as string, "view");
+      const { note, role } = await loadNote(req, req.params.id as string, "view");
       const at: string | null = req.body.at;
 
       if (at === null) {
@@ -388,7 +413,7 @@ export function registerNoteRoutes(app: any) {
         status: true,
         message: at === null ? "Reminder removed" : "Reminder set",
         data: {
-          note: await serializeNote(fresh, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }),
+          note: await serializeNote(fresh, { uid, role }),
         },
       });
     },
@@ -397,7 +422,7 @@ export function registerNoteRoutes(app: any) {
   // ---- a single note's public link: enable (keeps the current link), rotate, disable
   const share = (action: "enable" | "rotate" | "disable") => async (req: Request, res: Response) => {
     const uid = callerId(req);
-    const { note, notebook } = await loadNote(req, req.params.id as string, "edit");
+    const { note, role } = await loadNote(req, req.params.id as string, "manage");
     if (action === "disable") note.share = { enabled: false, token: note.share?.token };
     else
       note.share = {
@@ -407,7 +432,7 @@ export function registerNoteRoutes(app: any) {
     await note.save();
     res.json({
       status: true,
-      data: { note: await serializeNote(note, { uid, role: notebook ? roleOf(notebook.toObject(), uid) : "owner" }) },
+      data: { note: await serializeNote(note, { uid, role }) },
     });
   };
   app.post("/api/xennote/notes/:id/share", validateParams(xenNoteIdParamSchema), share("enable"));

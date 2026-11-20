@@ -28,7 +28,11 @@ export async function readTotals(userId: string): Promise<Record<string, number>
       const notebooks = await XenNotebook.find(member, "_id").lean();
       return XenNote.countDocuments({
         archived: { $ne: true },
-        $or: [{ owner_id: userId }, { notebook_id: { $in: notebooks.map((n) => n._id) } }],
+        $or: [
+          { owner_id: userId },
+          { notebook_id: { $in: notebooks.map((n) => n._id) } },
+          { "members.user_id": userId },
+        ],
       });
     },
   };

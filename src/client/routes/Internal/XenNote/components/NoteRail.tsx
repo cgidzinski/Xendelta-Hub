@@ -5,6 +5,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import NotesIcon from "@mui/icons-material/Notes";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
@@ -13,8 +14,8 @@ import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import type { XenNoteCounts, XenNotebook } from "../../../../types/XenNote";
 import { swatchColor } from "../noteColors";
 
-/** Which notes are showing: everything, my private notes, one notebook, the archive, or the Trash. */
-export type Scope = "all" | "none" | "archive" | "trash" | string;
+/** Which notes are showing: everything, my private notes, shared with me, one notebook, the archive, or the Trash. */
+export type Scope = "all" | "none" | "shared" | "archive" | "trash" | string;
 
 interface NoteRailProps {
   scope: Scope;
@@ -105,6 +106,15 @@ export default function NoteRail({
         selected={scope === "none"}
         onClick={() => onScope("none")}
       />
+      {(counts?.shared ?? 0) > 0 && (
+        <RailRow
+          icon={<PeopleOutlineIcon />}
+          text="Shared with me"
+          count={counts?.shared}
+          selected={scope === "shared"}
+          onClick={() => onScope("shared")}
+        />
+      )}
 
       <Typography variant="caption" sx={sectionSx}>
         Notebooks

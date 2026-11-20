@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
-  Avatar,
   Box,
   Card,
+  ButtonBase,
   CardActionArea,
   Checkbox,
   Chip,
@@ -16,13 +16,17 @@ import {
   Typography,
 } from "@mui/material";
 import { formatDistanceToNowStrict } from "date-fns";
-import { alpha, useTheme } from "@mui/material/styles";
+import { useTheme } from "@mui/material/styles";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import LinkIcon from "@mui/icons-material/Link";
+import NotesIcon from "@mui/icons-material/Notes";
+import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import type { PublicXenNote, XenNote } from "../../../../types/XenNote";
 import { checklistProgress, hostOf } from "../noteDraft";
@@ -45,6 +49,8 @@ interface NoteCardProps {
   onArchive?: () => void;
   onColor?: (color: XenNote["color"]) => void;
   onDelete?: () => void;
+  /** Open the Share dialog for this note. */
+  onShare?: () => void;
   /**
    * Set while choosing notes for a bulk action: the card shows a tick box, and a tap ticks it instead of opening it.
    * A note the person can't edit shows no tick box and can't be chosen.
@@ -52,6 +58,13 @@ interface NoteCardProps {
   selected?: boolean;
   onSelect?: () => void;
 }
+
+const TYPE_ICON: Record<string, typeof NotesIcon> = {
+  text: NotesIcon,
+  checklist: CheckBoxOutlinedIcon,
+  link: LinkIcon,
+  image: ImageOutlinedIcon,
+};
 
 const MAX_LINES = 8;
 const MAX_ITEMS = 6;
@@ -109,6 +122,7 @@ export default function NoteCard({
   onArchive,
   onColor,
   onDelete,
+  onShare,
   selected,
   onSelect,
 }: NoteCardProps) {
@@ -122,274 +136,328 @@ export default function NoteCard({
   const progress = checklistProgress(items);
   const hasPhotos = note.images.length > 0;
 
-  const content = (
-    <Box>
-      {hasPhotos && <PhotoMosaic images={note.images} />}
-      <Box sx={{ p: 2, pb: 2 }}>
-        {note.title && (
-          <Typography sx={{ fontWeight: 600, mb: 0.5, wordBreak: "break-word", pr: editable ? 8 : 0 }}>
-            {note.title}
-          </Typography>
-        )}
+  const hasBody = !!note.body.trim() || items.length > 0 || (note.type === "link" && !!note.link.url) || hasPhotos;
+  const activate = selected !== undefined ? (editable ? onSelect : undefined) : onOpen;
+  const selecting = selected !== undefined;
+  const TypeIcon = TYPE_ICON[note.type] ?? NotesIcon;
+  const heading = note.title || (note.type === "link" ? note.link.title || hostOf(note.link.url) : "");
+  const when = formatDistanceToNowStrict(new Date(note.updated_at), { addSuffix: true });
+  const who = full?.owner_name
+    ? `Shared by ${full.owner_name}`
+    : full?.updated_by_name
+      ? `${full.updated_by_name} edited`
+      : null;
+  const hasChips = note.labels.length > 0 || (full?.reminder && !full.reminder.sent);
 
-        {note.type === "link" && note.link.url && (
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 0.5 }}>
-            <LinkIcon fontSize="small" color="action" sx={{ mt: 0.25 }} />
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: "break-word" }}>
-                {note.link.title || hostOf(note.link.url)}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                {hostOf(note.link.url)}
-              </Typography>
-              {note.link.description && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, wordBreak: "break-word" }}>
-                  {note.link.description}
-                </Typography>
-              )}
-            </Box>
-          </Box>
-        )}
+  // The photo and the body open the note (or tick it while selecting); the header's title does the same.
+  const surface = (children: ReactNode) =>
+    activate ? (
+      <CardActionArea onClick={activate} tabIndex={-1} sx={{ display: "block" }}>
+        {children}
+      </CardActionArea>
+    ) : (
+      <Box>{children}</Box>
+    );
 
-        {note.type === "checklist" ? (
-          <Box>
-            {items.slice(0, MAX_ITEMS).map((item, i) => (
-              <Box key={i} sx={{ display: "flex", alignItems: "flex-start" }}>
-                <Checkbox
-                  size="small"
-                  checked={item.done}
-                  disabled={!onToggleItem}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={() => onToggleItem?.(i)}
-                  inputProps={{ "aria-label": item.text }}
-                  sx={{ p: 0.5, mr: 0.5 }}
-                />
-                <Typography
-                  variant="body2"
-                  sx={{
-                    pt: 0.5,
-                    wordBreak: "break-word",
-                    textDecoration: item.done ? "line-through" : "none",
-                    color: item.done ? "text.disabled" : "text.primary",
-                  }}
-                >
-                  {item.text}
-                </Typography>
-              </Box>
-            ))}
-            {items.length > MAX_ITEMS && (
-              <Typography variant="caption" color="text.secondary">
-                +{items.length - MAX_ITEMS} more
-              </Typography>
-            )}
-            {progress.total > 0 && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={(progress.done / progress.total) * 100}
-                  aria-label="Checklist progress"
-                  sx={{ flex: 1, height: 4, borderRadius: 2 }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  {progress.done} of {progress.total}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        ) : (
-          note.type !== "link" &&
-          note.body && (
-            <>
-              <NoteMarkdown
-                text={lines.slice(0, MAX_LINES).join("\n")}
-                resolve={resolveTitle}
-                onOpenNote={onOpenLinked}
-              />
-              {lines.length > MAX_LINES && (
-                <Typography variant="body2" color="text.secondary">
-                  …
-                </Typography>
-              )}
-            </>
-          )
-        )}
-
-        {(note.labels.length > 0 || (full?.reminder && !full.reminder.sent)) && (
-          <Stack direction="row" spacing={0.5} sx={{ mt: 1.5, flexWrap: "wrap", gap: 0.5 }}>
-            {full?.reminder && !full.reminder.sent && (
-              <Chip
-                size="small"
-                color="primary"
-                variant="outlined"
-                icon={<NotificationsActiveIcon sx={{ fontSize: 14 }} />}
-                label={formatReminder(full.reminder.at)}
-              />
-            )}
-            {note.labels.map((label) => (
-              <Chip key={label} label={label} size="small" variant="outlined" />
-            ))}
-          </Stack>
-        )}
-
-        {full?.updated_by_name && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              mt: 1.5,
-              pt: 1.25,
-              borderTop: 1,
-              borderColor: "divider",
-            }}
-          >
-            <Avatar sx={{ width: 20, height: 20, fontSize: 10 }}>
-              {full.updated_by_name.slice(0, 1).toUpperCase()}
-            </Avatar>
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {full.updated_by_name} edited {formatDistanceToNowStrict(new Date(full.updated_at), { addSuffix: true })}
-            </Typography>
-          </Box>
-        )}
-      </Box>
-    </Box>
+  const titleRow = (
+    <>
+      <TypeIcon fontSize="small" sx={{ color: "text.secondary", flex: "none" }} />
+      <Typography
+        noWrap
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          fontWeight: heading ? 600 : 400,
+          fontStyle: heading ? "normal" : "italic",
+          color: heading ? "text.primary" : "text.disabled",
+          textAlign: "left",
+        }}
+      >
+        {heading || "Untitled"}
+      </Typography>
+    </>
   );
 
   return (
     <Card
       variant="outlined"
       sx={[
-        { position: "relative", breakInside: "avoid", mb: 2, overflow: "hidden" },
-        noteSurfaceSx(note.color),
-        selected !== undefined && {
-          outline: 2,
-          outlineStyle: selected ? "solid" : "none",
-          outlineColor: "primary.main",
+        {
+          position: "relative",
+          breakInside: "avoid",
+          mb: 2,
+          overflow: "hidden",
+          opacity: selecting && !editable ? 0.5 : 1,
         },
+        noteSurfaceSx(note.color),
+        selected === undefined
+          ? {}
+          : {
+              outline: 2,
+              outlineStyle: selected ? "solid" : "none",
+              outlineColor: "primary.main",
+              ...(selected && {
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 0,
+                  bgcolor: "action.selected",
+                  pointerEvents: "none",
+                },
+              }),
+            },
       ]}
     >
-      {selected !== undefined ? (
-        <CardActionArea
-          onClick={editable ? onSelect : undefined}
-          disabled={!editable}
-          sx={{ opacity: editable ? 1 : 0.5 }}
-        >
-          {content}
-        </CardActionArea>
-      ) : onOpen ? (
-        <CardActionArea onClick={onOpen}>{content}</CardActionArea>
-      ) : (
-        content
-      )}
-      {selected !== undefined && editable && (
-        <Checkbox
-          checked={selected}
-          onChange={onSelect}
-          size="small"
-          slotProps={{ input: { "aria-label": `Select ${note.title || "note"}` } }}
-          sx={{
-            position: "absolute",
-            top: 4,
-            left: 4,
-            zIndex: 1,
-            bgcolor: "background.paper",
-            borderRadius: 1.5,
-            p: 0.5,
-          }}
-        />
-      )}
-      {selected === undefined && editable && (
-        <Tooltip title={pinned ? "Unpin" : "Pin"}>
-          <IconButton
-            size="small"
-            aria-label={pinned ? "Unpin" : "Pin"}
-            aria-pressed={pinned}
-            onClick={onTogglePin}
-            sx={{
-              position: "absolute",
-              top: 6,
-              right: 6,
-              zIndex: 1,
-              bgcolor: hasPhotos ? (t) => alpha(t.palette.background.paper, 0.75) : undefined,
-              color: pinned ? "primary.main" : "text.secondary",
-            }}
+      {hasPhotos && surface(<PhotoMosaic images={note.images} />)}
+
+      {/* Header: type, title and the actions, in the same place on every card. */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          minHeight: 48,
+          pl: 1.75,
+          pr: 0.75,
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
+      >
+        {activate ? (
+          <ButtonBase
+            onClick={activate}
+            sx={{ flex: 1, minWidth: 0, justifyContent: "flex-start", gap: 1, minHeight: 48, borderRadius: 1 }}
           >
-            {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
-      )}
-      {selected === undefined && editable && (onArchive || onColor || onDelete) && (
-        <>
-          <Tooltip title="More">
+            {titleRow}
+          </ButtonBase>
+        ) : (
+          <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 1 }}>{titleRow}</Box>
+        )}
+        {selecting && editable && (
+          <Checkbox
+            checked={selected}
+            onChange={onSelect}
+            size="small"
+            slotProps={{ input: { "aria-label": `Select ${note.title || "note"}` } }}
+            sx={{ p: 0.75 }}
+          />
+        )}
+        {!selecting && editable && (
+          <Tooltip title={pinned ? "Unpin" : "Pin"}>
             <IconButton
               size="small"
-              aria-label="More actions"
-              onClick={(e) => setMenuAnchor(e.currentTarget)}
-              sx={{
-                position: "absolute",
-                top: 6,
-                right: 38,
-                zIndex: 1,
-                bgcolor: hasPhotos ? (t) => alpha(t.palette.background.paper, 0.75) : undefined,
-                color: "text.secondary",
-              }}
+              aria-label={pinned ? "Unpin" : "Pin"}
+              aria-pressed={pinned}
+              onClick={onTogglePin}
+              sx={{ color: pinned ? "primary.main" : "text.secondary" }}
             >
-              <MoreVertIcon fontSize="small" />
+              {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
-          <Menu open={!!menuAnchor} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
-            {onColor && (
-              <Box sx={{ display: "flex", gap: 1, px: 2, py: 1 }} role="group" aria-label="Note colour">
-                {NOTE_COLORS.map((c) => (
-                  <IconButton
-                    key={c}
-                    size="small"
-                    aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
-                    aria-pressed={full?.color === c}
-                    onClick={() => {
-                      onColor(c);
-                      setMenuAnchor(null);
-                    }}
-                    sx={{
-                      width: 24,
-                      height: 24,
-                      bgcolor: swatchColor(theme, c) ?? "background.paper",
-                      border: 2,
-                      borderColor: full?.color === c ? "text.primary" : "divider",
-                    }}
-                  />
-                ))}
+        )}
+        {!selecting && editable && (onArchive || onColor || onDelete || onShare) && (
+          <>
+            <Tooltip title="More">
+              <IconButton
+                size="small"
+                aria-label="More actions"
+                onClick={(e) => setMenuAnchor(e.currentTarget)}
+                sx={{ color: "text.secondary" }}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Menu open={!!menuAnchor} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
+              {onColor && (
+                <Box sx={{ display: "flex", gap: 1, px: 2, py: 1 }} role="group" aria-label="Note colour">
+                  {NOTE_COLORS.map((c) => (
+                    <IconButton
+                      key={c}
+                      size="small"
+                      aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
+                      aria-pressed={full?.color === c}
+                      onClick={() => {
+                        onColor(c);
+                        setMenuAnchor(null);
+                      }}
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        bgcolor: swatchColor(theme, c) ?? "background.paper",
+                        border: 2,
+                        borderColor: full?.color === c ? "text.primary" : "divider",
+                      }}
+                    />
+                  ))}
+                </Box>
+              )}
+              {onArchive && (
+                <MenuItem
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    onArchive();
+                  }}
+                >
+                  <ListItemIcon>
+                    <ArchiveOutlinedIcon fontSize="small" />
+                  </ListItemIcon>
+                  {full?.archived ? "Unarchive" : "Archive"}
+                </MenuItem>
+              )}
+              {onShare && (
+                <MenuItem
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    onShare();
+                  }}
+                >
+                  <ListItemIcon>
+                    <ShareOutlinedIcon fontSize="small" />
+                  </ListItemIcon>
+                  Share
+                </MenuItem>
+              )}
+              {onDelete && (
+                <MenuItem
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    onDelete();
+                  }}
+                  sx={{ color: "error.main" }}
+                >
+                  <ListItemIcon sx={{ color: "inherit" }}>
+                    <DeleteOutlineIcon fontSize="small" />
+                  </ListItemIcon>
+                  Delete
+                </MenuItem>
+              )}
+            </Menu>
+          </>
+        )}
+      </Box>
+
+      {surface(
+        <>
+          <Box sx={{ px: 1.75, py: 1.5, minHeight: 76, display: "flex", flexDirection: "column", gap: 1 }}>
+            {!hasBody && (
+              <Typography variant="body2" sx={{ color: "text.disabled", fontStyle: "italic" }}>
+                Empty note
+              </Typography>
+            )}
+
+            {note.type === "link" && note.link.url && (
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                  {hostOf(note.link.url)}
+                </Typography>
+                {note.link.description && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, wordBreak: "break-word" }}>
+                    {note.link.description}
+                  </Typography>
+                )}
               </Box>
             )}
-            {onArchive && (
-              <MenuItem
-                onClick={() => {
-                  setMenuAnchor(null);
-                  onArchive();
-                }}
-              >
-                <ListItemIcon>
-                  <ArchiveOutlinedIcon fontSize="small" />
-                </ListItemIcon>
-                {full?.archived ? "Unarchive" : "Archive"}
-              </MenuItem>
+
+            {note.type === "checklist" ? (
+              <Box>
+                {items.slice(0, MAX_ITEMS).map((item, i) => (
+                  <Box key={i} sx={{ display: "flex", alignItems: "flex-start" }}>
+                    <Checkbox
+                      size="small"
+                      checked={item.done}
+                      disabled={!onToggleItem}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => onToggleItem?.(i)}
+                      inputProps={{ "aria-label": item.text }}
+                      sx={{ p: 0.5, mr: 0.5 }}
+                    />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        pt: 0.5,
+                        wordBreak: "break-word",
+                        textDecoration: item.done ? "line-through" : "none",
+                        color: item.done ? "text.disabled" : "text.primary",
+                      }}
+                    >
+                      {item.text}
+                    </Typography>
+                  </Box>
+                ))}
+                {items.length > MAX_ITEMS && (
+                  <Typography variant="caption" color="text.secondary">
+                    +{items.length - MAX_ITEMS} more
+                  </Typography>
+                )}
+                {progress.total > 0 && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+                    <LinearProgress
+                      variant="determinate"
+                      value={(progress.done / progress.total) * 100}
+                      aria-label="Checklist progress"
+                      sx={{ flex: 1, height: 4, borderRadius: 2 }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {progress.done} of {progress.total}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              note.type !== "link" &&
+              note.body && (
+                <>
+                  <NoteMarkdown
+                    text={lines.slice(0, MAX_LINES).join("\n")}
+                    resolve={resolveTitle}
+                    onOpenNote={onOpenLinked}
+                  />
+                  {lines.length > MAX_LINES && (
+                    <Typography variant="body2" color="text.secondary">
+                      …
+                    </Typography>
+                  )}
+                </>
+              )
             )}
-            {onDelete && (
-              <MenuItem
-                onClick={() => {
-                  setMenuAnchor(null);
-                  onDelete();
-                }}
-                sx={{ color: "error.main" }}
-              >
-                <ListItemIcon sx={{ color: "inherit" }}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </ListItemIcon>
-                Delete
-              </MenuItem>
+          </Box>
+
+          {/* Footer: when it changed and who by, then its labels and reminder. Always there, so cards stay the same shape. */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 1,
+              px: 1.75,
+              py: 1,
+              minHeight: 40,
+              borderTop: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>
+              {who ? `${who} · ` : ""}
+              {when}
+            </Typography>
+            {hasChips && (
+              <Stack direction="row" sx={{ gap: 0.5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {full?.reminder && !full.reminder.sent && (
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    icon={<NotificationsActiveIcon sx={{ fontSize: 14 }} />}
+                    label={formatReminder(full.reminder.at)}
+                  />
+                )}
+                {note.labels.map((label) => (
+                  <Chip key={label} label={label} size="small" variant="outlined" />
+                ))}
+              </Stack>
             )}
-          </Menu>
-        </>
+          </Box>
+        </>,
       )}
     </Card>
   );

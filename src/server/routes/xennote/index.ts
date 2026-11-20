@@ -1,6 +1,7 @@
 import { authenticateToken } from "../../middleware/auth";
 import { registerNotebookRoutes } from "./notebooks";
 import { registerNoteRoutes } from "./notes";
+import { registerNoteSharingRoutes } from "./noteSharing";
 import { registerNoteImageRoutes } from "./images";
 import { registerPublicNoteRoutes } from "./public";
 import { registerSharedLinkRoutes } from "./resolve";
@@ -19,6 +20,7 @@ module.exports = function (app: any) {
   // Before the note routes: a literal path must come before a :param one.
   registerNoteTrashRoutes(app);
   registerNoteRoutes(app);
+  registerNoteSharingRoutes(app);
   registerNoteVersionRoutes(app);
   registerNoteImageRoutes(app);
 };

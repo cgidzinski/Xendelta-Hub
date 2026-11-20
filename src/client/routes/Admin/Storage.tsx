@@ -71,7 +71,7 @@ export default function Storage() {
     <Box>
       <PageHeader title="Storage" subtitle="What people have stored, and where it is" />
       {isLoading ? (
-        <ListSkeleton rows={4} height={100} />
+        <ListSkeleton rows={4} height={100} columns={2} />
       ) : isError || !data ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load storage" onRetry={() => refetch()} />
       ) : (

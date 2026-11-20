@@ -412,7 +412,12 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
 
       {/* the listing */}
       {isLoading && !data ? (
-        <ListSkeleton />
+        <ListSkeleton
+          rows={mode === "grid" ? 8 : 6}
+          height={mode === "grid" ? 150 : 56}
+          columns={mode === "grid" ? { xs: 2, sm: 3, md: 4 } : undefined}
+          gap={mode === "grid" ? 2 : 1}
+        />
       ) : isError ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load this folder" onRetry={() => refetch()} />
       ) : empty ? (

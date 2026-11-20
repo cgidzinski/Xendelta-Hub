@@ -86,12 +86,13 @@ const userSchema = new Schema({
   },
   notificationsLastCheckedAt: { type: Date },
   notificationPrefs: {
-    // Opt-out: on by default, users turn it off in Profile settings. Push has no
-    // equivalent flag — it is governed by whether the user has any subscribed devices
-    // (see models/pushSubscription.js), since a browser can't be silently subscribed.
+    // Legacy global email switch, no longer read or written: email is chosen per app now (emailApps).
     email: { type: Boolean, default: true },
-    // Per-app switches that are off, as "app:way" (shared/notificationApps.ts), e.g. "xensplit:email". Everything else is on.
+    // Per-app switches that are off, as "app:way" (shared/notificationApps.ts), e.g. "xenroutine:push". Everything else is on.
     muted: { type: [String], default: [] },
+    // The apps this person chose to be emailed about. Email is opt-in, so an app is off until it is listed here. Push
+    // has no flag of its own: it depends on the device having a push subscription (models/pushSubscription.js).
+    emailApps: { type: [String], default: [] },
   },
 });
 export type UserAttrs = InferSchemaType<typeof userSchema>;

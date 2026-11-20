@@ -35,7 +35,7 @@ const CHANNELS: Array<{ value: NotifyChannel; label: string; note: string }> = [
   { value: "inapp", label: "In the app", note: "Shows in their notification list" },
   { value: "socket", label: "Live", note: "A toast if the app is open" },
   { value: "push", label: "Push", note: "Only if they turned it on" },
-  { value: "email", label: "Email", note: "Only if they allow email" },
+  { value: "email", label: "Email", note: "Sent whatever their email settings" },
 ];
 
 const errorText = (e: any, fallback: string) => e?.response?.data?.message || e?.message || fallback;

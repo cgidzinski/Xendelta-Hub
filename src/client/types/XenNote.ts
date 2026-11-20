@@ -37,7 +37,13 @@ export interface XenNote {
   /** My own reminder on this note (other people's aren't shown). `sent` once it has gone out. */
   reminder: { at: string; sent: boolean } | null;
   can_edit: boolean;
+  /** Whether I may delete, move or share it (the owner of a loose note, an editor of its notebook). */
+  can_manage: boolean;
   share: { enabled: boolean; token: string | null } | null; // only for people who can edit
+  /** Who owns a note someone shared with me directly; null for my own notes and notebook notes. */
+  owner_name: string | null;
+  /** How many people it is shared with directly (a notebook's members are not counted). */
+  shared_with: number;
   updated_by_name: string | null; // who last changed it, in a shared notebook
   created_at: string;
   updated_at: string;
@@ -59,6 +65,25 @@ export interface XenNoteCounts {
   archived: number;
   /** Notes this person deleted that are still in the Trash. */
   trash: number;
+  /** Notes other people shared with this person directly. */
+  shared: number;
+}
+
+/** Who a note is open to, for the Share dialog. */
+export interface XenNoteSharing {
+  can_manage: boolean;
+  owner: { user_id: string; username: string; avatar: string | null; cosmetics?: Cosmetics };
+  members: Array<{
+    user_id: string;
+    username: string;
+    avatar: string | null;
+    cosmetics?: Cosmetics;
+    role: "editor" | "viewer";
+  }>;
+  /** The notebook the note sits in, when the person is in it too: its members can also read the note. */
+  notebook: { id: string; name: string } | null;
+  /** The note's public link; only for the person who manages it. */
+  share: { enabled: boolean; token: string | null } | null;
 }
 
 /** A note in the Trash: enough to recognise it, and when it goes for good. */

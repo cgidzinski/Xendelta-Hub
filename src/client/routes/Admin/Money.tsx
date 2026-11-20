@@ -83,7 +83,7 @@ export default function Money() {
     <Box>
       <PageHeader title="Shop and payments" subtitle="Every gem pack bought, and what the shop sells" />
       {isLoading && !data ? (
-        <ListSkeleton rows={4} height={100} />
+        <ListSkeleton rows={4} height={100} columns={{ xs: 2, md: 4 }} />
       ) : isError || !data || !summary ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load payments" onRetry={() => refetch()} />
       ) : (

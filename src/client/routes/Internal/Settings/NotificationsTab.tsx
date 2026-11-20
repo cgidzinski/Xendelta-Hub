@@ -38,20 +38,15 @@ export default function NotificationsTab() {
     }
   };
 
-  const handleEmailToggle = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    const ok = await updateProfile({ emailNotifications: checked });
-    if (ok) {
-      enqueueSnackbar(checked ? "Email notifications enabled" : "Email notifications disabled", {
-        variant: "success",
-      });
-    }
-  };
-
-  const muted = profile?.mutedNotifications ?? [];
+  const prefs = { muted: profile?.mutedNotifications ?? [], emailApps: profile?.emailApps ?? [] };
   const handleWayToggle = async (app: NotificationApp, way: NotificationWay, on: boolean) => {
+    if (way === "email") {
+      const apps = prefs.emailApps.filter((a) => a !== app);
+      await updateProfile({ emailApps: on ? [...apps, app] : apps });
+      return;
+    }
     const key = `${app}:${way}`;
-    const next = on ? muted.filter((m) => m !== key) : [...muted, key];
+    const next = on ? prefs.muted.filter((m) => m !== key) : [...prefs.muted, key];
     await updateProfile({ mutedNotifications: next });
   };
 
@@ -88,21 +83,9 @@ export default function NotificationsTab() {
         )}
       </SectionCard>
 
-      <SectionCard title="Email" description="Sent to the address on your account.">
-        <FormControlLabel
-          control={
-            <Switch checked={profile?.emailNotifications ?? true} onChange={handleEmailToggle} disabled={isUpdating} />
-          }
-          label="Email notifications"
-        />
-        <Typography variant="caption" color="text.secondary">
-          XenSplit expenses and settlements, reminders, and other account activity.
-        </Typography>
-      </SectionCard>
-
       <SectionCard
         title="By app"
-        description="Choose how each app reaches you. Push needs the device switch above, and Email needs the email switch."
+        description="Choose how each app reaches you. Push needs the device switch above. Email is off until you turn it on for an app, and goes to the address on your account."
       >
         <Box
           sx={{
@@ -132,7 +115,7 @@ export default function NotificationsTab() {
                 <Box key={w.key} sx={{ textAlign: "center" }}>
                   <Switch
                     size="small"
-                    checked={isNotificationOn(muted, a.key, w.key)}
+                    checked={isNotificationOn(prefs, a.key, w.key)}
                     onChange={(e) => handleWayToggle(a.key, w.key, e.target.checked)}
                     disabled={isUpdating}
                     slotProps={{ input: { "aria-label": `${a.label}: ${w.label}` } }}
@@ -143,7 +126,8 @@ export default function NotificationsTab() {
           ))}
         </Box>
         <Typography variant="caption" color="text.secondary">
-          Announcements from the people who run {BRAND_NAME} always arrive.
+          Announcements from the people who run {BRAND_NAME} always arrive. Important one-off messages, like password
+          resets, account changes and announcements, may still be emailed even when email is off.
         </Typography>
       </SectionCard>
     </Stack>

@@ -35,6 +35,8 @@ export const xenNoteAddMembersSchema = z.object({
   role: role.default("editor"),
 });
 export const xenNoteMemberRoleSchema = z.object({ role: z.enum(["owner", "editor", "viewer"]) });
+// A note has one owner, so someone it is shared with is an editor or a viewer, never the owner.
+export const xenNoteShareRoleSchema = z.object({ role: role });
 
 const linkSchema = z.object({
   url: z
@@ -102,8 +104,8 @@ export const xenNoteBulkUpdateSchema = z
   );
 
 export const xenNoteListQuerySchema = z.object({
-  // "none" = only my loose notes; an id = that notebook; omitted = everything I can see.
-  notebook: z.union([z.literal("none"), objectIdSchema]).optional(),
+  // "none" = only my loose notes; "shared" = notes shared with me directly; an id = that notebook; omitted = everything I can see.
+  notebook: z.union([z.literal("none"), z.literal("shared"), objectIdSchema]).optional(),
   archived: z.enum(["true", "false"]).optional(),
   label: z
     .string()

@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
-import ListSkeleton from "../../../components/ui/ListSkeleton";
+import BillingSkeleton from "../../../components/billing/BillingSkeleton";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import GemAmount from "../../../components/GemAmount";
 import SectionLabel from "../../../components/ui/SectionLabel";
@@ -30,7 +30,7 @@ export default function Billing() {
           )
         }
       />
-      {isLoading && <ListSkeleton rows={4} height={96} />}
+      {isLoading && <BillingSkeleton />}
       {error && <ErrorDisplay error={error as Error} title="Couldn't load your bill" />}
       {data && (
         <Stack spacing={2.5}>

@@ -29,3 +29,7 @@ Sub-apps with a left sidebar (XenDrive, XenNote) spread `railPanelSx`, `railItem
 - One page title per page, via `PageHeader` (h5, `component="h1"`).
 - Pick radii from `RADIUS`; do not invent values.
 - Use `EmptyState` when a list is empty and a skeleton when the final shape is known.
+- Skeletons must look like what replaces them: `ListSkeleton` for rows, `ListSkeleton columns={...}` for a grid
+  (pass the real grid's column counts), `DetailSkeleton` for a detail page, and a purpose-built one (like
+  `BillingSkeleton`) when the page has its own layout. They wait 300 ms before showing and then fade in, so a fast
+  load never flashes one. Don't use a row skeleton for a grid or a detail page.

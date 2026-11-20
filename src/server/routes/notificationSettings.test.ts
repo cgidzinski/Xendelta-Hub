@@ -21,22 +21,37 @@ describe("per-app notification settings", () => {
     const { token } = await createUser();
     expect((await profile(token)).mutedNotifications).toEqual([]);
 
-    const res = await save(token, { mutedNotifications: ["xensplit:email", "xenroutine:push", "xensplit:email"] });
+    const res = await save(token, { mutedNotifications: ["xensplit:push", "xenroutine:push", "xensplit:push"] });
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body.data.user.mutedNotifications.sort()).toEqual(["xenroutine:push", "xensplit:email"]);
-    expect((await profile(token)).mutedNotifications.sort()).toEqual(["xenroutine:push", "xensplit:email"]);
+    expect(res.body.data.user.mutedNotifications.sort()).toEqual(["xenroutine:push", "xensplit:push"]);
+    expect((await profile(token)).mutedNotifications.sort()).toEqual(["xenroutine:push", "xensplit:push"]);
 
     await save(token, { mutedNotifications: [] });
     expect((await profile(token)).mutedNotifications).toEqual([]);
   });
 
-  it("leaves the email switch alone, and the email switch leaves these alone", async () => {
+  it("has email off for every app until it is turned on, and the two lists leave each other alone", async () => {
     const { token } = await createUser();
+    expect((await profile(token)).emailApps).toEqual([]);
     await save(token, { mutedNotifications: ["xennote:inapp"] });
-    await save(token, { emailNotifications: false });
+    await save(token, { emailApps: ["xensplit", "xenroutine", "xensplit"] });
     const p = await profile(token);
-    expect(p.emailNotifications).toBe(false);
+    expect(p.emailApps.sort()).toEqual(["xenroutine", "xensplit"]);
     expect(p.mutedNotifications).toEqual(["xennote:inapp"]);
+    await save(token, { emailApps: [] });
+    expect((await profile(token)).emailApps).toEqual([]);
+  });
+
+  it("drops old per-app email entries from the switched-off list instead of refusing them", async () => {
+    const { token } = await createUser();
+    const res = await save(token, { mutedNotifications: ["xensplit:email", "xensplit:push"] });
+    expect(res.status).toBe(200);
+    expect((await profile(token)).mutedNotifications).toEqual(["xensplit:push"]);
+  });
+
+  it("refuses an app that doesn't exist in the email list", async () => {
+    const { token } = await createUser();
+    expect((await save(token, { emailApps: ["nope"] })).status).toBe(400);
   });
 
   it("refuses an app or a way that doesn't exist", async () => {

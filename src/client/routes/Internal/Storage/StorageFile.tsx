@@ -4,7 +4,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { format } from "date-fns";
 import { useSnackbar } from "notistack";
 import ErrorDisplay from "../../../components/ErrorDisplay";
-import ListSkeleton from "../../../components/ui/ListSkeleton";
+import DetailSkeleton from "../../../components/ui/DetailSkeleton";
 import PageContainer from "../../../components/ui/PageContainer";
 import SectionLabel from "../../../components/ui/SectionLabel";
 import { useTitle } from "../../../hooks/useTitle";
@@ -46,7 +46,7 @@ export default function StorageFile() {
   if (isLoading || !file) {
     return (
       <PageContainer width="narrow">
-        <ListSkeleton />
+        <DetailSkeleton height={360} />
       </PageContainer>
     );
   }

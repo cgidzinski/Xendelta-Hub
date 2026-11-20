@@ -169,13 +169,15 @@ describe("recipientsFor", () => {
     ]);
     expect(recipientsFor(r, prefs)).toEqual([
       { userId: "u1", channels: ["inapp", "socket", "push", "email"] }, // no stored prefs = everything on
-      { userId: "u3", channels: ["push"] },
+      { userId: "u3", channels: ["push", "email"] }, // email is asked for; notify() applies the per-app opt-in
+      { userId: "u4", channels: ["email"] },
     ]);
   });
   it("channelsFor pairs socket with inapp and can drop email", () => {
     expect(channelsFor(on)).toEqual(["inapp", "socket", "push", "email"]);
     expect(channelsFor(on, { email: false })).toEqual(["inapp", "socket", "push"]);
-    expect(channelsFor({ inapp: false, push: false, email: false })).toEqual([]);
+    expect(channelsFor({ inapp: false, push: false, email: false })).toEqual(["email"]);
+    expect(channelsFor({ inapp: false, push: false, email: false }, { email: false })).toEqual([]);
   });
 });
 

@@ -41,6 +41,8 @@ export default function XenRoutine() {
   const { profile } = useUserProfile();
   const { settings } = useRoutineSettings();
   const { routines } = useRoutines();
+  // Archived routines are tucked away, so they don't count.
+  const activeCount = routines.filter((r) => !r.archived).length;
   const saveSettings = useSaveRoutineSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -120,7 +122,7 @@ export default function XenRoutine() {
           <Tab
             key={t.value}
             value={t.value}
-            label={t.value === "routines" && routines.length > 0 ? `${t.label} (${routines.length})` : t.label}
+            label={t.value === "routines" && activeCount > 0 ? `${t.label} (${activeCount})` : t.label}
           />
         ))}
       </Tabs>

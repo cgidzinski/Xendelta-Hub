@@ -254,7 +254,8 @@ export function channelsFor(prefs: MemberChannels = ALL_CHANNELS, opts: { email?
   // alongside inapp (see notificationUtils).
   if (prefs.inapp) channels.push("inapp", "socket");
   if (prefs.push) channels.push("push");
-  if (prefs.email && opts.email !== false) channels.push("email");
+  // Email is chosen per app in Settings > Notifications, which notify() checks, so this only asks for it.
+  if (opts.email !== false) channels.push("email");
   return channels;
 }
 

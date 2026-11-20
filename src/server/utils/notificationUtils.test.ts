@@ -27,13 +27,13 @@ const USER_ID = "507f1f77bcf86cd799439011";
 
 let sendNotificationSpy: ReturnType<typeof vi.fn>;
 
-function mockUser(overrides: { email?: string | null; emailPref?: boolean; muted?: string[] } = {}) {
+function mockUser(overrides: { email?: string | null; muted?: string[]; emailApps?: string[] } = {}) {
   vi.spyOn(User, "findById").mockReturnValue({
     select: () => ({
       exec: async () => ({
         email: overrides.email === null ? undefined : (overrides.email ?? "user@example.com"),
         username: "tester",
-        notificationPrefs: { email: overrides.emailPref ?? false, muted: overrides.muted ?? [] },
+        notificationPrefs: { muted: overrides.muted ?? [], emailApps: overrides.emailApps ?? [] },
       }),
     }),
   } as any);
@@ -138,7 +138,6 @@ describe("notify channel isolation", () => {
 
   it("still delivers push when the email channel throws", async () => {
     sendNotificationEmailMock.mockRejectedValue(new Error("resend down"));
-    mockUser({ emailPref: true });
 
     const result = await notify(USER_ID, {
       title: "T",
@@ -152,9 +151,7 @@ describe("notify channel isolation", () => {
 });
 
 describe("notify email channel", () => {
-  it("sends when the user has opted in", async () => {
-    mockUser({ emailPref: true });
-
+  it("sends a notification that names no app whenever email is asked for", async () => {
     const result = await notify(USER_ID, {
       title: "New Expense",
       message: "Alice added lunch",
@@ -172,17 +169,25 @@ describe("notify email channel", () => {
     });
   });
 
-  it("skips users who have not opted in", async () => {
-    mockUser({ emailPref: false });
+  it("skips an app's email for someone who has not turned it on for that app", async () => {
+    mockUser({ emailApps: ["xenroutine"] });
 
-    const result = await notify(USER_ID, { title: "T", message: "M", channels: ["email"] });
+    const result = await notify(USER_ID, { title: "T", message: "M", app: "xensplit", channels: ["email"] });
 
     expect(result.email).toBe(false);
     expect(sendNotificationEmailMock).not.toHaveBeenCalled();
   });
 
+  it("sends an app's email when the person turned it on for that app", async () => {
+    mockUser({ emailApps: ["xensplit"] });
+
+    const result = await notify(USER_ID, { title: "T", message: "M", app: "xensplit", channels: ["email"] });
+
+    expect(result.email).toBe(true);
+  });
+
   it("skips users with no email address", async () => {
-    mockUser({ email: null, emailPref: true });
+    mockUser({ email: null });
 
     const result = await notify(USER_ID, { title: "T", message: "M", channels: ["email"] });
 
@@ -194,14 +199,27 @@ describe("notify email channel", () => {
 describe("per-app notification settings", () => {
   const input = { title: "t", message: "m", link: "/x", app: "xensplit" as const };
 
-  it("does nothing different when nothing is switched off", async () => {
-    mockUser({ emailPref: true });
+  it("does nothing different when nothing is switched off, and never emails without an opt-in", async () => {
     const result = await notify(USER_ID, { ...input, channels: ["inapp", "socket", "push", "email"] });
-    expect(result).toMatchObject({ inapp: true, socket: true, email: true, push: { sent: 1 } });
+    expect(result).toMatchObject({ inapp: true, socket: true, email: false, push: { sent: 1 } });
+    expect(sendNotificationEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("emails an app's notifications by default for someone who opted in to that app", async () => {
+    mockUser({ emailApps: ["xensplit"] });
+    const result = await notify(USER_ID, input);
+    expect(result).toMatchObject({ inapp: true, push: { sent: 1 }, email: true });
+  });
+
+  it("keeps a caller's own channels: opting in doesn't add email to a notification that didn't ask for it", async () => {
+    mockUser({ emailApps: ["xensplit"] });
+    const result = await notify(USER_ID, { ...input, channels: ["inapp", "socket"] });
+    expect(result).toMatchObject({ inapp: true, email: false });
+    expect(sendNotificationEmailMock).not.toHaveBeenCalled();
   });
 
   it("drops the way that is switched off for that app only", async () => {
-    mockUser({ emailPref: true, muted: ["xensplit:push", "xensplit:email"] });
+    mockUser({ emailApps: ["xenroutine"], muted: ["xensplit:push"] });
     const result = await notify(USER_ID, { ...input, channels: ["inapp", "socket", "push", "email"] });
     expect(result).toMatchObject({ inapp: true, socket: true, email: false, push: { sent: 0 } });
     expect(sendPushToUserMock).not.toHaveBeenCalled();
@@ -217,7 +235,7 @@ describe("per-app notification settings", () => {
   });
 
   it("ignores another app's switches, and never filters a notification that names no app", async () => {
-    mockUser({ muted: ["xenroutine:inapp", "xenroutine:push", "xensplit:email"] });
+    mockUser({ muted: ["xenroutine:inapp", "xenroutine:push", "xensplit:email"] }); // an old email entry is ignored
     expect(await notify(USER_ID, input)).toMatchObject({ inapp: true, socket: true, push: { sent: 1 } });
     sendPushToUserMock.mockClear();
     mockUser({ muted: ["xensplit:inapp", "xensplit:push"] });
