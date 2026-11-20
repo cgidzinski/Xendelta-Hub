@@ -1,3 +1,5 @@
+import LinkIcon from "@mui/icons-material/Link";
+import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import { useEffect, useMemo, useState, type MutableRefObject, type ReactElement } from "react";
 import { Box, ListItemButton, ListItemIcon, ListItemText, Paper, Popper } from "@mui/material";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
@@ -14,6 +16,8 @@ import type { SlashState } from "./SlashCommand";
 import type { SlashItemId } from "./slashItems";
 
 const ICONS: Record<SlashItemId, ReactElement> = {
+  blockRef: <LinkIcon />,
+  blockEmbed: <ViewAgendaOutlinedIcon />,
   heading1: <TitleIcon />,
   heading2: <TitleIcon fontSize="small" />,
   heading3: <TitleIcon sx={{ fontSize: 16 }} />,
