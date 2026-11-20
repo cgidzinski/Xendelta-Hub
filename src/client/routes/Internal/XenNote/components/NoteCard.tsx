@@ -1,8 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   Box,
   Card,
-  ButtonBase,
   CardActionArea,
   Checkbox,
   Chip,
@@ -149,15 +148,16 @@ export default function NoteCard({
       : null;
   const hasChips = note.labels.length > 0 || (full?.reminder && !full.reminder.sent);
 
-  // The photo and the body open the note (or tick it while selecting); the header's title does the same.
-  const surface = (children: ReactNode) =>
-    activate ? (
-      <CardActionArea onClick={activate} tabIndex={-1} sx={{ display: "block" }}>
-        {children}
-      </CardActionArea>
-    ) : (
-      <Box>{children}</Box>
-    );
+  // The whole card is one target: a single invisible button behind the content opens the note (or ticks it while
+  // selecting) and carries the hover, ripple and focus ring. The content sits above it and lets clicks fall through to
+  // it, except for the controls that do something else (pin, menu, tick boxes, checklist ticks, links in the text).
+  const passThrough = {
+    position: "relative",
+    pointerEvents: activate ? "none" : "auto",
+    "& a, & button, & input, & .MuiCheckbox-root, & .MuiIconButton-root, & [role='button'], & [role='link']": {
+      pointerEvents: "auto",
+    },
+  } as const;
 
   const titleRow = (
     <>
@@ -208,11 +208,24 @@ export default function NoteCard({
             },
       ]}
     >
-      {hasPhotos && surface(<PhotoMosaic images={note.images} />)}
+      {activate && (
+        <CardActionArea
+          onClick={activate}
+          aria-label={`${selecting ? "Select" : "Open"} ${heading || "note"}`}
+          sx={{ position: "absolute", inset: 0, zIndex: 0 }}
+        />
+      )}
+
+      {hasPhotos && (
+        <Box sx={passThrough}>
+          <PhotoMosaic images={note.images} />
+        </Box>
+      )}
 
       {/* Header: type, title and the actions, in the same place on every card. */}
       <Box
         sx={{
+          ...passThrough,
           display: "flex",
           alignItems: "center",
           gap: 1,
@@ -223,16 +236,7 @@ export default function NoteCard({
           borderColor: "divider",
         }}
       >
-        {activate ? (
-          <ButtonBase
-            onClick={activate}
-            sx={{ flex: 1, minWidth: 0, justifyContent: "flex-start", gap: 1, minHeight: 48, borderRadius: 1 }}
-          >
-            {titleRow}
-          </ButtonBase>
-        ) : (
-          <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 1 }}>{titleRow}</Box>
-        )}
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 1 }}>{titleRow}</Box>
         {selecting && editable && (
           <Checkbox
             checked={selected}
@@ -336,129 +340,127 @@ export default function NoteCard({
         )}
       </Box>
 
-      {surface(
-        <>
-          <Box sx={{ px: 1.75, py: 1.5, minHeight: 76, display: "flex", flexDirection: "column", gap: 1 }}>
-            {!hasBody && (
-              <Typography variant="body2" sx={{ color: "text.disabled", fontStyle: "italic" }}>
-                Empty note
-              </Typography>
-            )}
-
-            {note.type === "link" && note.link.url && (
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                  {hostOf(note.link.url)}
-                </Typography>
-                {note.link.description && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, wordBreak: "break-word" }}>
-                    {note.link.description}
-                  </Typography>
-                )}
-              </Box>
-            )}
-
-            {note.type === "checklist" ? (
-              <Box>
-                {items.slice(0, MAX_ITEMS).map((item, i) => (
-                  <Box key={i} sx={{ display: "flex", alignItems: "flex-start" }}>
-                    <Checkbox
-                      size="small"
-                      checked={item.done}
-                      disabled={!onToggleItem}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={() => onToggleItem?.(i)}
-                      inputProps={{ "aria-label": item.text }}
-                      sx={{ p: 0.5, mr: 0.5 }}
-                    />
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        pt: 0.5,
-                        wordBreak: "break-word",
-                        textDecoration: item.done ? "line-through" : "none",
-                        color: item.done ? "text.disabled" : "text.primary",
-                      }}
-                    >
-                      {item.text}
-                    </Typography>
-                  </Box>
-                ))}
-                {items.length > MAX_ITEMS && (
-                  <Typography variant="caption" color="text.secondary">
-                    +{items.length - MAX_ITEMS} more
-                  </Typography>
-                )}
-                {progress.total > 0 && (
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-                    <LinearProgress
-                      variant="determinate"
-                      value={(progress.done / progress.total) * 100}
-                      aria-label="Checklist progress"
-                      sx={{ flex: 1, height: 4, borderRadius: 2 }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {progress.done} of {progress.total}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            ) : (
-              note.type !== "link" &&
-              note.body && (
-                <>
-                  <NoteMarkdown
-                    text={lines.slice(0, MAX_LINES).join("\n")}
-                    resolve={resolveTitle}
-                    onOpenNote={onOpenLinked}
-                  />
-                  {lines.length > MAX_LINES && (
-                    <Typography variant="body2" color="text.secondary">
-                      …
-                    </Typography>
-                  )}
-                </>
-              )
-            )}
-          </Box>
-
-          {/* Footer: when it changed and who by, then its labels and reminder. Always there, so cards stay the same shape. */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 1,
-              px: 1.75,
-              py: 1,
-              minHeight: 40,
-              borderTop: 1,
-              borderColor: "divider",
-            }}
-          >
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>
-              {who ? `${who} · ` : ""}
-              {when}
+      <Box sx={passThrough}>
+        <Box sx={{ px: 1.75, py: 1.5, minHeight: 76, display: "flex", flexDirection: "column", gap: 1 }}>
+          {!hasBody && (
+            <Typography variant="body2" sx={{ color: "text.disabled", fontStyle: "italic" }}>
+              Empty note
             </Typography>
-            {hasChips && (
-              <Stack direction="row" sx={{ gap: 0.5, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {full?.reminder && !full.reminder.sent && (
-                  <Chip
+          )}
+
+          {note.type === "link" && note.link.url && (
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                {hostOf(note.link.url)}
+              </Typography>
+              {note.link.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, wordBreak: "break-word" }}>
+                  {note.link.description}
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {note.type === "checklist" ? (
+            <Box>
+              {items.slice(0, MAX_ITEMS).map((item, i) => (
+                <Box key={i} sx={{ display: "flex", alignItems: "flex-start" }}>
+                  <Checkbox
                     size="small"
-                    color="primary"
-                    variant="outlined"
-                    icon={<NotificationsActiveIcon sx={{ fontSize: 14 }} />}
-                    label={formatReminder(full.reminder.at)}
+                    checked={item.done}
+                    disabled={!onToggleItem}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => onToggleItem?.(i)}
+                    inputProps={{ "aria-label": item.text }}
+                    sx={{ p: 0.5, mr: 0.5 }}
                   />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      pt: 0.5,
+                      wordBreak: "break-word",
+                      textDecoration: item.done ? "line-through" : "none",
+                      color: item.done ? "text.disabled" : "text.primary",
+                    }}
+                  >
+                    {item.text}
+                  </Typography>
+                </Box>
+              ))}
+              {items.length > MAX_ITEMS && (
+                <Typography variant="caption" color="text.secondary">
+                  +{items.length - MAX_ITEMS} more
+                </Typography>
+              )}
+              {progress.total > 0 && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={(progress.done / progress.total) * 100}
+                    aria-label="Checklist progress"
+                    sx={{ flex: 1, height: 4, borderRadius: 2 }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    {progress.done} of {progress.total}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            note.type !== "link" &&
+            note.body && (
+              <>
+                <NoteMarkdown
+                  text={lines.slice(0, MAX_LINES).join("\n")}
+                  resolve={resolveTitle}
+                  onOpenNote={onOpenLinked}
+                />
+                {lines.length > MAX_LINES && (
+                  <Typography variant="body2" color="text.secondary">
+                    …
+                  </Typography>
                 )}
-                {note.labels.map((label) => (
-                  <Chip key={label} label={label} size="small" variant="outlined" />
-                ))}
-              </Stack>
-            )}
-          </Box>
-        </>,
-      )}
+              </>
+            )
+          )}
+        </Box>
+
+        {/* Footer: when it changed and who by, then its labels and reminder. Always there, so cards stay the same shape. */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            px: 1.75,
+            py: 1,
+            minHeight: 40,
+            borderTop: 1,
+            borderColor: "divider",
+          }}
+        >
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>
+            {who ? `${who} · ` : ""}
+            {when}
+          </Typography>
+          {hasChips && (
+            <Stack direction="row" sx={{ gap: 0.5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {full?.reminder && !full.reminder.sent && (
+                <Chip
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  icon={<NotificationsActiveIcon sx={{ fontSize: 14 }} />}
+                  label={formatReminder(full.reminder.at)}
+                />
+              )}
+              {note.labels.map((label) => (
+                <Chip key={label} label={label} size="small" variant="outlined" />
+              ))}
+            </Stack>
+          )}
+        </Box>
+      </Box>
     </Card>
   );
 }
