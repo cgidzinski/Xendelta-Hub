@@ -8,6 +8,7 @@ import {
   XenNoteSection,
   type XenNotePageAttrs,
 } from "../models/xenNotePage";
+import { pageQuerySchema } from "../../shared/xennote/properties";
 import { deriveTasks } from "../../shared/xennote/tasks";
 import { blockTarget, deriveBlockRefs } from "../../shared/xennote/blockReferences";
 import { deriveFromDoc } from "../../shared/xennote/deriveFromDoc";
@@ -74,6 +75,10 @@ export function sanitizePageDoc(doc: JSONContent, allowedFileIds: ReadonlySet<st
     }
     if ((node.type === "blockRef" || node.type === "blockEmbed") && !blockTarget(node)) {
       next = { ...next, attrs: { ...next.attrs, page_id: null, block_id: null } };
+    }
+    if (node.type === "pageQuery") {
+      const parsed = pageQuerySchema.safeParse(node.attrs?.query);
+      next = { ...next, attrs: { ...next.attrs, query: parsed.success ? parsed.data : null } };
     }
     if (node.content) next = { ...next, content: node.content.map(walk) };
     return next;

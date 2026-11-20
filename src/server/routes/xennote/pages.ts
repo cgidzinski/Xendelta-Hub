@@ -76,6 +76,7 @@ export async function pageDetail(page: PageDoc, notebook: NotebookDoc, role: Mem
     : [];
   const own = page.reminders.find((item) => item.user_id === uid);
   return {
+    properties: page.properties,
     reminder: own ? { at: own.at, sent: !!own.notified_at } : null,
     children: children.map((p) => ({ id: String(p._id), title: p.title })),
     page: serializePage(page, uid, role, canManagePage(notebook.toObject(), uid)),

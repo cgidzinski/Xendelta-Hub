@@ -432,6 +432,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Explore connections between pages and tags in a notebook or across all notebooks.",
       "Link to a specific block, embed it in another page, and see which pages reference it.",
       "View and tick off tasks from one notebook or across your shared pages and notebooks.",
+      "Add structured properties to pages and show matching pages in a live table.",
       "Open a note link while signed in and it opens right in the app, ready to edit if you are an editor.",
       "Set a reminder on a note or page and get a notification when it is due.",
       "Search and filter by type, label or notebook.",

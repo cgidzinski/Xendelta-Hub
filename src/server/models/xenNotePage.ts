@@ -1,5 +1,6 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 import { softDeleteFields, softDeletePlugin } from "../utils/softDelete";
+import { propertyTypes } from "../../shared/xennote/properties";
 import { NOTE_COLORS } from "../../shared/xennote/notes";
 import { MAX_PAGE_TITLE, MAX_SECTION_NAME, PAGE_SCHEMA_VERSION, SECTION_KINDS } from "../../shared/xennote/pages";
 import { reminderSchema, xenNoteShareMemberSchema } from "./xenNote";
@@ -53,6 +54,20 @@ const pageSchema = new Schema({
   // Favourites are personal: the people who starred this page.
   favorited_by: { type: [String], default: [] },
   // Other names the page answers to, so `[[Q4 kickoff]]` finds "Q4 planning kickoff".
+  properties: {
+    type: [
+      new Schema(
+        {
+          key: { type: String, required: true },
+          type: { type: String, enum: propertyTypes, required: true },
+          value: { type: Schema.Types.Mixed, required: true },
+          options: { type: [String], default: undefined },
+        },
+        { _id: false },
+      ),
+    ],
+    default: [],
+  },
   aliases: { type: [String], default: [] },
 
   // Tags belong to the page's notebook (a query always names the notebook). `tags_manual` are added as page
@@ -123,6 +138,7 @@ pageSchema.index({ section_id: 1, parent_id: 1, order: 1 });
 pageSchema.index({ notebook_id: 1, updated_at: -1 });
 pageSchema.index({ links: 1 });
 pageSchema.index({ notebook_id: 1, "task_items.done": 1 });
+pageSchema.index({ notebook_id: 1, "properties.key": 1, "properties.type": 1 });
 pageSchema.index({ "block_refs.page_id": 1, "block_refs.block_id": 1 });
 pageSchema.index({ notebook_id: 1, unresolved: 1 });
 pageSchema.index({ notebook_id: 1, tags: 1 });
