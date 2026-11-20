@@ -427,7 +427,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         text: "Link one note to another by typing its name in double square brackets, and see what links back.",
         link: "/internal/xennote",
       },
-      { text: "Format a note with Markdown: headings, bold, lists and links.", link: "/internal/xennote" },
+      {
+        text: "Type / while editing a text note to insert a heading, checklist, table or quote.",
+        link: "/internal/xennote",
+      },
       {
         text: "Press the bell on a note to set a reminder, and get a notification when it is due.",
         link: "/internal/xennote",
