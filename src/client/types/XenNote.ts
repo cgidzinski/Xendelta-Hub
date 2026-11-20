@@ -117,6 +117,7 @@ export interface XenNotebook {
   color: NoteColor;
   my_role: NoteRole | null;
   note_count: number;
+  journal_template_id?: string | null;
   members: XenNotebookMember[];
   share: { enabled: boolean; token: string | null } | null; // owner only
   created_at: string;

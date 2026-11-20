@@ -228,6 +228,7 @@ export async function writePageBody(
   docInput: unknown,
   uid: string,
   baseRev: number,
+  restoredTitle?: string,
 ): Promise<{ rev: number; conflict: boolean }> {
   const checked = checkPageDoc(docInput);
   if (!checked.ok) throw new AppError(400, checked.reason);
@@ -238,11 +239,11 @@ export async function writePageBody(
 
   const before = await XenNotePageBody.findOne({ page_id: page._id }).lean();
   const conflict = baseRev !== page.rev;
-  if (before && JSON.stringify(before.doc) !== JSON.stringify(clean)) {
+  if (before && (restoredTitle !== undefined || JSON.stringify(before.doc) !== JSON.stringify(clean))) {
     await keepPageVersion(
       page._id,
       { doc: before.doc, title: page.title, files: page.files, at: before.updated_at, by: page.updated_by ?? null },
-      conflict,
+      conflict || restoredTitle !== undefined,
     );
   }
 
@@ -251,6 +252,7 @@ export async function writePageBody(
     { _id: page._id },
     {
       $set: {
+        ...(restoredTitle === undefined ? {} : { title: restoredTitle }),
         links: derived.links,
         unresolved: derived.unresolved,
         tags_inline: derived.tags,

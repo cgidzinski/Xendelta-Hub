@@ -22,6 +22,8 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/xendrive/trash/:fileId/restore": "no body: puts back the trashed file named by the path",
   "POST /api/xennote/notes/:id/versions/:versionId/restore": "no body: puts back the version named by the path",
   "POST /api/xennote/trash/:id/restore": "no body: puts back the trashed note named by the path",
+  "POST /api/xennote/pages/:id/history/:versionId/restore": "no body: the path names the page version",
+  "POST /api/xennote/notebooks/:id/templates": "no body: creates or opens the templates section",
   "POST /api/xennote/pages/:id/restore": "no body: puts back the trashed page named by the path",
   "POST /api/xennote/sections/:id/restore": "no body: puts back the trashed section named by the path",
   "POST /api/xennote/pages/:id/files": "multipart upload handled by multer, not JSON",

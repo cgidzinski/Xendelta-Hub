@@ -1,5 +1,19 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { Box, Button, Chip, IconButton, InputBase, TextField, Tooltip, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  InputBase,
+  Menu,
+  MenuItem,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import PageHistoryDialog from "./PageHistoryDialog";
+import { downloadMarkdown } from "../../../../hooks/xennote/downloadMarkdown";
 import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
@@ -123,6 +137,8 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
       );
     },
   });
+  const [pageMenu, setPageMenu] = useState<HTMLElement | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [label, setLabel] = useState<DraftLabel>("Saved");
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
@@ -259,6 +275,29 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
             </IconButton>
           </Tooltip>
         )}
+        <Tooltip title="Page options">
+          <IconButton aria-label="Page options" onClick={(e) => setPageMenu(e.currentTarget)}>
+            <MoreVertIcon />
+          </IconButton>
+        </Tooltip>
+        <Menu anchorEl={pageMenu} open={!!pageMenu} onClose={() => setPageMenu(null)}>
+          <MenuItem
+            onClick={() => {
+              setPageMenu(null);
+              setHistoryOpen(true);
+            }}
+          >
+            Page history
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setPageMenu(null);
+              void downloadMarkdown("pages", page.id, page.title).catch(fail);
+            }}
+          >
+            Export Markdown
+          </MenuItem>
+        </Menu>
       </Box>
 
       <TitleField
@@ -386,6 +425,7 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
         />
       )}
 
+      {historyOpen && <PageHistoryDialog id={page.id} editable={page.can_edit} onClose={() => setHistoryOpen(false)} />}
       {shareOpen && (
         <PageShareDialog
           pageId={page.id}

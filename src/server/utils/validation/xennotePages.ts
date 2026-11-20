@@ -7,6 +7,7 @@ import {
   MAX_PAGE_TITLE,
   MAX_SECTION_NAME,
   normalizeTag,
+  isJournalDate,
 } from "../../../shared/xennote/pages";
 
 // Notebook sections and pages (routes/xennote/sections.ts, pages.ts, ...). Path parameters reuse xenNoteIdParamSchema
@@ -105,3 +106,7 @@ export const xenNoteSearchQuerySchema = z.object({
   notebook: objectIdSchema.optional(),
   tag: z.string().max(60).optional(),
 });
+
+export const xenNoteJournalSchema = z.object({ date: z.string().refine(isJournalDate, "Choose a valid journal date") });
+export const xenNoteJournalTemplateSchema = z.object({ page_id: objectIdSchema.nullable() });
+export const xenNoteTemplateUseSchema = z.object({ template_id: objectIdSchema });
