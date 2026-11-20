@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Box, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import { overlayButtonSx } from "../../../../components/ui/surfaceStyles";
 import type { XenNoteImage } from "../../../../types/XenNote";
 
 interface NotePhotoGridProps {
@@ -14,7 +15,8 @@ interface NotePhotoGridProps {
 }
 
 const thumbSx = { width: 96, height: 96, objectFit: "cover", borderRadius: 1, display: "block" } as const;
-const removeSx = { position: "absolute", top: 2, right: 2, bgcolor: "background.paper" } as const;
+// A light button over the photo that gets lighter on hover, never see-through (the design language's button-over-image style).
+const removeSx = { position: "absolute", top: 4, right: 4, ...overlayButtonSx.light } as const;
 
 /** The note's photos, saved and not yet saved, each with a remove button. */
 export default function NotePhotoGrid({
