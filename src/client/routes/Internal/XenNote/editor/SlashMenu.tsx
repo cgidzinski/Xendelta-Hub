@@ -93,7 +93,8 @@ export default function SlashMenu({ state, keyRef }: SlashMenuProps) {
             // Keep the focus in the editor: choosing a block must not blur it.
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => state.select(item)}
-            onMouseEnter={() => setIndex(i)}
+            // Only when the pointer moves: a menu opening under a resting pointer must not take the selection.
+            onMouseMove={() => i !== index && setIndex(i)}
             sx={{ borderRadius: 1, gap: 1.5, py: 0.75 }}
           >
             <ListItemIcon sx={{ minWidth: 0 }}>
