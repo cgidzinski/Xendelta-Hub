@@ -18,6 +18,8 @@ const text = (item: LinkItem): { primary: string; secondary?: string } => {
         primary: item.title.trim() || "Untitled",
         secondary: item.alias ? `Also called "${item.alias}" · ${item.subtitle}` : item.subtitle,
       };
+    case "note":
+      return { primary: item.title };
     case "create":
       return { primary: `Create page "${item.title}"`, secondary: "In the open section" };
     case "tag":
@@ -75,7 +77,7 @@ export default function LinkMenu({ state, keyRef, label }: LinkMenuProps) {
           const create = item.kind === "create" || item.kind === "newtag";
           return (
             <ListItemButton
-              key={item.kind === "page" ? item.id : `${item.kind}:${primary}`}
+              key={item.kind === "page" || item.kind === "note" ? item.id : `${item.kind}:${primary}`}
               role="option"
               aria-selected={i === index}
               selected={i === index}
@@ -90,7 +92,7 @@ export default function LinkMenu({ state, keyRef, label }: LinkMenuProps) {
                 <Box sx={{ display: "flex" }}>
                   {create ? (
                     <AddIcon fontSize="small" />
-                  ) : item.kind === "page" ? (
+                  ) : item.kind === "page" || item.kind === "note" ? (
                     <DescriptionOutlinedIcon fontSize="small" />
                   ) : (
                     <TagIcon fontSize="small" />

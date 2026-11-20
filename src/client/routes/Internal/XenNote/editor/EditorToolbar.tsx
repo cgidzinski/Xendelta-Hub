@@ -22,6 +22,7 @@ interface EditorToolbarProps {
   onPickFiles?: () => void;
   compact?: boolean;
   onLink: () => void;
+  onNoteLink?: () => void;
 }
 
 interface Tool {
@@ -33,7 +34,13 @@ interface Tool {
 }
 
 /** The formatting bar above a page's text: marks, headings, lists, blocks and attachments. Scrolls sideways on a phone. */
-export default function EditorToolbar({ editor, onPickFiles, onLink, compact = false }: EditorToolbarProps) {
+export default function EditorToolbar({
+  editor,
+  onPickFiles,
+  onLink,
+  onNoteLink,
+  compact = false,
+}: EditorToolbarProps) {
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -73,6 +80,7 @@ export default function EditorToolbar({ editor, onPickFiles, onLink, compact = f
       },
       { label: "Inline code", icon: <CodeIcon />, active: s.code, run: () => chain().toggleCode().run() },
       { label: "Link", icon: <LinkIcon />, active: s.link, run: onLink },
+      ...(onNoteLink ? [{ label: "Link to a note", icon: <b>[[</b>, run: onNoteLink }] : []),
     ],
     [
       { label: "Heading 1", icon: <b>H1</b>, active: s.h1, run: () => chain().toggleHeading({ level: 1 }).run() },
@@ -140,7 +148,8 @@ export default function EditorToolbar({ editor, onPickFiles, onLink, compact = f
         bottom: compact ? 0 : undefined,
         zIndex: 2,
         bgcolor: "background.paper",
-        borderBottom: 1,
+        borderTop: compact ? 1 : 0,
+        borderBottom: compact ? 0 : 1,
         borderColor: "divider",
       }}
     >

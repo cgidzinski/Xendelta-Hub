@@ -99,10 +99,11 @@ export function toInput(d: NoteDraft): XenNoteInput {
 
 /** Whether two drafts differ in what would be saved (photos still waiting to upload count by number). */
 export function isDirty(a: NoteDraft, b: NoteDraft): boolean {
-  return (
-    JSON.stringify({ ...a, pendingImages: a.pendingImages.length }) !==
-    JSON.stringify({ ...b, pendingImages: b.pendingImages.length })
-  );
+  const content = (draft: NoteDraft) => {
+    const input = toInput(draft);
+    return { ...input, checklist: input.checklist?.map(({ text, done }) => ({ text: text.trim(), done })) };
+  };
+  return a.pendingImages.length !== b.pendingImages.length || JSON.stringify(content(a)) !== JSON.stringify(content(b));
 }
 
 /** The web address's host, for showing a link note compactly. Falls back to the raw text. */

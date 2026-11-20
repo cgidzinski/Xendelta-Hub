@@ -9,6 +9,7 @@ import {
   xenNoteCreateSchema,
   xenNoteIdParamSchema,
   xenNoteListQuerySchema,
+  xenNoteMentionParamSchema,
   xenNoteReminderSchema,
   xenNoteUpdateSchema,
 } from "../../utils/validation";
@@ -16,9 +17,8 @@ import { AppError, callerId } from "../../utils/http";
 import { XenNote } from "../../models/xenNote";
 import { randomToken } from "../../utils/tokens";
 import { contentChanged, contentOf, keepVersion } from "../../utils/xenNoteVersions";
-import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
-import { linkFirstMention, mentionSnippet } from "../../../shared/xennote/linkMention";
-import { markdownToDoc } from "../../../shared/xennote/convert/v1";
+import { MAX_BODY, MAX_CHECKLIST_ITEMS, normalizeLabels } from "@shared/xennote/notes";
+import { findNoteMention } from "@shared/xennote/noteBlockMarkdown";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
   escapeRegex,
@@ -244,7 +244,6 @@ export function registerNoteRoutes(app: any) {
       const { note } = await loadNote(req, req.params.id as string, "view");
       const title = note.title.trim();
       if (!title) return res.json({ status: true, data: { notes: [] } });
-      const target = { id: String(note._id), title, aliases: [] };
       const words = title.split(/\s+/).map(escapeRegex).join("\\s+");
       const possible = await XenNote.find(
         {
@@ -254,18 +253,70 @@ export function registerNoteRoutes(app: any) {
           ...visibleNotesFilter(uid),
           body: { $regex: words, $options: "i" },
         },
-        "title body",
+        "title body owner_id members",
       )
         .sort({ updated_at: -1 })
         .limit(100)
         .lean();
       const notes = possible
         .flatMap((other) => {
-          if (linksTo(other.body, title) || !linkFirstMention(markdownToDoc(other.body), target).changed) return [];
-          return [{ _id: String(other._id), title: other.title, snippet: mentionSnippet(other.body, target) }];
+          if (linksTo(other.body, title)) return [];
+          const match = findNoteMention(other.body, title);
+          if (!match) return [];
+          const start = Math.max(0, match.index - 25);
+          const end = Math.min(other.body.length, match.index + match.length + 25);
+          const snippet = `${start ? "…" : ""}${other.body.slice(start, end).replace(/\s+/g, " ")}${end < other.body.length ? "…" : ""}`;
+          const role = noteRole(other, uid);
+          return [
+            {
+              _id: String(other._id),
+              title: other.title,
+              snippet,
+              can_link: (role === "owner" || role === "editor") && !/[\[\]|\n]/.test(title),
+            },
+          ];
         })
         .slice(0, 50);
       return res.json({ status: true, data: { notes } });
+    },
+  );
+
+  app.post(
+    "/api/xennote/notes/:id/mentions/:sourceId/link",
+    validateParams(xenNoteMentionParamSchema),
+    async (req: Request, res: Response) => {
+      const { id, sourceId } = xenNoteMentionParamSchema.parse(req.params);
+      const { note: target } = await loadNote(req, id, "view");
+      const { note: source } = await loadNote(req, sourceId, "edit");
+      const title = target.title.trim();
+      if (!title || /[\[\]|\n]/.test(title) || id === sourceId || source.archived || source.type !== "text") {
+        throw new AppError(400, "This note reference can't be linked");
+      }
+      const match = linksTo(source.body, title) ? undefined : findNoteMention(source.body, title);
+      if (!match) throw new AppError(409, "This mention has already changed");
+      const last = match.index + match.length;
+      const original = source.body.slice(match.index, last);
+      const link = original === title ? `[[${title}]]` : `[[${title}|${original}]]`;
+      const body = source.body.slice(0, match.index) + link + source.body.slice(last);
+      if (body.length > MAX_BODY) throw new AppError(400, "This note is too long to add a link");
+      const uid = callerId(req);
+      const saved = await XenNote.updateOne(
+        {
+          _id: source._id,
+          body: source.body,
+          updated_at: source.updated_at,
+          archived: { $ne: true },
+          type: "text",
+          $or: [{ owner_id: uid }, { members: { $elemMatch: { user_id: uid, role: "editor" } } }],
+        },
+        { $set: { body, updated_at: new Date(), updated_by: uid } },
+      );
+      if (!saved.modifiedCount) throw new AppError(409, "This note has changed. Try again.");
+      await keepVersion(source._id, source, source.updated_at, source.updated_by ?? source.owner_id).catch((error) =>
+        console.error("xennote version failed:", error),
+      );
+      notifyChange(source);
+      res.json({ status: true, message: "Note linked" });
     },
   );
 

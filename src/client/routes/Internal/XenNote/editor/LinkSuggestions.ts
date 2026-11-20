@@ -5,6 +5,7 @@ import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from "@
 /** One line of the menu that opens after "[[" (pages) or "#" (tags). */
 export type LinkItem =
   | { kind: "page"; id: string; title: string; subtitle: string; alias: string | null }
+  | { kind: "note"; id: string; title: string }
   | { kind: "create"; title: string }
   | { kind: "tag"; tag: string }
   | { kind: "newtag"; tag: string };

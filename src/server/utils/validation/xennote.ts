@@ -19,6 +19,7 @@ const role = z.enum(["editor", "viewer"]);
 const shareToken = z.string().regex(/^[A-Za-z0-9_-]{22}$/, "Invalid link");
 
 export const xenNoteIdParamSchema = z.object({ id: objectIdSchema });
+export const xenNoteMentionParamSchema = xenNoteIdParamSchema.extend({ sourceId: objectIdSchema });
 export const xenNoteMemberParamSchema = z.object({ id: objectIdSchema, userId: objectIdSchema });
 export const xenNoteImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });
 export const xenNoteVersionParamSchema = z.object({ id: objectIdSchema, versionId: objectIdSchema });

@@ -91,6 +91,18 @@ describe("isEmptyDraft / isDirty", () => {
 });
 
 describe("draftFromNote / hostOf", () => {
+  it("ignores blank checklist rows and server-assigned item IDs when deciding whether to save", () => {
+    const saved = emptyDraft({ type: "checklist", checklist: [{ _id: "id", text: "Buy milk", done: false }] });
+    const draft = emptyDraft({
+      type: "checklist",
+      checklist: [
+        { text: "Buy milk", done: false },
+        { text: "", done: false },
+      ],
+    });
+    expect(isDirty(draft, saved)).toBe(false);
+  });
+
   it("copies a saved note into an editable draft", () => {
     const note = {
       type: "checklist",

@@ -1,9 +1,10 @@
 import { alpha } from "@mui/material/styles";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Button, Dialog, DialogContent, Stack, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Button, Dialog, DialogContent, Stack, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { formatDistanceToNow } from "date-fns";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
+import { canEditWithNoteBlocks } from "@shared/xennote/noteBlockMarkdown";
 import type { XenNote } from "../../../../types/XenNote";
 import { useNoteDraft } from "../hooks/useNoteDraft";
 import { changeType } from "../noteDraft";
@@ -60,18 +61,25 @@ export default function NoteEditor({
 
   const [editing, setEditing] = useState(false);
   const [source, setSource] = useState(false);
-  const [viewportHeight, setViewportHeight] = useState<number>();
+  const [sourceRequired, setSourceRequired] = useState(false);
+  const [mobileToolbar, setMobileToolbar] = useState<HTMLDivElement | null>(null);
+  const [viewport, setViewport] = useState<{ height: number; top: number }>();
   useEffect(() => {
     setEditing(false);
     setSource(false);
+    setSourceRequired(false);
   }, [note?._id, open]);
   useEffect(() => {
     if (!isMobile || !open || !window.visualViewport) return;
-    const viewport = window.visualViewport;
-    const resize = () => setViewportHeight(Math.round(viewport.height));
-    resize();
-    viewport.addEventListener("resize", resize);
-    return () => viewport.removeEventListener("resize", resize);
+    const visual = window.visualViewport;
+    const measure = () => setViewport({ height: Math.round(visual.height), top: Math.round(visual.offsetTop) });
+    measure();
+    visual.addEventListener("resize", measure);
+    visual.addEventListener("scroll", measure);
+    return () => {
+      visual.removeEventListener("resize", measure);
+      visual.removeEventListener("scroll", measure);
+    };
   }, [isMobile, open]);
   const viewing = readOnly || (!!note && !editing);
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
@@ -81,6 +89,17 @@ export default function NoteEditor({
   const [shareOpen, setShareOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  const editNote = () => {
+    const needsSource = draft.type === "text" && !canEditWithNoteBlocks(draft.body);
+    setSource(needsSource);
+    setSourceRequired(needsSource);
+    setEditing(true);
+  };
+  const openBlockEditor = () => {
+    const needsSource = !canEditWithNoteBlocks(draft.body);
+    setSourceRequired(needsSource);
+    if (!needsSource) setSource(false);
+  };
   const isList = draft.type === "checklist";
   const linkError = draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim());
   const photoCount = (live?.images.length ?? 0) + draft.pendingImages.length;
@@ -89,6 +108,7 @@ export default function NoteEditor({
   return (
     <>
       <Dialog
+        aria-label={draft.title || "Note"}
         open={open}
         onClose={n.saveAndClose}
         fullWidth
@@ -104,7 +124,7 @@ export default function NoteEditor({
         }}
         slotProps={{
           paper: {
-            style: isMobile && viewportHeight ? { height: viewportHeight } : undefined,
+            style: isMobile && viewport ? { height: viewport.height, marginTop: viewport.top } : undefined,
             sx: [{ maxWidth: 680, mt: { sm: 8 }, borderRadius: { sm: 3 } }, noteSurfaceSx(draft.color)],
           },
           backdrop: { sx: { bgcolor: alpha(theme.palette.common.black, 0.4) } },
@@ -120,6 +140,20 @@ export default function NoteEditor({
           onClose={n.saveAndClose}
         />
 
+        <NoteEditorToolbar
+          readOnly={viewing}
+          live={live}
+          autosave={n.autosave}
+          addingPhotos={n.addingPhotos}
+          doneDisabled={n.saving || linkError}
+          onAddPhotos={n.addPhotos}
+          onColor={setColorAnchor}
+          onLabels={setLabelAnchor}
+          onReminder={setReminderAnchor}
+          onShare={() => setShareOpen(true)}
+          onDone={n.saveAndClose}
+          onEdit={viewing && !readOnly ? editNote : undefined}
+        />
         <DialogContent sx={{ pt: 1.5, px: { xs: 2, sm: 3 } }}>
           <Stack spacing={2.5}>
             {!live && !readOnly && isBlank && (
@@ -135,16 +169,22 @@ export default function NoteEditor({
                 }
               />
             )}
-            {live && (
-              <Typography variant="caption" color="text.secondary">
-                Edited {formatDistanceToNow(live.updated_at, { addSuffix: true })}
-                {live.updated_by_name ? ` by ${live.updated_by_name}` : ""}
-              </Typography>
-            )}
-            {viewing && !readOnly && (
-              <Button variant="outlined" onClick={() => setEditing(true)} sx={{ alignSelf: "start" }}>
-                Edit note
-              </Button>
+            {(live || draft.labels.length > 0) && (
+              <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                {draft.labels.length > 0 && (
+                  <NoteChips
+                    labels={draft.labels}
+                    readOnly={viewing}
+                    onRemoveLabel={(label) => set({ labels: draft.labels.filter((l) => l !== label) })}
+                  />
+                )}
+                {live && (
+                  <Typography variant="caption" color="text.secondary">
+                    Edited{live.updated_by_name ? ` by ${live.updated_by_name},` : ""}{" "}
+                    {formatDistanceToNow(live.updated_at, { addSuffix: true })}
+                  </Typography>
+                )}
+              </Stack>
             )}
             {draft.type === "text" && !viewing && !source ? (
               <Suspense fallback={<ListSkeleton rows={4} />}>
@@ -156,6 +196,7 @@ export default function NoteEditor({
                   noteId={live?._id ?? null}
                   onOpenNote={n.openLinked}
                   onSource={() => setSource(true)}
+                  mobileToolbar={isMobile ? mobileToolbar : undefined}
                 />
               </Suspense>
             ) : (
@@ -173,7 +214,14 @@ export default function NoteEditor({
               )
             )}
             {source && !viewing && draft.type === "text" && (
-              <Button onClick={() => setSource(false)}>Use block editor</Button>
+              <Box>
+                {sourceRequired && (
+                  <Typography variant="body2" color="text.secondary">
+                    Edit the Markdown source to preserve this note’s formatting.
+                  </Typography>
+                )}
+                <Button onClick={openBlockEditor}>Use block editor</Button>
+              </Box>
             )}
             {isList && (
               <NoteChecklistEditor
@@ -201,30 +249,11 @@ export default function NoteEditor({
                 onRemovePending={(i) => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
               />
             )}
-            {draft.labels.length > 0 && (
-              <NoteChips
-                labels={draft.labels}
-                readOnly={viewing}
-                onRemoveLabel={(label) => set({ labels: draft.labels.filter((l) => l !== label) })}
-              />
-            )}
             {live && <NoteBacklinks noteId={live._id} onOpenNote={n.openLinked} />}
           </Stack>
         </DialogContent>
 
-        <NoteEditorToolbar
-          readOnly={viewing}
-          live={live}
-          autosave={n.autosave}
-          addingPhotos={n.addingPhotos}
-          doneDisabled={n.saving || linkError}
-          onAddPhotos={n.addPhotos}
-          onColor={setColorAnchor}
-          onLabels={setLabelAnchor}
-          onReminder={setReminderAnchor}
-          onShare={() => setShareOpen(true)}
-          onDone={n.saveAndClose}
-        />
+        {isMobile && <Box ref={setMobileToolbar} sx={{ flexShrink: 0 }} />}
       </Dialog>
 
       <NoteColorPopover

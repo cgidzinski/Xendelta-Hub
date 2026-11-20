@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSnackbar } from "notistack";
 import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
@@ -44,6 +44,19 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
   const [autosave, setAutosave] = useState<"idle" | "saving" | "saved">("idle");
   // What the server holds for this note right now (photos and the link change it outside the draft).
   const [live, setLive] = useState<XenNote | null>(note);
+  const pendingSave = useRef<Promise<XenNote> | null>(null);
+
+  const saveExisting = async (savedNote: XenNote, nextDraft: NoteDraft) => {
+    const request = actions.updateNote.mutateAsync({ id: savedNote._id, input: toInput(nextDraft) });
+    pendingSave.current = request;
+    try {
+      const saved = await request;
+      setLive((current) => (current?._id === saved._id ? { ...current, ...saved } : current));
+      return saved;
+    } finally {
+      if (pendingSave.current === request) pendingSave.current = null;
+    }
+  };
 
   // Reset when the dialog opens for a note (or a fresh start), never because the board refetched behind
   // it: a collaborator's live update must not wipe what is being typed.
@@ -60,13 +73,12 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
 
   // An existing note saves itself shortly after you stop typing; a new one is created when you press Done.
   useEffect(() => {
-    if (!open || readOnly || !live || !isDirty(draft, draftFromNote(live))) return;
+    if (!open || saving || readOnly || !live || pendingSave.current || !isDirty(draft, draftFromNote(live))) return;
     if (draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim())) return;
     const timer = setTimeout(async () => {
       setAutosave("saving");
       try {
-        const saved = await actions.updateNote.mutateAsync({ id: live._id, input: toInput(draft) });
-        setLive((cur) => (cur && cur._id === saved._id ? { ...cur, ...saved } : cur));
+        await saveExisting(live, draft);
         setAutosave("saved");
       } catch (e) {
         setAutosave("idle");
@@ -75,7 +87,7 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
     }, AUTOSAVE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, live, open, readOnly]);
+  }, [draft, live, open, readOnly, saving]);
   useEffect(() => {
     if (open) setAutosave("idle");
   }, [open, initial]);
@@ -83,6 +95,7 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
   // Save what is in the editor (a new note is created, a changed one updated). False if it couldn't be saved, in which
   // case the editor stays as it is so nothing typed is lost.
   const persist = async (): Promise<boolean> => {
+    if (saving) return false;
     try {
       setSaving(true);
       if (!live) {
@@ -91,8 +104,11 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
           if (draft.pendingImages.length)
             await actions.addImages.mutateAsync({ id: created._id, files: draft.pendingImages });
         }
-      } else if (isDirty(draft, draftFromNote(live))) {
-        await actions.updateNote.mutateAsync({ id: live._id, input: toInput(draft) });
+      } else {
+        // A close while autosave is in flight must finish that write before flushing a newer draft.
+        const saved = await pendingSave.current?.catch(() => null);
+        const baseline = saved?._id === live._id ? saved : live;
+        if (isDirty(draft, draftFromNote(baseline))) await saveExisting(baseline, draft);
       }
       return true;
     } catch (e) {
