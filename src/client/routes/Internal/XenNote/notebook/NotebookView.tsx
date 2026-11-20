@@ -143,7 +143,7 @@ export default function NotebookView() {
       setChosen(id);
       if (pageId || tag) closePage();
     });
-  const useTemplate = (id: string | null) =>
+  const applyTemplate = (id: string | null) =>
     runNotebookTool(async () => {
       if (templateDialog === "journal") {
         await api.put(`/api/xennote/notebooks/${notebookId}/journal-template`, { page_id: id });
@@ -661,7 +661,7 @@ export default function NotebookView() {
               <ListItemButton
                 disabled={toolBusy}
                 selected={!notebook?.journal_template_id}
-                onClick={() => void useTemplate(null)}
+                onClick={() => void applyTemplate(null)}
               >
                 <ListItemText primary="Blank page" />
               </ListItemButton>
@@ -671,7 +671,7 @@ export default function NotebookView() {
                 key={item.id}
                 disabled={toolBusy}
                 selected={templateDialog === "journal" && notebook?.journal_template_id === item.id}
-                onClick={() => void useTemplate(item.id)}
+                onClick={() => void applyTemplate(item.id)}
               >
                 <ListItemText primary={pageTitle(item.title)} />
               </ListItemButton>

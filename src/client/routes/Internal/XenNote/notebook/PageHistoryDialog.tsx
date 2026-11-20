@@ -37,13 +37,13 @@ export default function PageHistoryDialog({
   const path = `/api/xennote/pages/${id}/history`;
   const list = useQuery({
     queryKey: xennoteKeys.pageHistory(id),
-    queryFn: () => api.get<Version[]>(path),
+    queryFn: () => api.get<Version[]>(`/api/xennote/pages/${id}/history`),
     staleTime: 0,
   });
   const active = selected ?? list.data?.[0]?.id;
   const body = useQuery({
     queryKey: xennoteKeys.pageVersion(id, active ?? ""),
-    queryFn: () => api.get<PublicPage>(`${path}/${active}`),
+    queryFn: () => api.get<PublicPage>(`/api/xennote/pages/${id}/history/${active}`),
     enabled: !!active,
     gcTime: 0,
   });

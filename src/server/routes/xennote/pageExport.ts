@@ -14,8 +14,10 @@ import { loadNotebook } from "./shared";
 import { loadPage } from "./pageAccess";
 
 const filename = (name: string) =>
-  name
-    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+  Array.from(name)
+    .filter((character) => character >= " ")
+    .join("")
+    .replace(/[<>:"/\\|?*]+/g, "-")
     .replace(/^[. ]+|[. ]+$/g, "")
     .slice(0, 90) || "Untitled";
 const filePath = (id: string, name: string) => `files/${id}-${filename(name)}`;
