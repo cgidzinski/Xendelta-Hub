@@ -52,6 +52,7 @@ export interface PageFileInfo {
 /** A page with its text, as the person opening it sees it. */
 export interface XenNotePageDetail {
   viewed_at?: string;
+  reminder?: { at: string; sent: boolean } | null;
   page: XenNotePageMeta;
   doc: JSONContent;
   /** The files the text refers to, by file id. */

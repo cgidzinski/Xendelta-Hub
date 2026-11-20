@@ -1,3 +1,4 @@
+import { rejectMigratedNote, requireLegacyNotebook } from "./legacy";
 import type { Request, Response } from "express";
 import { recordActivity } from "../../activity";
 import { Types } from "mongoose";
@@ -77,6 +78,7 @@ async function moveNote(req: Request, note: NoteDoc, to: string | null) {
   let destination = null;
   if (to) {
     destination = await loadNotebook(req, to, "edit");
+    await requireLegacyNotebook(destination);
   } else if (note.owner_id !== uid) {
     throw new AppError(403, "Only the person who wrote a note can make it private");
   }
@@ -109,6 +111,7 @@ export function registerNoteRoutes(app: any) {
   app.post("/api/xennote/notes/bulk-update", validate(xenNoteBulkUpdateSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
     const body = xenNoteBulkUpdateSchema.parse(req.body);
+    for (const id of body.ids) await rejectMigratedNote(req, id);
     const targets = await editableAmong(uid, body.ids);
     // Checked for the lot before anything changes: a private move needs every note to be the caller's own.
     if (body.notebook_id === null && targets.some((t) => t.note.owner_id !== uid && t.note.notebook_id)) {
@@ -122,7 +125,7 @@ export function registerNoteRoutes(app: any) {
       throw new AppError(403, "Only the person who owns a note can move it");
     }
     // A destination the caller can't write to refuses the whole request before any note moves.
-    if (body.notebook_id) await loadNotebook(req, body.notebook_id, "edit");
+    if (body.notebook_id) await requireLegacyNotebook(await loadNotebook(req, body.notebook_id, "edit"));
 
     const touched = new Map<string, NotebookDoc | null>();
     for (const { note, notebook } of targets) {
@@ -151,6 +154,7 @@ export function registerNoteRoutes(app: any) {
   app.post("/api/xennote/notes/bulk-delete", validate(xenNoteBulkDeleteSchema), async (req: Request, res: Response) => {
     const uid = callerId(req);
     const { ids } = xenNoteBulkDeleteSchema.parse(req.body);
+    for (const id of ids) await rejectMigratedNote(req, id);
     const targets = (await editableAmong(uid, ids)).filter((t) =>
       canManageNote(t.note.toObject(), t.notebook?.toObject() ?? null, uid),
     );
@@ -182,7 +186,7 @@ export function registerNoteRoutes(app: any) {
     if (notebook === "none") scope = mine;
     else if (notebook === "shared") scope = { "members.user_id": uid };
     else if (notebook) {
-      await loadNotebook(req, notebook, "view");
+      await requireLegacyNotebook(await loadNotebook(req, notebook, "view"));
       scope = { notebook_id: new Types.ObjectId(notebook) };
     } else {
       scope = visibleNotesFilter(uid, books);
@@ -255,6 +259,7 @@ export function registerNoteRoutes(app: any) {
     const uid = callerId(req);
     const notebookId: string | null = req.body.notebook_id ?? null;
     const book = notebookId ? await loadNotebook(req, notebookId, "edit") : null;
+    if (book) await requireLegacyNotebook(book);
 
     const note = new XenNote({ owner_id: uid, notebook_id: notebookId, updated_by: uid });
     applyFields(note, req.body);

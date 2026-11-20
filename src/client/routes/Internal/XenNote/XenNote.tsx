@@ -51,7 +51,6 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { xennoteKeys } from "../../../hooks/xennote/keys";
-import { useNotebookPagesFlag } from "../../../hooks/xennote/useNotebookPagesFlag";
 import {
   useXenNoteActions,
   useXenNoteCounts,
@@ -95,8 +94,6 @@ export default function XenNote() {
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
 
   const navigate = useNavigate();
-  // Opt-in for now (hooks/xennote/useNotebookPagesFlag.ts): notebooks open as sections and pages.
-  const [pagesOn] = useNotebookPagesFlag();
   const [sharedTab, setSharedTab] = useState<"pages" | "notes">("pages");
   const [scope, setScope] = useState<Scope>("all");
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
@@ -129,19 +126,32 @@ export default function XenNote() {
     }
     if (handled.current === linkedNoteId) return;
     handled.current = linkedNoteId;
-    api
-      .get<{ note: Note }>(`/api/xennote/notes/${encodeURIComponent(linkedNoteId)}`)
-      .then((r) => setEditor({ note: r.note }))
-      .catch(() => enqueueSnackbar("That note isn't available any more", { variant: "info" }))
-      .finally(() => setSearchParams({}, { replace: true }));
-  }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
+    const locate = async () => {
+      try {
+        const id = encodeURIComponent(linkedNoteId);
+        const target = await api.get<{ kind: "page" | "note"; id: string; notebook_id?: string | null }>(
+          `/api/xennote/locate/${id}`,
+        );
+        if (target.kind === "page") {
+          const notebook = target.notebook_id ? `/b/${target.notebook_id}` : "";
+          navigate(`/internal/xennote${notebook}/p/${target.id}`, { replace: true });
+          return;
+        }
+        setEditor({ note: (await api.get<{ note: Note }>(`/api/xennote/notes/${id}`)).note });
+      } catch {
+        enqueueSnackbar("That note isn't available any more", { variant: "info" });
+      }
+      setSearchParams({}, { replace: true });
+    };
+    void locate();
+  }, [linkedNoteId, navigate, setSearchParams, enqueueSnackbar]);
 
   // A link to a notebook (being added to one, or opening its public link as a member): /internal/xennote?notebook=<id>.
   const linkedBookId = searchParams.get("notebook");
   const linkedLegacyBook = searchParams.get("legacyNotebook") === "1";
   useEffect(() => {
     if (!linkedBookId) return;
-    if (pagesOn && !linkedLegacyBook) {
+    if (!linkedLegacyBook) {
       navigate(`/internal/xennote/b/${linkedBookId}`, { replace: true });
       return;
     }
@@ -154,7 +164,7 @@ export default function XenNote() {
       },
       { replace: true },
     );
-  }, [linkedBookId, linkedLegacyBook, pagesOn, navigate, setSearchParams]);
+  }, [linkedBookId, linkedLegacyBook, navigate, setSearchParams]);
 
   // A link back from a notebook's screen to one of the board's views: /internal/xennote?scope=shared.
   const linkedScope = searchParams.get("scope");
@@ -337,7 +347,7 @@ export default function XenNote() {
     openBook && (openBook.my_role === "owner" || openBook.my_role === "editor") ? openBook._id : null;
   const canWrite = scope !== "archive" && scope !== "trash" && scope !== "shared" && (!openBook || !!startNotebookId);
 
-  const sharedPages = pagesOn && scope === "shared" && sharedTab === "pages";
+  const sharedPages = scope === "shared" && sharedTab === "pages";
   const pickScope = (next: Scope) => {
     if (next === "shared") setSharedTab("pages");
     setScope(next);
@@ -350,7 +360,7 @@ export default function XenNote() {
       scope={scope}
       onScope={pickScope}
       counts={counts}
-      showShared={pagesOn}
+      showShared
       notebooks={notebooks}
       labels={labels}
       label={label}
@@ -359,7 +369,7 @@ export default function XenNote() {
         setRailOpen(false);
       }}
       onNewNote={canWrite || sharedPages ? () => startNote() : undefined}
-      onOpenNotebook={pagesOn ? (id) => navigate(`/internal/xennote/b/${id}`) : undefined}
+      onOpenNotebook={(id) => navigate(`/internal/xennote/b/${id}`)}
       onNewNotebook={() => {
         setRailOpen(false);
         setNotebookDialog({ id: null });
@@ -451,7 +461,7 @@ export default function XenNote() {
             }
           />
 
-          {pagesOn && scope === "shared" && (
+          {scope === "shared" && (
             <Tabs
               value={sharedTab}
               onChange={(_, value: "pages" | "notes") => setSharedTab(value)}
@@ -576,7 +586,7 @@ export default function XenNote() {
               count={selectedIds.length}
               inArchive={scope === "archive"}
               busy={bulkUpdateNotes.isPending || bulkDeleteNotes.isPending}
-              notebooks={notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor")}
+              notebooks={openBook ? notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor") : []}
               labels={labels.map((l) => l.name)}
               onSelectAll={() => setSelectedIds(editableShown.map((n) => n._id))}
               onArchive={(archived) =>
@@ -662,7 +672,7 @@ export default function XenNote() {
         note={editor?.note ?? null}
         startType={editor?.startType}
         startNotebookId={startNotebookId}
-        notebooks={notebooks}
+        notebooks={openBook ? notebooks : []}
         labelSuggestions={labels.map((l) => l.name)}
         titles={titles}
         onOpenNote={openNoteById}

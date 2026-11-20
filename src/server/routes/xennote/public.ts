@@ -5,6 +5,7 @@ import { XenNote, XenNotebook } from "../../models/xenNote";
 import { XenNotePage, XenNotePageBody, XenNoteSection } from "../../models/xenNotePage";
 import { emptyDoc } from "../../../shared/xennote/pageSchema";
 import { fileMapFor } from "./pages";
+import { existsLegacyNote, migratedLink } from "./legacy";
 import { serializePublicNote } from "./shared";
 
 const visible = { archived: { $ne: true } };
@@ -23,9 +24,12 @@ export function registerPublicNoteRoutes(app: any) {
     "/api/xennote/public/note/:token",
     validateParams(xenNoteTokenParamSchema),
     async (req: Request, res: Response) => {
-      const note = await XenNote.findOne({ "share.token": req.params.token, "share.enabled": true });
-      if (!note) throw new AppError(404, "Link not found");
-      res.json({ status: true, data: { note: await serializePublicNote(note) } });
+      const token = req.params.token as string;
+      const note = await existsLegacyNote(token);
+      if (note) return res.json({ status: true, data: { note: await serializePublicNote(note) } });
+      const page = await migratedLink(token);
+      if (!page || !(await XenNotebook.exists({ _id: page.notebook_id }))) throw new AppError(404, "Link not found");
+      return res.json({ status: true, data: { page_id: page.id as string } });
     },
   );
 
