@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Graph 3D</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1440px;height:900px;box-sizing:border-box;background:#0f1722;font-family:Roboto,system-ui,sans-serif;color:#e8eaed;position:relative;overflow:hidden">
+
+<svg width="1440" height="900" viewBox="0 0 1440 900" style="position:absolute;left:0;top:0" role="img" aria-label="Graph of pages and tags, rotated in 3D">
+<g stroke="#8ab4f8" stroke-opacity="0.35" stroke-width="1.2" fill="none">
+<path d="M720 430L560 330M720 430L880 300M720 430L640 580M720 430L860 560M560 330L430 260M560 330L470 420M880 300L1020 250M880 300L990 390M640 580L520 660M640 580L700 730M860 560L1000 640M860 560L930 720M430 260L330 330M1020 250L1150 300M1000 640L1120 560"/>
+</g>
+<g stroke="#f28b82" stroke-opacity="0.35" stroke-width="1" stroke-dasharray="4 4" fill="none">
+<path d="M560 330L880 300M640 580L860 560M470 420L520 660M990 390L1000 640"/>
+</g>
+<!-- pages -->
+<circle cx="720" cy="430" r="16" fill="#8ab4f8"/>
+<circle cx="560" cy="330" r="11" fill="#8ab4f8"/>
+<circle cx="880" cy="300" r="11" fill="#81c995"/>
+<circle cx="640" cy="580" r="12" fill="#81c995"/>
+<circle cx="860" cy="560" r="9" fill="#fdd663"/>
+<circle cx="430" cy="260" r="7" fill="#8ab4f8"/>
+<circle cx="470" cy="420" r="8" fill="#8ab4f8"/>
+<circle cx="1020" cy="250" r="7" fill="#81c995"/>
+<circle cx="990" cy="390" r="8" fill="#81c995"/>
+<circle cx="520" cy="660" r="7" fill="#fdd663"/>
+<circle cx="700" cy="730" r="6" fill="#fdd663"/>
+<circle cx="1000" cy="640" r="9" fill="#81c995"/>
+<circle cx="930" cy="720" r="6" fill="#fdd663"/>
+<circle cx="330" cy="330" r="5" fill="#8ab4f8"/>
+<circle cx="1150" cy="300" r="5" fill="#81c995"/>
+<circle cx="1120" cy="560" r="6" fill="#fdd663"/>
+<!-- tag nodes -->
+<rect x="660" y="262" width="12" height="12" transform="rotate(45 666 268)" fill="#c58af9"/>
+<rect x="1060" y="470" width="12" height="12" transform="rotate(45 1066 476)" fill="#c58af9"/>
+<path d="M666 268L560 330M666 268L880 300M1066 476L990 390M1066 476L1000 640" stroke="#c58af9" stroke-opacity="0.4" fill="none"/>
+<g font-family="Roboto, sans-serif" font-size="13" fill="#e8eaed">
+<text x="738" y="426">Q4 planning kickoff</text>
+<text x="486" y="326">Risk register</text>
+<text x="896" y="296">Budget FY27</text>
+<text x="545" y="604">Weekly sync</text>
+<text x="678" y="268" fill="#c58af9">#planning</text>
+<text x="1080" y="480" fill="#c58af9">#research</text>
+</g>
+</svg>
+
+<!-- top bar -->
+<div style="position:absolute;left:24px;top:24px;display:flex;align-items:center;gap:12px">
+<div style="height:40px;padding:0 16px;border-radius:6px;background:#1c2736;border:1px solid #33425a;display:flex;align-items:center;font-weight:500">Graph: Work</div>
+<div style="height:40px;padding:0 4px;border-radius:6px;background:#1c2736;border:1px solid #33425a;display:flex;align-items:center;gap:4px">
+<span style="height:32px;padding:0 14px;border-radius:4px;display:flex;align-items:center;color:#9aa0a6">2D</span>
+<span style="height:32px;padding:0 14px;border-radius:4px;display:flex;align-items:center;background:#2196f3;color:#ffffff;font-weight:500">3D</span>
+</div>
+<div style="height:40px;padding:0 16px;border-radius:6px;background:#1c2736;border:1px solid #33425a;display:flex;align-items:center;color:#9aa0a6">Search the graph</div>
+</div>
+
+<!-- panel -->
+<div style="position:absolute;right:24px;top:24px;width:280px;box-sizing:border-box;border:1px solid #33425a;border-radius:8px;background:#1c2736;padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#9aa0a6">SHOW</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:4px;background:#2196f3"></span>Pages</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:4px;background:#2196f3"></span>Tags as nodes</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:4px;border:2px solid #9aa0a6;box-sizing:border-box"></span>Merge same tag names across notebooks</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:18px;border-radius:4px;border:2px solid #9aa0a6;box-sizing:border-box"></span>Unresolved links</div>
+<div style="font-size:11px;font-weight:600;letter-spacing:0.08em;color:#9aa0a6;margin-top:6px">SECTIONS</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:999px;background:#8ab4f8"></span>Meetings</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:999px;background:#81c995"></span>Projects</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;border-radius:999px;background:#fdd663"></span>Journal</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:10px;height:10px;transform:rotate(45deg);background:#c58af9"></span>Tag</div>
+</div>
+
+<!-- selected node card -->
+<div style="position:absolute;left:24px;bottom:24px;width:360px;box-sizing:border-box;border:1px solid #33425a;border-radius:8px;background:#1c2736;padding:16px;display:flex;flex-direction:column;gap:6px">
+<div style="font-weight:600;font-size:16px">Q4 planning kickoff</div>
+<div style="font-size:12px;color:#9aa0a6">Meetings, 6 links, 2 tags</div>
+<div style="height:36px;margin-top:6px;border-radius:6px;background:#2196f3;color:#ffffff;display:flex;align-items:center;justify-content:center;font-weight:500">Open page</div>
+</div>
+<div style="position:absolute;left:420px;bottom:34px;font-size:12px;color:#9aa0a6">Drag to orbit, scroll to zoom, click a node to select it.</div>
+</div>
+
+</body>
+</html>
