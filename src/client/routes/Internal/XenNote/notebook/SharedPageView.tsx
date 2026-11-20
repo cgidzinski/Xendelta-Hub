@@ -17,7 +17,7 @@ export default function SharedPageView() {
   };
   return (
     <PageContainer width="narrow">
-      <PageView key={pageId} pageId={pageId} onGone={() => navigate("/internal/xennote")} links={links} />
+      <PageView key={pageId} pageId={pageId} onGone={() => navigate("/internal/xennote?scope=shared")} links={links} />
     </PageContainer>
   );
 }

@@ -29,6 +29,7 @@ interface NoteRailProps {
   /** Start a note in whatever is open; omitted when the open view can't take new notes (archive, read-only). */
   onNewNote?: () => void;
   /** What the new button says (a notebook's screen starts pages, not notes). */
+  showShared?: boolean;
   newLabel?: string;
   /** When given, a notebook opens as sections and pages (its own screen) instead of filtering the board. */
   onOpenNotebook?: (id: string) => void;
@@ -82,6 +83,7 @@ export default function NoteRail({
   onLabel,
   onNewNotebook,
   onNewNote,
+  showShared = false,
   newLabel = "New note",
   onOpenNotebook,
 }: NoteRailProps) {
@@ -112,11 +114,11 @@ export default function NoteRail({
         selected={scope === "none"}
         onClick={() => onScope("none")}
       />
-      {(counts?.shared ?? 0) > 0 && (
+      {(showShared || (counts?.shared ?? 0) > 0) && (
         <RailRow
           icon={<PeopleOutlineIcon />}
           text="Shared with me"
-          count={counts?.shared}
+          count={showShared ? undefined : counts?.shared}
           selected={scope === "shared"}
           onClick={() => onScope("shared")}
         />

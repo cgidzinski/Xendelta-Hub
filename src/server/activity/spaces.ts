@@ -1,4 +1,5 @@
 import { XenSplit } from "../models/xenSplit";
+import { XenNotePage } from "../models/xenNotePage";
 import { XenNotebook } from "../models/xenNote";
 
 // "Who is in this space right now?" for each app that has shared spaces. An activity is stored with a snapshot of
@@ -14,6 +15,10 @@ export const SPACES: Record<string, MembersOf> = {
     return group ? idsOf(group.members) : null;
   },
   xennote: async (id) => {
+    if (id.startsWith("page:")) {
+      const page = await XenNotePage.findById(id.slice(5), "members.user_id").lean();
+      return page?.members.map((m) => m.user_id) ?? null;
+    }
     const book = await XenNotebook.findById(id, "members.user_id").lean();
     return book ? book.members.map((m) => m.user_id) : null;
   },

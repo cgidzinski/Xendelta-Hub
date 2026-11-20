@@ -63,6 +63,7 @@ export function registerNotebookRoutes(app: any) {
       const book = await loadNotebook(req, req.params.id as string, "manage");
       if (req.body.name !== undefined) book.name = req.body.name;
       if (req.body.color !== undefined) book.color = req.body.color;
+      book.content_updated_at = new Date();
       await book.save();
       SocketManager.getInstance().notifyXenNoteUpdate(book.members.map((m) => m.user_id));
       const counts = await noteCounts([book.id]);
@@ -107,7 +108,8 @@ export function registerNotebookRoutes(app: any) {
       if (book.members.length + added.length > MAX_NOTEBOOK_PEOPLE) {
         throw new AppError(400, `${MAX_NOTEBOOK_PEOPLE} people per notebook is the limit`);
       }
-      for (const id of added) book.members.push({ user_id: id, role, added_at: new Date() });
+      const addedAt = new Date();
+      for (const id of added) book.members.push({ user_id: id, role, added_at: addedAt, added_by: callerId(req) });
       await book.save();
 
       const me = (req.user as { username?: string }).username ?? "Someone";
@@ -115,10 +117,11 @@ export function registerNotebookRoutes(app: any) {
         added.map((id) =>
           notify(id, {
             app: "xennote",
-            title: "Added to a notebook",
+            title: "Notebook shared with you",
+            channels: ["inapp", "socket", "push"],
             message: `${me} shared the notebook "${book.name}" with you as ${role === "viewer" ? "a viewer" : "an editor"}.`,
             link: `/internal/xennote?notebook=${book.id}`,
-            icon: "sticky_note_2",
+            icon: "menu_book",
           }),
         ),
       );

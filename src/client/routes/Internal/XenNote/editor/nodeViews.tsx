@@ -10,7 +10,7 @@ import { isSafeUrl } from "@shared/xennote/notes";
 import { Bookmark, FileBlock, Hashtag, ImageBlock, WikiLink } from "@shared/xennote/pageSchema";
 import { usePagePeek } from "../../../../hooks/xennote/usePages";
 import type { PageFileInfo } from "../../../../types/XenNotePage";
-import { PageLinksContext } from "./pageLinksContext";
+import { PageLinksContext, PublicPageLinksContext } from "./pageLinksContext";
 
 /** What the blocks that show a stored file need: where the files are, and what to do when a picture is opened. */
 export interface PageFilesValue {
@@ -157,13 +157,24 @@ function WikiLinkView({ node, updateAttributes, editor }: NodeViewProps) {
   const { onOpenPage, onCreatePage } = useContext(PageLinksContext);
   const pageId = (node.attrs.page_id as string | null) || null;
   const typed = String(node.attrs.label || node.attrs.title || "");
-  const { data: peek } = usePagePeek(pageId);
+  const publicPages = useContext(PublicPageLinksContext);
+  const { data: peek } = usePagePeek(publicPages ? null : pageId);
   const base = {
     component: "span",
     "data-type": "wikiLink",
     contentEditable: false,
     sx: { color: "primary.main", borderBottom: 1, borderColor: "primary.main", cursor: "pointer" },
   } as const;
+
+  if (!pageId && publicPages) {
+    return (
+      <NodeViewWrapper as="span">
+        <Box component="span" sx={{ color: "text.secondary" }}>
+          {typed}
+        </Box>
+      </NodeViewWrapper>
+    );
+  }
 
   if (!pageId) {
     const create = async () => {
@@ -187,11 +198,12 @@ function WikiLinkView({ node, updateAttributes, editor }: NodeViewProps) {
       </NodeViewWrapper>
     );
   }
-  if (peek?.locked) {
+  if (peek?.locked || (publicPages && !publicPages.has(pageId))) {
     return (
       <NodeViewWrapper as="span">
         <Box
           {...base}
+          data-locked="true"
           title="You don't have access to this page"
           sx={{
             ...base.sx,
@@ -214,11 +226,16 @@ function WikiLinkView({ node, updateAttributes, editor }: NodeViewProps) {
         {...base}
         role="link"
         tabIndex={0}
-        title="Shift-click to open beside"
+        title={publicPages ? undefined : "Shift-click to open beside"}
         onClick={open}
         onKeyDown={activate(open)}
       >
-        {(node.attrs.label as string) || (peek && !peek.locked ? peek.title || "Untitled" : typed)}
+        {(node.attrs.label as string) ||
+          (publicPages
+            ? publicPages.get(pageId) || "Untitled"
+            : peek && !peek.locked
+              ? peek.title || "Untitled"
+              : typed)}
       </Box>
     </NodeViewWrapper>
   );

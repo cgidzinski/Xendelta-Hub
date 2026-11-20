@@ -5,6 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AvatarGroup,
   Box,
+  Tab,
+  Tabs,
   Button,
   Card,
   Chip,
@@ -63,6 +65,7 @@ import { NOTE_SORTS, isNoteSort, sortNotes, type NoteSort } from "./noteSort";
 import NoteCard from "./components/NoteCard";
 import NoteEditor from "./components/NoteEditor";
 import NoteTrash from "./components/NoteTrash";
+import SharedItems from "./notebook/SharedItems";
 import NoteShareDialog from "./components/NoteShareDialog";
 import NoteBulkBar from "./components/NoteBulkBar";
 import NoteRail, { type Scope } from "./components/NoteRail";
@@ -94,6 +97,7 @@ export default function XenNote() {
   const navigate = useNavigate();
   // Opt-in for now (hooks/xennote/useNotebookPagesFlag.ts): notebooks open as sections and pages.
   const [pagesOn] = useNotebookPagesFlag();
+  const [sharedTab, setSharedTab] = useState<"pages" | "notes">("pages");
   const [scope, setScope] = useState<Scope>("all");
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [label, setLabel] = useState<string | null>(null);
@@ -134,9 +138,10 @@ export default function XenNote() {
 
   // A link to a notebook (being added to one, or opening its public link as a member): /internal/xennote?notebook=<id>.
   const linkedBookId = searchParams.get("notebook");
+  const linkedLegacyBook = searchParams.get("legacyNotebook") === "1";
   useEffect(() => {
     if (!linkedBookId) return;
-    if (pagesOn) {
+    if (pagesOn && !linkedLegacyBook) {
       navigate(`/internal/xennote/b/${linkedBookId}`, { replace: true });
       return;
     }
@@ -144,11 +149,12 @@ export default function XenNote() {
     setSearchParams(
       (p) => {
         p.delete("notebook");
+        p.delete("legacyNotebook");
         return p;
       },
       { replace: true },
     );
-  }, [linkedBookId, pagesOn, navigate, setSearchParams]);
+  }, [linkedBookId, linkedLegacyBook, pagesOn, navigate, setSearchParams]);
 
   // A link back from a notebook's screen to one of the board's views: /internal/xennote?scope=shared.
   const linkedScope = searchParams.get("scope");
@@ -331,7 +337,9 @@ export default function XenNote() {
     openBook && (openBook.my_role === "owner" || openBook.my_role === "editor") ? openBook._id : null;
   const canWrite = scope !== "archive" && scope !== "trash" && scope !== "shared" && (!openBook || !!startNotebookId);
 
+  const sharedPages = pagesOn && scope === "shared" && sharedTab === "pages";
   const pickScope = (next: Scope) => {
+    if (next === "shared") setSharedTab("pages");
     setScope(next);
     setTypeFilter("all");
     setRailOpen(false);
@@ -342,6 +350,7 @@ export default function XenNote() {
       scope={scope}
       onScope={pickScope}
       counts={counts}
+      showShared={pagesOn}
       notebooks={notebooks}
       labels={labels}
       label={label}
@@ -349,7 +358,7 @@ export default function XenNote() {
         setLabel(l);
         setRailOpen(false);
       }}
-      onNewNote={canWrite ? () => startNote() : undefined}
+      onNewNote={canWrite || sharedPages ? () => startNote() : undefined}
       onOpenNotebook={pagesOn ? (id) => navigate(`/internal/xennote/b/${id}`) : undefined}
       onNewNotebook={() => {
         setRailOpen(false);
@@ -442,9 +451,21 @@ export default function XenNote() {
             }
           />
 
+          {pagesOn && scope === "shared" && (
+            <Tabs
+              value={sharedTab}
+              onChange={(_, value: "pages" | "notes") => setSharedTab(value)}
+              aria-label="Shared items"
+              sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
+            >
+              <Tab value="pages" label="Notebooks and pages" />
+              <Tab value="notes" label="Loose notes" />
+            </Tabs>
+          )}
+          {sharedPages && <SharedItems />}
           {scope === "trash" && <NoteTrash />}
 
-          {scope !== "trash" && (
+          {!sharedPages && scope !== "trash" && (
             <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
               <TextField
                 fullWidth
@@ -533,7 +554,7 @@ export default function XenNote() {
             </Card>
           )}
 
-          {scope !== "trash" && (
+          {!sharedPages && scope !== "trash" && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", mb: 2.75 }}>
               <Stack direction="row" sx={{ gap: 1, flex: 1, flexWrap: "wrap" }} aria-label="Filter by type">
                 {TYPE_FILTERS.map((f) => (
@@ -550,7 +571,7 @@ export default function XenNote() {
             </Box>
           )}
 
-          {selecting && scope !== "trash" && (
+          {!sharedPages && selecting && scope !== "trash" && (
             <NoteBulkBar
               count={selectedIds.length}
               inArchive={scope === "archive"}
@@ -581,7 +602,7 @@ export default function XenNote() {
             />
           )}
 
-          {scope === "trash" ? null : isLoading && !notes ? (
+          {sharedPages || scope === "trash" ? null : isLoading && !notes ? (
             <ListSkeleton rows={4} height={96} gap={2} />
           ) : isError ? (
             <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />
@@ -593,12 +614,16 @@ export default function XenNote() {
                   ? "Nothing archived"
                   : search || label || typeFilter !== "all"
                     ? "No notes match"
-                    : "No notes yet"
+                    : scope === "shared"
+                      ? "No shared notes yet"
+                      : "No notes yet"
               }
               description={
                 scope === "archive"
                   ? "Archived notes are kept here."
-                  : "Take a note, make a list, save a photo or a link."
+                  : scope === "shared"
+                    ? "Loose notes people share with you will appear here."
+                    : "Take a note, make a list, save a photo or a link."
               }
             />
           ) : (

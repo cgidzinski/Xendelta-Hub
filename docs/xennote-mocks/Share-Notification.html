@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XenNote · Sharing notifications</title>
+  <link rel="stylesheet" href="sharing.css">
+</head>
+<body>
+  <header class="app-bar">
+    <a class="back" href="Shared-With-Me.html" aria-label="Back to Shared with me">‹</a>
+    <span class="brand">XenSuite</span>
+    <span class="app-name">Notifications</span>
+    <span class="spacer"></span>
+    <span class="avatar avatar-self" aria-label="Ellie">E</span>
+  </header>
+  <main class="notification-layout">
+    <section aria-labelledby="notifications">
+      <div class="title-row">
+        <h1 id="notifications">Notifications</h1>
+        <span class="outline-action">Mark all read</span>
+      </div>
+      <div class="filters"><span class="chip chip-new">Unread (2)</span><span class="chip chip-changed">XenNote</span></div>
+      <ul class="card notification-list">
+        <li><a class="notification-row" href="#notification-detail">
+          <span class="item-icon notebook-icon" aria-hidden="true"></span>
+          <span class="row-text"><strong>Notebook shared with you</strong><span>Maya Chen shared “Work” with you as an editor.</span></span>
+          <span class="timestamp">2 min ago</span>
+        </a></li>
+        <li><a class="notification-row" href="#page-notification-detail">
+          <span class="item-icon page-icon" aria-hidden="true"></span>
+          <span class="row-text"><strong>Page shared with you</strong><span>Jordan Lee shared “Weekend itinerary” with you as an editor.</span></span>
+          <span class="timestamp">15 min ago</span>
+        </a></li>
+      </ul>
+    </section>
+    <section class="push-preview" aria-labelledby="push">
+      <h2 id="push">Push notification</h2>
+      <a class="card push-card" href="Main.html">
+        <span class="push-app"><strong>XenSuite</strong><span>now</span></span>
+        <strong>Notebook shared with you</strong>
+        <span>Maya Chen shared “Work” with you as an editor.</span>
+      </a>
+    </section>
+  </main>
+  <section class="modal" id="notification-detail" role="dialog" aria-labelledby="detail-title">
+    <div class="card dialog">
+      <header><span class="item-icon notebook-icon" aria-hidden="true"></span><h2 id="detail-title">Notebook shared with you</h2></header>
+      <div class="dialog-body"><p>Maya Chen shared “Work” with you as an editor.</p><p class="timestamp">Received 2 min ago</p></div>
+      <footer><a href="#" class="outline-action">Close</a><a href="Main.html" class="primary-action">Go to</a></footer>
+    </div>
+  </section>
+  <section class="modal" id="page-notification-detail" role="dialog" aria-labelledby="page-detail-title">
+    <div class="card dialog">
+      <header><span class="item-icon page-icon" aria-hidden="true"></span><h2 id="page-detail-title">Page shared with you</h2></header>
+      <div class="dialog-body"><p>Jordan Lee shared “Weekend itinerary” with you as an editor.</p><p class="timestamp">Received 15 min ago</p></div>
+      <footer><a href="#" class="outline-action">Close</a><a href="Phone-Page.html" class="primary-action">Go to</a></footer>
+    </div>
+  </section>
+</body>
+</html>

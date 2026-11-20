@@ -32,5 +32,8 @@ export const xennoteKeys = {
     [...xennoteKeys.all, "page-search", q, notebook ?? "", tag ?? ""] as const,
   /** What was deleted from a notebook's sections and pages. */
   notebookTrash: (notebookId: string) => [...xennoteKeys.all, "notebook-trash", notebookId] as const,
+  pagePeople: (pageId: string) => [...xennoteKeys.all, "page-people", pageId] as const,
+  sharedItems: () => [...xennoteKeys.all, "shared-items"] as const,
+  publicPage: (token: string, pageId?: string) => [...xennoteKeys.all, "public-page", token, pageId ?? ""] as const,
   publicNotebook: (token: string) => [...xennoteKeys.all, "public-notebook", token] as const,
 };

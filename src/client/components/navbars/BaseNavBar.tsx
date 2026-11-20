@@ -1,3 +1,4 @@
+import { getNotificationIcon } from "../notifications/notificationIcon";
 import { brandGradient } from "../../theme";
 import { Outlet } from "react-router-dom";
 import {
@@ -24,10 +25,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import CommandPalette from "../search/CommandPalette";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import NotificationsIcon from "@mui/icons-material/Notifications";
-import PersonIcon from "@mui/icons-material/Person";
-import AnnouncementIcon from "@mui/icons-material/Announcement";
-import SecurityIcon from "@mui/icons-material/Security";
-import LockIcon from "@mui/icons-material/Lock";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import { formatDistance } from "date-fns";
@@ -75,21 +72,6 @@ interface BaseNavBarProps {
   showGems?: boolean;
   children?: React.ReactNode;
 }
-
-const getNotificationIcon = (icon: string) => {
-  switch (icon) {
-    case "person":
-      return <PersonIcon />;
-    case "security":
-      return <SecurityIcon />;
-    case "announcement":
-      return <AnnouncementIcon />;
-    case "lock":
-      return <LockIcon />;
-    default:
-      return <NotificationsIcon />;
-  }
-};
 
 export default function BaseNavBar({
   title,
