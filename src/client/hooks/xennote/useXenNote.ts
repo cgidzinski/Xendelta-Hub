@@ -135,6 +135,17 @@ export const useXenNoteBacklinks = (noteId: string | undefined) =>
     enabled: !!noteId,
   });
 
+export const useXenNoteMentions = (noteId: string) =>
+  useQuery({
+    queryKey: xennoteKeys.noteMentions(noteId),
+    queryFn: async () =>
+      (
+        await api.get<{
+          notes: Array<{ _id: string; title: string; snippet: string }>;
+        }>(`/api/xennote/notes/${noteId}/mentions`)
+      ).notes,
+  });
+
 export const usePublicNote = (token: string | undefined) =>
   useQuery({
     queryKey: xennoteKeys.publicNote(token ?? ""),

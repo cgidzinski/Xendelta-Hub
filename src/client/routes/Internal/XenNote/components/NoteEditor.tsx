@@ -1,6 +1,8 @@
 import { alpha } from "@mui/material/styles";
-import { useState } from "react";
-import { Dialog, DialogContent, Stack, useMediaQuery, useTheme } from "@mui/material";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Button, Dialog, DialogContent, Stack, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { formatDistanceToNow } from "date-fns";
+import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
 import type { XenNote, XenNotebook } from "../../../../types/XenNote";
 import { useNoteDraft } from "../hooks/useNoteDraft";
@@ -22,6 +24,8 @@ import NoteShareDialog from "./NoteShareDialog";
 import NoteTextBody from "./NoteTextBody";
 import NoteTitleRow from "./NoteTitleRow";
 import NoteTypeToggle from "./NoteTypeToggle";
+
+const NoteBlockEditor = lazy(() => import("../editor/NoteBlockEditor"));
 
 interface NoteEditorProps {
   open: boolean;
@@ -61,6 +65,22 @@ export default function NoteEditor({
   const n = useNoteDraft({ open, onClose, note, startType, startNotebookId, onOpenNote });
   const { draft, setDraft, set, live, readOnly } = n;
 
+  const [editing, setEditing] = useState(false);
+  const [source, setSource] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number>();
+  useEffect(() => {
+    setEditing(false);
+    setSource(false);
+  }, [note?._id, open]);
+  useEffect(() => {
+    if (!isMobile || !open || !window.visualViewport) return;
+    const viewport = window.visualViewport;
+    const resize = () => setViewportHeight(Math.round(viewport.height));
+    resize();
+    viewport.addEventListener("resize", resize);
+    return () => viewport.removeEventListener("resize", resize);
+  }, [isMobile, open]);
+  const viewing = readOnly || (!!note && !editing);
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
   const [bookAnchor, setBookAnchor] = useState<HTMLElement | null>(null);
@@ -86,13 +106,14 @@ export default function NoteEditor({
         sx={{ "& .MuiDialog-container": { alignItems: isMobile ? "stretch" : "flex-start" } }}
         onPaste={(e) => {
           const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
-          if (!readOnly && images.length) {
+          if (!viewing && images.length) {
             e.preventDefault();
             n.addPhotos(images);
           }
         }}
         slotProps={{
           paper: {
+            style: isMobile && viewportHeight ? { height: viewportHeight } : undefined,
             sx: [{ maxWidth: 680, mt: { sm: 8 }, borderRadius: { sm: 3 } }, noteSurfaceSx(draft.color)],
           },
           backdrop: { sx: { bgcolor: alpha(theme.palette.common.black, 0.4) } },
@@ -101,7 +122,7 @@ export default function NoteEditor({
         <NoteTitleRow
           title={draft.title}
           pinned={draft.pinned}
-          readOnly={readOnly}
+          readOnly={viewing}
           onTitle={(title) => set({ title })}
           onTogglePin={() => set({ pinned: !draft.pinned })}
           onMore={setMoreAnchor}
@@ -123,21 +144,50 @@ export default function NoteEditor({
                 }
               />
             )}
-            {(draft.type === "text" || draft.type === "image") && (
-              <NoteTextBody
-                type={draft.type}
-                body={draft.body}
-                onBody={(body) => set({ body })}
-                readOnly={readOnly}
-                noteId={live?._id ?? null}
-                titles={titles}
-                onOpenNote={n.openLinked}
-                resetToken={n.initial}
-              />
+            {live && (
+              <Typography variant="caption" color="text.secondary">
+                Edited {formatDistanceToNow(live.updated_at, { addSuffix: true })}
+                {live.updated_by_name ? ` by ${live.updated_by_name}` : ""}
+              </Typography>
+            )}
+            {viewing && !readOnly && (
+              <Button variant="outlined" onClick={() => setEditing(true)} sx={{ alignSelf: "start" }}>
+                Edit note
+              </Button>
+            )}
+            {draft.type === "text" && !viewing && !source ? (
+              <Suspense fallback={<ListSkeleton rows={4} />}>
+                <NoteBlockEditor
+                  key={note?._id ?? "new"}
+                  body={draft.body}
+                  onBody={(body) => set({ body })}
+                  titles={titles}
+                  noteId={live?._id ?? null}
+                  onOpenNote={n.openLinked}
+                  onSource={() => setSource(true)}
+                />
+              </Suspense>
+            ) : (
+              (draft.type === "text" || draft.type === "image") && (
+                <NoteTextBody
+                  type={draft.type}
+                  body={draft.body}
+                  onBody={(body) => set({ body })}
+                  readOnly={viewing}
+                  noteId={live?._id ?? null}
+                  titles={titles}
+                  onOpenNote={n.openLinked}
+                  resetToken={n.initial}
+                />
+              )
+            )}
+            {source && !viewing && draft.type === "text" && (
+              <Button onClick={() => setSource(false)}>Use block editor</Button>
             )}
             {isList && (
               <NoteChecklistEditor
                 items={draft.checklist}
+                viewing={viewing}
                 readOnly={readOnly}
                 autoFocusFirst={!live}
                 onChange={(checklist) => set({ checklist })}
@@ -147,7 +197,7 @@ export default function NoteEditor({
               <NoteLinkFields
                 link={draft.link}
                 error={linkError}
-                readOnly={readOnly}
+                readOnly={viewing}
                 onChange={(link) => set({ link })}
               />
             )}
@@ -155,7 +205,7 @@ export default function NoteEditor({
               <NotePhotoGrid
                 images={live?.images ?? []}
                 pendingImages={draft.pendingImages}
-                readOnly={readOnly}
+                readOnly={viewing}
                 onRemoveSaved={n.removePhoto}
                 onRemovePending={(i) => set({ pendingImages: draft.pendingImages.filter((_, idx) => idx !== i) })}
               />
@@ -166,7 +216,7 @@ export default function NoteEditor({
                   draft.notebook_id ? (notebooks.find((b) => b._id === draft.notebook_id)?.name ?? "Notebook") : null
                 }
                 labels={draft.labels}
-                readOnly={readOnly}
+                readOnly={viewing}
                 onRemoveLabel={(label) => set({ labels: draft.labels.filter((l) => l !== label) })}
               />
             )}
@@ -175,7 +225,7 @@ export default function NoteEditor({
         </DialogContent>
 
         <NoteEditorToolbar
-          readOnly={readOnly}
+          readOnly={viewing}
           live={live}
           autosave={n.autosave}
           addingPhotos={n.addingPhotos}

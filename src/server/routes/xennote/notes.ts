@@ -20,6 +20,8 @@ import { randomToken } from "../../utils/tokens";
 import { roleOf } from "../../utils/membership";
 import { contentChanged, contentOf, keepVersion } from "../../utils/xenNoteVersions";
 import { MAX_CHECKLIST_ITEMS, normalizeLabels } from "../../../shared/xennote/notes";
+import { linkFirstMention, mentionSnippet } from "../../../shared/xennote/linkMention";
+import { markdownToDoc } from "../../../shared/xennote/convert/v1";
 import { linksTo } from "../../../shared/xennote/wikiLinks";
 import {
   canManageNote,
@@ -324,6 +326,40 @@ export function registerNoteRoutes(app: any) {
           updated_at: n.updated_at.toISOString(),
         }));
       res.json({ status: true, data: { notes } });
+    },
+  );
+
+  app.get(
+    "/api/xennote/notes/:id/mentions",
+    validateParams(xenNoteIdParamSchema),
+    async (req: Request, res: Response) => {
+      const uid = callerId(req);
+      const { note } = await loadNote(req, req.params.id as string, "view");
+      const title = note.title.trim();
+      if (!title) return res.json({ status: true, data: { notes: [] } });
+      const books = await myNotebooks(uid);
+      const target = { id: String(note._id), title, aliases: [] };
+      const words = title.split(/\s+/).map(escapeRegex).join("\\s+");
+      const possible = await XenNote.find(
+        {
+          _id: { $ne: note._id },
+          type: "text",
+          archived: { $ne: true },
+          ...visibleNotesFilter(uid, books),
+          body: { $regex: words, $options: "i" },
+        },
+        "title body",
+      )
+        .sort({ updated_at: -1 })
+        .limit(100)
+        .lean();
+      const notes = possible
+        .flatMap((other) => {
+          if (linksTo(other.body, title) || !linkFirstMention(markdownToDoc(other.body), target).changed) return [];
+          return [{ _id: String(other._id), title: other.title, snippet: mentionSnippet(other.body, target) }];
+        })
+        .slice(0, 50);
+      return res.json({ status: true, data: { notes } });
     },
   );
 

@@ -14,13 +14,21 @@ import { noteFieldSx } from "../noteFieldSx";
 interface NoteChecklistEditorProps {
   items: XenNoteItem[];
   readOnly: boolean;
+  viewing?: boolean;
   /** Focus the first item (a brand new list). */
   autoFocusFirst: boolean;
   onChange: (items: XenNoteItem[]) => void;
 }
 
 /** A list note: rows you can check, edit and drag to reorder, with finished items folded away below. */
-export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, onChange }: NoteChecklistEditorProps) {
+export default function NoteChecklistEditor({
+  items,
+  readOnly,
+  viewing = false,
+  autoFocusFirst,
+  onChange,
+}: NoteChecklistEditorProps) {
+  const editable = !readOnly && !viewing;
   const theme = useTheme();
   const [showDone, setShowDone] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -31,7 +39,7 @@ export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, o
   const row = (item: XenNoteItem, i: number) => (
     <Box
       key={item._id ?? i}
-      draggable={!readOnly && !item.done}
+      draggable={editable && !item.done}
       onDragStart={() => setDragFrom(i)}
       onDragOver={(e) => dragFrom !== null && e.preventDefault()}
       onDrop={() => {
@@ -41,7 +49,7 @@ export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, o
       onDragEnd={() => setDragFrom(null)}
       sx={{ display: "flex", alignItems: "center", gap: 0.5, opacity: dragFrom === i ? 0.4 : 1 }}
     >
-      {!readOnly && !item.done && (
+      {editable && !item.done && (
         <DragIndicatorIcon
           fontSize="small"
           aria-label="Drag to reorder"
@@ -53,7 +61,7 @@ export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, o
           }}
         />
       )}
-      {!readOnly && !item.done && (
+      {editable && !item.done && (
         <Box sx={{ display: "none", "@media (pointer: coarse)": { display: "flex" } }}>
           <IconButton
             size="small"
@@ -84,7 +92,7 @@ export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, o
         fullWidth
         autoFocus={autoFocusFirst && i === 0}
         value={item.text}
-        disabled={readOnly}
+        disabled={!editable}
         onChange={(e) => updateItem(i, { text: e.target.value })}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -97,7 +105,7 @@ export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, o
           input: { sx: { textDecoration: item.done ? "line-through" : "none" } },
         }}
       />
-      {!readOnly && (
+      {editable && (
         <IconButton aria-label="Remove item" size="small" onClick={() => onChange(items.filter((_, idx) => idx !== i))}>
           <CloseIcon fontSize="small" />
         </IconButton>
@@ -111,7 +119,7 @@ export default function NoteChecklistEditor({ items, readOnly, autoFocusFirst, o
   return (
     <Box sx={{ ...noteFieldSx(theme), display: "block" }}>
       {active.map((x) => row(x.item, x.i))}
-      {!readOnly && (
+      {editable && (
         <Button
           startIcon={<AddIcon />}
           onClick={() => onChange([...items, { text: "", done: false }])}

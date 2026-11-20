@@ -141,7 +141,7 @@ async function signedImages(images: Array<{ _id: unknown; file_id?: unknown; gcs
 export async function namesForNotes(notes: NoteDoc[]): Promise<Map<string, string>> {
   const ids = [
     ...new Set([
-      ...notes.filter((n) => n.notebook_id && n.updated_by).map((n) => n.updated_by as string),
+      ...notes.filter((n) => n.updated_by).map((n) => n.updated_by as string),
       ...notes.filter((n) => !n.notebook_id).map((n) => n.owner_id),
     ]),
   ];
@@ -187,7 +187,7 @@ export async function serializeNote(
     can_manage: note.notebook_id ? editable : note.owner_id === opts.uid,
     // The note's own public link is only shown to people who can change the note.
     share: editable ? { enabled: !!note.share?.enabled, token: note.share?.token ?? null } : null,
-    updated_by_name: note.notebook_id && note.updated_by ? (names.get(note.updated_by) ?? null) : null,
+    updated_by_name: note.updated_by ? (names.get(note.updated_by) ?? null) : null,
     created_at: note.created_at.toISOString(),
     updated_at: note.updated_at.toISOString(),
   };

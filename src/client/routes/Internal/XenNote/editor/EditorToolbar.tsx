@@ -19,7 +19,8 @@ import { useEditorState, type Editor } from "@tiptap/react";
 
 interface EditorToolbarProps {
   editor: Editor;
-  onPickFiles: () => void;
+  onPickFiles?: () => void;
+  compact?: boolean;
   onLink: () => void;
 }
 
@@ -32,7 +33,7 @@ interface Tool {
 }
 
 /** The formatting bar above a page's text: marks, headings, lists, blocks and attachments. Scrolls sideways on a phone. */
-export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToolbarProps) {
+export default function EditorToolbar({ editor, onPickFiles, onLink, compact = false }: EditorToolbarProps) {
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -120,7 +121,7 @@ export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToo
         icon: <TableChartOutlinedIcon />,
         run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
       },
-      { label: "Image or file", icon: <AttachFileIcon />, run: onPickFiles },
+      ...(onPickFiles ? [{ label: "Image or file", icon: <AttachFileIcon />, run: onPickFiles }] : []),
     ],
   ];
 
@@ -135,7 +136,8 @@ export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToo
         overflowX: "auto",
         py: 0.5,
         position: "sticky",
-        top: 0,
+        top: compact ? undefined : 0,
+        bottom: compact ? 0 : undefined,
         zIndex: 2,
         bgcolor: "background.paper",
         borderBottom: 1,
@@ -145,25 +147,27 @@ export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToo
       {groups.map((group, g) => (
         <Box key={g} sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}>
           {g > 0 && <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.75 }} />}
-          {group.map((tool) => (
-            <Tooltip key={tool.label} title={tool.label}>
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label={tool.label}
-                  aria-pressed={tool.active ?? undefined}
-                  color={tool.active ? "primary" : "default"}
-                  disabled={tool.disabled}
-                  // Keep the focus (and the selection) in the text while a button is pressed.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={tool.run}
-                  sx={{ width: 36, height: 36, fontSize: 13 }}
-                >
-                  {tool.icon}
-                </IconButton>
-              </span>
-            </Tooltip>
-          ))}
+          {group
+            .filter((tool) => !compact || tool.label !== "Callout")
+            .map((tool) => (
+              <Tooltip key={tool.label} title={tool.label}>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label={tool.label}
+                    aria-pressed={tool.active ?? undefined}
+                    color={tool.active ? "primary" : "default"}
+                    disabled={tool.disabled}
+                    // Keep the focus (and the selection) in the text while a button is pressed.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={tool.run}
+                    sx={{ width: 36, height: 36, fontSize: 13 }}
+                  >
+                    {tool.icon}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            ))}
         </Box>
       ))}
     </Box>
