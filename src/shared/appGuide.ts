@@ -397,7 +397,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     ],
     tips: [
       {
-        text: "Turn on Link editing in the settings popover to change the order of your links.",
+        text: "Turn on Edit mode in the settings popover to add, edit, or reorder links.",
         link: "/internal/xenstart",
       },
       { text: "Open Settings to choose which sections from Home to show.", link: "/internal/xenstart" },

@@ -20,6 +20,7 @@ import { QUICK_LINK_LIMIT, searchUrl, type QuickLink, type XenStartConfig } from
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useTitle } from "../../../hooks/useTitle";
 import { useXenStart } from "../../../hooks/xenstart/useXenStart";
+import { RADIUS } from "../../../theme";
 import { rememberRecentApp } from "../../../utils/recentApps";
 import { LinkDialog, SettingsDialog } from "./Dialogs";
 import QuickLinks, { quickLinkColumns } from "./QuickLinks";
@@ -129,7 +130,7 @@ export default function XenStart() {
         >
           <Stack>
             <FormControlLabel
-              label="Link editing"
+              label="Edit mode"
               labelPlacement="start"
               sx={{ mx: 1, justifyContent: "space-between" }}
               control={
@@ -161,39 +162,27 @@ export default function XenStart() {
         <Typography component="h1" variant="h4" textAlign="center" sx={{ mb: 2 }}>
           XenStart
         </Typography>
-        <Box
-          component="form"
-          role="search"
-          onSubmit={submitSearch}
-          sx={{ display: "flex", gap: 0.75, maxWidth: 550, mx: "auto", mb: 4 }}
-        >
+        <Box component="form" role="search" onSubmit={submitSearch} sx={{ maxWidth: 550, mx: "auto", mb: 4 }}>
           <TextField
             fullWidth
-            size="small"
             type="search"
             placeholder={config ? `Search with ${config.engine}` : "Search the web"}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             slotProps={{
               input: {
+                sx: { bgcolor: "background.paper", borderRadius: RADIUS.pill, pl: 2 },
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
+                  <InputAdornment position="start" sx={{ mr: 1.25, color: "text.secondary" }}>
+                    <SearchIcon fontSize="small" aria-hidden />
                   </InputAdornment>
                 ),
               },
-              htmlInput: { "aria-label": "Web search" },
+              htmlInput: { "aria-label": "Web search", enterKeyHint: "search" },
             }}
-            sx={{ bgcolor: "background.paper" }}
           />
-          <Button type="submit" variant="contained" disabled={!config}>
-            Search
-          </Button>
         </Box>
-        <Box component="section" aria-labelledby="xenstart-links-title">
-          <Typography id="xenstart-links-title" component="h2" variant="subtitle2" sx={{ mb: 1 }}>
-            Quick links
-          </Typography>
+        <Box component="section" aria-label="Quick links">
           {error && !dialog && (
             <Alert severity="error" sx={{ mb: 1.5 }}>
               {error}

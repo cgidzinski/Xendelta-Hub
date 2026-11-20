@@ -170,17 +170,25 @@ export default function QuickLinks({ links, editing, saving, onEdit, onMove }: Q
           </Box>
         );
       })}
-      {Array.from({ length: QUICK_LINK_LIMIT - links.length }, (_, i) => (
-        <ButtonBase
-          key={i}
-          disabled={saving}
-          onClick={() => onEdit(null)}
-          sx={{ ...faceSx, minWidth: 0, border: "1px dashed", borderColor: "divider", color: "text.secondary" }}
-        >
-          <AddIcon fontSize="small" />
-          <Typography variant="body2">Add link</Typography>
-        </ButtonBase>
-      ))}
+      {Array.from({ length: QUICK_LINK_LIMIT - links.length }, (_, i) =>
+        editing ? (
+          <ButtonBase
+            key={i}
+            disabled={saving}
+            onClick={() => onEdit(null)}
+            sx={{ ...faceSx, minWidth: 0, border: "1px dashed", borderColor: "divider", color: "text.secondary" }}
+          >
+            <AddIcon fontSize="small" />
+            <Typography variant="body2">Add link</Typography>
+          </ButtonBase>
+        ) : (
+          <Box
+            key={i}
+            aria-hidden="true"
+            sx={{ minHeight: 78, border: "1px solid", borderColor: "divider", borderRadius: RADIUS.lg }}
+          />
+        ),
+      )}
     </Box>
   );
 }
