@@ -94,7 +94,8 @@ export default function PageEditor({ detail, onLabel }: PageEditorProps) {
   editedRef.current = draft.edited;
   useEffect(() => onLabel?.(draft.label), [draft.label, onLabel]);
   useEffect(() => {
-    editor?.setEditable(editable);
+    // Only when it really changed, and without an update event: that would be taken for typing and saved.
+    if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
   }, [editor, editable]);
   // A reload (someone else's save) can bring files this editor hasn't seen.
   useEffect(() => setFiles((prev) => ({ ...prev, ...detail.files })), [detail.files]);
