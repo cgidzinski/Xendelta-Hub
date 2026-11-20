@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import UserAvatar from "../../../components/user/UserAvatar";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AvatarGroup,
@@ -49,6 +49,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { xennoteKeys } from "../../../hooks/xennote/keys";
+import { useNotebookPagesFlag } from "../../../hooks/xennote/useNotebookPagesFlag";
 import {
   useXenNoteActions,
   useXenNoteCounts,
@@ -90,6 +91,9 @@ export default function XenNote() {
   const wide = useMediaQuery(theme.breakpoints.up("md"));
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
 
+  const navigate = useNavigate();
+  // Opt-in for now (hooks/xennote/useNotebookPagesFlag.ts): notebooks open as sections and pages.
+  const [pagesOn] = useNotebookPagesFlag();
   const [scope, setScope] = useState<Scope>("all");
   const [shareNoteId, setShareNoteId] = useState<string | null>(null);
   const [label, setLabel] = useState<string | null>(null);
@@ -132,6 +136,10 @@ export default function XenNote() {
   const linkedBookId = searchParams.get("notebook");
   useEffect(() => {
     if (!linkedBookId) return;
+    if (pagesOn) {
+      navigate(`/internal/xennote/b/${linkedBookId}`, { replace: true });
+      return;
+    }
     setScope(linkedBookId);
     setSearchParams(
       (p) => {
@@ -140,7 +148,21 @@ export default function XenNote() {
       },
       { replace: true },
     );
-  }, [linkedBookId, setSearchParams]);
+  }, [linkedBookId, pagesOn, navigate, setSearchParams]);
+
+  // A link back from a notebook's screen to one of the board's views: /internal/xennote?scope=shared.
+  const linkedScope = searchParams.get("scope");
+  useEffect(() => {
+    if (!linkedScope) return;
+    if (["all", "none", "shared", "archive", "trash"].includes(linkedScope)) setScope(linkedScope);
+    setSearchParams(
+      (p) => {
+        p.delete("scope");
+        return p;
+      },
+      { replace: true },
+    );
+  }, [linkedScope, setSearchParams]);
 
   const filters: NoteFilters = {
     notebook: scope === "all" || scope === "archive" || scope === "trash" ? undefined : scope,
@@ -328,6 +350,7 @@ export default function XenNote() {
         setRailOpen(false);
       }}
       onNewNote={canWrite ? () => startNote() : undefined}
+      onOpenNotebook={pagesOn ? (id) => navigate(`/internal/xennote/b/${id}`) : undefined}
       onNewNotebook={() => {
         setRailOpen(false);
         setNotebookDialog({ id: null });

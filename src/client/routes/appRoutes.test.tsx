@@ -74,6 +74,11 @@ describe("app routes", () => {
     expect(hit("/internal/xendrive/file/f1")).toEqual(["/internal", "xendrive", "file/:fileId"]);
     expect(hit("/internal/xendrive/folder/d1")).toEqual(["/internal", "xendrive", "folder/:folderId"]);
     expect(hit("/internal/xennote")).toEqual(["/internal", "xennote"]);
+    expect(hit("/internal/xennote/b/nb1")).toEqual(["/internal", "xennote/b/:notebookId"]);
+    expect(hit("/internal/xennote/b/nb1/p/p1")).toEqual(["/internal", "xennote/b/:notebookId/p/:pageId"]);
+    expect(hit("/internal/xennote/p/p1")).toEqual(["/internal", "xennote/p/:pageId"]);
+    // The older shared-link routes next to them still match.
+    expect(hit("/internal/xennote/shared/abc")).toEqual(["/internal", "xennote/shared/:token"]);
     expect(hit("/internal/nowhere")).toBeUndefined();
   });
 });
