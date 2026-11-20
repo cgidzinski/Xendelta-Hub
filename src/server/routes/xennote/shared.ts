@@ -2,6 +2,7 @@ import type { Request } from "express";
 import type { HydratedDocument } from "mongoose";
 import { AppError, callerId } from "../../utils/http";
 import { XenNote, XenNotebook, type XenNoteAttrs, type XenNotebookAttrs } from "../../models/xenNote";
+import { rejectMigratedNote } from "./legacy";
 import { User } from "../../models/user";
 import { generateSignedUrl } from "../../utils/storageUtils";
 import { signedUrlsFor, thumbnailUrlsFor } from "../../utils/appFiles";
@@ -72,7 +73,10 @@ export async function loadNote(
 ): Promise<{ note: NoteDoc; notebook: NotebookDoc | null; role: MemberRole }> {
   const uid = callerId(req);
   const note = await XenNote.findById(id);
-  if (!note) throw new AppError(404, "Note not found");
+  if (!note) {
+    await rejectMigratedNote(req, id);
+    throw new AppError(404, "Note not found");
+  }
 
   const notebook = note.notebook_id ? await XenNotebook.findById(note.notebook_id) : null;
   const role = noteRole(note.toObject(), notebook?.toObject() ?? null, uid);

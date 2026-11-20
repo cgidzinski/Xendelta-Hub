@@ -97,9 +97,11 @@ export default function NoteBulkBar(props: NoteBulkBarProps) {
       <Button size="small" onClick={open("label")} disabled={none}>
         Label
       </Button>
-      <Button size="small" onClick={open("move")} disabled={none}>
-        Move
-      </Button>
+      {!!notebooks.length && (
+        <Button size="small" onClick={open("move")} disabled={none}>
+          Move
+        </Button>
+      )}
       <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={onDelete} disabled={none}>
         Delete
       </Button>

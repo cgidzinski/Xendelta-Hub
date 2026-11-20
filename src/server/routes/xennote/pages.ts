@@ -8,6 +8,7 @@ import {
   xenNotePageFavoriteSchema,
   xenNotePageMoveSchema,
   xenNotePageUpdateSchema,
+  xenNoteReminderSchema,
 } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
 import { FileRecord } from "../../models/fileRecord";
@@ -73,7 +74,9 @@ export async function pageDetail(page: PageDoc, notebook: NotebookDoc, role: Mem
         .sort({ order: 1, _id: 1 })
         .lean()
     : [];
+  const own = page.reminders.find((item) => item.user_id === uid);
   return {
+    reminder: own ? { at: own.at, sent: !!own.notified_at } : null,
     children: children.map((p) => ({ id: String(p._id), title: p.title })),
     page: serializePage(page, uid, role, canManagePage(notebook.toObject(), uid)),
     doc: body?.doc ?? ensureBlockIds(emptyDoc()),
@@ -246,6 +249,26 @@ export function registerPageRoutes(app: any) {
       );
       const fresh = await XenNotePage.findById(page._id);
       res.json({ status: true, data: await pageDetail(fresh ?? page, notebook, role, uid) });
+    },
+  );
+
+  app.put(
+    "/api/xennote/pages/:id/reminder",
+    validateParams(xenNoteIdParamSchema),
+    validate(xenNoteReminderSchema),
+    async (req: Request, res: Response) => {
+      const uid = callerId(req);
+      const { page } = await loadPage(req, req.params.id as string, "view");
+      const { at } = xenNoteReminderSchema.parse(req.body);
+      // Preserve other people's reminders and atomically replace or remove this caller's own reminder.
+      const remaining = {
+        $filter: { input: { $ifNull: ["$reminders", []] }, as: "r", cond: { $ne: ["$$r.user_id", uid] } },
+      };
+      const reminder = at ? { user_id: uid, at: new Date(at), notified_at: null } : null;
+      const update = reminder ? { $concatArrays: [remaining, [reminder]] } : remaining;
+      const changed = await XenNotePage.updateOne({ _id: page._id }, [{ $set: { reminders: update } }]);
+      if (!changed.matchedCount) throw new AppError(404, "Page not found");
+      res.json({ status: true, data: { reminder: reminder ? { at: reminder.at, sent: false } : null } });
     },
   );
 

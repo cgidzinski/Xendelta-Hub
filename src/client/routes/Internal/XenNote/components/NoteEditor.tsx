@@ -183,7 +183,7 @@ export default function NoteEditor({
           onAddPhotos={n.addPhotos}
           onColor={setColorAnchor}
           onLabels={setLabelAnchor}
-          onNotebook={setBookAnchor}
+          onNotebook={notebooks.length ? setBookAnchor : undefined}
           onReminder={setReminderAnchor}
           onShare={() => setShareOpen(true)}
           onDone={n.saveAndClose}

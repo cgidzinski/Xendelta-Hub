@@ -1,5 +1,7 @@
 import { XenNote, XenNotebook } from "../models/xenNote";
-import { canView } from "./membership";
+import { XenNotePage } from "../models/xenNotePage";
+import { noteRole } from "../routes/xennote/shared";
+import { pageRole } from "./xenNotePages";
 import { notify } from "./notificationUtils";
 
 // Sends the reminders people set on notes (routes/xennote/notes.ts). Runs every minute from the scheduler. A reminder
@@ -34,53 +36,99 @@ export function reminderMessage(note: {
   return clip(note.body) || "Open the note.";
 }
 
-/**
- * Send every reminder that has come due. Each is claimed before it is sent (a compare-and-set on its unsent stamp), so
- * two overlapping runs, or a second server, can't send it twice. A person who can no longer see the note (removed from
- * its notebook, or it became private) is not told anything, and the reminder is simply used up.
- */
-export async function runNoteReminders(now: Date = new Date()): Promise<void> {
-  const notes = await XenNote.find({ reminders: { $elemMatch: { at: { $lte: now }, notified_at: null } } })
-    .limit(BATCH)
-    .exec();
+interface Remindable {
+  _id: unknown;
+  title: string;
+  reminders: Array<{ user_id: string; at: Date; notified_at?: Date | null }>;
+}
 
-  // Notebooks already looked up this run, so a notebook with many due notes is read once.
-  const books = new Map<string, Parameters<typeof canView>[0]>();
+interface Job<T extends Remindable> {
+  kind: "note" | "page";
+  items: T[];
+  canRead: (item: T, uid: string) => Promise<boolean>;
+  claim: (id: string, uid: string, at: Date, now: Date) => Promise<boolean>;
+  message: (item: T) => string;
+  link: (id: string) => string;
+}
 
-  for (const note of notes) {
-    const due = note.reminders.filter((r) => r.at <= now && !r.notified_at);
-    for (const reminder of due) {
+async function sendDue<T extends Remindable>(job: Job<T>, now: Date) {
+  for (const item of job.items) {
+    const id = String(item._id);
+    for (const reminder of item.reminders) {
+      if (reminder.at > now || reminder.notified_at) continue;
       try {
-        const claim = await XenNote.updateOne(
-          {
-            _id: note._id,
-            reminders: { $elemMatch: { user_id: reminder.user_id, at: reminder.at, notified_at: null } },
-          },
-          { $set: { "reminders.$.notified_at": now } },
-        );
-        if (claim.modifiedCount !== 1) continue;
-
-        let allowed: boolean;
-        if (note.notebook_id) {
-          const key = String(note.notebook_id);
-          if (!books.has(key)) books.set(key, (await XenNotebook.findById(note.notebook_id))?.toObject() ?? null);
-          const book = books.get(key);
-          allowed = !!book && canView(book, reminder.user_id);
-        } else {
-          allowed = note.owner_id === reminder.user_id;
-        }
-        if (!allowed) continue;
-
+        if (!(await job.claim(id, reminder.user_id, reminder.at, now))) continue;
+        if (!(await job.canRead(item, reminder.user_id))) continue;
         await notify(reminder.user_id, {
           app: "xennote",
-          title: `Reminder: ${note.title.trim() || "Untitled note"}`,
-          message: reminderMessage(note),
-          link: `/internal/xennote?note=${note.id}`,
+          title: `Reminder: ${item.title.trim() || `Untitled ${job.kind}`}`,
+          message: job.message(item),
+          link: job.link(id),
           icon: "notifications",
         });
-      } catch (e) {
-        console.error(`XenNote reminder failed for note ${note.id}:`, e);
+      } catch (error) {
+        console.error(`XenNote reminder failed for ${job.kind} ${id}:`, error);
       }
     }
   }
+}
+
+/** Claim before sending so concurrent scheduler runs only notify once. Recheck the current share before delivery. */
+export async function runNoteReminders(now: Date = new Date()): Promise<void> {
+  const due = { reminders: { $elemMatch: { at: { $lte: now }, notified_at: null } } };
+  const [notes, pages] = await Promise.all([XenNote.find(due).limit(BATCH), XenNotePage.find(due).limit(BATCH)]);
+  const books = new Map<string, ReturnType<typeof fetchBook>>();
+  async function fetchBook(id: string) {
+    return XenNotebook.findById(id, "members").lean();
+  }
+  const bookFor = (id: string) => {
+    const current = books.get(id) ?? fetchBook(id);
+    books.set(id, current);
+    return current;
+  };
+  const pending = (id: string, user_id: string, at: Date) => ({
+    _id: id,
+    reminders: { $elemMatch: { user_id, at, notified_at: null } },
+  });
+
+  await sendDue(
+    {
+      kind: "note",
+      items: notes,
+      canRead: async (note, uid) => {
+        const fresh = await XenNote.findById(note._id, "owner_id notebook_id members").lean();
+        if (!fresh) return false;
+        const book = fresh.notebook_id ? await bookFor(String(fresh.notebook_id)) : null;
+        return !!noteRole(fresh, book, uid);
+      },
+      claim: async (id, uid, at, time) =>
+        (await XenNote.updateOne(pending(id, uid, at), { $set: { "reminders.$.notified_at": time } })).modifiedCount ===
+        1,
+      message: reminderMessage,
+      link: (id) => `/internal/xennote?note=${id}`,
+    },
+    now,
+  );
+
+  await sendDue(
+    {
+      kind: "page",
+      items: pages,
+      canRead: async (page, uid) => {
+        const fresh = await XenNotePage.findById(page._id, "notebook_id parent_id members").lean();
+        if (!fresh) return false;
+        const [book, parent] = await Promise.all([
+          bookFor(String(fresh.notebook_id)),
+          fresh.parent_id ? XenNotePage.findById(fresh.parent_id, "members").lean() : null,
+        ]);
+        return !!book && !!pageRole(fresh, book, parent, uid);
+      },
+      claim: async (id, uid, at, time) =>
+        (await XenNotePage.updateOne(pending(id, uid, at), { $set: { "reminders.$.notified_at": time } }))
+          .modifiedCount === 1,
+      message: (page) => clip(page.excerpt) || "Open the page.",
+      link: (id) => `/internal/xennote/p/${id}`,
+    },
+    now,
+  );
 }
