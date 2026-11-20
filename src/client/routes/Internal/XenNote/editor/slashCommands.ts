@@ -4,6 +4,7 @@ import type { SlashItemId } from "./slashItems";
 export interface SlashContext {
   /** Open the file picker; what is chosen is uploaded and inserted where the caret is. */
   pickFiles: () => void;
+  pickBlock: (kind: "blockRef" | "blockEmbed") => void;
 }
 
 /** Replace the "/…" the person typed with the block they chose. */
@@ -34,6 +35,10 @@ export function runSlashItem(id: SlashItemId, editor: Editor, range: Range, ctx:
       return void chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
     case "divider":
       return void chain.setHorizontalRule().run();
+    case "blockRef":
+    case "blockEmbed":
+      chain.run();
+      return ctx.pickBlock(id);
     case "file":
       chain.run();
       return ctx.pickFiles();

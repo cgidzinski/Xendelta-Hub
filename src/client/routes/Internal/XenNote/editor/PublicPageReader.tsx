@@ -4,6 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { createPageExtensions } from "@shared/xennote/pageSchema";
 import ImageLightbox from "../../../../components/ui/ImageLightbox";
 import type { PublicPage } from "../../../../types/XenNotePage";
+import { BlockEmbedView, BlockRefView, PublicBlockContext, type PublicBlockScope } from "./BlockViews";
 import { editorSx } from "./editorSx";
 import {
   BookmarkWithView,
@@ -15,15 +16,19 @@ import {
 import { PageLinksContext, PublicPageLinksContext, type PageLinksValue } from "./pageLinksContext";
 
 const nodeViews = new Map(
-  [ImageBlockWithView, FileBlockWithView, BookmarkWithView, WikiLinkWithView].map((node) => [node.name, node]),
+  [ImageBlockWithView, FileBlockWithView, BookmarkWithView, WikiLinkWithView, BlockEmbedView, BlockRefView].map(
+    (node) => [node.name, node],
+  ),
 );
 
 export default function PublicPageReader({
   detail,
   titles,
   onOpenPage,
+  scope,
 }: {
   detail: PublicPage;
+  scope?: PublicBlockScope;
   titles: ReadonlyMap<string, string>;
   onOpenPage: (id: string) => void;
 }) {
@@ -41,15 +46,17 @@ export default function PublicPageReader({
     tags: () => [],
   };
   return (
-    <PublicPageLinksContext.Provider value={titles}>
-      <PageLinksContext.Provider value={links}>
-        <PageFilesContext.Provider value={{ files: detail.files, onOpenImage: setImage }}>
-          <Box sx={editorSx}>
-            <EditorContent editor={editor} />
-          </Box>
-          {image && <ImageLightbox url={image} onClose={() => setImage(null)} />}
-        </PageFilesContext.Provider>
-      </PageLinksContext.Provider>
-    </PublicPageLinksContext.Provider>
+    <PublicBlockContext.Provider value={scope}>
+      <PublicPageLinksContext.Provider value={titles}>
+        <PageLinksContext.Provider value={links}>
+          <PageFilesContext.Provider value={{ files: detail.files, onOpenImage: setImage }}>
+            <Box sx={editorSx}>
+              <EditorContent editor={editor} />
+            </Box>
+            {image && <ImageLightbox url={image} onClose={() => setImage(null)} />}
+          </PageFilesContext.Provider>
+        </PageLinksContext.Provider>
+      </PublicPageLinksContext.Provider>
+    </PublicBlockContext.Provider>
   );
 }
