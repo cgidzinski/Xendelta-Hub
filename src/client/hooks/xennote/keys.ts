@@ -33,6 +33,11 @@ export const xennoteKeys = {
   /** What was deleted from a notebook's sections and pages. */
   notebookTrash: (notebookId: string) => [...xennoteKeys.all, "notebook-trash", notebookId] as const,
   graph: (book: string | undefined, merge: boolean) => [...xennoteKeys.all, "graph", book ?? "", merge] as const,
+  blockSearch: (query: string) => [...xennoteKeys.all, "block-search", query] as const,
+  pageBlocks: (page: string) => [...xennoteKeys.all, "page-blocks", page] as const,
+  blockBacklinks: (page: string, block: string) => [...xennoteKeys.all, "block-backlinks", page, block] as const,
+  blockPreview: (page: string, block: string, token?: string, kind?: string) =>
+    [...xennoteKeys.all, "block-preview", page, block, token ?? "", kind ?? ""] as const,
   pageHistory: (id: string) => [...xennoteKeys.all, "page-history", id] as const,
   pageVersion: (id: string, version: string) => [...xennoteKeys.all, "page-version", id, version] as const,
   pagePeople: (pageId: string) => [...xennoteKeys.all, "page-people", pageId] as const,

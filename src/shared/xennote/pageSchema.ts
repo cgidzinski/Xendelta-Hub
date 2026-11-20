@@ -137,6 +137,28 @@ export const Hashtag = TipTapNode.create({
   ],
 });
 
+function blockLinkExtension(name: "blockRef" | "blockEmbed", inline: boolean) {
+  const tag = inline ? "span" : "div";
+  return TipTapNode.create({
+    name,
+    group: inline ? "inline" : "block",
+    inline,
+    atom: true,
+    selectable: true,
+    addAttributes() {
+      return { page_id: { default: null }, block_id: { default: null } };
+    },
+    parseHTML: () => [{ tag: `${tag}[data-type='${name}']` }],
+    renderHTML: ({ HTMLAttributes }) => [
+      tag,
+      mergeAttributes(HTMLAttributes, { "data-type": name }),
+      inline ? "Block reference" : "Block embed",
+    ],
+  });
+}
+export const BlockRef = blockLinkExtension("blockRef", true);
+export const BlockEmbed = blockLinkExtension("blockEmbed", false);
+
 /** Blocks that get a stable `id`. Containers (lists, table rows and cells) don't: their items do. */
 export const BLOCK_ID_TYPES = [
   "paragraph",
@@ -151,6 +173,7 @@ export const BLOCK_ID_TYPES = [
   "fileBlock",
   "bookmark",
   "horizontalRule",
+  "blockEmbed",
 ] as const;
 
 /**
@@ -183,6 +206,8 @@ export function createPageExtensions(): Extensions {
     Bookmark,
     WikiLink,
     Hashtag,
+    BlockRef,
+    BlockEmbed,
     UniqueID.configure({ attributeName: "id", types: [...BLOCK_ID_TYPES] }),
   ];
 }

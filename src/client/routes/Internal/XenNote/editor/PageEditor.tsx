@@ -25,6 +25,8 @@ import {
   PageFilesContext,
   WikiLinkWithView,
 } from "./nodeViews";
+import BlockPicker from "./BlockPicker";
+import { BlockEmbedView, BlockRefView } from "./BlockViews";
 import LinkMenu from "./LinkMenu";
 import { HashtagSuggestion, WikiLinkSuggestion, type LinkItem, type LinkMenuState } from "./LinkSuggestions";
 import { PageLinksContext, type PageLinksValue } from "./pageLinksContext";
@@ -49,6 +51,8 @@ const defaultLinks: PageLinksValue = {
 
 /** The shared page nodes, with the ones that show a stored file or a link drawn by React. */
 const NODE_VIEWS: Record<string, unknown> = {
+  blockRef: BlockRefView,
+  blockEmbed: BlockEmbedView,
   imageBlock: ImageBlockWithView,
   fileBlock: FileBlockWithView,
   bookmark: BookmarkWithView,
@@ -64,6 +68,7 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
   const { percent, onUploadProgress, reset } = useUploadProgress();
   const [files, setFiles] = useState(detail.files);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [blockPicker, setBlockPicker] = useState<"blockRef" | "blockEmbed" | null>(null);
   const [slash, setSlash] = useState<SlashState | null>(null);
   const [link, setLink] = useState<{ url: string; error: boolean } | null>(null);
   const [wikiMenu, setWikiMenu] = useState<LinkMenuState | null>(null);
@@ -90,7 +95,8 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
       SlashCommand.configure({
         onState: setSlash,
         onKey: (event) => slashKey.current?.(event) ?? false,
-        run: (id, editor, range) => runSlashItem(id, editor, range, { pickFiles: () => fileInput.current?.click() }),
+        run: (id, editor, range) =>
+          runSlashItem(id, editor, range, { pickFiles: () => fileInput.current?.click(), pickBlock: setBlockPicker }),
       }),
       // "[[" offers pages (and making one); "#" offers the tags in use (and a new one).
       WikiLinkSuggestion.configure({
@@ -252,6 +258,18 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
           </Box>
         </Box>
 
+        {blockPicker && (
+          <BlockPicker
+            mode={blockPicker}
+            currentPage={pageId}
+            onClose={() => setBlockPicker(null)}
+            onOpenPage={() => undefined}
+            onPick={(target) => {
+              editor?.chain().focus().insertContent({ type: blockPicker, attrs: target }).run();
+              setBlockPicker(null);
+            }}
+          />
+        )}
         <SlashMenu state={slash} keyRef={slashKey} />
         <LinkMenu state={wikiMenu} keyRef={wikiKey} label="Pages" />
         <LinkMenu state={tagMenu} keyRef={tagKey} label="Tags" />

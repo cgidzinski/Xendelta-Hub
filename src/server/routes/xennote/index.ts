@@ -4,6 +4,7 @@ import { registerNoteRoutes } from "./notes";
 import { registerNoteSharingRoutes } from "./noteSharing";
 import { registerNoteImageRoutes } from "./images";
 import { registerPageExportRoutes } from "./pageExport";
+import { registerBlockRoutes, registerPublicBlockRoutes } from "./pageBlocks";
 import { registerPageGraphRoutes } from "./pageGraph";
 import { registerPageHistoryRoutes } from "./pageHistory";
 import { registerPageTemplateRoutes } from "./pageTemplates";
@@ -24,6 +25,7 @@ import { registerNoteVersionRoutes } from "./versions";
 module.exports = function (app: any) {
   // Public links first: they are read-only views and need no sign-in.
   registerPublicNoteRoutes(app);
+  registerPublicBlockRoutes(app);
 
   // Auth for every other XenNote route
   app.use("/api/xennote", authenticateToken);
@@ -40,6 +42,7 @@ module.exports = function (app: any) {
   registerPageSearchRoutes(app);
   registerPageGraphRoutes(app);
   registerPageRoutes(app);
+  registerBlockRoutes(app);
   registerPageHistoryRoutes(app);
   registerPageExportRoutes(app);
   registerPageTemplateRoutes(app);

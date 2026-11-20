@@ -12,7 +12,9 @@ export type SlashItemId =
   | "callout"
   | "table"
   | "divider"
-  | "file";
+  | "file"
+  | "blockRef"
+  | "blockEmbed";
 
 export interface SlashItem {
   id: SlashItemId;
@@ -23,6 +25,18 @@ export interface SlashItem {
 }
 
 export const SLASH_ITEMS: readonly SlashItem[] = [
+  {
+    id: "blockRef",
+    title: "Block reference",
+    description: "Link to a block on a page",
+    keywords: ["reference", "link"],
+  },
+  {
+    id: "blockEmbed",
+    title: "Block embed",
+    description: "Show a block from another page",
+    keywords: ["embed", "transclude"],
+  },
   { id: "heading1", title: "Heading 1", description: "A big section heading", keywords: ["h1", "title", "header"] },
   { id: "heading2", title: "Heading 2", description: "A medium heading", keywords: ["h2", "subtitle", "header"] },
   { id: "heading3", title: "Heading 3", description: "A small heading", keywords: ["h3", "header"] },

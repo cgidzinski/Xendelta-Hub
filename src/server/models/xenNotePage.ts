@@ -77,6 +77,15 @@ const pageSchema = new Schema({
   rev: { type: Number, default: 0 },
 
   // Worked out from the body on every save (shared/xennote/deriveFromDoc.ts). Never set by a client.
+  block_refs: {
+    type: [
+      new Schema(
+        { page_id: { type: Schema.Types.ObjectId, required: true }, block_id: { type: String, required: true } },
+        { _id: false },
+      ),
+    ],
+    default: [],
+  },
   links: { type: [Schema.Types.ObjectId], default: [] },
   unresolved: { type: [String], default: [] },
   files: { type: [Schema.Types.ObjectId], default: [] },
@@ -100,6 +109,7 @@ const pageSchema = new Schema({
 pageSchema.index({ section_id: 1, parent_id: 1, order: 1 });
 pageSchema.index({ notebook_id: 1, updated_at: -1 });
 pageSchema.index({ links: 1 });
+pageSchema.index({ "block_refs.page_id": 1, "block_refs.block_id": 1 });
 pageSchema.index({ notebook_id: 1, unresolved: 1 });
 pageSchema.index({ notebook_id: 1, tags: 1 });
 pageSchema.index({ notebook_id: 1, aliases: 1 });

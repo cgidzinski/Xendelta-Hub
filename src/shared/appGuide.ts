@@ -404,6 +404,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Browse earlier versions of a page and restore one when needed.",
       "Download a page or an entire notebook as Markdown.",
       "Explore connections between pages and tags in a notebook or across all notebooks.",
+      "Link to a specific block, embed it in another page, and see which pages reference it.",
       "Open a note link while signed in and it opens right in the app, ready to edit if you are an editor.",
       "Set a reminder on a note or page and get a notification when it is due.",
       "Search and filter by type, label or notebook.",

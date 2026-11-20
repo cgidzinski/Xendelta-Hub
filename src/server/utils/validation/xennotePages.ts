@@ -1,3 +1,4 @@
+import { blockIdPattern } from "../../../shared/xennote/blockReferences";
 import { z } from "zod";
 import { objectIdSchema } from "./core";
 import { NOTE_COLORS } from "../../../shared/xennote/notes";
@@ -114,4 +115,10 @@ export const xenNoteTemplateUseSchema = z.object({ template_id: objectIdSchema }
 export const xenNoteGraphQuerySchema = z.object({
   notebook: objectIdSchema.optional(),
   mergeTags: z.enum(["true", "false"]).optional(),
+});
+
+const blockId = z.string().regex(blockIdPattern);
+export const xenNoteBlockParamSchema = z.object({ id: objectIdSchema, blockId });
+export const xenNotePublicBlockParamSchema = xenNoteBlockParamSchema.extend({
+  token: z.string().regex(/^[a-z0-9_-]{22,64}$/i),
 });
