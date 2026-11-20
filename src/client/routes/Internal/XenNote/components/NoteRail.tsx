@@ -7,6 +7,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import NotesIcon from "@mui/icons-material/Notes";
+import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import { railItemSx, railNewButtonSx } from "../../../../components/ui/railStyles";
@@ -32,6 +33,7 @@ interface NoteRailProps {
   showShared?: boolean;
   newLabel?: string;
   /** When given, a notebook opens as sections and pages (its own screen) instead of filtering the board. */
+  onOpenGraph?: () => void;
   onOpenNotebook?: (id: string) => void;
 }
 
@@ -86,6 +88,7 @@ export default function NoteRail({
   showShared = false,
   newLabel = "New note",
   onOpenNotebook,
+  onOpenGraph,
 }: NoteRailProps) {
   const theme = useTheme();
   return (
@@ -166,6 +169,7 @@ export default function NoteRail({
         </>
       )}
 
+      {onOpenGraph && <RailRow icon={<HubOutlinedIcon />} text="Graph, all notebooks" onClick={onOpenGraph} />}
       <Box sx={{ flex: 1, minHeight: 20 }} />
       <RailRow
         icon={<ArchiveOutlinedIcon />}
