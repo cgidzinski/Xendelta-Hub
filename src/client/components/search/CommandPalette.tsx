@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Dialog,
+  IconButton,
   InputBase,
   List,
   ListItemButton,
@@ -11,6 +12,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
 import SubdirectoryArrowLeftIcon from "@mui/icons-material/SubdirectoryArrowLeft";
 import { useNavigate } from "react-router-dom";
@@ -162,13 +164,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             spellCheck: false,
           }}
         />
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: { xs: "none", sm: "block" }, whiteSpace: "nowrap" }}
-        >
-          Esc to close
-        </Typography>
+        {phone ? (
+          <IconButton aria-label="Close search" onClick={onClose} sx={{ flexShrink: 0, width: 44, height: 44 }}>
+            <CloseIcon />
+          </IconButton>
+        ) : (
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+            Esc to close
+          </Typography>
+        )}
       </Box>
       <List
         ref={listRef}
