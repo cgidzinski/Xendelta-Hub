@@ -3,6 +3,11 @@ import { registerNotebookRoutes } from "./notebooks";
 import { registerNoteRoutes } from "./notes";
 import { registerNoteSharingRoutes } from "./noteSharing";
 import { registerNoteImageRoutes } from "./images";
+import { registerPageFileRoutes } from "./pageFiles";
+import { registerPageRoutes } from "./pages";
+import { registerPageSharingRoutes } from "./pageSharing";
+import { registerPageTrashRoutes } from "./pageTrash";
+import { registerSectionRoutes } from "./sections";
 import { registerPublicNoteRoutes } from "./public";
 import { registerSharedLinkRoutes } from "./resolve";
 import { registerNoteTrashRoutes } from "./trash";
@@ -17,6 +22,12 @@ module.exports = function (app: any) {
   // Before the note routes: literal paths first.
   registerSharedLinkRoutes(app);
   registerNotebookRoutes(app);
+  // Notebook sections and pages (the notebook tree, then pages, their people, files and trash).
+  registerSectionRoutes(app);
+  registerPageTrashRoutes(app);
+  registerPageRoutes(app);
+  registerPageSharingRoutes(app);
+  registerPageFileRoutes(app);
   // Before the note routes: a literal path must come before a :param one.
   registerNoteTrashRoutes(app);
   registerNoteRoutes(app);

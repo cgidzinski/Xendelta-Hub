@@ -53,8 +53,12 @@ export interface RealtimeEvents {
   "xensplit:groups_updated": undefined;
   "xenbudget:book_update": { bookId: string };
   "xenbudget:books_updated": undefined;
-  "xennote:update": undefined;
   "xenstart:update": undefined;
+  "xennote:update": undefined;
+  /** A notebook's sections or pages changed (created, renamed, moved, deleted, shared): refetch its tree. */
+  "xennote:notebook_update": { notebookId: string };
+  /** A page's text was saved. `rev` is the new revision and `by` who saved it, so an open editor can tell its own saves apart. */
+  "xennote:page_update": { pageId: string; notebookId: string; rev: number; by: string };
   /** A recipe, category or meal-plan entry in a book changed. */
   "xenkitchen:book_update": { bookId: string };
   /** The books themselves changed: one was created, renamed or deleted, or its people changed. */

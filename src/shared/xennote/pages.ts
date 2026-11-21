@@ -75,6 +75,8 @@ export interface PageTreeEntry {
   icon: string | null;
   color: string;
   archived: boolean;
+  /** Whether the caller starred it (favourites are personal). */
+  favorite: boolean;
   tags: string[];
   excerpt: string;
   journal_date: string | null;

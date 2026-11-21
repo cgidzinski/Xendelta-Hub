@@ -21,6 +21,7 @@ import { SocketManager } from "../../infrastructure/SocketManager";
 import { changeRole, removeMember } from "../../utils/membership";
 import { MAX_NOTEBOOKS_OWNED, MAX_NOTEBOOK_PEOPLE } from "../../../shared/xennote/notes";
 import { removeVersionsOf } from "../../utils/xenNoteVersions";
+import { deleteNotebookPages } from "../../utils/xenNotePages";
 import { loadNotebook, myNotebooks, serializeNotebook } from "./shared";
 import { addRefused } from "../../social/policy";
 
@@ -73,7 +74,7 @@ export function registerNotebookRoutes(app: any) {
     },
   );
 
-  // Deleting a notebook deletes every note in it, and their photos.
+  // Deleting a notebook deletes every note in it, and their photos, and its sections, pages and their files.
   app.delete(
     "/api/xennote/notebooks/:id",
     validateParams(xenNoteIdParamSchema),
@@ -83,6 +84,7 @@ export function registerNotebookRoutes(app: any) {
       await removeVersionsOf(notes.map((n) => n._id));
       await removeNotePhotos(notes.flatMap((n) => n.images));
       await XenNote.deleteMany({ notebook_id: book._id });
+      await deleteNotebookPages(book._id);
       const people = book.members.map((m) => m.user_id);
       await book.deleteOne();
       SocketManager.getInstance().notifyXenNoteUpdate(people);

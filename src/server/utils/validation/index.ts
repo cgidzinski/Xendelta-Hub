@@ -14,6 +14,7 @@ export * from "./xenkitchenPlan";
 export * from "./recipaint";
 export * from "./admin";
 export * from "./xennote";
+export * from "./xennotePages";
 export * from "./apiKeys";
 export * from "./chat";
 export * from "./communities";

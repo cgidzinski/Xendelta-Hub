@@ -194,6 +194,16 @@ export class SocketManager {
     this.emit(userIds, "xennote:update");
   }
 
+  // Tell people that a notebook's sections or pages changed, so an open notebook refetches its tree
+  notifyXenNoteNotebookUpdate(userIds: string[], notebookId: string) {
+    this.emit(userIds, "xennote:notebook_update", { notebookId });
+  }
+
+  // Tell people that a page's text was saved (`by` is who saved it), so an open copy can reload or warn
+  notifyXenNotePageUpdate(userIds: string[], page: { pageId: string; notebookId: string; rev: number; by: string }) {
+    this.emit(userIds, "xennote:page_update", page);
+  }
+
   // Tell everyone in a XenKitchen book that a recipe, category or planned meal changed, so their open screens refresh
   notifyXenKitchenBookUpdate(bookId: string, memberIds: string[]) {
     this.emit(memberIds, "xenkitchen:book_update", { bookId });

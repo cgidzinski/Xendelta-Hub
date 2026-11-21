@@ -11,10 +11,12 @@ import { loadNote, notifyChange, serializeNote } from "./shared";
 const IMAGE_MAX_EDGE = 1600;
 
 /** The file's name with the extension of what it was re-encoded to ("IMG_1.heic" → "IMG_1.webp"). */
-const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
+export const renamed = (name: string, ext: string) => `${name.replace(/\.[^.]*$/, "") || "photo"}.${ext}`;
 
 /** Resize to a sensible size, honour EXIF rotation, and re-encode as WebP (GIF stays GIF). */
-async function processImage(file: Express.Multer.File): Promise<{ buffer: Buffer; contentType: string; ext: string }> {
+export async function processImage(
+  file: Express.Multer.File,
+): Promise<{ buffer: Buffer; contentType: string; ext: string }> {
   if (file.mimetype === "image/gif") return { buffer: file.buffer, contentType: "image/gif", ext: "gif" };
   const buffer = await sharp(file.buffer)
     .rotate()
