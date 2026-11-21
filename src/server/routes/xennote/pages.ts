@@ -15,11 +15,10 @@ import { XenNotePage, XenNotePageBody, XenNoteSection } from "../../models/xenNo
 import { signedUrlsFor, thumbnailUrlsFor } from "../../utils/appFiles";
 import { canView } from "../../utils/membership";
 import { orderFor } from "../../utils/xenNoteOrder";
-import { filesOfPage, keepPageVersion, referencedFileIds, sanitizePageDoc, trashPage } from "../../utils/xenNotePages";
+import { trashPage, unionTags, writePageBody } from "../../utils/xenNotePages";
 import { SocketManager } from "../../infrastructure/SocketManager";
-import { deriveFromDoc } from "../../../shared/xennote/deriveFromDoc";
-import { PAGE_SCHEMA_VERSION, MAX_PAGES_PER_NOTEBOOK, MAX_PAGE_TAGS } from "../../../shared/xennote/pages";
-import { checkPageDoc, emptyDoc, ensureBlockIds } from "../../../shared/xennote/pageSchema";
+import { MAX_PAGES_PER_NOTEBOOK } from "../../../shared/xennote/pages";
+import { emptyDoc, ensureBlockIds } from "../../../shared/xennote/pageSchema";
 import {
   canManagePage,
   loadPage,
@@ -81,9 +80,6 @@ const siblingsOf = async (sectionId: unknown, parentId: unknown, except?: unknow
   const rows = await XenNotePage.find({ section_id: sectionId, parent_id: parentId }, "order").lean();
   return rows.filter((r) => String(r._id) !== String(except)).map((r) => ({ id: String(r._id), order: r.order }));
 };
-
-/** The tags a page shows: those written in the text and those added as properties, each once. */
-const unionTags = (inline: string[], manual: string[]) => [...new Set([...inline, ...manual])].slice(0, MAX_PAGE_TAGS);
 
 export function registerPageRoutes(app: any) {
   app.post(
@@ -165,59 +161,16 @@ export function registerPageRoutes(app: any) {
       const { page, notebook, parent } = await loadPage(req, req.params.id as string, "edit");
       const { doc, base_rev, client_id } = xenNotePageBodySchema.parse(req.body);
 
-      const checked = checkPageDoc(doc);
-      if (!checked.ok) throw new AppError(400, checked.reason);
-      const allowed = await filesOfPage(page.id as string, referencedFileIds(checked.doc));
-      // Through JSON, so no `undefined` is stored as null.
-      const clean = JSON.parse(JSON.stringify(sanitizePageDoc(checked.doc, allowed)));
-      const derived = deriveFromDoc(clean);
-
-      const before = await XenNotePageBody.findOne({ page_id: page._id }).lean();
-      const conflict = base_rev !== page.rev;
-      if (before && JSON.stringify(before.doc) !== JSON.stringify(clean)) {
-        await keepPageVersion(
-          page._id,
-          { doc: before.doc, title: page.title, files: page.files, at: before.updated_at, by: page.updated_by ?? null },
-          conflict,
-        );
-      }
-
-      const now = new Date();
-      const saved = await XenNotePage.findOneAndUpdate(
-        { _id: page._id },
-        {
-          $set: {
-            links: derived.links,
-            unresolved: derived.unresolved,
-            tags_inline: derived.tags,
-            tags: unionTags(derived.tags, page.tags_manual),
-            files: derived.files,
-            search_text: derived.search_text,
-            excerpt: derived.excerpt,
-            todo: derived.todo,
-            word_count: derived.word_count,
-            updated_by: uid,
-            updated_at: now,
-          },
-          $inc: { rev: 1 },
-        },
-        { new: true },
-      );
-      if (!saved) throw new AppError(404, "Page not found");
-      await XenNotePageBody.findOneAndUpdate(
-        { page_id: page._id },
-        { $set: { doc: clean, schema_version: PAGE_SCHEMA_VERSION, rev: saved.rev, updated_at: now } },
-        { upsert: true },
-      );
+      const { rev, conflict } = await writePageBody(page, doc, uid, base_rev);
 
       SocketManager.getInstance().notifyXenNotePageUpdate(pageAudience(notebook, page, parent), {
         pageId: page.id as string,
         notebookId: notebook.id as string,
-        rev: saved.rev,
+        rev,
         by: uid,
         client: client_id,
       });
-      res.json({ status: true, message: "Saved", data: { rev: saved.rev, conflict } });
+      res.json({ status: true, message: "Saved", data: { rev, conflict } });
     },
   );
 

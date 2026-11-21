@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Note dialog, edit mode</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:720px;height:800px;box-sizing:border-box;background:#f6f7f9;font-family:Roboto,system-ui,sans-serif;color:#212121;font-size:14px;padding:24px">
+<div style="height:100%;box-sizing:border-box;border:1px solid #e0e0e0;border-radius:10px;background:#ffffff;display:flex;flex-direction:column;overflow:hidden;position:relative">
+<div style="height:56px;flex:none;display:flex;align-items:center;gap:4px;padding:0 12px 0 20px;border-bottom:1px solid #e0e0e0">
+<span style="flex:1;color:#5f6368;font-size:13px">Saved</span>
+<span style="margin-left:4px;height:36px;padding:0 18px;border-radius:6px;border:1px solid #1565c0;color:#1565c0;font-weight:500;display:flex;align-items:center">Done</span>
+</div>
+<div style="flex:1;padding:28px 40px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+<div style="font-size:30px;font-weight:600;letter-spacing:-0.01em">Weekend plans</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#5f6368"><span style="padding:3px 10px;border-radius:999px;border:1px solid #e0e0e0">home</span><span style="padding:3px 10px;border-radius:999px;border:1px solid #e0e0e0">food</span><span style="padding:3px 10px;border-radius:999px;border:1px dashed #5f6368">+ label</span></div>
+<!-- bubble toolbar -->
+<div style="width:max-content;border:1px solid #e0e0e0;border-radius:8px;background:#ffffff;box-shadow:0 4px 16px #00000026;display:flex;align-items:center;gap:2px;padding:4px;margin-top:6px">
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:700;background:#e3edf8;color:#1565c0;border-radius:4px">B</span>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-style:italic">I</span>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;text-decoration:line-through">S</span>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-family:monospace">&lt;/&gt;</span>
+<span style="width:1px;height:20px;background:#e0e0e0;margin:0 4px"></span>
+<span style="height:32px;padding:0 8px;display:flex;align-items:center">H2</span>
+<span style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#1565c0">[[</span>
+</div>
+<div style="font-size:20px;font-weight:600">Saturday</div>
+<div style="font-size:16px;line-height:1.6">Market in the morning, then lunch with <span style="background:#cfe0f5">Anna's birthday</span>. Ideas for the cake are in <span style="color:#1565c0;border-bottom:1px solid #1565c0">Recipes</span>.</div>
+<div style="display:flex;gap:10px;align-items:center;font-size:16px"><span style="width:20px;height:20px;box-sizing:border-box;border:2px solid #1565c0;border-radius:4px;background:#1565c0"></span><span style="text-decoration:line-through;color:#5f6368">Buy flowers</span></div>
+<div style="display:flex;gap:10px;align-items:center;font-size:16px"><span style="width:20px;height:20px;box-sizing:border-box;border:2px solid #5f6368;border-radius:4px"></span>Book the table<span style="display:inline-block;width:2px;height:20px;background:#1565c0"></span></div>
+<div style="color:#5f6368;font-size:16px">Type / for blocks, [[ to link a note</div>
+</div>
+<!-- slash hint -->
+<div style="position:absolute;right:40px;bottom:96px;width:260px;border:1px solid #e0e0e0;border-radius:8px;background:#ffffff;box-shadow:0 4px 16px #00000026;padding:6px;display:flex;flex-direction:column;gap:2px">
+<div style="padding:8px 10px;border-radius:6px;background:#e3edf8"><span style="font-weight:500">Checklist</span></div>
+<div style="padding:8px 10px;border-radius:6px"><span style="font-weight:500">Heading</span></div>
+<div style="padding:8px 10px;border-radius:6px"><span style="font-weight:500">Table</span></div>
+<div style="padding:8px 10px;border-radius:6px"><span style="font-weight:500">Quote</span></div>
+</div>
+<div style="flex:none;height:52px;border-top:1px solid #e0e0e0;display:flex;align-items:center;gap:16px;padding:0 20px;color:#5f6368">
+<span>Photo</span><span>Reminder</span><span>Colour</span><span style="flex:1"></span><span>History</span>
+</div>
+</div>
+</div>
+
+</body>
+</html>

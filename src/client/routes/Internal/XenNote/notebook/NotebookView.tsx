@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { AvatarGroup, Box, Button, Chip, Drawer, IconButton, Tooltip, useMediaQuery } from "@mui/material";
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { AvatarGroup, Box, Button, Chip, Drawer, IconButton, Tooltip, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import NotesIcon from "@mui/icons-material/Notes";
 import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import PublicIcon from "@mui/icons-material/Public";
+import CloseIcon from "@mui/icons-material/Close";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { closeSnackbar, useSnackbar } from "notistack";
 import type { NoteColor } from "@shared/xennote/notes";
@@ -22,7 +24,11 @@ import { useNotebookPageActions, useNotebookTree } from "../../../../hooks/xenno
 import type { PageTreeEntry, XenNoteSection } from "../../../../types/XenNotePage";
 import NoteRail from "../components/NoteRail";
 import NotebookDialog from "../components/NotebookDialog";
+import type { PageLinksValue } from "../editor/pageLinksContext";
 import PageList from "./PageList";
+import SearchResults, { SearchBox } from "./NotebookSearch";
+import TagPage from "./TagPage";
+import TagsMenu from "./TagsMenu";
 import PageView from "./PageView";
 import SectionNameDialog from "./SectionNameDialog";
 import SectionTabs from "./SectionTabs";
@@ -35,8 +41,13 @@ const BOARD = "/internal/xennote";
  * section, and the open page. On a phone it is a drill-down: the list of pages, then a page full screen.
  */
 export default function NotebookView() {
-  const { notebookId = "", pageId } = useParams();
+  const { notebookId = "", pageId, tag: tagParam } = useParams();
+  const tag = tagParam ? decodeURIComponent(tagParam) : undefined;
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  // A second page open beside the first (desktop): /internal/xennote/b/<id>/p/<id>?beside=<id>.
+  const beside = searchParams.get("beside");
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up("md"));
   const { enqueueSnackbar } = useSnackbar();
@@ -52,17 +63,23 @@ export default function NotebookView() {
   const [chosen, setChosen] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [sectionDialog, setSectionDialog] = useState<{ section: XenNoteSection | null } | null>(null);
   const [notebookDialog, setNotebookDialog] = useState<{ tab?: "general" | "people" | "link" } | null>(null);
 
   const sections = tree?.sections ?? [];
-  const pages = tree?.pages ?? [];
+  const pages = useMemo(() => tree?.pages ?? [], [tree]);
   const activeId = activeSectionId(sections, pages, pageId, chosen);
   const canEdit = notebook?.my_role === "owner" || notebook?.my_role === "editor";
   const fail = (e: unknown) => enqueueSnackbar((e as Error).message || "Couldn't save that", { variant: "error" });
 
-  const openPage = (id: string) => navigate(`${BOARD}/b/${notebookId}/p/${id}`);
-  const closePage = () => navigate(`${BOARD}/b/${notebookId}`);
+  // The page beside stays open while moving around.
+  const keep = location.search;
+  const openPage = (id: string) => navigate(`${BOARD}/b/${notebookId}/p/${id}${keep}`);
+  const closePage = () => navigate(`${BOARD}/b/${notebookId}${keep}`);
+  const openTag = (name: string) => navigate(`${BOARD}/b/${notebookId}/t/${encodeURIComponent(name)}${keep}`);
+  const openBeside = (id: string | null) =>
+    navigate({ pathname: location.pathname, search: id ? `?beside=${id}` : "" });
 
   const createPage = async (parentId: string | null) => {
     if (!activeId) return;
@@ -159,6 +176,31 @@ export default function NotebookView() {
         </Button>
       ),
     });
+  };
+
+  // ---- tags used in this notebook, and what links and tags in a page's text do
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of pages) if (!p.archived) for (const t of p.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([name, count]) => ({ tag: name, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  }, [pages]);
+  const links: PageLinksValue = {
+    notebookId,
+    onOpenPage: (id, options) => (options?.beside && wide ? openBeside(id) : openPage(id)),
+    onOpenTag: openTag,
+    // A link to a page that doesn't exist yet makes it in the open section (without leaving this page).
+    onCreatePage: async (title) => {
+      if (!activeId || !canEdit) return null;
+      try {
+        return (await actions.createPage.mutateAsync({ sectionId: activeId, title })).page.id;
+      } catch (e) {
+        fail(e);
+        return null;
+      }
+    },
+    tags: () => tagCounts.map((t) => t.tag),
   };
 
   // ---- the rail: the same one as the board, so moving between them feels like one place
@@ -264,6 +306,34 @@ export default function NotebookView() {
     />
   );
 
+  // Above the list: search, and the notebook's tags. A search shows its results in place of the list.
+  const listColumn = (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <SearchBox value={query} onChange={setQuery} />
+        </Box>
+        <TagsMenu tags={tagCounts} onOpen={openTag} />
+      </Box>
+      {query.trim() ? (
+        <SearchResults
+          query={query}
+          notebookId={notebookId}
+          onOpen={(hit) => {
+            setQuery("");
+            if (hit.in_notebook && hit.notebook_id === notebookId) openPage(hit.id);
+            else navigate(hit.in_notebook ? `${BOARD}/b/${hit.notebook_id}/p/${hit.id}` : `${BOARD}/p/${hit.id}`);
+          }}
+        />
+      ) : (
+        list
+      )}
+    </Box>
+  );
+
+  // What fills the main area: a page, or a tag's page.
+  const detailOpen = !!pageId || !!tag;
+
   let body;
   if (isPending || loadingBooks) {
     body = (
@@ -298,8 +368,26 @@ export default function NotebookView() {
       />
     );
   } else {
-    const pane = pageId ? (
-      <PageView key={pageId} pageId={pageId} onBack={wide ? undefined : closePage} onGone={closePage} />
+    const pane = tag ? (
+      <Box>
+        {!wide && (
+          <Button sx={{ m: 1 }} onClick={closePage}>
+            Back to the pages
+          </Button>
+        )}
+        <TagPage
+          notebookId={notebookId}
+          tag={tag}
+          pages={pages}
+          sections={sections}
+          onOpenPage={(id, nb, inNotebook) =>
+            nb === notebookId ? openPage(id) : navigate(inNotebook ? `${BOARD}/b/${nb}/p/${id}` : `${BOARD}/p/${id}`)
+          }
+          onOpenTag={openTag}
+        />
+      </Box>
+    ) : pageId ? (
+      <PageView key={pageId} pageId={pageId} onBack={wide ? undefined : closePage} onGone={closePage} links={links} />
     ) : wide ? (
       <EmptyState
         icon={<NotesIcon />}
@@ -318,7 +406,7 @@ export default function NotebookView() {
     body = (
       <>
         {/* On a phone an open page takes the whole screen, with its own way back. */}
-        {(wide || !pageId) && (
+        {(wide || !detailOpen) && (
           <SectionTabs
             sections={sections}
             activeId={activeId}
@@ -346,20 +434,67 @@ export default function NotebookView() {
                 overflowY: "auto",
               }}
             >
-              {list}
+              {listColumn}
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>{pane}</Box>
+            {beside && (
+              <Box
+                aria-label="Page open beside"
+                role="complementary"
+                sx={{
+                  flex: "0 0 480px",
+                  borderLeft: 1,
+                  borderColor: "divider",
+                  minWidth: 0,
+                  maxHeight: "calc(100vh - 64px)",
+                  overflowY: "auto",
+                  position: "sticky",
+                  top: 0,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    px: 1.5,
+                    py: 0.5,
+                    borderBottom: 1,
+                    borderColor: "divider",
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                    Opened beside
+                  </Typography>
+                  <Tooltip title="Open it full size">
+                    <IconButton
+                      size="small"
+                      aria-label="Open full size"
+                      onClick={() => navigate(`${BOARD}/b/${notebookId}/p/${beside}`)}
+                    >
+                      <OpenInFullIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Close">
+                    <IconButton size="small" aria-label="Close the page beside" onClick={() => openBeside(null)}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <PageView key={beside} pageId={beside} onGone={() => openBeside(null)} links={links} />
+              </Box>
+            )}
           </Box>
-        ) : pageId ? (
+        ) : detailOpen ? (
           pane
         ) : (
-          <Box sx={{ p: 1.5 }}>{list}</Box>
+          <Box sx={{ p: 1.5 }}>{listColumn}</Box>
         )}
       </>
     );
   }
 
-  const mainHeader = wide || !pageId ? header : null;
+  const mainHeader = wide || !detailOpen ? header : null;
 
   return (
     <>

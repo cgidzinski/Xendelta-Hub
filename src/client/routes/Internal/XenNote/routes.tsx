@@ -18,6 +18,7 @@ export const xennoteRoutes = (
     <Route path="xennote" element={<XenNote />} />
     <Route path="xennote/b/:notebookId" element={<NotebookView />} />
     <Route path="xennote/b/:notebookId/p/:pageId" element={<NotebookView />} />
+    <Route path="xennote/b/:notebookId/t/:tag" element={<NotebookView />} />
     <Route path="xennote/p/:pageId" element={<SharedPageView />} />
     {/* A public link opened by a signed-in person who is not a member: read-only, but inside the app */}
     <Route path="xennote/shared/:token" element={<XenNoteSharedNote />} />

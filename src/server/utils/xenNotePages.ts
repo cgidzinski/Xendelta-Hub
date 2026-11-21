@@ -1,10 +1,18 @@
-import { Types } from "mongoose";
+import { Types, type HydratedDocument } from "mongoose";
 import type { JSONContent } from "@tiptap/core";
 import { FileRecord } from "../models/fileRecord";
-import { XenNotePage, XenNotePageBody, XenNotePageVersion, XenNoteSection } from "../models/xenNotePage";
-import { MAX_PAGE_VERSIONS } from "../../shared/xennote/pages";
+import {
+  XenNotePage,
+  XenNotePageBody,
+  XenNotePageVersion,
+  XenNoteSection,
+  type XenNotePageAttrs,
+} from "../models/xenNotePage";
+import { deriveFromDoc } from "../../shared/xennote/deriveFromDoc";
+import { MAX_PAGE_TAGS, MAX_PAGE_VERSIONS, PAGE_SCHEMA_VERSION } from "../../shared/xennote/pages";
 import { bestRole, canEdit, roleOf, type MemberRole } from "./membership";
-import { stripUnsafeLinks } from "../../shared/xennote/pageSchema";
+import { checkPageDoc, stripUnsafeLinks } from "../../shared/xennote/pageSchema";
+import { AppError } from "./http";
 import { removeAppFiles } from "./appFiles";
 import { trashCutoff } from "./softDelete";
 import { VERSION_GAP_MS } from "./xenNoteVersions";
@@ -203,4 +211,67 @@ export async function purgeExpiredPages(now = new Date()): Promise<number> {
     .lean();
   removed += await deletePagesForever({ _id: { $in: pages.map((p) => p._id) } });
   return removed;
+}
+
+/** The tags a page shows: those written in the text and those added as properties, each once. */
+export const unionTags = (inline: string[], manual: string[]): string[] =>
+  [...new Set([...inline, ...manual])].slice(0, MAX_PAGE_TAGS);
+
+/**
+ * Save a page's text: check it against the page schema and size limit, remove what must not be stored (unsafe links, files
+ * that don't belong to the page), work out the derived fields, keep what it replaces as a version when needed, and bump
+ * the revision. `baseRev` is the revision the change started from; a save over a newer one still goes through (the last
+ * save wins for now), keeps what it replaced as a version regardless of the usual wait, and reports `conflict`.
+ */
+export async function writePageBody(
+  page: HydratedDocument<XenNotePageAttrs>,
+  docInput: unknown,
+  uid: string,
+  baseRev: number,
+): Promise<{ rev: number; conflict: boolean }> {
+  const checked = checkPageDoc(docInput);
+  if (!checked.ok) throw new AppError(400, checked.reason);
+  const allowed = await filesOfPage(page.id as string, referencedFileIds(checked.doc));
+  // Through JSON, so no `undefined` is stored as null.
+  const clean = JSON.parse(JSON.stringify(sanitizePageDoc(checked.doc, allowed)));
+  const derived = deriveFromDoc(clean);
+
+  const before = await XenNotePageBody.findOne({ page_id: page._id }).lean();
+  const conflict = baseRev !== page.rev;
+  if (before && JSON.stringify(before.doc) !== JSON.stringify(clean)) {
+    await keepPageVersion(
+      page._id,
+      { doc: before.doc, title: page.title, files: page.files, at: before.updated_at, by: page.updated_by ?? null },
+      conflict,
+    );
+  }
+
+  const now = new Date();
+  const saved = await XenNotePage.findOneAndUpdate(
+    { _id: page._id },
+    {
+      $set: {
+        links: derived.links,
+        unresolved: derived.unresolved,
+        tags_inline: derived.tags,
+        tags: unionTags(derived.tags, page.tags_manual),
+        files: derived.files,
+        search_text: derived.search_text,
+        excerpt: derived.excerpt,
+        todo: derived.todo,
+        word_count: derived.word_count,
+        updated_by: uid,
+        updated_at: now,
+      },
+      $inc: { rev: 1 },
+    },
+    { new: true },
+  );
+  if (!saved) throw new AppError(404, "Page not found");
+  await XenNotePageBody.findOneAndUpdate(
+    { page_id: page._id },
+    { $set: { doc: clean, schema_version: PAGE_SCHEMA_VERSION, rev: saved.rev, updated_at: now } },
+    { upsert: true },
+  );
+  return { rev: saved.rev, conflict };
 }

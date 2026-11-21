@@ -92,3 +92,16 @@ export const xenNotePageMoveSchema = z
   .refine(onePosition, positionMessage);
 
 export const xenNotePageFavoriteSchema = z.object({ favorite: z.boolean() });
+
+// Links between pages, and search.
+export const xenNotePeekSchema = z.object({ ids: z.array(objectIdSchema).min(1).max(100) });
+export const xenNoteSuggestQuerySchema = z.object({
+  q: z.string().max(200).default(""),
+  notebook: objectIdSchema.optional(),
+});
+export const xenNoteLinkMentionSchema = z.object({ target_id: objectIdSchema });
+export const xenNoteSearchQuerySchema = z.object({
+  q: z.string().max(200).default(""),
+  notebook: objectIdSchema.optional(),
+  tag: z.string().max(60).optional(),
+});

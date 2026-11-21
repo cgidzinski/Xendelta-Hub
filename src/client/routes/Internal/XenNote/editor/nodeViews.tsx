@@ -1,13 +1,16 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, type KeyboardEvent, type MouseEvent } from "react";
 import { Box, Link as MuiLink, Typography } from "@mui/material";
 import BrokenImageOutlinedIcon from "@mui/icons-material/BrokenImageOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import LinkIcon from "@mui/icons-material/Link";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import { isSafeUrl } from "@shared/xennote/notes";
-import { Bookmark, FileBlock, ImageBlock } from "@shared/xennote/pageSchema";
+import { Bookmark, FileBlock, Hashtag, ImageBlock, WikiLink } from "@shared/xennote/pageSchema";
+import { usePagePeek } from "../../../../hooks/xennote/usePages";
 import type { PageFileInfo } from "../../../../types/XenNotePage";
+import { PageLinksContext } from "./pageLinksContext";
 
 /** What the blocks that show a stored file need: where the files are, and what to do when a picture is opened. */
 export interface PageFilesValue {
@@ -136,3 +139,112 @@ function BookmarkView({ node, selected }: NodeViewProps) {
 export const ImageBlockWithView = ImageBlock.extend({ addNodeView: () => ReactNodeViewRenderer(ImageBlockView) });
 export const FileBlockWithView = FileBlock.extend({ addNodeView: () => ReactNodeViewRenderer(FileBlockView) });
 export const BookmarkWithView = Bookmark.extend({ addNodeView: () => ReactNodeViewRenderer(BookmarkView) });
+
+/** Enter or Space on a link made of a span acts like a click. */
+const activate = (run: (e: MouseEvent | KeyboardEvent) => void) => (e: KeyboardEvent) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    run(e);
+  }
+};
+
+/**
+ * A link to another page. It shows the page's current name (looked up when drawn, so a rename shows everywhere), a lock
+ * when the person can't open it (with the words that were typed, which they could already read), or a dotted underline
+ * when there is no such page yet: clicking that makes the page.
+ */
+function WikiLinkView({ node, updateAttributes, editor }: NodeViewProps) {
+  const { onOpenPage, onCreatePage } = useContext(PageLinksContext);
+  const pageId = (node.attrs.page_id as string | null) || null;
+  const typed = String(node.attrs.label || node.attrs.title || "");
+  const { data: peek } = usePagePeek(pageId);
+  const base = {
+    component: "span",
+    "data-type": "wikiLink",
+    contentEditable: false,
+    sx: { color: "primary.main", borderBottom: 1, borderColor: "primary.main", cursor: "pointer" },
+  } as const;
+
+  if (!pageId) {
+    const create = async () => {
+      if (!editor.isEditable) return;
+      const id = await onCreatePage(String(node.attrs.title || typed));
+      if (id) updateAttributes({ page_id: id });
+    };
+    return (
+      <NodeViewWrapper as="span">
+        <Box
+          {...base}
+          role="link"
+          tabIndex={0}
+          title="No page with this name yet. Click to make it."
+          onClick={() => void create()}
+          onKeyDown={activate(() => void create())}
+          sx={{ ...base.sx, color: "text.secondary", borderColor: "text.secondary", borderBottomStyle: "dashed" }}
+        >
+          {typed}
+        </Box>
+      </NodeViewWrapper>
+    );
+  }
+  if (peek?.locked) {
+    return (
+      <NodeViewWrapper as="span">
+        <Box
+          {...base}
+          title="You don't have access to this page"
+          sx={{
+            ...base.sx,
+            color: "text.secondary",
+            borderColor: "text.disabled",
+            cursor: "default",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <LockOutlinedIcon sx={{ fontSize: "0.85em", mr: 0.25, verticalAlign: "-0.1em" }} />
+          {typed}
+        </Box>
+      </NodeViewWrapper>
+    );
+  }
+  const open = (e: MouseEvent | KeyboardEvent) => onOpenPage(pageId, { beside: e.shiftKey });
+  return (
+    <NodeViewWrapper as="span">
+      <Box
+        {...base}
+        role="link"
+        tabIndex={0}
+        title="Shift-click to open beside"
+        onClick={open}
+        onKeyDown={activate(open)}
+      >
+        {(node.attrs.label as string) || (peek && !peek.locked ? peek.title || "Untitled" : typed)}
+      </Box>
+    </NodeViewWrapper>
+  );
+}
+
+/** A #tag: click to see the pages with it. */
+function HashtagView({ node }: NodeViewProps) {
+  const { onOpenTag } = useContext(PageLinksContext);
+  const tag = String(node.attrs.tag ?? "");
+  return (
+    <NodeViewWrapper as="span">
+      <Box
+        component="span"
+        data-type="hashtag"
+        contentEditable={false}
+        role="link"
+        tabIndex={0}
+        onClick={() => onOpenTag(tag)}
+        onKeyDown={activate(() => onOpenTag(tag))}
+        sx={{ color: "primary.main", cursor: "pointer" }}
+      >
+        #{tag}
+      </Box>
+    </NodeViewWrapper>
+  );
+}
+
+export const WikiLinkWithView = WikiLink.extend({ addNodeView: () => ReactNodeViewRenderer(WikiLinkView) });
+export const HashtagWithView = Hashtag.extend({ addNodeView: () => ReactNodeViewRenderer(HashtagView) });
