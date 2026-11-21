@@ -25,6 +25,7 @@ export default defineConfig({
       // wire up the update banner and re-check for updates on launch/focus.
       injectRegister: false,
       injectManifest: {
+        globIgnores: ["**/GraphCanvas3D-*.js", "**/xennote-graph3d-*.js"],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         // Main bundle is ~2 MB, just over Workbox's 2 MiB default; raise the limit so it precaches.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
@@ -51,6 +52,11 @@ export default defineConfig({
           if (!id.includes("node_modules")) return undefined;
           if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) return "react";
           if (/node_modules\/(@mui|@emotion)\//.test(id)) return "mui";
+          if (
+            /node_modules\/(three|three-forcegraph|three-render-objects|3d-force-graph|react-force-graph-3d)\//.test(id)
+          ) {
+            return "xennote-graph3d";
+          }
           return undefined;
         },
       },

@@ -3,6 +3,7 @@ import { lazyPage } from "../../../utils/lazyPage";
 
 const XenNote = lazyPage(() => import("./XenNote"));
 // A notebook as sections and pages (opt-in for now), and a single page shared with someone who isn't in its notebook.
+const GraphView = lazyPage(() => import("./notebook/GraphView"));
 const NotebookView = lazyPage(() => import("./notebook/NotebookView"));
 const SharedPageView = lazyPage(() => import("./notebook/SharedPageView"));
 const XenNoteSharedNote = lazyPage<object>(() =>
@@ -19,6 +20,8 @@ const XenNoteSharedNotebook = lazyPage<object>(() =>
 export const xennoteRoutes = (
   <>
     <Route path="xennote" element={<XenNote />} />
+    <Route path="xennote/graph" element={<GraphView />} />
+    <Route path="xennote/b/:notebookId/graph" element={<GraphView />} />
     <Route path="xennote/b/:notebookId" element={<NotebookView />} />
     <Route path="xennote/b/:notebookId/p/:pageId" element={<NotebookView />} />
     <Route path="xennote/b/:notebookId/t/:tag" element={<NotebookView />} />

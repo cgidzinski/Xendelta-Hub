@@ -287,6 +287,7 @@ export default function NotebookView() {
     <NoteRail
       scope={notebookId}
       showShared
+      onOpenGraph={() => navigate(`${BOARD}/graph`)}
       onScope={(scope) =>
         navigate(notebooks.some((b) => b._id === scope) ? `${BOARD}/b/${scope}` : `${BOARD}?scope=${scope}`)
       }
@@ -346,6 +347,7 @@ export default function NotebookView() {
             </IconButton>
           </Tooltip>
           <Menu anchorEl={optionsMenu} open={!!optionsMenu} onClose={() => setOptionsMenu(null)}>
+            <MenuItem onClick={() => navigate(`${BOARD}/b/${notebookId}/graph`)}>Graph</MenuItem>
             {(canEdit || pages.some((p) => p.journal_date === today)) && (
               <MenuItem disabled={toolBusy} onClick={() => void openToday()}>
                 Today's page
