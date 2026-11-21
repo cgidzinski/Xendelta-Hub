@@ -361,6 +361,7 @@ export default function XenNote() {
       onScope={pickScope}
       counts={counts}
       showShared
+      onOpenTasks={() => navigate("/internal/xennote/tasks")}
       onOpenGraph={() => navigate("/internal/xennote/graph")}
       notebooks={notebooks}
       labels={labels}
