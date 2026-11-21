@@ -181,8 +181,15 @@ describe("the board", () => {
   });
 });
 
+const addPage = async (owner: U, book: string, title: string) => {
+  const section = (await api(owner).post(`/notebooks/${book}/sections`, { name: title })).body.data.section;
+  const created = await api(owner).post(`/sections/${section.id}/pages`, { title });
+  expect(created.status, JSON.stringify(created.body)).toBe(200);
+  return created.body.data.page as { id: string };
+};
+
 describe("notebooks and sharing", () => {
-  it("members see the notebook's notes; roles decide who can change them", async () => {
+  it("members see the notebook's pages according to their roles", async () => {
     const [owner, editor, viewer, stranger] = await Promise.all([
       createUser(),
       createUser(),
@@ -197,18 +204,13 @@ describe("notebooks and sharing", () => {
     expect(added.status, JSON.stringify(added.body)).toBe(200);
     await api(owner).post(`/notebooks/${nb._id}/members`, { userIds: [String(viewer.user._id)], role: "viewer" });
 
-    const shared = await note(owner, { title: "packing", notebook_id: nb._id });
-    expect(await titles(editor)).toEqual(["packing"]);
-    expect(await titles(viewer)).toEqual(["packing"]);
-    expect(await titles(stranger)).toEqual([]);
-
-    // editor writes; viewer reads only; a stranger does not know it exists
-    expect((await api(editor).put(`/notes/${shared._id}`, { title: "packing list" })).status).toBe(200);
-    expect((await api(viewer).put(`/notes/${shared._id}`, { title: "no" })).status).toBe(403);
-    expect((await api(viewer).get(`/notes/${shared._id}`)).body.data.note.can_edit).toBe(false);
-    expect((await api(stranger).get(`/notes/${shared._id}`)).status).toBe(404);
-    expect((await api(viewer).post("/notes", { title: "x", notebook_id: nb._id })).status).toBe(403);
-    expect((await api(stranger).post("/notes", { title: "x", notebook_id: nb._id })).status).toBe(404);
+    const page = await addPage(owner, nb._id, "Packing");
+    expect((await api(editor).put(`/pages/${page.id}`, { title: "Packing list" })).status).toBe(200);
+    expect((await api(viewer).put(`/pages/${page.id}`, { title: "No" })).status).toBe(403);
+    expect((await api(viewer).get(`/pages/${page.id}`)).status).toBe(200);
+    expect((await api(stranger).get(`/pages/${page.id}`)).status).toBe(404);
+    expect(await titles(editor)).toEqual([]);
+    expect(await titles(viewer)).toEqual([]);
 
     // only the owner manages people, the notebook and its link
     expect((await api(editor).put(`/notebooks/${nb._id}`, { name: "mine now" })).status).toBe(403);
@@ -221,26 +223,20 @@ describe("notebooks and sharing", () => {
     expect((await api(owner).put(`/notebooks/${nb._id}/members/${viewer.user._id}`, { role: "editor" })).status).toBe(
       200,
     );
-    expect((await api(viewer).put(`/notes/${shared._id}`, { title: "now ok" })).status).toBe(200);
+    expect((await api(viewer).put(`/pages/${page.id}`, { title: "Now ok" })).status).toBe(200);
   });
 
-  it("shows who last changed a shared note, never for a private one, and counts the rail", async () => {
+  it("counts loose notes separately from notebook pages", async () => {
     const [owner, editor] = await Promise.all([createUser(), createUser()]);
     const nb = await notebook(owner, "Trip");
-    await api(owner).post(`/notebooks/${nb._id}/members`, { userIds: [String(editor.user._id)], role: "editor" });
-    const shared = await note(owner, { title: "packing", notebook_id: nb._id });
-    const loose = await note(owner, { title: "private" });
-    await note(owner, { title: "old", archived: true });
+    await api(owner).post(`/notebooks/${nb._id}/members`, { userIds: [editor.user.id], role: "editor" });
+    await addPage(owner, nb._id, "Packing");
+    await note(owner, { title: "Private" });
+    await note(owner, { title: "Old", archived: true });
 
-    await api(editor).put(`/notes/${shared._id}`, { title: "packing list" });
-    const seen = (await api(owner).get("/notes")).body.data.notes;
-    expect(seen.find((n: any) => n._id === shared._id).updated_by_name).toBe(editor.user.username);
-    expect(seen.find((n: any) => n._id === loose._id).updated_by_name).toBeNull();
-    expect((await api(owner).get(`/notes/${shared._id}`)).body.data.note.updated_by_name).toBe(editor.user.username);
-
-    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 2, mine: 1, archived: 1, trash: 0, shared: 0 });
-    // the editor sees the shared note but not the owner's private or archived ones
-    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 1, mine: 0, archived: 0, trash: 0, shared: 0 });
+    expect((await api(editor).get("/notebooks")).body.data.notebooks[0].page_count).toBe(1);
+    expect((await api(owner).get("/counts")).body.data).toEqual({ all: 1, mine: 1, archived: 1, trash: 0, shared: 0 });
+    expect((await api(editor).get("/counts")).body.data).toEqual({ all: 0, mine: 0, archived: 0, trash: 0, shared: 0 });
     expect((await api().get("/counts")).status).toBe(401);
   });
 
@@ -253,40 +249,20 @@ describe("notebooks and sharing", () => {
     expect((await api(member).get("/notebooks")).body.data.notebooks).toEqual([]);
   });
 
-  it("moves a note between notebooks, needing edit rights on both, and only its author can make it private", async () => {
-    const [a, b] = await Promise.all([createUser(), createUser()]);
-    const mine = await notebook(a, "Mine");
-    const theirs = await notebook(b, "Theirs");
-    const n = await note(a, { title: "movable", notebook_id: mine._id });
-
-    expect((await api(a).put(`/notes/${n._id}`, { notebook_id: theirs._id })).status).toBe(404); // not a member there
-    await api(b).post(`/notebooks/${theirs._id}/members`, { userIds: [String(a.user._id)], role: "viewer" });
-    expect((await api(a).put(`/notes/${n._id}`, { notebook_id: theirs._id })).status).toBe(403); // viewer only
-
-    await api(b).put(`/notebooks/${theirs._id}/members/${a.user._id}`, { role: "editor" });
-    const moved = await api(a).put(`/notes/${n._id}`, { notebook_id: theirs._id });
-    expect(moved.body.data.note.notebook_id).toBe(theirs._id);
-
-    // b is an editor of that notebook but did not write the note: cannot take it private
-    expect((await api(b).put(`/notes/${n._id}`, { notebook_id: null })).status).toBe(403);
-    expect((await api(a).put(`/notes/${n._id}`, { notebook_id: null })).body.data.note.notebook_id).toBeNull();
-    expect(await titles(b, `?notebook=${theirs._id}`)).toEqual([]);
-  });
-
-  it("deleting a notebook deletes its notes and their photos", async () => {
+  it("deleting a notebook deletes its pages and their files", async () => {
     const me = await createUser();
     const nb = await notebook(me);
-    const n = await note(me, { type: "image", title: "pic", notebook_id: nb._id });
+    const page = await addPage(me, nb._id, "Pictures");
     const up = await request(t.app)
-      .post(`/api/xennote/notes/${n._id}/images`)
+      .post(`/api/xennote/pages/${page.id}/files`)
       .set({ Authorization: `Bearer ${me.token}` })
-      .attach("images", PNG, "a.png");
+      .attach("files", PNG, "a.png");
     expect(up.status, JSON.stringify(up.body)).toBe(200);
     expect(stored.size).toBe(1);
 
     expect((await api(me).del(`/notebooks/${nb._id}`)).status).toBe(200);
     expect(stored.size).toBe(0);
-    expect(await titles(me)).toEqual([]);
+    expect((await api(me).get(`/pages/${page.id}`)).status).toBe(404);
   });
 });
 
@@ -325,7 +301,7 @@ describe("photos", () => {
   it("stores photos as files the uploader pays for, and the storage viewer only shows them", async () => {
     const me = await createUser();
     const uid = String(me.user._id);
-    const n = await note(me, { type: "image", title: "Garden", notebook_id: undefined });
+    const n = await note(me, { type: "image", title: "Garden" });
     const before = await usageFor(uid);
     const up = await request(t.app)
       .post(`/api/xennote/notes/${n._id}/images`)
@@ -358,9 +334,8 @@ describe("photos", () => {
 
   it("a viewer cannot add photos", async () => {
     const [owner, viewer] = await Promise.all([createUser(), createUser()]);
-    const nb = await notebook(owner);
-    await api(owner).post(`/notebooks/${nb._id}/members`, { userIds: [String(viewer.user._id)], role: "viewer" });
-    const n = await note(owner, { type: "image", title: "x", notebook_id: nb._id });
+    const n = await note(owner, { type: "image", title: "x" });
+    await api(owner).post(`/notes/${n._id}/members`, { userIds: [viewer.user.id], role: "viewer" });
     const r = await request(t.app)
       .post(`/api/xennote/notes/${n._id}/images`)
       .set({ Authorization: `Bearer ${viewer.token}` })
@@ -402,12 +377,13 @@ describe("public links", () => {
     expect((await api().get(`/public/note/${rotated}`)).status).toBe(404);
   });
 
-  it("a notebook's link lists its un-archived notes read-only, and only the owner can turn it on", async () => {
+  it("a notebook's link lists its unarchived pages read-only, and only the owner can turn it on", async () => {
     const [owner, editor] = await Promise.all([createUser(), createUser()]);
     const nb = await notebook(owner, "Recipes");
     await api(owner).post(`/notebooks/${nb._id}/members`, { userIds: [String(editor.user._id)], role: "editor" });
-    await note(owner, { title: "pie", notebook_id: nb._id });
-    await note(owner, { title: "old", notebook_id: nb._id, archived: true });
+    await addPage(owner, nb._id, "pie");
+    const old = await addPage(owner, nb._id, "old");
+    await api(owner).put(`/pages/${old.id}`, { archived: true });
     await note(owner, { title: "private, not in the notebook" });
 
     expect((await api(editor).post(`/notebooks/${nb._id}/share`)).status).toBe(403);
@@ -415,7 +391,7 @@ describe("public links", () => {
 
     const view = await api().get(`/public/notebook/${token}`);
     expect(view.body.data.notebook.name).toBe("Recipes");
-    expect(view.body.data.notes.map((n: any) => n.title)).toEqual(["pie"]);
+    expect(view.body.data.pages.map((n: any) => n.title)).toEqual(["pie"]);
 
     await api(owner).del(`/notebooks/${nb._id}/share`);
     expect((await api().get(`/public/notebook/${token}`)).status).toBe(404);

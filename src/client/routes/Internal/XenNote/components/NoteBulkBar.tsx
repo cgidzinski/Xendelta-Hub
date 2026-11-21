@@ -17,7 +17,6 @@ import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { NOTE_COLORS, type NoteColor } from "@shared/xennote/notes";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
-import type { XenNotebook } from "../../../../types/XenNote";
 import { NOTE_COLOR_LABELS, swatchColor } from "../noteColors";
 
 interface NoteBulkBarProps {
@@ -25,38 +24,21 @@ interface NoteBulkBarProps {
   /** The archive is open, so the main action is to bring notes back. */
   inArchive: boolean;
   busy: boolean;
-  /** Notebooks the person can add notes to, for Move. */
-  notebooks: XenNotebook[];
   /** Labels in use, to pick from. */
   labels: string[];
   onSelectAll: () => void;
   onArchive: (archived: boolean) => void;
   onColor: (color: NoteColor) => void;
   onAddLabel: (label: string) => void;
-  /** null = out to private notes. */
-  onMove: (notebookId: string | null) => void;
   onDelete: () => void;
   onDone: () => void;
 }
 
-type Open = "color" | "label" | "move" | null;
+type Open = "color" | "label" | null;
 
-/** What can be done to the ticked notes: archive, colour, label, move to a notebook, or send them to the Trash. */
+/** What can be done to the ticked notes: archive, colour, label, or send them to the Trash. */
 export default function NoteBulkBar(props: NoteBulkBarProps) {
-  const {
-    count,
-    inArchive,
-    busy,
-    notebooks,
-    labels,
-    onSelectAll,
-    onArchive,
-    onColor,
-    onAddLabel,
-    onMove,
-    onDelete,
-    onDone,
-  } = props;
+  const { count, inArchive, busy, labels, onSelectAll, onArchive, onColor, onAddLabel, onDelete, onDone } = props;
   const theme = useTheme();
   const [menu, setMenu] = useState<{ kind: Exclude<Open, null>; anchor: HTMLElement } | null>(null);
   const [newLabelOpen, setNewLabelOpen] = useState(false);
@@ -97,11 +79,6 @@ export default function NoteBulkBar(props: NoteBulkBarProps) {
       <Button size="small" onClick={open("label")} disabled={none}>
         Label
       </Button>
-      {!!notebooks.length && (
-        <Button size="small" onClick={open("move")} disabled={none}>
-          Move
-        </Button>
-      )}
       <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={onDelete} disabled={none}>
         Delete
       </Button>
@@ -154,27 +131,6 @@ export default function NoteBulkBar(props: NoteBulkBarProps) {
         >
           New label…
         </MenuItem>
-      </Menu>
-      <Menu open={menu?.kind === "move"} anchorEl={menu?.anchor} onClose={() => setMenu(null)}>
-        <MenuItem
-          onClick={() => {
-            setMenu(null);
-            onMove(null);
-          }}
-        >
-          My notes (private)
-        </MenuItem>
-        {notebooks.map((b) => (
-          <MenuItem
-            key={b._id}
-            onClick={() => {
-              setMenu(null);
-              onMove(b._id);
-            }}
-          >
-            {b.name}
-          </MenuItem>
-        ))}
       </Menu>
 
       <Dialog open={newLabelOpen} onClose={() => setNewLabelOpen(false)} maxWidth="xs" fullWidth>

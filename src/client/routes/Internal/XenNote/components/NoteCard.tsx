@@ -141,11 +141,7 @@ export default function NoteCard({
   const TypeIcon = TYPE_ICON[note.type] ?? NotesIcon;
   const heading = note.title || (note.type === "link" ? note.link.title || hostOf(note.link.url) : "");
   const when = formatDistanceToNowStrict(new Date(note.updated_at), { addSuffix: true });
-  const who = full?.owner_name
-    ? `Shared by ${full.owner_name}`
-    : full?.updated_by_name
-      ? `${full.updated_by_name} edited`
-      : null;
+  const who = full?.owner_name ? `Shared by ${full.owner_name}` : null;
   const hasChips = note.labels.length > 0 || (full?.reminder && !full.reminder.sent);
 
   // The whole card is one target: a single invisible button behind the content opens the note (or ticks it while

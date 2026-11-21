@@ -10,9 +10,7 @@ import {
   NOTE_TYPES,
 } from "../../shared/xennote/notes";
 
-// A notebook groups notes and is the unit of sharing: people are members of it (standard
-// membership shape, utils/membership.ts) and see every note in it. A note with no notebook is a loose
-// note that only its owner sees.
+// Notebooks group pages. Loose notes have an owner and can be shared directly.
 export const xenNoteShareMemberSchema = new Schema(
   {
     ...memberFields,
@@ -30,12 +28,8 @@ const notebookSchema = new Schema({
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },
   },
-  // Notebooks hold sections and pages (models/xenNotePage.ts). `pages_migrated_at` is set once the migration has
-  // turned this notebook's notes into pages (and is what its rollback looks for); `journal_template_id` is the page
-  // in the notebook's templates section used for new journal days.
   content_updated_at: { type: Date },
   journal_template_id: { type: Schema.Types.ObjectId, default: null },
-  pages_migrated_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },
 });
 
@@ -63,7 +57,6 @@ export const reminderSchema = new Schema(
 
 const noteSchema = new Schema({
   owner_id: { type: String, required: true },
-  notebook_id: { type: Schema.Types.ObjectId, ref: "XenNotebook", default: null },
   type: { type: String, enum: NOTE_TYPES, default: "text" },
   title: { type: String, default: "", maxlength: MAX_TITLE },
   body: { type: String, default: "", maxlength: MAX_BODY },
@@ -90,8 +83,7 @@ const noteSchema = new Schema({
   pinned: { type: Boolean, default: false },
   archived: { type: Boolean, default: false },
   labels: { type: [String], default: [] },
-  // People the note is shared with directly, as viewers or editors. The owner is `owner_id`; a note in a notebook is
-  // also open to that notebook's members (routes/xennote/shared.ts noteRole).
+  // People the note is shared with directly as viewers or editors.
   members: { type: [memberSchema], default: [] },
   share: {
     enabled: { type: Boolean, default: false },
@@ -103,8 +95,7 @@ const noteSchema = new Schema({
   updated_at: { type: Date, default: Date.now },
 });
 
-noteSchema.index({ notebook_id: 1, updated_at: -1 });
-noteSchema.index({ owner_id: 1, notebook_id: 1 });
+noteSchema.index({ owner_id: 1 });
 noteSchema.index({ "members.user_id": 1 });
 noteSchema.index({ "share.token": 1 }, { unique: true, sparse: true });
 // The reminder job: notes with a reminder that has come due.

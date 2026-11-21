@@ -141,15 +141,12 @@ describe("searching everything", () => {
   it("includes things shared with the caller", async () => {
     const owner = await createUser();
     const member = await createUser();
-    const book = (await post(owner, "/api/xennote/notebooks", { name: "Team" })).body.data.notebook;
-    await post(owner, `/api/xennote/notebooks/${book._id}/members`, {
-      userIds: [String(member.user._id)],
-      role: "viewer",
-    });
-    await post(owner, "/api/xennote/notes", { type: "text", title: "Shared quokka plan", notebook_id: book._id });
+    const note = (await post(owner, "/api/xennote/notes", { type: "text", title: "Shared quokka plan" })).body.data
+      .note;
+    await post(owner, `/api/xennote/notes/${note._id}/members`, { userIds: [member.user.id], role: "viewer" });
     const hit = (await search(member, "quokka")).find((g) => g.kind === "notes")!.hits[0];
     expect(hit.title).toBe("Shared quokka plan");
-    expect(hit.subtitle).toBe("Team");
+    expect(hit.link).toBe(`/internal/xennote?note=${note._id}`);
   });
 
   it("needs sign-in and at least two characters", async () => {

@@ -1,9 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
-import UserAvatar from "../../../components/user/UserAvatar";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  AvatarGroup,
   Box,
   Tab,
   Tabs,
@@ -30,11 +28,8 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import NotesIcon from "@mui/icons-material/Notes";
-import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
-import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
 import { closeSnackbar, useSnackbar } from "notistack";
 import type { NoteType } from "@shared/xennote/notes";
@@ -80,8 +75,6 @@ const TYPE_FILTERS: Array<{ id: TypeFilter; label: string; icon?: ReactElement }
   { id: "notes", label: "Notes", icon: <NotesIcon /> },
 ];
 
-const ROLE_LABEL = { owner: "Owner", editor: "Editor", viewer: "Viewer" } as const;
-
 export default function XenNote() {
   useTitle("XenNote");
   const { enqueueSnackbar } = useSnackbar();
@@ -108,10 +101,7 @@ export default function XenNote() {
   const q = useDeferredValue(search);
 
   const [editor, setEditor] = useState<{ note: Note | null; startType?: NoteType } | null>(null);
-  const [notebookDialog, setNotebookDialog] = useState<{
-    id: string | null;
-    tab?: "general" | "people" | "link";
-  } | null>(null);
+  const [newNotebookOpen, setNewNotebookOpen] = useState(false);
 
   // A link to a note (a reminder's notification) opens it: /internal/xennote?note=<id>. The address is tidied once
   // the note has loaded, so closing it and reloading doesn't reopen it. `handled` stops a re-render from fetching twice,
@@ -126,51 +116,30 @@ export default function XenNote() {
     }
     if (handled.current === linkedNoteId) return;
     handled.current = linkedNoteId;
-    const locate = async () => {
+    const openLinkedNote = async () => {
       try {
         const id = encodeURIComponent(linkedNoteId);
-        const target = await api.get<{ kind: "page" | "note"; id: string; notebook_id?: string | null }>(
-          `/api/xennote/locate/${id}`,
-        );
-        if (target.kind === "page") {
-          const notebook = target.notebook_id ? `/b/${target.notebook_id}` : "";
-          navigate(`/internal/xennote${notebook}/p/${target.id}`, { replace: true });
-          return;
-        }
         setEditor({ note: (await api.get<{ note: Note }>(`/api/xennote/notes/${id}`)).note });
       } catch {
         enqueueSnackbar("That note isn't available any more", { variant: "info" });
       }
       setSearchParams({}, { replace: true });
     };
-    void locate();
-  }, [linkedNoteId, navigate, setSearchParams, enqueueSnackbar]);
-
-  // A link to a notebook (being added to one, or opening its public link as a member): /internal/xennote?notebook=<id>.
-  const linkedBookId = searchParams.get("notebook");
-  const linkedLegacyBook = searchParams.get("legacyNotebook") === "1";
-  useEffect(() => {
-    if (!linkedBookId) return;
-    if (!linkedLegacyBook) {
-      navigate(`/internal/xennote/b/${linkedBookId}`, { replace: true });
-      return;
-    }
-    setScope(linkedBookId);
-    setSearchParams(
-      (p) => {
-        p.delete("notebook");
-        p.delete("legacyNotebook");
-        return p;
-      },
-      { replace: true },
-    );
-  }, [linkedBookId, linkedLegacyBook, navigate, setSearchParams]);
+    void openLinkedNote();
+  }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
 
   // A link back from a notebook's screen to one of the board's views: /internal/xennote?scope=shared.
   const linkedScope = searchParams.get("scope");
   useEffect(() => {
     if (!linkedScope) return;
-    if (["all", "none", "shared", "archive", "trash"].includes(linkedScope)) setScope(linkedScope);
+    if (
+      linkedScope === "all" ||
+      linkedScope === "none" ||
+      linkedScope === "shared" ||
+      linkedScope === "archive" ||
+      linkedScope === "trash"
+    )
+      setScope(linkedScope);
     setSearchParams(
       (p) => {
         p.delete("scope");
@@ -181,7 +150,7 @@ export default function XenNote() {
   }, [linkedScope, setSearchParams]);
 
   const filters: NoteFilters = {
-    notebook: scope === "all" || scope === "archive" || scope === "trash" ? undefined : scope,
+    scope: scope === "none" ? "mine" : scope === "shared" ? "shared" : undefined,
     archived: scope === "archive",
     label: label ?? undefined,
     q,
@@ -212,7 +181,6 @@ export default function XenNote() {
     const shown = typeFilter === "all" ? allNotes : allNotes?.filter((n) => matchesKind(n, typeFilter));
     return shown && sortNotes(shown, sort);
   }, [allNotes, typeFilter, sort]);
-  const openBook = notebooks.find((b) => b._id === scope) ?? null;
   // What is ticked belongs to the view it was ticked in; a new view, search or filter starts again.
   const viewKey = `${scope}|${label ?? ""}|${typeFilter}|${q}`;
   useEffect(() => setSelectedIds([]), [viewKey]);
@@ -331,21 +299,10 @@ export default function XenNote() {
           ? "Shared with me"
           : scope === "archive"
             ? "Archive"
-            : scope === "trash"
-              ? "Trash"
-              : (openBook?.name ?? "Notes");
-  const bookSubtitle = openBook
-    ? `${openBook.note_count} ${openBook.note_count === 1 ? "note" : "notes"}${
-        openBook.my_role
-          ? ` · You're ${openBook.my_role === "owner" ? "the owner" : `a ${ROLE_LABEL[openBook.my_role].toLowerCase()}`}`
-          : ""
-      }`
-    : undefined;
+            : "Trash";
   const startNote = (type?: NoteType) => setEditor({ note: null, startType: type });
   const empty = !!notes && notes.length === 0;
-  const startNotebookId =
-    openBook && (openBook.my_role === "owner" || openBook.my_role === "editor") ? openBook._id : null;
-  const canWrite = scope !== "archive" && scope !== "trash" && scope !== "shared" && (!openBook || !!startNotebookId);
+  const canWrite = scope !== "archive" && scope !== "trash" && scope !== "shared";
 
   const sharedPages = scope === "shared" && sharedTab === "pages";
   const pickScope = (next: Scope) => {
@@ -374,7 +331,7 @@ export default function XenNote() {
       onOpenNotebook={(id) => navigate(`/internal/xennote/b/${id}`)}
       onNewNotebook={() => {
         setRailOpen(false);
-        setNotebookDialog({ id: null });
+        setNewNotebookOpen(true);
       }}
     />
   );
@@ -418,48 +375,13 @@ export default function XenNote() {
         <Box sx={{ flex: 1, minWidth: 0, px: { xs: 1.5, sm: 4 }, pt: { xs: 2, sm: 3 }, pb: { xs: 10, sm: 4 } }}>
           <PageHeader
             title={scopeTitle}
-            subtitle={openBook ? bookSubtitle : undefined}
             mb={2.5}
             actions={
-              <>
-                {openBook && (
-                  <>
-                    <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
-                      {openBook.members.map((m) => (
-                        <UserAvatar key={m.user_id} user={m}>
-                          {m.username.slice(0, 1).toUpperCase()}
-                        </UserAvatar>
-                      ))}
-                    </AvatarGroup>
-                    {openBook.share?.enabled && (
-                      <Chip size="small" color="primary" variant="outlined" icon={<PublicIcon />} label="Link on" />
-                    )}
-                    {openBook.my_role === "owner" && (
-                      <Button
-                        variant="outlined"
-                        color="inherit"
-                        startIcon={<PersonAddAltOutlinedIcon />}
-                        onClick={() => setNotebookDialog({ id: openBook._id, tab: "people" })}
-                      >
-                        Share
-                      </Button>
-                    )}
-                    <Tooltip title="Notebook settings">
-                      <IconButton
-                        aria-label="Notebook settings"
-                        onClick={() => setNotebookDialog({ id: openBook._id })}
-                      >
-                        <SettingsOutlinedIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </>
-                )}
-                {!wide && (
-                  <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
-                    <MenuBookOutlinedIcon />
-                  </IconButton>
-                )}
-              </>
+              !wide && (
+                <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
+                  <MenuBookOutlinedIcon />
+                </IconButton>
+              )
             }
           />
 
@@ -588,7 +510,6 @@ export default function XenNote() {
               count={selectedIds.length}
               inArchive={scope === "archive"}
               busy={bulkUpdateNotes.isPending || bulkDeleteNotes.isPending}
-              notebooks={openBook ? notebooks.filter((b) => b.my_role === "owner" || b.my_role === "editor") : []}
               labels={labels.map((l) => l.name)}
               onSelectAll={() => setSelectedIds(editableShown.map((n) => n._id))}
               onArchive={(archived) =>
@@ -602,12 +523,6 @@ export default function XenNote() {
               }
               onAddLabel={(l) =>
                 bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, add_label: l }), `Labelled ${countLabel}`)
-              }
-              onMove={(notebookId) =>
-                bulk(
-                  () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, notebook_id: notebookId }),
-                  `Moved ${countLabel}`,
-                )
               }
               onDelete={bulkDelete}
               onDone={stopSelecting}
@@ -673,18 +588,15 @@ export default function XenNote() {
         onClose={() => setEditor(null)}
         note={editor?.note ?? null}
         startType={editor?.startType}
-        startNotebookId={startNotebookId}
-        notebooks={openBook ? notebooks : []}
         labelSuggestions={labels.map((l) => l.name)}
         titles={titles}
         onOpenNote={openNoteById}
       />
       <NoteShareDialog noteId={shareNoteId} onClose={() => setShareNoteId(null)} />
       <NotebookDialog
-        open={!!notebookDialog}
-        onClose={() => setNotebookDialog(null)}
-        notebook={notebooks.find((b) => b._id === notebookDialog?.id) ?? null}
-        initialTab={notebookDialog?.tab}
+        open={newNotebookOpen}
+        onClose={() => setNewNotebookOpen(false)}
+        notebook={null}
         onGone={() => setScope("all")}
       />
     </>
