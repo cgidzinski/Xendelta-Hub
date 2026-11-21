@@ -51,16 +51,19 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down("sm"));
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const q = query.trim();
-  const debounced = useDebounced(q);
-  const search = useSearch(open ? debounced : "");
+  const debounced = useDebounced(open ? q : "");
+  const canSearch = open && q.length >= 2 && q.length <= 100;
+  const queryReady = canSearch && debounced === q;
+  const search = useSearch(queryReady ? q : "");
+  const groups = queryReady && !search.isError ? search.data : undefined;
 
   useEffect(() => {
-    if (open) {
+    if (!open) {
       setQuery("");
-      setActive(0);
+      setSelectedId(null);
     }
   }, [open]);
 
@@ -69,11 +72,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       id: c.id,
       title: c.label,
       path: c.path,
-      section: q ? "Go to" : "Go to",
+      section: "Go to",
       icon: c.icon,
     }));
-    // Results belong to the text they were searched with; while newer text is still being searched, they are shown dimmed.
-    const found = (q.length >= 2 ? (search.data ?? []) : []).flatMap((g) =>
+    const found = (groups ?? []).flatMap((g) =>
       g.hits.map<Row>((h) => ({
         id: `${g.kind}:${h.id}`,
         title: h.title,
@@ -83,13 +85,16 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       })),
     );
     return [...commands.slice(0, q ? 5 : commands.length), ...found];
-  }, [q, search.data]);
+  }, [q, groups]);
 
-  useEffect(() => setActive(0), [q]);
+  const active = Math.max(
+    0,
+    rows.findIndex((row) => row.id === selectedId),
+  );
   // Keep the highlighted row in view while arrowing through a long list.
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [active]);
+  }, [active, rows]);
 
   const go = (row: Row | undefined) => {
     if (!row) return;
@@ -100,18 +105,19 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((i) => Math.min(rows.length - 1, i + 1));
+      setSelectedId(rows[Math.min(rows.length - 1, active + 1)]?.id ?? null);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((i) => Math.max(0, i - 1));
+      setSelectedId(rows[Math.max(0, active - 1)]?.id ?? null);
     } else if (e.key === "Enter") {
       e.preventDefault();
       go(rows[active]);
     }
   };
 
-  const searching = q.length >= 2 && (search.isFetching || debounced !== q);
-  const noResults = q.length >= 2 && !searching && rows.length === 0;
+  const failed = queryReady && (search.isError || search.isPaused);
+  const searching = canSearch && !failed && (!queryReady || search.isPending);
+  const noResults = queryReady && !failed && search.isSuccess && rows.length === 0;
   let lastSection = "";
 
   return (
@@ -141,7 +147,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
           fullWidth
           placeholder="Search or jump to…"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSelectedId(null);
+          }}
           onKeyDown={onKeyDown}
           inputProps={{
             role: "combobox",
@@ -167,7 +176,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
         role="listbox"
         aria-label="Results"
         disablePadding
-        sx={{ overflowY: "auto", py: 0.5, opacity: searching ? 0.7 : 1 }}
+        sx={{ overflowY: "auto", py: 0.5 }}
       >
         {rows.map((row, i) => {
           const header = row.section !== lastSection;
@@ -189,7 +198,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 role="option"
                 aria-selected={i === active}
                 selected={i === active}
-                onMouseMove={() => i !== active && setActive(i)}
+                onMouseMove={() => i !== active && setSelectedId(row.id)}
                 onClick={() => go(row)}
                 sx={{ py: 0.75 }}
               >
@@ -208,22 +217,15 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
             </Box>
           );
         })}
-        {searching && rows.length === 0 && (
-          <Typography color="text.secondary" sx={{ px: 2, py: 2 }}>
-            Searching…
-          </Typography>
-        )}
-        {noResults && (
-          <Typography color="text.secondary" sx={{ px: 2, py: 2 }}>
-            Nothing found for “{q}”.
-          </Typography>
-        )}
-        {search.isError && q.length >= 2 && (
-          <Typography color="error" variant="body2" sx={{ px: 2, py: 1 }}>
-            Search isn't available right now.
-          </Typography>
-        )}
       </List>
+      {(searching || noResults || failed || q.length > 100) && (
+        <Typography role="status" color={failed ? "error" : "text.secondary"} sx={{ px: 2, py: 2 }}>
+          {searching && "Searching…"}
+          {noResults && `Nothing found for “${q}”.`}
+          {failed && "Search isn't available right now."}
+          {q.length > 100 && "Use 100 characters or fewer to search within apps."}
+        </Typography>
+      )}
     </Dialog>
   );
 }

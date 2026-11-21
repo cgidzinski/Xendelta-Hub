@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,6 +30,7 @@ import ErrorDisplay from "../../../components/ErrorDisplay";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { api } from "../../../config/api";
 import { useTitle } from "../../../hooks/useTitle";
+import { useRecordLink } from "../../../hooks/useRecordLink";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { xennoteKeys } from "../../../hooks/xennote/keys";
@@ -74,34 +75,13 @@ export default function XenNote() {
 
   const [editor, setEditor] = useState<{ note: Note | null; startType?: NoteType } | null>(null);
 
-  // Consume a linked note while keeping board filters in the URL for Back navigation.
-  const linkedNoteId = searchParams.get("note");
-  const handled = useRef<string | null>(null);
-  useEffect(() => {
-    if (!linkedNoteId) {
-      handled.current = null;
-      return;
-    }
-    if (handled.current === linkedNoteId) return;
-    handled.current = linkedNoteId;
-    const openLinkedNote = async () => {
-      try {
-        const id = encodeURIComponent(linkedNoteId);
-        setEditor({ note: (await api.get<{ note: Note }>(`/api/xennote/notes/${id}`)).note });
-      } catch {
-        enqueueSnackbar("That note isn't available any more", { variant: "info" });
-      }
-    };
-    void openLinkedNote();
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        next.delete("note");
-        return next;
-      },
-      { replace: true },
-    );
-  }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
+  useRecordLink(
+    "note",
+    async (id, signal) =>
+      (await api.get<{ note: Note }>(`/api/xennote/notes/${encodeURIComponent(id)}`, { signal })).note,
+    (note) => setEditor({ note }),
+    "That note isn't available anymore.",
+  );
 
   const filters: NoteFilters = {
     scope: sharedOnly ? "shared" : undefined,

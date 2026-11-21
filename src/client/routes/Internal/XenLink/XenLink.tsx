@@ -21,6 +21,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import { useTitle } from "../../../hooks/useTitle";
+import { useRecordLink } from "../../../hooks/useRecordLink";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import LinkIcon from "@mui/icons-material/Link";
 import {
@@ -62,6 +63,19 @@ export default function XenDrive() {
   const { mutateAsync: deleteXenLink } = useDeleteXenLink();
   const { mutateAsync: deleteManyXenLinks, isPending: isDeletingMany } = useDeleteManyXenLinks();
   const visibleLinks = useMemo(() => sortLinks(filterLinks(links, search), sort), [links, search, sort]);
+  const openLink = (link: XenLink) => {
+    setSelectedLink(link);
+    setEditLinkDialogOpen(true);
+  };
+  useRecordLink(
+    "link",
+    async (id) => {
+      const { data } = await refetch({ cancelRefetch: false, throwOnError: true });
+      return data?.find((link) => link._id === id);
+    },
+    openLink,
+    "That short link isn't available anymore.",
+  );
 
   const stopSelecting = () => {
     setSelecting(false);
@@ -366,8 +380,7 @@ export default function XenDrive() {
         selectedIds={selecting ? selected : undefined}
         handleLinkClick={(id) => {
           if (selecting) return toggleSelected(id);
-          setSelectedLink(links.find((link) => link._id === id) || emptyXenLink);
-          setEditLinkDialogOpen(true);
+          openLink(links.find((link) => link._id === id) || emptyXenLink);
         }}
         isLoading={isLoading}
         isError={isError}

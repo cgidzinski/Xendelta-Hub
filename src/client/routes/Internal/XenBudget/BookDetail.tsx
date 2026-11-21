@@ -9,6 +9,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTitle } from "../../../hooks/useTitle";
+import { useRecordLink } from "../../../hooks/useRecordLink";
+import { api } from "../../../config/api";
 import { useXenBudgetBook } from "../../../hooks/xenbudget/useBook";
 import { useXenBudgetSocket } from "../../../hooks/xenbudget/useXenBudgetSocket";
 import { useXenBudgetItemMutations } from "../../../hooks/xenbudget/useItems";
@@ -104,6 +106,13 @@ export default function BookDetail() {
   const [editing, setEditing] = useState<XenBudgetItem | null>(null);
   const [duplicating, setDuplicating] = useState<XenBudgetItem | null>(null);
   const [previewing, setPreviewing] = useState<XenBudgetItem | null>(null);
+  useRecordLink(
+    "item",
+    (id, signal) =>
+      api.get<XenBudgetItem>(`/api/xenbudget/books/${bookId}/items/${encodeURIComponent(id)}`, { signal }),
+    setPreviewing,
+    "That budget item isn't available anymore.",
+  );
   const [addImages, setAddImages] = useState<File[]>([]);
   // Undefined lets the server pick (the book's default, or the only one present);
   // choosing from the switcher pins it for this session.

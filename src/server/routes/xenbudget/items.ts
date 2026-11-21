@@ -307,6 +307,22 @@ export function registerItemRoutes(app: any) {
     },
   );
 
+  app.get(
+    "/api/xenbudget/books/:bookId/items/:itemId",
+    validateParams(xenBudgetItemParamSchema),
+    async (req: Request, res: Response) => {
+      const book = await loadBookForMember(req);
+      const item = await XenBudgetItem.findOne({ _id: req.params.itemId, book_id: book._id }).lean();
+      if (!item) throw new AppError(404, "Item not found");
+
+      const batchId = item.import_batch_id?.toString();
+      const batch = batchId && book.import_batches?.find((entry: any) => String(entry._id) === batchId);
+      const label = batch ? resolveBatchLabel(batch, book) : undefined;
+      const batchLabels = batchId && label ? new Map([[batchId, label]]) : undefined;
+      res.json({ status: true, data: serializeItem(item, batchLabels) });
+    },
+  );
+
   // POST /api/xenbudget/books/:bookId/items
   app.post(
     "/api/xenbudget/books/:bookId/items",

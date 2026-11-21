@@ -47,7 +47,7 @@ async function populate(who: U, suffix = "") {
   const notebook = await post(who, "/api/xennote/notebooks", { name: `Quokka notebook${suffix}` });
   expect(notebook.status, JSON.stringify(notebook.body)).toBe(200);
   const { createDriveFile } = await import("../testing/files.js");
-  await createDriveFile({
+  const file = await createDriveFile({
     owner_id: who.user._id,
     folder_id: null,
     name: `quokka${suffix}.png`,
@@ -55,7 +55,11 @@ async function populate(who: U, suffix = "") {
     mimeType: "image/png",
     size: 3,
   });
-  await createXenLink({ name: `Quokka fan page${suffix}`, url: "https://example.com/quokkas", owner_id: uid });
+  const link = await createXenLink({
+    name: `Quokka fan page${suffix}`,
+    url: "https://example.com/quokkas",
+    owner_id: uid,
+  });
   const books = await request(t.app).get("/api/xenkitchen/books").set(auth(who));
   const bookId = books.body.data.books[0]._id;
   const recipe = await post(who, "/api/xenkitchen/items", {
@@ -65,13 +69,13 @@ async function populate(who: U, suffix = "") {
     steps: [{ text: "Simmer" }],
   });
   expect(recipe.status, JSON.stringify(recipe.body)).toBe(200);
-  await post(who, "/api/xenroutine/routines", {
+  const routine = await post(who, "/api/xenroutine/routines", {
     name: `Feed the quokka${suffix}`,
     interval: { every: 1, unit: "days" },
   });
   const group = await post(who, "/api/xensplit/groups", { name: `Quokka trip${suffix}`, default_currency: "CAD" });
   const groupId = (group.body.data.group ?? group.body.data)._id;
-  await post(who, `/api/xensplit/groups/${groupId}/expenses`, {
+  const expense = await post(who, `/api/xensplit/groups/${groupId}/expenses`, {
     paid_by: uid,
     amount: 12,
     currency: "CAD",
@@ -82,13 +86,24 @@ async function populate(who: U, suffix = "") {
   });
   const book = await post(who, "/api/xenbudget/books", { name: `Quokka budget${suffix}`, default_currency: "CAD" });
   const budgetId = (book.body.data.book ?? book.body.data)._id;
-  await post(who, `/api/xenbudget/books/${budgetId}/items`, {
+  const item = await post(who, `/api/xenbudget/books/${budgetId}/items`, {
     type: "expense",
     amount: 9,
     description: `Quokka feed${suffix}`,
     date: new Date().toISOString(),
   });
-  return { groupId, budgetId };
+  return {
+    noteId: note.body.data.note._id,
+    notebookId: notebook.body.data.notebook._id,
+    fileId: String(file._id),
+    linkId: String(link._id),
+    recipeId: recipe.body.data.item._id,
+    routineId: routine.body.data.routine._id,
+    groupId,
+    expenseId: expense.body.data.newExpenseId,
+    budgetId,
+    itemId: item.body.data._id,
+  };
 }
 
 describe("searching everything", () => {
@@ -115,8 +130,22 @@ describe("searching everything", () => {
     expect(titles(groups, "expenses").sort()).toEqual(["Quokka tickets", "Quokka trip"]);
     expect(titles(groups, "budget").sort()).toEqual(["Quokka budget", "Quokka feed"]);
 
-    const expense = groups.find((g) => g.kind === "expenses")!.hits.find((h) => h.title === "Quokka tickets")!;
-    expect(expense.link).toBe(`/internal/xensplit/groups/${ids.groupId}/expenses`);
+    const hits = new Map(groups.flatMap((group) => group.hits.map((hit) => [hit.title, hit])));
+    expect(
+      Object.fromEntries([...hits].filter(([title]) => title !== "Other").map(([title, hit]) => [title, hit.link])),
+    ).toEqual({
+      "Quokka note": `/internal/xennote?note=${ids.noteId}`,
+      "Quokka notebook": `/internal/xennote/b/${ids.notebookId}`,
+      "quokka.png": `/internal/xendrive/file/${ids.fileId}`,
+      "Quokka stew": `/internal/xenkitchen/${ids.recipeId}`,
+      "Feed the quokka": `/internal/xenroutine/routines?routine=${ids.routineId}`,
+      "Quokka fan page": `/internal/xenlink?link=${ids.linkId}`,
+      "Quokka trip": `/internal/xensplit/groups/${ids.groupId}/overview`,
+      "Quokka tickets": `/internal/xensplit/groups/${ids.groupId}/expenses?expense=${ids.expenseId}`,
+      "Quokka budget": `/internal/xenbudget/books/${ids.budgetId}/overview`,
+      "Quokka feed": `/internal/xenbudget/books/${ids.budgetId}/items?item=${ids.itemId}`,
+    });
+    const expense = hits.get("Quokka tickets")!;
     expect(expense.subtitle).toBe("12 CAD · Quokka trip");
     // A hit in a note's body shows the words around it.
     const bodyHit = groups.find((g) => g.kind === "notes")!.hits.find((h) => h.title === "Other")!;
@@ -151,6 +180,37 @@ describe("searching everything", () => {
     const hit = (await search(member, "quokka")).find((g) => g.kind === "notes")!.hits[0];
     expect(hit.title).toBe("Shared quokka plan");
     expect(hit.link).toBe(`/internal/xennote?note=${note._id}`);
+  });
+
+  it("does not return trashed notes or deleted expenses", async () => {
+    const me = await createUser();
+    const ids = await populate(me);
+    const remove = (url: string) => request(t.app).delete(url).set(auth(me));
+    expect((await remove(`/api/xennote/notes/${ids.noteId}`)).status).toBe(200);
+    expect((await remove(`/api/xensplit/groups/${ids.groupId}/expenses/${ids.expenseId}`)).status).toBe(200);
+    const groups = await search(me, "quokka");
+    expect(titles(groups, "notes")).toEqual(["Other"]);
+    expect(titles(groups, "expenses")).toEqual(["Quokka trip"]);
+  });
+
+  it("serves an exact budget item only to members of its book", async () => {
+    const owner = await createUser();
+    const outsider = await createUser();
+    const { budgetId, itemId } = await populate(owner);
+    const other = await post(owner, "/api/xenbudget/books", { name: "Other budget", default_currency: "CAD" });
+    expect(other.status).toBe(200);
+    const otherBook = (other.body.data.book ?? other.body.data)._id;
+    const path = `/api/xenbudget/books/${budgetId}/items/${itemId}`;
+
+    const result = await request(t.app).get(path).set(auth(owner));
+    expect(result.status).toBe(200);
+    expect(result.body.data).toMatchObject({ _id: itemId, book_id: budgetId, description: "Quokka feed" });
+    expect((await request(t.app).get(path).set(auth(outsider))).status).toBe(403);
+    expect(
+      (await request(t.app).get(`/api/xenbudget/books/${otherBook}/items/${itemId}`).set(auth(owner))).status,
+    ).toBe(404);
+    expect((await request(t.app).delete(path).set(auth(owner))).status).toBe(200);
+    expect((await request(t.app).get(path).set(auth(owner))).status).toBe(404);
   });
 
   it("needs sign-in and at least two characters", async () => {

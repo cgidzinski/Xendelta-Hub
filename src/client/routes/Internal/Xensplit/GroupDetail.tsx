@@ -36,6 +36,7 @@ import GridViewIcon from "@mui/icons-material/GridView";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { useTitle } from "../../../hooks/useTitle";
+import { useRecordLink } from "../../../hooks/useRecordLink";
 import { useXenSplit } from "../../../hooks/xensplit/useGroup";
 import { useXenSplits } from "../../../hooks/xensplit/useGroups";
 import { useXenSplitBalances } from "../../../hooks/xensplit/useBalances";
@@ -161,6 +162,8 @@ export default function GroupDetail() {
     useXenSplitExchanges(groupId!);
   useXenSplitSocket(groupId!);
   const { profile } = useUserProfile();
+  const location = useLocation();
+  const hasExpenseLink = new URLSearchParams(location.search).has("expense");
   const [showEtransferPrompt, setShowEtransferPrompt] = useState(false);
   // Remembers the group we last nudged for: re-nudges once per distinct group opened
   // (GroupDetail stays mounted when navigating group→group), and stops a dismissal from
@@ -168,14 +171,20 @@ export default function GroupDetail() {
   const etransferPromptShownFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!profile || !groupId) return;
+    if (!groupId) return;
+    // The expense viewer is the reason for this visit. Keep the reminder for a normal group visit.
+    if (hasExpenseLink) {
+      etransferPromptShownFor.current = groupId;
+      setShowEtransferPrompt(false);
+      return;
+    }
+    if (!profile) return;
     if (profile.etransfer?.handle || isEtransferPromptDismissed()) return;
     if (etransferPromptShownFor.current === groupId) return;
     etransferPromptShownFor.current = groupId;
     setShowEtransferPrompt(true);
-  }, [profile, groupId]);
+  }, [profile, groupId, hasExpenseLink]);
 
-  const location = useLocation();
   const activeTab = location.pathname.endsWith("/overview")
     ? 0
     : location.pathname.endsWith("/expenses")
@@ -216,6 +225,19 @@ export default function GroupDetail() {
 
   const [showViewExpenseModal, setShowViewExpenseModal] = useState(false);
   const [viewExpenseItem, setViewExpenseItem] = useState<XenSplitExpense | null>(null);
+  const openExpense = (expense: XenSplitExpense) => {
+    setViewExpenseItem(expense);
+    setShowViewExpenseModal(true);
+  };
+  useRecordLink(
+    "expense",
+    async (id) => {
+      const { data } = await refetch({ cancelRefetch: false, throwOnError: true });
+      return data?.expenses.find((expense) => expense._id === id);
+    },
+    openExpense,
+    "That expense isn't available anymore.",
+  );
   const [showAddExchangeModal, setShowAddExchangeModal] = useState(false);
   const { percent: uploadPercent, onUploadProgress, reset: resetUploadProgress } = useUploadProgress();
 
@@ -494,10 +516,7 @@ export default function GroupDetail() {
     isCreator,
     onAddExpense: openAddExpenseModal,
     onEditExpense: handleOpenEditExpense,
-    onViewExpense: (expense) => {
-      setViewExpenseItem(expense);
-      setShowViewExpenseModal(true);
-    },
+    onViewExpense: openExpense,
     settleDebt,
     isSettlingDebt,
     nudgeMember,

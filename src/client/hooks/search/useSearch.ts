@@ -14,13 +14,13 @@ export interface SearchGroup {
   hits: SearchHit[];
 }
 
-/** What the caller can open across the apps for `q` (at least two characters). Results are kept for a minute. */
+/** What the caller can open across the apps. An empty query disables record search. */
 export const useSearch = (q: string) =>
   useQuery({
     queryKey: searchKeys.query(q),
-    queryFn: async () => (await api.get<{ groups: SearchGroup[] }>("/api/search", { params: { q } })).groups,
-    enabled: q.length >= 2,
+    queryFn: async ({ signal }) =>
+      (await api.get<{ groups: SearchGroup[] }>("/api/search", { params: { q }, signal })).groups,
+    enabled: q !== "",
     staleTime: 60_000,
-    placeholderData: (previous) => previous,
     retry: false,
   });
