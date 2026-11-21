@@ -194,6 +194,13 @@ mongoConnection.on("connected", async () => {
         },
       });
     }
+    const { runKitchenTimerAlerts } = require("./utils/xenKitchenTimerAlerts");
+    scheduler.register({
+      name: "xenkitchen-timer-alerts",
+      everyMs: 2000,
+      runOnStart: true,
+      handler: runKitchenTimerAlerts,
+    });
     scheduler.start();
   } catch (e) {
     // An error thrown from an event handler would crash the process as an
@@ -296,6 +303,7 @@ require("./routes/xenbudget")(app);
 require("./routes/xenroutine.ts")(app);
 require("./routes/xenkitchen.ts")(app);
 require("./routes/xenkitchenPlan.ts")(app);
+require("./routes/xenkitchenTimers.ts")(app);
 require("./routes/xennote")(app);
 require("./routes/xenstart.ts").default(app);
 require("./routes/feed")(app);

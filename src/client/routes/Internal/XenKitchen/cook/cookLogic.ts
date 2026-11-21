@@ -23,16 +23,3 @@ export function formatCountdown(seconds: number): string {
   const ss = String(s % 60).padStart(2, "0");
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
-
-export interface RunningTimer {
-  step: number;
-  seconds: number;
-  finished: boolean;
-}
-
-/** The timers that have been started (a finished one stays until it is dismissed), soonest to finish first. */
-export function runningTimers(timers: Record<number, number>, now: number): RunningTimer[] {
-  return Object.entries(timers)
-    .map(([step, endAt]) => ({ step: Number(step), seconds: remainingSeconds(endAt, now), finished: endAt <= now }))
-    .sort((a, b) => Number(a.finished) - Number(b.finished) || a.seconds - b.seconds || a.step - b.step);
-}

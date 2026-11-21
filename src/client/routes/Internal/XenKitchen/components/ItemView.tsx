@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Box,
@@ -17,7 +17,6 @@ import {
 import { alpha, useTheme } from "@mui/material/styles";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddIcon from "@mui/icons-material/Add";
-import TimerIcon from "@mui/icons-material/Timer";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -42,6 +41,9 @@ import type {
 } from "../../../../hooks/xenkitchen/useKitchen";
 import { CategoryIconView, MethodIconView } from "./kitchenIcons";
 import CookMode from "../cook/CookMode";
+import { RecipeTimerButton } from "../timers/TimerButtons";
+import { recipeTimerSource } from "../timers/timerDisplay";
+import type { TimerSource } from "@shared/xenkitchen/timers";
 
 /** "food.example.com" for a recipe's source link. */
 const sourceHost = (url: string) => {
@@ -504,6 +506,7 @@ function RecipeSection({
                 <StepRow
                   key={step._id ?? i}
                   step={step}
+                  source={recipeTimerSource(item, "step", step._id, i, `Step ${i + 1}`)}
                   index={i}
                   accent={accent}
                   done={doneSteps.has(i)}
@@ -519,7 +522,10 @@ function RecipeSection({
         onClose={() => setCooking(false)}
         title={item.title || "Recipe"}
         accent={accent}
-        steps={item.steps.map((st) => ({ text: st.text, timer_minutes: st.timer_minutes }))}
+        steps={item.steps.map((step, i) => ({
+          ...step,
+          source: recipeTimerSource(item, "step", step._id, i, `Step ${i + 1}`),
+        }))}
         ingredients={item.ingredients.map((ing, key) => ({
           key,
           section: ing.section || "",
@@ -536,12 +542,14 @@ function RecipeSection({
 
 function StepRow({
   step,
+  source,
   index,
   accent,
   done,
   onToggle,
 }: {
   step: KitchenStep;
+  source: TimerSource;
   index: number;
   accent: string;
   done: boolean;
@@ -576,72 +584,9 @@ function StepRow({
         <Typography variant="body1" sx={{ whiteSpace: "pre-wrap", fontWeight: 400, lineHeight: 1.5 }}>
           {step.text}
         </Typography>
-        {step.timer_minutes ? <StepTimer minutes={step.timer_minutes} accent={accent} /> : null}
+        {step.timer_minutes ? <RecipeTimerButton minutes={step.timer_minutes} source={source} /> : null}
       </Box>
     </Card>
-  );
-}
-
-/** A countdown chip. Beeps (and vibrates where supported) when it reaches zero. */
-function StepTimer({ minutes, accent }: { minutes: number; accent: string }) {
-  const [endAt, setEndAt] = useState<number | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const fired = useRef(false);
-
-  useEffect(() => {
-    if (!endAt) return;
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
-  }, [endAt]);
-
-  const left = endAt ? Math.max(0, Math.round((endAt - now) / 1000)) : minutes * 60;
-  useEffect(() => {
-    if (endAt && left === 0 && !fired.current) {
-      fired.current = true;
-      navigator.vibrate?.([300, 150, 300]);
-      try {
-        const ctx = new AudioContext();
-        [0, 0.35, 0.7].forEach((at) => {
-          const o = ctx.createOscillator();
-          o.frequency.value = 880;
-          o.connect(ctx.destination);
-          o.start(ctx.currentTime + at);
-          o.stop(ctx.currentTime + at + 0.2);
-        });
-      } catch {
-        /* no audio */
-      }
-    }
-  }, [endAt, left]);
-
-  const mm = Math.floor(left / 60);
-  const ss = String(left % 60).padStart(2, "0");
-  const finished = !!endAt && left === 0;
-  return (
-    <Chip
-      icon={<TimerIcon />}
-      size="small"
-      clickable
-      onClick={() => {
-        fired.current = false;
-        setNow(Date.now());
-        setEndAt(endAt && !finished ? null : Date.now() + minutes * 60_000);
-      }}
-      label={
-        endAt
-          ? finished
-            ? "Done! Tap to restart"
-            : `${mm}:${ss} · tap to stop`
-          : `Start ${formatMinutes(minutes)} timer`
-      }
-      sx={{
-        mt: 1,
-        fontVariantNumeric: "tabular-nums",
-        ...(endAt
-          ? { bgcolor: finished ? "success.main" : alpha(accent, 0.25), color: finished ? "common.white" : undefined }
-          : {}),
-      }}
-    />
   );
 }
 
@@ -702,7 +647,13 @@ function InstructionsSection({
           }}
         >
           {item.methods.map((m, i) => (
-            <MethodCard key={m._id ?? i} m={m} accent={accent} units={units} />
+            <MethodCard
+              key={m._id ?? i}
+              m={m}
+              accent={accent}
+              units={units}
+              source={recipeTimerSource(item, "method", m._id, i, COOK_METHOD_LABELS[m.method])}
+            />
           ))}
         </Box>
       )}
@@ -722,7 +673,17 @@ function InstructionsSection({
   );
 }
 
-function MethodCard({ m, accent, units }: { m: KitchenMethod; accent: string; units: UnitSystem }) {
+function MethodCard({
+  m,
+  accent,
+  units,
+  source,
+}: {
+  m: KitchenMethod;
+  accent: string;
+  units: UnitSystem;
+  source: TimerSource;
+}) {
   const time = formatMinuteRange(m.minutes_min, m.minutes_max);
   const shown = m.temp ? convertTemp(m.temp, m.temp_unit, units) : null;
   return (
@@ -771,7 +732,7 @@ function MethodCard({ m, accent, units }: { m: KitchenMethod; accent: string; un
       )}
       {m.minutes_max ? (
         <Box sx={{ px: 2, pb: 2 }}>
-          <StepTimer minutes={m.minutes_max} accent={accent} />
+          <RecipeTimerButton minutes={m.minutes_max} source={source} />
         </Box>
       ) : null}
     </Card>

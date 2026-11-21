@@ -1,3 +1,4 @@
+import { TimersButton } from "./timers/TimerButtons";
 import PageContainer from "../../../components/ui/PageContainer";
 import { useState } from "react";
 import {
@@ -161,7 +162,16 @@ export default function ItemDetail() {
           <ItemView
             item={item}
             actions={
-              <Box sx={{ display: "flex", gap: 0.5, "@media print": { display: "none" } }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 0.5,
+                  "@media print": { display: "none" },
+                }}
+              >
+                <TimersButton compact />
                 <Tooltip title={item.favorite ? "Unfavorite" : "Favorite (just for you)"}>
                   <IconButton
                     onClick={() => favorite.mutate({ id: item._id, on: !item.favorite })}

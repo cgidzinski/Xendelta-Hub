@@ -67,7 +67,11 @@ function truncate(text: string, max: number): string {
  * subscription is deleted (the browser has dropped it), anything else is logged and left
  * alone so a transient push-service outage doesn't discard a valid device.
  */
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<PushResult> {
+export async function sendPushToUser(
+  userId: string,
+  payload: PushPayload,
+  options?: { ttl: number; timeout: number },
+): Promise<PushResult> {
   if (!ensureVapid()) return { sent: 0, pruned: 0 };
   // Do not disturb: nothing reaches the phone or desktop, whoever it is from (in-app notifications are still kept).
   const quiet = await User.exists({ _id: userId, "presence.choice": "dnd" }).exec();
@@ -93,6 +97,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
           body,
+          options && { TTL: options.ttl, timeout: options.timeout },
         );
         return { ok: true as const };
       } catch (err: any) {
