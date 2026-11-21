@@ -79,7 +79,13 @@ export function SharedPageReader({ token, signedIn }: { token?: string; signedIn
                 }
               />
               <Suspense fallback={<DetailSkeleton height={200} />}>
-                <PublicPageReader key={data.id} detail={data} titles={titles} onOpenPage={() => undefined} />
+                <PublicPageReader
+                  key={data.id}
+                  detail={data}
+                  titles={titles}
+                  onOpenPage={() => undefined}
+                  scope={token ? { token, kind: "page" } : undefined}
+                />
               </Suspense>
             </>
           ) : (
@@ -188,7 +194,13 @@ export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook;
                   }
                 />
                 <Suspense fallback={<DetailSkeleton height={200} />}>
-                  <PublicPageReader key={detail.id} detail={detail} titles={titles} onOpenPage={openPage} />
+                  <PublicPageReader
+                    key={detail.id}
+                    detail={detail}
+                    titles={titles}
+                    onOpenPage={openPage}
+                    scope={token ? { token, kind: "notebook" } : undefined}
+                  />
                 </Suspense>
               </>
             ) : (

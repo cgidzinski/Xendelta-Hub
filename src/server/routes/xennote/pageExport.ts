@@ -1,3 +1,8 @@
+import type { JSONContent } from "@tiptap/core";
+import { blockTarget, deriveBlockRefs } from "../../../shared/xennote/blockReferences";
+import { visiblePagesFilter } from "../../utils/xenNotePageSearch";
+import { blockPreview } from "./pageBlocks";
+import { callerId } from "../../utils/http";
 import type { Request, Response } from "express";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -89,6 +94,38 @@ async function* archive(entries: AsyncIterable<Entry>) {
   yield end;
 }
 
+async function expandEmbeds(doc: JSONContent, visible: Record<string, unknown>) {
+  const targets = deriveBlockRefs(doc);
+  if (!targets.length) return doc;
+  const pages = await XenNotePage.find(
+    { $and: [visible, { _id: { $in: targets.map((t) => t.page_id) } }] },
+    "title files",
+  ).lean();
+  const available = new Map(pages.map((page) => [String(page._id), page]));
+  const previews = new Map<string, string>();
+  for (const target of targets) {
+    const page = available.get(target.page_id);
+    if (!page) continue;
+    const block = await blockPreview(page, target.block_id);
+    previews.set(
+      `${target.page_id}:${target.block_id}`,
+      block.status === "available" ? block.excerpt : "Block removed",
+    );
+  }
+  const walk = (node: JSONContent): JSONContent => {
+    if (node.type === "blockRef" || node.type === "blockEmbed") {
+      const target = blockTarget(node);
+      const contents = (target && previews.get(`${target.page_id}:${target.block_id}`)) || "Locked block";
+      const inline = { type: "text", text: contents };
+      return node.type === "blockRef"
+        ? inline
+        : { type: "blockquote", content: [{ type: "paragraph", content: [inline] }] };
+    }
+    return node.content ? { ...node, content: node.content.map(walk) } : node;
+  };
+  return walk(doc);
+}
+
 export function registerPageExportRoutes(app: any) {
   app.get(
     "/api/xennote/pages/:id/export",
@@ -100,7 +137,8 @@ export function registerPageExportRoutes(app: any) {
         filesOfPage(String(page._id), page.files.map(String)),
       ]);
       const files = await signedUrlsFor([...allowed], 60);
-      const text = docToMarkdown(body?.doc ?? emptyDoc(), { fileUrl: (id) => files.get(id) ?? "" });
+      const doc = await expandEmbeds(body?.doc ?? emptyDoc(), await visiblePagesFilter(callerId(req)));
+      const text = docToMarkdown(doc, { fileUrl: (id) => files.get(id) ?? "" });
       res
         .attachment(`${filename(page.title)}.md`)
         .type("text/markdown")

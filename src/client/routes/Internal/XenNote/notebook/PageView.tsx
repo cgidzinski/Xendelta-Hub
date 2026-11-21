@@ -45,6 +45,7 @@ import NoteColorPopover from "../components/NoteColorPopover";
 import { pageTitle } from "./pageTree";
 
 // The editor (and ProseMirror with it) is its own chunk, loaded when a page is opened.
+const BlockPicker = lazy(() => import("../editor/BlockPicker"));
 const PageEditor = lazy(() => import("../editor/PageEditor"));
 
 const TITLE_SAVE_DELAY_MS = 600;
@@ -137,6 +138,7 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
       );
     },
   });
+  const [blockBacklinks, setBlockBacklinks] = useState(false);
   const [pageMenu, setPageMenu] = useState<HTMLElement | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -284,6 +286,14 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
           <MenuItem
             onClick={() => {
               setPageMenu(null);
+              setBlockBacklinks(true);
+            }}
+          >
+            Block backlinks
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setPageMenu(null);
               setHistoryOpen(true);
             }}
           >
@@ -425,6 +435,20 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
         />
       )}
 
+      {blockBacklinks && (
+        <Suspense fallback={null}>
+          <BlockPicker
+            mode="backlinks"
+            currentPage={page.id}
+            onClose={() => setBlockBacklinks(false)}
+            onPick={() => undefined}
+            onOpenPage={(id) => {
+              setBlockBacklinks(false);
+              links?.onOpenPage(id);
+            }}
+          />
+        </Suspense>
+      )}
       {historyOpen && <PageHistoryDialog id={page.id} editable={page.can_edit} onClose={() => setHistoryOpen(false)} />}
       {shareOpen && (
         <PageShareDialog

@@ -8,6 +8,7 @@ import {
   XenNoteSection,
   type XenNotePageAttrs,
 } from "../models/xenNotePage";
+import { blockTarget, deriveBlockRefs } from "../../shared/xennote/blockReferences";
 import { deriveFromDoc } from "../../shared/xennote/deriveFromDoc";
 import { MAX_PAGE_TAGS, MAX_PAGE_VERSIONS, PAGE_SCHEMA_VERSION } from "../../shared/xennote/pages";
 import { bestRole, canEdit, roleOf, type MemberRole } from "./membership";
@@ -69,6 +70,9 @@ export function sanitizePageDoc(doc: JSONContent, allowedFileIds: ReadonlySet<st
     } else if (node.type === "wikiLink") {
       const id = node.attrs?.page_id;
       if (id != null && !isId(id)) next = { ...next, attrs: { ...node.attrs, page_id: null } };
+    }
+    if ((node.type === "blockRef" || node.type === "blockEmbed") && !blockTarget(node)) {
+      next = { ...next, attrs: { ...next.attrs, page_id: null, block_id: null } };
     }
     if (node.content) next = { ...next, content: node.content.map(walk) };
     return next;
@@ -254,6 +258,7 @@ export async function writePageBody(
       $set: {
         ...(restoredTitle === undefined ? {} : { title: restoredTitle }),
         links: derived.links,
+        block_refs: deriveBlockRefs(clean),
         unresolved: derived.unresolved,
         tags_inline: derived.tags,
         tags: unionTags(derived.tags, page.tags_manual),
