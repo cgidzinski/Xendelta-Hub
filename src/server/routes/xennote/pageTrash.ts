@@ -5,7 +5,7 @@ import { XenNotePage, XenNoteSection } from "../../models/xenNotePage";
 import { purgeDate } from "../../utils/softDelete";
 import { deletePagesForever, deleteSectionForever, restorePage, restoreSection } from "../../utils/xenNotePages";
 import { loadNotebook } from "./shared";
-import { loadPage, loadSection, notifyTree, pageAudience } from "./pageAccess";
+import { loadPage, loadSection, markNotebookChanged, notifyTree, pageAudience } from "./pageAccess";
 
 // The Trash for a notebook's sections and pages: anyone who can edit the notebook sees what was deleted in it, brings it
 // back, or removes it for good. A page deleted with its section (or a sub-page deleted with its page) is not listed on
@@ -74,6 +74,7 @@ export function registerPageTrashRoutes(app: any) {
       if (!section || section.deleted_at) throw new AppError(409, "Restore its section first");
       if (parent?.deleted_at) throw new AppError(409, "Restore its parent page first");
       await restorePage(page._id);
+      await markNotebookChanged(notebook);
       notifyTree(notebook, pageAudience(notebook, page, parent));
       res.json({ status: true, message: "Page restored" });
     },
@@ -86,6 +87,7 @@ export function registerPageTrashRoutes(app: any) {
       const { page, notebook } = await loadPage(req, req.params.id as string, "manage", { includeDeleted: true });
       if (!page.deleted_at) throw new AppError(404, "Page not found in the Trash");
       await deletePagesForever({ $or: [{ _id: page._id }, { parent_id: page._id }] });
+      await markNotebookChanged(notebook);
       notifyTree(notebook);
       res.json({ status: true, message: "Page deleted for good" });
     },
@@ -98,6 +100,7 @@ export function registerPageTrashRoutes(app: any) {
       const { section, notebook } = await loadSection(req, req.params.id as string, "edit", { includeDeleted: true });
       if (!section.deleted_at) throw new AppError(404, "Section not found in the Trash");
       await restoreSection(section._id);
+      await markNotebookChanged(notebook);
       notifyTree(notebook);
       res.json({ status: true, message: "Section restored" });
     },
@@ -110,6 +113,7 @@ export function registerPageTrashRoutes(app: any) {
       const { section, notebook } = await loadSection(req, req.params.id as string, "edit", { includeDeleted: true });
       if (!section.deleted_at) throw new AppError(404, "Section not found in the Trash");
       await deleteSectionForever(section._id);
+      await markNotebookChanged(notebook);
       notifyTree(notebook);
       res.json({ status: true, message: "Section deleted for good" });
     },
@@ -126,6 +130,7 @@ export function registerPageTrashRoutes(app: any) {
         .lean();
       for (const s of sections) await deleteSectionForever(s._id);
       const removed = await deletePagesForever({ notebook_id: notebook._id, deleted_at: { $ne: null } });
+      await markNotebookChanged(notebook);
       notifyTree(notebook);
       res.json({ status: true, message: "Trash emptied", data: { removed } });
     },

@@ -1,9 +1,8 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
-import { memberSchema } from "../utils/membership";
 import { softDeleteFields, softDeletePlugin } from "../utils/softDelete";
 import { NOTE_COLORS } from "../../shared/xennote/notes";
 import { MAX_PAGE_TITLE, MAX_SECTION_NAME, PAGE_SCHEMA_VERSION, SECTION_KINDS } from "../../shared/xennote/pages";
-import { reminderSchema } from "./xenNote";
+import { reminderSchema, xenNoteShareMemberSchema } from "./xenNote";
 
 // Notebook pages. A notebook (XenNotebook in xenNote.ts) holds sections, a section holds pages, and a page can hold
 // sub-pages (one level). Who may see a page comes from the notebook's members, plus anyone added to the page itself
@@ -67,7 +66,7 @@ const pageSchema = new Schema({
   reminders: { type: [reminderSchema], default: [] },
 
   // People added to this page (and its sub-pages) who are not members of the notebook.
-  members: { type: [memberSchema], default: [] },
+  members: { type: [xenNoteShareMemberSchema], default: [] },
   share: {
     enabled: { type: Boolean, default: false },
     token: { type: String, default: undefined },

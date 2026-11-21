@@ -14,6 +14,8 @@ export interface PageLinksValue {
   tags: () => string[];
 }
 
+export const PublicPageLinksContext = createContext<ReadonlyMap<string, string> | null>(null);
+
 export const PageLinksContext = createContext<PageLinksValue>({
   notebookId: null,
   onOpenPage: () => undefined,

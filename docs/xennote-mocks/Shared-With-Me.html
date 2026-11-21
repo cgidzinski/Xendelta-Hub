@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XenNote · Shared with me</title>
+  <link rel="stylesheet" href="sharing.css">
+</head>
+<body>
+  <header class="app-bar">
+    <a class="back" href="index.html" aria-label="Back to XenNote design mocks">‹</a>
+    <span class="brand">XenSuite</span>
+    <span class="app-name">XenNote</span>
+    <span class="spacer"></span>
+    <a class="header-link" href="Share-Notification.html">Notifications</a>
+    <span class="avatar avatar-self" aria-label="Ellie">E</span>
+  </header>
+  <div class="frame">
+    <nav class="rail" aria-label="Notes navigation">
+      <div class="rail-action">＋ New note</div>
+      <div class="rail-label">Notes</div>
+      <div class="rail-item">All notes</div>
+      <div class="rail-item">My notes</div>
+      <div class="rail-item selected" aria-current="page">Shared with me</div>
+      <div class="rail-item">Archive</div>
+      <div class="rail-item">Trash</div>
+      <div class="rail-label">Notebooks</div>
+      <div class="rail-item"><span class="notebook-dot recipes"></span>Recipes</div>
+      <div class="rail-item"><span class="notebook-dot trips"></span>Trips</div>
+      <div class="rail-item">＋ New notebook</div>
+    </nav>
+    <main class="content">
+      <h1>Shared with me</h1>
+      <nav class="tabs" aria-label="Shared items">
+        <a href="Shared-With-Me.html" aria-current="page">Notebooks and pages</a>
+        <a href="#shared-notes">Loose notes</a>
+      </nav>
+      <section class="shared-group" aria-labelledby="maya">
+        <h2 id="maya"><span class="avatar avatar-maya" aria-hidden="true">MC</span>Maya Chen</h2>
+        <ul class="card">
+          <li>
+            <a class="shared-row" href="Main.html">
+              <span class="item-icon notebook-icon" aria-hidden="true"></span>
+              <span class="row-text"><strong>Work</strong><span>Notebook · Can edit</span></span>
+              <span class="chip chip-new">New</span><span class="chevron" aria-hidden="true">›</span>
+            </a>
+          </li>
+          <li>
+            <a class="shared-row" href="Phone-Page.html">
+              <span class="item-icon page-icon" aria-hidden="true"></span>
+              <span class="row-text"><strong>Release checklist</strong><span>Page · Can view</span></span>
+              <span class="chip chip-changed">Changed</span><span class="chevron" aria-hidden="true">›</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+      <section class="shared-group" aria-labelledby="jordan">
+        <h2 id="jordan"><span class="avatar avatar-jordan" aria-hidden="true">JL</span>Jordan Lee</h2>
+        <ul class="card">
+          <li>
+            <a class="shared-row" href="Phone-Page.html">
+              <span class="item-icon page-icon" aria-hidden="true"></span>
+              <span class="row-text"><strong>Weekend itinerary</strong><span>Page · Can edit</span></span>
+              <span class="chevron" aria-hidden="true">›</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+    </main>
+    <main class="content loose-notes" id="shared-notes">
+      <h1>Shared with me</h1>
+      <nav class="tabs" aria-label="Shared items">
+        <a href="Shared-With-Me.html">Notebooks and pages</a>
+        <a href="#shared-notes" aria-current="page">Loose notes</a>
+      </nav>
+      <div class="card note-card">
+        <strong>Parking for Saturday</strong>
+        <p>Use the lot on the south side of the station.</p>
+        <span>Shared by Jordan Lee</span>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

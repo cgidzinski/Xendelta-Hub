@@ -115,6 +115,10 @@ export const editorSx: SxProps<Theme> = (theme: Theme) => {
       color: theme.palette.primary.main,
       borderBottom: `1px solid ${theme.palette.primary.main}`,
     },
+    "& .ProseMirror span[data-type='wikiLink'][data-locked]": {
+      color: theme.palette.text.secondary,
+      borderBottom: `1px dashed ${theme.palette.text.disabled}`,
+    },
     "& .ProseMirror span[data-type='hashtag']": { color: theme.palette.primary.main },
 
     // The hint in an empty line

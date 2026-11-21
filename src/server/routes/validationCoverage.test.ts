@@ -25,6 +25,8 @@ const BODY_EXEMPT: Record<string, string> = {
   "POST /api/xennote/pages/:id/restore": "no body: puts back the trashed page named by the path",
   "POST /api/xennote/sections/:id/restore": "no body: puts back the trashed section named by the path",
   "POST /api/xennote/pages/:id/files": "multipart upload handled by multer, not JSON",
+  "POST /api/xennote/pages/:id/share": "no body: turns on the page's public link",
+  "POST /api/xennote/pages/:id/share/rotate": "no body: replaces the page's public link",
   "POST /api/xennote/notes/:id/share": "no body: turns on the note's public link (path names the note)",
   "POST /api/xennote/notes/:id/share/rotate": "no body: replaces the note's public link (path names the note)",
   "POST /api/xennote/notebooks/:id/share": "no body: turns on the notebook's public link (path names the notebook)",

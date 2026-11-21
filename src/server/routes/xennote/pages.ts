@@ -23,6 +23,7 @@ import {
   canManagePage,
   loadPage,
   loadSection,
+  markNotebookChanged,
   notifyTree,
   pageAudience,
   serializePage,
@@ -37,7 +38,7 @@ import type { MemberRole } from "../../utils/membership";
 const URL_MINUTES = 60;
 
 /** The files a page shows, with a short-lived link to each, by id. */
-async function fileMapFor(fileIds: unknown[]) {
+export async function fileMapFor(fileIds: unknown[]) {
   const ids = fileIds.map(String);
   if (ids.length === 0) return {};
   const [rows, urls, thumbs] = await Promise.all([
@@ -67,7 +68,13 @@ export async function pageDetail(page: PageDoc, notebook: NotebookDoc, role: Mem
   ]);
   // Someone who was added to this page alone sees the page, not the notebook around it.
   const member = canView(notebook.toObject(), uid);
+  const children = !member
+    ? await XenNotePage.find({ parent_id: page._id, archived: { $ne: true } }, "title")
+        .sort({ order: 1, _id: 1 })
+        .lean()
+    : [];
   return {
+    children: children.map((p) => ({ id: String(p._id), title: p.title })),
     page: serializePage(page, uid, role, canManagePage(notebook.toObject(), uid)),
     doc: body?.doc ?? ensureBlockIds(emptyDoc()),
     files: await fileMapFor(page.files),
@@ -111,6 +118,7 @@ export function registerPageRoutes(app: any) {
         updated_by: uid,
       });
       await XenNotePageBody.create({ page_id: page._id, doc: ensureBlockIds(emptyDoc()), rev: 0 });
+      await markNotebookChanged(notebook);
       notifyTree(
         notebook,
         parent?.members.map((m) => m.user_id),
@@ -120,9 +128,10 @@ export function registerPageRoutes(app: any) {
   );
 
   app.get("/api/xennote/pages/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
+    const viewed_at = new Date();
     const uid = callerId(req);
     const { page, notebook, role } = await loadPage(req, req.params.id as string, "view");
-    res.json({ status: true, data: await pageDetail(page, notebook, role, uid) });
+    res.json({ status: true, data: { ...(await pageDetail(page, notebook, role, uid)), viewed_at } });
   });
 
   // Name, icon, colour, archive, tags and aliases. The text is saved on its own (below).
@@ -145,6 +154,7 @@ export function registerPageRoutes(app: any) {
       }
       page.updated_by = uid;
       await page.save();
+      await markNotebookChanged(notebook);
       notifyTree(notebook, pageAudience(notebook, page, parent));
       res.json({ status: true, message: "Saved", data: await pageDetail(page, notebook, role, uid) });
     },
@@ -163,6 +173,7 @@ export function registerPageRoutes(app: any) {
 
       const { rev, conflict } = await writePageBody(page, doc, uid, base_rev);
 
+      await markNotebookChanged(notebook);
       SocketManager.getInstance().notifyXenNotePageUpdate(pageAudience(notebook, page, parent), {
         pageId: page.id as string,
         notebookId: notebook.id as string,
@@ -213,6 +224,7 @@ export function registerPageRoutes(app: any) {
       await page.save();
       // Its sub-pages go with it.
       if (sectionChanged) await XenNotePage.updateMany({ parent_id: page._id }, { $set: { section_id: sectionId } });
+      await markNotebookChanged(notebook);
       notifyTree(notebook, pageAudience(notebook, page, oldParent));
       res.json({ status: true, message: "Moved", data: await pageDetail(page, notebook, role, uid) });
     },
@@ -242,6 +254,7 @@ export function registerPageRoutes(app: any) {
     const { page, notebook, parent } = await loadPage(req, req.params.id as string, "manage");
     const audience = pageAudience(notebook, page, parent);
     await trashPage(page._id, callerId(req));
+    await markNotebookChanged(notebook);
     notifyTree(notebook, audience);
     res.json({ status: true, message: "Page deleted" });
   });

@@ -76,6 +76,10 @@ export function pageAudience(notebook: NotebookDoc, page: PageDoc, parent: PageD
 }
 
 /** Tell the people who can see a notebook that its sections or pages changed. */
+export async function markNotebookChanged(notebook: NotebookDoc) {
+  await XenNotebook.updateOne({ _id: notebook._id }, { $max: { content_updated_at: new Date() } });
+}
+
 export function notifyTree(notebook: NotebookDoc, extra: string[] = []) {
   const ids = [...new Set([...notebook.members.map((m) => m.user_id), ...extra])];
   SocketManager.getInstance().notifyXenNoteNotebookUpdate(ids, notebook.id as string);
