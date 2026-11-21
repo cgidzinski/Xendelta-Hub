@@ -7,6 +7,7 @@ import AddIcon from "@mui/icons-material/Add";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSnackbar } from "notistack";
 import { useTitle } from "../../../hooks/useTitle";
+import { useRecordLink } from "../../../hooks/useRecordLink";
 import {
   useCreateRoutine,
   useRoutineSettings,
@@ -40,7 +41,7 @@ export default function XenRoutine() {
 
   const { profile } = useUserProfile();
   const { settings } = useRoutineSettings();
-  const { routines } = useRoutines();
+  const { routines, refetch: refetchRoutines } = useRoutines();
   // Archived routines are tucked away, so they don't count.
   const activeCount = routines.filter((r) => !r.archived).length;
   const saveSettings = useSaveRoutineSettings();
@@ -71,6 +72,15 @@ export default function XenRoutine() {
     setTemplate(null);
     setDialogOpen(true);
   };
+  useRecordLink(
+    "routine",
+    async (id) => {
+      const { data } = await refetchRoutines({ cancelRefetch: false, throwOnError: true });
+      return data?.find((routine) => routine._id === id);
+    },
+    openEdit,
+    "That routine isn't available anymore.",
+  );
   const openDuplicate = (routine: Routine) => {
     setEditing(null);
     setTemplate(routine);

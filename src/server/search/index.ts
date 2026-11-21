@@ -158,7 +158,7 @@ const links: Source = async (uid, _q, rx) => {
       id: String(l._id),
       title: l.name,
       subtitle: clip(l.url, 70),
-      link: "/internal/xenlink",
+      link: `/internal/xenlink?link=${l._id}`,
     })),
   };
 };
@@ -198,7 +198,7 @@ const routines: Source = async (uid, _q, rx) => {
       id: String(r._id),
       title: r.name,
       subtitle: r.category || undefined,
-      link: "/internal/xenroutine/routines",
+      link: `/internal/xenroutine/routines?routine=${r._id}`,
     })),
   };
 };
@@ -245,7 +245,7 @@ const splits: Source = async (uid, _q, rx) => {
         id: String(e.expense._id),
         title: e.expense.title,
         subtitle: `${e.expense.amount} ${e.expense.currency} · ${e.name}`,
-        link: `/internal/xensplit/groups/${e._id}/expenses`,
+        link: `/internal/xensplit/groups/${e._id}/expenses?expense=${e.expense._id}`,
       })),
     ].slice(0, SEARCH_PER_SOURCE),
   };
@@ -280,7 +280,7 @@ const budgets: Source = async (uid, _q, rx) => {
         id: String(i._id),
         title: i.description,
         subtitle: `${i.amount} ${i.currency ?? ""} · ${names.get(String(i.book_id)) ?? ""}`.trim(),
-        link: `/internal/xenbudget/books/${i.book_id}/items`,
+        link: `/internal/xenbudget/books/${i.book_id}/items?item=${i._id}`,
       })),
     ].slice(0, SEARCH_PER_SOURCE),
   };
