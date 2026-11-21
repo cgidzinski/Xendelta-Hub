@@ -15,6 +15,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Node as PMNode, type Schema } from "@tiptap/pm/model";
 import StarterKit from "@tiptap/starter-kit";
+import { pageQuerySchema } from "./properties";
 import { isSafeUrl } from "./notes";
 import { MAX_PAGE_DOC_BYTES } from "./pages";
 
@@ -159,6 +160,36 @@ function blockLinkExtension(name: "blockRef" | "blockEmbed", inline: boolean) {
 export const BlockRef = blockLinkExtension("blockRef", true);
 export const BlockEmbed = blockLinkExtension("blockEmbed", false);
 
+export const PageQuery = TipTapNode.create({
+  name: "pageQuery",
+  group: "block",
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      query: {
+        default: null,
+        parseHTML: (el) => {
+          try {
+            const raw = (el as unknown as { getAttribute(name: string): string | null }).getAttribute("data-query");
+            const parsed = pageQuerySchema.safeParse(JSON.parse(raw ?? "null"));
+            return parsed.success ? parsed.data : null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: (attrs) => ({ "data-query": JSON.stringify(attrs.query) }),
+      },
+    };
+  },
+  parseHTML: () => [{ tag: "div[data-type='pageQuery']" }],
+  renderHTML: ({ HTMLAttributes }) => [
+    "div",
+    mergeAttributes(HTMLAttributes, { "data-type": "pageQuery" }),
+    "Page query",
+  ],
+});
+
 /** Blocks that get a stable `id`. Containers (lists, table rows and cells) don't: their items do. */
 export const BLOCK_ID_TYPES = [
   "paragraph",
@@ -174,6 +205,7 @@ export const BLOCK_ID_TYPES = [
   "bookmark",
   "horizontalRule",
   "blockEmbed",
+  "pageQuery",
 ] as const;
 
 /**
@@ -208,6 +240,7 @@ export function createPageExtensions(): Extensions {
     Hashtag,
     BlockRef,
     BlockEmbed,
+    PageQuery,
     UniqueID.configure({ attributeName: "id", types: [...BLOCK_ID_TYPES] }),
   ];
 }

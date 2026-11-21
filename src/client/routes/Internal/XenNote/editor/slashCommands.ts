@@ -35,6 +35,8 @@ export function runSlashItem(id: SlashItemId, editor: Editor, range: Range, ctx:
       return void chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
     case "divider":
       return void chain.setHorizontalRule().run();
+    case "pageQuery":
+      return void chain.insertContent({ type: "pageQuery" }).run();
     case "blockRef":
     case "blockEmbed":
       chain.run();

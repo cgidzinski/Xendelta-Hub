@@ -16,6 +16,7 @@ import type { SlashState } from "./SlashCommand";
 import type { SlashItemId } from "./slashItems";
 
 const ICONS: Record<SlashItemId, ReactElement> = {
+  pageQuery: <ViewAgendaOutlinedIcon />,
   blockRef: <LinkIcon />,
   blockEmbed: <ViewAgendaOutlinedIcon />,
   heading1: <TitleIcon />,

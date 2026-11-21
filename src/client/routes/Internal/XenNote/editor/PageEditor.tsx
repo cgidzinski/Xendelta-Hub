@@ -25,6 +25,7 @@ import {
   PageFilesContext,
   WikiLinkWithView,
 } from "./nodeViews";
+import { PageQueryView } from "./QueryBlockView";
 import BlockPicker from "./BlockPicker";
 import { BlockEmbedView, BlockRefView } from "./BlockViews";
 import LinkMenu from "./LinkMenu";
@@ -51,6 +52,7 @@ const defaultLinks: PageLinksValue = {
 
 /** The shared page nodes, with the ones that show a stored file or a link drawn by React. */
 const NODE_VIEWS: Record<string, unknown> = {
+  pageQuery: PageQueryView,
   blockRef: BlockRefView,
   blockEmbed: BlockEmbedView,
   imageBlock: ImageBlockWithView,
@@ -242,7 +244,7 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
   const filesValue = useMemo(() => ({ files, onOpenImage: setLightbox }), [files]);
 
   return (
-    <PageLinksContext.Provider value={links ?? defaultLinks}>
+    <PageLinksContext.Provider value={{ ...(links ?? defaultLinks), sourcePageId: pageId }}>
       <PageFilesContext.Provider value={filesValue}>
         <Box sx={editorSx}>
           {editable && editor && (
