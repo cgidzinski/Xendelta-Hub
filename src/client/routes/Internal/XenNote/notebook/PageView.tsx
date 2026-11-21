@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Box,
   Button,
@@ -112,6 +112,7 @@ interface PageViewProps {
   heading?: string;
   /** Shown on phones: back to the list of pages. */
   onBack?: () => void;
+  notebookTools?: ReactNode;
   /** The page was deleted, or can't be opened any more. */
   onGone: () => void;
   /** What links and tags in the text do, and where "linked from" opens a page. */
@@ -119,7 +120,7 @@ interface PageViewProps {
 }
 
 /** One page: its title, tags, actions and text. */
-export default function PageView({ pageId, heading, onBack, onGone, links }: PageViewProps) {
+export default function PageView({ pageId, heading, onBack, notebookTools, onGone, links }: PageViewProps) {
   const { data, isPending, isError, error, refetch } = useXenNotePage(pageId);
   const page = data?.page;
   const actions = useNotebookPageActions(page?.notebook_id ?? "");
@@ -246,6 +247,7 @@ export default function PageView({ pageId, heading, onBack, onGone, links }: Pag
                 <ArrowBackIcon />
               </IconButton>
             )}
+            {notebookTools}
             {!heading && (
               <Typography
                 variant="body2"

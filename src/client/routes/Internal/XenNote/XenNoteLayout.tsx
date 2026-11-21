@@ -53,7 +53,7 @@ function XenNoteLayoutContent() {
         <Drawer
           open={railOpen}
           onClose={() => setRailOpen(false)}
-          slotProps={{ paper: { sx: { width: 280, p: 1.5, pt: 9, overflow: "hidden" } } }}
+          slotProps={{ paper: { sx: { width: "75vw", p: 1.5, pt: 9, overflow: "hidden" } } }}
         >
           {rail}
         </Drawer>
