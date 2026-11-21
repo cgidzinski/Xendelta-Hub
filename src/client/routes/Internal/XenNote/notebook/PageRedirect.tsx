@@ -17,7 +17,7 @@ export default function PageRedirect() {
 
   return (
     <PageContainer>
-      <PageHeader title="Page" actions={<NoteNavButton />} />
+      <PageHeader title="Page" leading={<NoteNavButton />} />
       {isPending ? (
         <DetailSkeleton height={360} />
       ) : (

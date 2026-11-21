@@ -29,6 +29,7 @@ export default function SectionOptions({ section, onRename, onColor, onDelete }:
           aria-expanded={!!menu}
           size="small"
           onClick={(event) => setMenu(event.currentTarget)}
+          sx={{ width: 40, height: 40, borderRadius: 1 }}
         >
           <MoreVertIcon fontSize="small" />
         </IconButton>

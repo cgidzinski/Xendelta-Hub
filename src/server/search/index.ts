@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { escapeRegex } from "@shared/regex";
 import { User } from "../models/user";
-import { XenNote } from "../models/xenNote";
+import { XenNote, XenNotebook } from "../models/xenNote";
 import { XenDriveFile } from "../models/xendriveFile";
 import { XenDriveFolder } from "../models/xendriveFolder";
 import { XenLink } from "../models/xenlink";
@@ -94,6 +94,19 @@ const notes: Source = async (uid, q, rx) => {
         link: `/internal/xennote?note=${n._id}`,
       };
     }),
+  };
+};
+
+// Notebooks the person is in, by name.
+const notebooks: Source = async (uid, _q, rx) => {
+  const found = await XenNotebook.find({ "members.user_id": uid, name: rx }, "name")
+    .sort({ name: 1 })
+    .limit(SEARCH_PER_SOURCE)
+    .lean();
+  return {
+    kind: "notebooks",
+    label: "Notebooks",
+    hits: found.map((b) => ({ id: String(b._id), title: b.name, link: `/internal/xennote/b/${b._id}` })),
   };
 };
 
@@ -273,7 +286,7 @@ const budgets: Source = async (uid, _q, rx) => {
   };
 };
 
-const SOURCES: Source[] = [notes, pages, files, recipes, splits, budgets, routines, links, people];
+const SOURCES: Source[] = [notes, notebooks, pages, files, recipes, splits, budgets, routines, links, people];
 
 /** Search every source for `query` (at least SEARCH_MIN characters) on behalf of `uid`. Empty groups are left out. */
 export async function searchEverything(uid: string, query: string): Promise<SearchGroup[]> {

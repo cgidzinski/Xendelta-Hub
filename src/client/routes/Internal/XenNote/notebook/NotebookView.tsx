@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import MenuIcon from "@mui/icons-material/Menu";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
@@ -14,7 +15,7 @@ import {
   AvatarGroup,
   Box,
   Button,
-  Chip,
+  Divider,
   IconButton,
   Menu,
   MenuItem,
@@ -32,13 +33,13 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import PublicIcon from "@mui/icons-material/Public";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { closeSnackbar, useSnackbar } from "notistack";
 import UserAvatar from "../../../../components/user/UserAvatar";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import EmptyState from "../../../../components/ui/EmptyState";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import PageHeader from "../../../../components/ui/PageHeader";
+import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { getRawStored, setRawStored } from "../../../../hooks/useLocalStorageState";
@@ -51,18 +52,17 @@ import NoteNavButton from "../components/NoteNavButton";
 import NotebookDialog from "../components/NotebookDialog";
 import type { PageLinksValue } from "../editor/pageLinksContext";
 import PageList from "./PageList";
-import SearchResults, { SearchBox } from "./NotebookSearch";
 import TagPage from "./TagPage";
 import TagsMenu from "./TagsMenu";
 import PageView from "./PageView";
 import SectionNameDialog from "./SectionNameDialog";
 import SectionList from "./SectionList";
-import SectionOptions from "./SectionOptions";
 import { activeSectionId, pagesInSection, pageTitle } from "./pageTree";
 import { lazyPage } from "../../../../utils/lazyPage";
 
 const BOARD = "/internal/xennote";
-const PAGES_SIDEBAR_WIDTH = 320;
+/** The sections and pages columns, the same width as the rail so the three bars line up. */
+const SIDEBAR_WIDTH = 256;
 const NOTEBOOK_CONTENT_WIDTH = 1200;
 const TasksPane = lazyPage(() => import("./TasksView"));
 const GraphPane = lazyPage(() => import("./GraphView"));
@@ -71,13 +71,14 @@ const lastPageKey = (userId: string, notebookId: string, sectionId: string) =>
 
 /**
  * A notebook as sections and pages: the rail, the notebook's name and people, the section list, the pages of the open
- * section, and the open page. On a phone it is a drill-down: the list of pages, then a page full screen.
+ * section, and the open page. On a phone the sections and pages are the drawer's tree, and this screen is the page.
  */
 export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   const { notebookId = "", pageId, tag: tagParam } = useParams();
   const tag = tagParam ? decodeURIComponent(tagParam) : undefined;
   const navigate = useNavigate();
   const location = useLocation();
+  const openNavigation = useOutletContext<() => void>();
   const [searchParams, setSearchParams] = useSearchParams();
   // A second page open beside the first (desktop): /internal/xennote/b/<id>/p/<id>?beside=<id>.
   const beside = searchParams.get("beside");
@@ -103,12 +104,16 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   const [templateDialog, setTemplateDialog] = useState<"create" | "journal" | null>(null);
   const [toolBusy, setToolBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [query, setQuery] = useState("");
   const [sectionDialog, setSectionDialog] = useState<{ section: XenNoteSection | null } | null>(null);
   const [notebookDialog, setNotebookDialog] = useState<{ tab?: "general" | "people" | "link" } | null>(null);
 
   const sections = tree?.sections ?? [];
   const pages = useMemo(() => tree?.pages ?? [], [tree]);
+  const pageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const page of pages) if (!page.archived) counts.set(page.section_id, (counts.get(page.section_id) ?? 0) + 1);
+    return counts;
+  }, [pages]);
   const lastPages = useRef(new Map<string, string>());
   const openPageEntry = pages.find((page) => page.id === pageId);
   const openPageSectionId = openPageEntry?.section_id;
@@ -126,8 +131,8 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   }, [activeTool, notebookId, openPageSectionId, pageId, user.id]);
   const activeId = activeSectionId(sections, pages, pageId, chosen);
   const activeSection = sections.find((s) => s.id === activeId);
-  const navigationSection = sections.find((section) => section.id === chosen) ?? (pageId ? activeSection : undefined);
-  const sidebarSection = searchParams.get("nav") === "sections" ? undefined : navigationSection;
+  // The sections and pages columns are a desktop layout; a phone browses the same tree in the drawer.
+  const sidebarSection = wide ? activeSection : undefined;
   const pageCreationSection = sidebarSection ?? activeSection;
   const templateSection = sections.find((s) => s.kind === "templates");
   const templates = pages.filter(
@@ -144,7 +149,6 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   const openPage = (id: string) => {
     const params = new URLSearchParams(pageParams);
     const sectionId = pages.find((page) => page.id === id)?.section_id;
-    params.delete("nav");
     if (sectionId) params.set("section", sectionId);
     else params.delete("section");
     navigate({ pathname: `${notebookPath}/p/${id}`, search: params.toString() });
@@ -165,7 +169,6 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   const openSection = (id: string) => {
     const params = new URLSearchParams(pageParams);
     params.set("section", id);
-    params.delete("nav");
     navigate({ pathname: notebookPath, search: params.toString() });
   };
   const showSectionPages = (id: string) => {
@@ -180,13 +183,6 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
     }
     const params = new URLSearchParams(searchParams);
     params.set("section", id);
-    params.delete("nav");
-    setSearchParams(params);
-  };
-  const showSections = () => {
-    setQuery("");
-    const params = new URLSearchParams(searchParams);
-    params.set("nav", "sections");
     setSearchParams(params);
   };
   const openTool = (next: "tasks" | "graph") => {
@@ -369,8 +365,30 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
       }
       subtitle={`${pages.length} ${pages.length === 1 ? "page" : "pages"}`}
       mb={1.5}
+      leading={<NoteNavButton />}
       actions={
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <>
+          <AvatarGroup
+            max={4}
+            sx={{ display: { xs: "none", sm: "flex" }, "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}
+          >
+            {notebook.members.map((m) => (
+              <UserAvatar key={m.user_id} user={m}>
+                {m.username.slice(0, 1).toUpperCase()}
+              </UserAvatar>
+            ))}
+          </AvatarGroup>
+          {notebook.my_role === "owner" && (
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<PersonAddAltOutlinedIcon />}
+              endIcon={notebook.share?.enabled ? <PublicIcon /> : undefined}
+              onClick={() => setNotebookDialog({ tab: "people" })}
+            >
+              Share
+            </Button>
+          )}
           {canEdit && pageCreationSection && (
             <Button
               variant="contained"
@@ -379,26 +397,6 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
               onClick={() => void createPage()}
             >
               New page
-            </Button>
-          )}
-          <AvatarGroup max={4} sx={{ "& .MuiAvatar-root": { width: 28, height: 28, fontSize: 13 } }}>
-            {notebook.members.map((m) => (
-              <UserAvatar key={m.user_id} user={m}>
-                {m.username.slice(0, 1).toUpperCase()}
-              </UserAvatar>
-            ))}
-          </AvatarGroup>
-          {notebook.share?.enabled && (
-            <Chip size="small" color="primary" variant="outlined" icon={<PublicIcon />} label="Link on" />
-          )}
-          {notebook.my_role === "owner" && (
-            <Button
-              variant="outlined"
-              color="inherit"
-              startIcon={<PersonAddAltOutlinedIcon />}
-              onClick={() => setNotebookDialog({ tab: "people" })}
-            >
-              Share
             </Button>
           )}
           <Tooltip title="Notebook tools">
@@ -435,14 +433,17 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
             >
               Export notebook as Markdown
             </MenuItem>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem
+              onClick={() => {
+                setOptionsMenu(null);
+                setNotebookDialog({});
+              }}
+            >
+              Notebook settings
+            </MenuItem>
           </Menu>
-          <Tooltip title="Notebook settings">
-            <IconButton aria-label="Notebook settings" onClick={() => setNotebookDialog({})}>
-              <SettingsOutlinedIcon />
-            </IconButton>
-          </Tooltip>
-          <NoteNavButton />
-        </Box>
+        </>
       }
     />
   );
@@ -469,82 +470,91 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
     />
   );
 
-  const sidebarHeader = sidebarSection && (
-    <Box sx={{ flexShrink: 0 }}>
-      <Box sx={{ px: 1.5, py: 0.5, bgcolor: "action.hover", borderBottom: 1, borderColor: "divider" }}>
-        <Button
-          fullWidth
-          color="inherit"
-          aria-label="Back to sections"
-          startIcon={<ArrowBackIcon />}
-          onClick={showSections}
-          sx={{ justifyContent: "flex-start", minHeight: 44, px: 1, textTransform: "none" }}
-        >
-          Back
-        </Button>
-      </Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 48, pl: 2.5, pr: 1.5, pt: 1 }}>
-        <Typography variant="subtitle1" noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 600 }}>
-          {sidebarSection.name}
-        </Typography>
-        {canEdit && (
-          <SectionOptions
-            key={sidebarSection.id}
-            section={sidebarSection}
-            onRename={() => setSectionDialog({ section: sidebarSection })}
-            onColor={(color) => actions.updateSection.mutate({ id: sidebarSection.id, color }, { onError: fail })}
-            onDelete={() => void deleteSection(sidebarSection)}
-          />
-        )}
-      </Box>
-    </Box>
+  const sectionList = (
+    <SectionList
+      key={notebookId}
+      sections={sections}
+      pageCounts={pageCounts}
+      activeId={activeSection?.id ?? null}
+      onSelect={showSectionPages}
+      canEdit={canEdit}
+      onRename={(section) => setSectionDialog({ section })}
+      onColor={(section, color) => actions.updateSection.mutate({ id: section.id, color }, { onError: fail })}
+      onDelete={(section) => void deleteSection(section)}
+      onReorder={(id, position) => actions.moveSection.mutate({ id, ...position }, { onError: fail })}
+      reordering={actions.moveSection.isPending}
+    />
   );
 
-  // Above the list: search, and the notebook's tags. A search shows its results in place of the list.
-  const listColumn = (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <SearchBox value={query} onChange={setQuery} />
-        </Box>
+  // A column header sits level with the rail's search box, above a rule inset from both sides.
+  const columnHeaderSx = {
+    display: "flex",
+    alignItems: "center",
+    gap: 0.5,
+    pl: 3.75,
+    pr: 2,
+    pt: 2,
+    minHeight: 56,
+    flexShrink: 0,
+  } as const;
+  const columnRule = <Box sx={{ height: "1px", bgcolor: "divider", mx: 2, flexShrink: 0 }} />;
+
+  const sectionsHeader = (
+    <>
+      <Box sx={columnHeaderSx}>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, flex: 1 }}>
+          Sections
+        </Typography>
         <TagsMenu tags={tagCounts} onOpen={openTag} />
+        {canEdit && (
+          <Tooltip title="Add a section">
+            <IconButton aria-label="Add a section" size="small" onClick={() => setSectionDialog({ section: null })}>
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
-      {query.trim() ? (
-        <SearchResults
-          query={query}
-          notebookId={notebookId}
-          onOpen={(hit) => {
-            setQuery("");
-            if (hit.in_notebook && hit.notebook_id === notebookId) openPage(hit.id);
-            else navigate(hit.in_notebook ? `${BOARD}/b/${hit.notebook_id}/p/${hit.id}` : `${BOARD}/p/${hit.id}`);
-          }}
-        />
-      ) : sidebarSection ? (
-        <>
-          {sidebarSection.kind === "journal" && (canEdit || pages.some((p) => p.journal_date === today)) && (
-            <Button startIcon={<TodayOutlinedIcon />} onClick={() => void openToday()} disabled={toolBusy}>
-              Today's page
-            </Button>
-          )}
-          {canEdit && sidebarSection.kind === "normal" && !!templates.length && (
-            <Button onClick={() => setTemplateDialog("create")}>From template</Button>
-          )}
-          {list}
-        </>
-      ) : sections.length > 0 ? (
-        <SectionList
-          key={notebookId}
-          sections={sections}
-          activeId={navigationSection?.id ?? null}
-          onSelect={showSectionPages}
-          canEdit={canEdit}
-          onAdd={() => setSectionDialog({ section: null })}
-          onReorder={(id, position) => actions.moveSection.mutate({ id, ...position }, { onError: fail })}
-          reordering={actions.moveSection.isPending}
-        />
-      ) : null}
-    </Box>
+      {columnRule}
+    </>
   );
+
+  const pagesHeader = (
+    <>
+      <Box sx={columnHeaderSx}>
+        <Typography variant="caption" sx={{ ...sectionLabelSx, flex: 1 }}>
+          Pages
+        </Typography>
+        {canEdit && (
+          <Tooltip title="Add a page">
+            <IconButton
+              aria-label="Add a page"
+              size="small"
+              disabled={actions.createPage.isPending || toolBusy}
+              onClick={() => void createPage()}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+      {columnRule}
+    </>
+  );
+
+  // The open section's pages, with its quick actions above them.
+  const pagesColumn = sidebarSection ? (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      {sidebarSection.kind === "journal" && (canEdit || pages.some((p) => p.journal_date === today)) && (
+        <Button startIcon={<TodayOutlinedIcon />} onClick={() => void openToday()} disabled={toolBusy}>
+          Today's page
+        </Button>
+      )}
+      {canEdit && sidebarSection.kind === "normal" && !!templates.length && (
+        <Button onClick={() => setTemplateDialog("create")}>From template</Button>
+      )}
+      {list}
+    </Box>
+  ) : null;
 
   const toolPane =
     activeTool === "tasks" ? (
@@ -608,8 +618,8 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
       (tag ? (
         <Box>
           {!wide && (
-            <Button sx={{ m: 1 }} onClick={closePage}>
-              Back to the pages
+            <Button sx={{ m: 1 }} startIcon={<ArrowBackIcon />} onClick={closePage}>
+              Back
             </Button>
           )}
           <TagPage
@@ -633,25 +643,49 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
           links={links}
         />
       ) : wide ? (
+        !sidebarSection ? (
+          <EmptyState icon={<NotesIcon />} title="Pick a section" description="Choose a section from the list." />
+        ) : pages.some((page) => page.section_id === sidebarSection.id) ? (
+          <EmptyState
+            icon={<NotesIcon />}
+            title="Pick a page"
+            description={canEdit ? "Open a page from the list, or start a new one." : undefined}
+          />
+        ) : (
+          <EmptyState
+            icon={<NotesIcon />}
+            title="No pages yet"
+            description="Add a page to this section."
+            action={
+              canEdit ? (
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => void createPage()}>
+                  New page
+                </Button>
+              ) : undefined
+            }
+          />
+        )
+      ) : (
         <EmptyState
           icon={<NotesIcon />}
-          title={
-            !sidebarSection
-              ? "Pick a section"
-              : pages.some((page) => page.section_id === sidebarSection.id)
-                ? "Pick a page"
-                : "No pages yet"
+          title="Pick a page"
+          description="Notebooks, sections and pages are in the menu."
+          action={
+            <Button startIcon={<MenuIcon />} onClick={openNavigation}>
+              Browse pages
+            </Button>
           }
-          description={sidebarSection && canEdit ? "Open a page from the list, or start a new one." : undefined}
         />
-      ) : null);
+      ));
 
     body = (
       <Box
         sx={{
           display: { xs: "flex", md: "grid" },
           flexDirection: "column",
-          gridTemplateColumns: `${PAGES_SIDEBAR_WIDTH}px minmax(0, 1fr)`,
+          gridTemplateColumns: sidebarSection
+            ? `${SIDEBAR_WIDTH}px ${SIDEBAR_WIDTH}px minmax(0, 1fr)`
+            : `${SIDEBAR_WIDTH}px minmax(0, 1fr)`,
           gridTemplateRows: "minmax(0, 1fr)",
           flex: 1,
           minHeight: 0,
@@ -660,7 +694,7 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
         {wide && (
           <Box
             component="aside"
-            aria-label="Notebook pages"
+            aria-label="Notebook sections"
             sx={{
               gridArea: "1 / 1",
               display: "flex",
@@ -670,13 +704,36 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
               borderColor: "divider",
             }}
           >
-            {sidebarHeader}
+            {sectionsHeader}
             <Box
-              key={sidebarSection?.id ?? "sections"}
+              key={`sections:${notebookId}`}
               data-list-drag-scroll
-              sx={{ flex: 1, minHeight: 0, p: 1.5, overflowY: "auto" }}
+              sx={{ flex: 1, minHeight: 0, p: 2, pt: 0.75, overflowY: "auto" }}
             >
-              {listColumn}
+              {sectionList}
+            </Box>
+          </Box>
+        )}
+        {wide && sidebarSection && (
+          <Box
+            component="aside"
+            aria-label="Notebook pages"
+            sx={{
+              gridArea: "1 / 2",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              borderRight: 1,
+              borderColor: "divider",
+            }}
+          >
+            {pagesHeader}
+            <Box
+              key={sidebarSection.id}
+              data-list-drag-scroll
+              sx={{ flex: 1, minHeight: 0, p: 2, pt: 0.75, overflowY: "auto" }}
+            >
+              {pagesColumn}
             </Box>
           </Box>
         )}
@@ -685,17 +742,19 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
         {wide ? (
           <Box
             sx={{
-              gridArea: "1 / 2",
+              gridArea: sidebarSection ? "1 / 3" : "1 / 2",
               display: "flex",
               flexDirection: "column",
               width: "100%",
               minHeight: 0,
               mx: "auto",
-              ...(pageHeading && {
-                maxWidth: NOTEBOOK_CONTENT_WIDTH,
-                borderInline: "1px solid",
-                borderColor: "divider",
-              }),
+              ...(pageHeading || (showNotebook && !activeTool && !tag)
+                ? {
+                    maxWidth: NOTEBOOK_CONTENT_WIDTH,
+                    borderInline: "1px solid",
+                    borderColor: "divider",
+                  }
+                : null),
             }}
           >
             <Box sx={{ flexShrink: 0 }}>{mainHeader}</Box>
@@ -704,9 +763,9 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
                 component="section"
                 aria-label="Notebook content"
                 key={`${notebookId}:${activeTool ?? ""}:${pageId ?? ""}:${tag ?? ""}`}
-                sx={{ flex: 1, minWidth: 0, overflowY: "auto" }}
+                sx={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}
               >
-                <Box sx={{ maxWidth: 960, mx: "auto" }}>{pane}</Box>
+                {pane}
               </Box>
               {beside && !toolPane && (
                 <Box
@@ -754,13 +813,9 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
               )}
             </Box>
           </Box>
-        ) : detailOpen || noSections ? (
-          pane
         ) : (
-          <>
-            {sidebarHeader}
-            <Box sx={{ p: 1.5 }}>{listColumn}</Box>
-          </>
+          // A phone browses sections and pages in the drawer's tree, so there is nothing to list here.
+          pane
         )}
       </Box>
     );

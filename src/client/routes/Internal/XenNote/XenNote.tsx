@@ -274,24 +274,18 @@ export default function XenNote() {
         <PageHeader
           title={scopeTitle}
           mb={2.5}
+          leading={<NoteNavButton />}
           actions={
-            <>
-              {canWrite && (
-                <>
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => startNote("text")}>
-                    New note
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<CheckBoxOutlinedIcon />}
-                    onClick={() => startNote("checklist")}
-                  >
-                    New list
-                  </Button>
-                </>
-              )}
-              <NoteNavButton />
-            </>
+            canWrite && (
+              <>
+                <Button variant="outlined" startIcon={<CheckBoxOutlinedIcon />} onClick={() => startNote("checklist")}>
+                  New list
+                </Button>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => startNote("text")}>
+                  New note
+                </Button>
+              </>
+            )
           }
         />
 

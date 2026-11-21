@@ -206,8 +206,18 @@ export default function PageView({ pageId, heading, onBack, onGone, links }: Pag
   const inlineTags = page.tags.filter((t) => !page.tags_manual.includes(t));
 
   return (
-    <Box sx={{ width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 1.5, sm: 3 } }}>
-      <Box component="article" sx={{ ...cardSx, bgcolor: "background.paper" }}>
+    <Box
+      sx={{
+        width: "100%",
+        mx: "auto",
+        px: { xs: 1.5, sm: 2.5 },
+        py: { xs: 1.5, sm: 2.5 },
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+      }}
+    >
+      <Box component="article" sx={{ ...cardSx, bgcolor: "background.paper", flexGrow: 1 }}>
         <Box
           component="header"
           sx={{

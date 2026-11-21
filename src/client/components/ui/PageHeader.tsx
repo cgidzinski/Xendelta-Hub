@@ -10,11 +10,13 @@ interface PageHeaderProps {
   actions?: ReactNode;
   /** Shows a back arrow and calls this when pressed. */
   onBack?: () => void;
+  /** An icon placed before the title, e.g. a menu button that opens the app's navigation on a phone. */
+  leading?: ReactNode;
   mb?: number;
 }
 
 /** Title, optional subtitle and actions. The one page header used across the app. */
-export default function PageHeader({ title, subtitle, actions, onBack, mb = 2.5 }: PageHeaderProps) {
+export default function PageHeader({ title, subtitle, actions, onBack, leading, mb = 2.5 }: PageHeaderProps) {
   return (
     <Box
       sx={{
@@ -32,6 +34,7 @@ export default function PageHeader({ title, subtitle, actions, onBack, mb = 2.5 
             <ArrowBackIcon />
           </IconButton>
         )}
+        {leading}
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" component="h1" sx={pageTitleSx} noWrap>
             {title}
@@ -43,7 +46,7 @@ export default function PageHeader({ title, subtitle, actions, onBack, mb = 2.5 
           )}
         </Box>
       </Box>
-      {actions && <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>{actions}</Box>}
+      {actions && <Box sx={{ display: "flex", gap: 1, alignItems: "center", ml: "auto" }}>{actions}</Box>}
     </Box>
   );
 }

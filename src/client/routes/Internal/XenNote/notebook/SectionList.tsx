@@ -1,29 +1,35 @@
-import { Box, IconButton, ListItemButton, Tooltip, Typography } from "@mui/material";
+import { Box, ListItemButton, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import AddIcon from "@mui/icons-material/Add";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import type { NoteColor } from "@shared/xennote/notes";
 import { railItemSx } from "../../../../components/ui/railStyles";
-import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import type { XenNoteSection } from "../../../../types/XenNotePage";
 import { swatchColor } from "../noteColors";
+import SectionOptions from "./SectionOptions";
 import { reorderRowSx, useListDrag } from "./useListDrag";
 
 interface SectionListProps {
   sections: XenNoteSection[];
+  /** How many non-archived pages each section holds, keyed by section id. */
+  pageCounts: ReadonlyMap<string, number>;
   activeId: string | null;
   onSelect: (id: string) => void;
   canEdit: boolean;
-  onAdd: () => void;
+  onRename: (section: XenNoteSection) => void;
+  onColor: (section: XenNoteSection, color: NoteColor) => void;
+  onDelete: (section: XenNoteSection) => void;
   onReorder: (id: string, position: { before?: string; after?: string }) => void;
   reordering: boolean;
 }
 
 export default function SectionList({
   sections,
+  pageCounts,
   activeId,
   onSelect,
   canEdit,
-  onAdd,
+  onRename,
+  onColor,
+  onDelete,
   onReorder,
   reordering,
 }: SectionListProps) {
@@ -32,20 +38,13 @@ export default function SectionList({
   const canReorder = canEdit && !reordering && sections.length > 1;
 
   return (
-    <Box component="nav" aria-label="Notebook sections" sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 0.5, minHeight: 32 }}>
-        <Typography variant="caption" sx={sectionLabelSx}>
-          Sections
+    <Box component="nav" aria-label="Notebook sections" sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+      {sections.length === 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ px: 1.75, py: 0.75 }}>
+          No sections yet
         </Typography>
-        {canEdit && (
-          <Tooltip title="Add a section">
-            <IconButton aria-label="Add a section" size="small" onClick={onAdd}>
-              <AddIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-      <Box {...listProps} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+      )}
+      <Box {...listProps} sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
         {sections.map((section) => {
           const color = swatchColor(theme, section.color);
           const dragging = drag?.id === section.id;
@@ -93,8 +92,21 @@ export default function SectionList({
                 <Typography variant="body2" noWrap sx={{ fontWeight: "inherit", flex: 1 }}>
                   {section.name}
                 </Typography>
-                <ChevronRightIcon fontSize="small" />
+                <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                  {pageCounts.get(section.id) ?? 0}
+                </Typography>
               </ListItemButton>
+              {canEdit && (
+                <Box sx={{ ml: 0.5, mr: 1, flexShrink: 0, display: "flex" }}>
+                  <SectionOptions
+                    key={section.id}
+                    section={section}
+                    onRename={() => onRename(section)}
+                    onColor={(next) => onColor(section, next)}
+                    onDelete={() => onDelete(section)}
+                  />
+                </Box>
+              )}
             </Box>
           );
         })}

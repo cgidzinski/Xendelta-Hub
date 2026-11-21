@@ -44,6 +44,8 @@ async function populate(who: U, suffix = "") {
   });
   expect(note.status, JSON.stringify(note.body)).toBe(200);
   await post(who, "/api/xennote/notes", { type: "text", title: "Other", body: "mentions a quokka in the body" });
+  const notebook = await post(who, "/api/xennote/notebooks", { name: `Quokka notebook${suffix}` });
+  expect(notebook.status, JSON.stringify(notebook.body)).toBe(200);
   const { createDriveFile } = await import("../testing/files.js");
   await createDriveFile({
     owner_id: who.user._id,
@@ -99,11 +101,13 @@ describe("searching everything", () => {
       "expenses",
       "files",
       "links",
+      "notebooks",
       "notes",
       "recipes",
       "routines",
     ]);
     expect(titles(groups, "notes").sort()).toEqual(["Other", "Quokka note"]);
+    expect(titles(groups, "notebooks")).toEqual(["Quokka notebook"]);
     expect(titles(groups, "files")).toEqual(["quokka.png"]);
     expect(titles(groups, "recipes")).toEqual(["Quokka stew"]);
     expect(titles(groups, "routines")).toEqual(["Feed the quokka"]);

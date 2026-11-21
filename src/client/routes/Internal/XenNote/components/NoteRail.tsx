@@ -1,11 +1,10 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useMatch, useSearchParams, type To } from "react-router-dom";
-import { Badge, Box, IconButton, ListItemButton, Tooltip, Typography } from "@mui/material";
+import { Badge, Box, ListItemButton, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import NotesIcon from "@mui/icons-material/Notes";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
@@ -17,7 +16,9 @@ import { useXenNotebooks } from "../../../../hooks/xennote/useXenNote";
 import { useSharedXenNoteItems } from "../../../../hooks/xennote/usePageSharing";
 import { useLocalStorageState } from "../../../../hooks/useLocalStorageState";
 import { swatchColor } from "../noteColors";
-import { useListDrag } from "../notebook/useListDrag";
+import { reorderRowSx, useListDrag, type ReorderRowProps } from "../notebook/useListDrag";
+import NoteRailSearch from "./NoteRailSearch";
+import NoteRailTree from "./NoteRailTree";
 
 const BOARD = "/internal/xennote";
 const railGroupSx = { display: "flex", flexDirection: "column", gap: railPanelSx.gap } as const;
@@ -38,6 +39,8 @@ function RailLink({
   selected,
   onClick,
   indicator,
+  reorder,
+  dragging,
 }: {
   icon: ReactNode;
   text: string;
@@ -45,6 +48,8 @@ function RailLink({
   selected: boolean;
   onClick: () => void;
   indicator?: ReactNode;
+  reorder?: ReorderRowProps;
+  dragging?: boolean;
 }) {
   return (
     <ListItemButton
@@ -53,7 +58,8 @@ function RailLink({
       selected={selected}
       aria-current={selected ? "page" : undefined}
       onClick={onClick}
-      sx={railItemSx}
+      {...reorder}
+      sx={{ ...railItemSx, ...(reorder && reorderRowSx(dragging ?? false)) }}
     >
       <Box sx={{ display: "flex", alignItems: "center", width: 20, justifyContent: "center", flexShrink: 0 }}>
         {icon}
@@ -70,10 +76,13 @@ export default function NoteRail({
   userId,
   onNavigate,
   onNewNotebook,
+  variant = "list",
 }: {
   userId: string;
   onNavigate: () => void;
   onNewNotebook: () => void;
+  /** "tree" (a phone drawer): notebooks open to their sections and pages in place. "list" (desktop): flat, draggable. */
+  variant?: "list" | "tree";
 }) {
   const theme = useTheme();
   const pathname = useLocation().pathname.replace(/\/$/, "");
@@ -102,7 +111,7 @@ export default function NoteRail({
     ids.splice(index + (before ? 0 : 1), 0, id);
     setOrder(ids);
   };
-  const { listRef, drag, start, move, drop, cancel } = useListDrag("data-notebook-row", reorder);
+  const { listProps, drag, getRowProps } = useListDrag("data-notebook-row", reorder);
   const { data: shared = [] } = useSharedXenNoteItems();
   const sharedStatus = new Map(shared.flatMap(({ items }) => items.map((item) => [item.id, item.status])));
   const toolLink = (next: string, fallback: string) => {
@@ -118,6 +127,9 @@ export default function NoteRail({
       aria-label="XenNote navigation"
       sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
     >
+      <Box sx={{ flexShrink: 0 }}>
+        <NoteRailSearch />
+      </Box>
       <Box data-list-drag-scroll sx={{ ...railGroupSx, flex: 1, minHeight: 0, overflowY: "auto" }}>
         <RailLink
           icon={<NotesIcon />}
@@ -129,103 +141,79 @@ export default function NoteRail({
         <Typography variant="caption" sx={{ ...sectionLabelSx, flexShrink: 0, px: 1.75, pt: 1.75, pb: 0.75 }}>
           Notebooks
         </Typography>
-        <Box
-          ref={listRef}
-          onPointerMove={move}
-          onPointerUp={drop}
-          onPointerCancel={cancel}
-          onLostPointerCapture={cancel}
-          onKeyDown={(event) => {
-            if (drag && event.key === "Escape") cancel();
-          }}
-          sx={{ ...railGroupSx, flexShrink: 0 }}
-        >
-          {orderedNotebooks.map((book, index) => {
-            const color = swatchColor(theme, book.color);
-            const status = sharedStatus.get(book._id);
-            const sharedLabel =
-              status === "new"
-                ? "New shared notebook"
-                : status === "changed"
-                  ? "Shared notebook updated"
-                  : "Shared notebook";
-            const dragging = drag?.id === book._id;
-            const dropEdge = drag?.target?.id === book._id ? drag.target.edge : undefined;
-            return (
-              <Box
-                key={book._id}
-                data-notebook-row={book._id}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  position: "relative",
-                  opacity: dragging ? 0.4 : 1,
-                  "& > a": { flex: 1, minWidth: 0, pr: 0.75 },
-                  ...(dropEdge && {
-                    "&::after": {
-                      content: '""',
-                      position: "absolute",
-                      insetInline: 0,
-                      [dropEdge === "before" ? "top" : "bottom"]: -4,
-                      height: 2,
-                      bgcolor: "primary.main",
-                      borderRadius: 1,
-                      pointerEvents: "none",
-                    },
-                  }),
-                }}
-              >
-                <RailLink
-                  icon={
-                    color ? (
-                      <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color }} />
-                    ) : (
-                      <MenuBookOutlinedIcon />
-                    )
-                  }
-                  text={book.name}
-                  to={`${BOARD}/b/${book._id}`}
-                  selected={notebookId === book._id && tool !== "tasks" && tool !== "graph"}
-                  onClick={onNavigate}
-                  indicator={
-                    book.my_role !== "owner" && (
-                      <Tooltip title={sharedLabel}>
-                        <Badge variant="dot" color="primary" invisible={status !== "new" && status !== "changed"}>
-                          <PeopleOutlineIcon fontSize="small" titleAccess={sharedLabel} />
-                        </Badge>
-                      </Tooltip>
-                    )
-                  }
-                />
-                {orderedNotebooks.length > 1 && (
-                  <IconButton
-                    aria-label={`Reorder ${book.name}`}
-                    aria-keyshortcuts="ArrowUp ArrowDown"
-                    title="Drag to reorder"
-                    size="small"
-                    onPointerDown={(event) => start(book._id, event)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-                      event.preventDefault();
-                      if (drag) return;
-                      const up = event.key === "ArrowUp";
-                      const target = orderedNotebooks[index + (up ? -1 : 1)];
-                      if (target) reorder(book._id, up ? { before: target._id } : { after: target._id });
-                    }}
-                    sx={{
-                      flexShrink: 0,
-                      touchAction: "none",
-                      cursor: dragging ? "grabbing" : "grab",
-                      "@media (pointer: coarse)": { width: 44, height: 44 },
-                    }}
-                  >
-                    <DragIndicatorIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
-            );
-          })}
-        </Box>
+        {variant === "tree" ? (
+          <NoteRailTree notebooks={orderedNotebooks} sharedStatus={sharedStatus} onNavigate={onNavigate} />
+        ) : (
+          <Box {...listProps} sx={{ ...railGroupSx, flexShrink: 0 }}>
+            {orderedNotebooks.map((book) => {
+              const color = swatchColor(theme, book.color);
+              const status = sharedStatus.get(book._id);
+              const sharedLabel =
+                status === "new"
+                  ? "New shared notebook"
+                  : status === "changed"
+                    ? "Shared notebook updated"
+                    : "Shared notebook";
+              const dragging = drag?.id === book._id;
+              const dropEdge = drag?.target?.id === book._id ? drag.target.edge : undefined;
+              return (
+                <Box
+                  key={book._id}
+                  data-notebook-row={book._id}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    position: "relative",
+                    opacity: dragging ? 0.4 : 1,
+                    "& > a": { flex: 1, minWidth: 0 },
+                    ...(dropEdge && {
+                      "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        insetInline: 0,
+                        [dropEdge === "before" ? "top" : "bottom"]: -4,
+                        height: 2,
+                        bgcolor: "primary.main",
+                        borderRadius: 1,
+                        pointerEvents: "none",
+                      },
+                    }),
+                  }}
+                >
+                  <RailLink
+                    icon={
+                      color ? (
+                        <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color }} />
+                      ) : (
+                        <MenuBookOutlinedIcon />
+                      )
+                    }
+                    text={book.name}
+                    to={`${BOARD}/b/${book._id}`}
+                    selected={notebookId === book._id && tool !== "tasks" && tool !== "graph"}
+                    onClick={onNavigate}
+                    reorder={orderedNotebooks.length > 1 ? getRowProps(book._id) : undefined}
+                    dragging={dragging}
+                    indicator={
+                      <>
+                        <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                          {book.page_count}
+                        </Typography>
+                        {book.my_role !== "owner" && (
+                          <Tooltip title={sharedLabel}>
+                            <Badge variant="dot" color="primary" invisible={status !== "new" && status !== "changed"}>
+                              <PeopleOutlineIcon fontSize="small" titleAccess={sharedLabel} />
+                            </Badge>
+                          </Tooltip>
+                        )}
+                      </>
+                    }
+                  />
+                </Box>
+              );
+            })}
+          </Box>
+        )}
         <ListItemButton onClick={onNewNotebook} sx={{ ...railItemSx, color: "primary.main" }}>
           <AddIcon sx={{ fontSize: 20 }} />
           New notebook

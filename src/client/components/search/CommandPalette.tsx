@@ -43,7 +43,7 @@ function useDebounced(value: string, ms = 220) {
 }
 
 /**
- * Ctrl/Cmd+K: one box to jump to an app or page, or to find a person, note, file, recipe, routine, expense, link or
+ * Ctrl/Cmd+K: one box to jump to an app or page, or to find a person, note, notebook, file, recipe, routine, expense or
  * budget item. Arrow keys move, Enter opens, Escape closes.
  */
 export default function CommandPalette({ open, onClose }: CommandPaletteProps) {

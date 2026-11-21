@@ -1,19 +1,20 @@
 import { useState } from "react";
 import {
   Box,
-  Chip,
   FormControlLabel,
   IconButton,
+  ListItemButton,
   ListSubheader,
   Menu,
   MenuItem,
   Switch,
   Typography,
 } from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
+import { useTheme } from "@mui/material/styles";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import StarIcon from "@mui/icons-material/Star";
 import type { PageTreeEntry, XenNoteSection } from "../../../../types/XenNotePage";
+import { railItemSx } from "../../../../components/ui/railStyles";
 import { swatchColor } from "../noteColors";
 import { pageTitle, type PageDrop } from "./pageTree";
 import { reorderRowSx, useListDrag, type ReorderRowProps } from "./useListDrag";
@@ -65,19 +66,15 @@ function PageRow({
       data-page-row={page.id}
       sx={{
         display: "flex",
+        alignItems: "center",
         position: "relative",
-        alignItems: "stretch",
-        border: 1,
-        borderColor: selected ? "primary.main" : "divider",
-        bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : "background.paper",
-        borderRadius: 2,
         opacity: dragging ? 0.4 : page.archived ? 0.6 : 1,
         ...(dropEdge && {
           "&::after": {
             content: '""',
             position: "absolute",
             insetInline: 0,
-            [dropEdge === "before" ? "top" : "bottom"]: -5,
+            [dropEdge === "before" ? "top" : "bottom"]: -3,
             height: 2,
             bgcolor: "primary.main",
             borderRadius: 1,
@@ -86,47 +83,42 @@ function PageRow({
         }),
       }}
     >
-      <Box
+      <ListItemButton
         component="button"
         type="button"
+        selected={selected}
+        aria-current={selected ? "page" : undefined}
         onClick={onOpen}
         {...reorder}
-        aria-current={selected ? "page" : undefined}
         sx={{
-          all: "unset",
-          boxSizing: "border-box",
-          flex: 1,
-          minWidth: 0,
-          cursor: "pointer",
-          px: 1.5,
-          py: 1.25,
-          borderRadius: 2,
+          ...railItemSx,
           ...(reorder && reorderRowSx(dragging)),
-          "&:focus-visible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main" },
+          flexGrow: 1,
+          pr: 0.75,
+          gap: 0.75,
+          minWidth: 0,
+          textAlign: "left",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-          {dot && <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: dot, flexShrink: 0 }} />}
-          <Typography noWrap sx={{ fontWeight: 500, flex: 1, minWidth: 0 }}>
-            {pageTitle(page.title)}
+        {dot && <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: dot, flexShrink: 0 }} />}
+        <Typography variant="body2" noWrap sx={{ fontWeight: "inherit", flex: 1 }}>
+          {pageTitle(page.title)}
+        </Typography>
+        {page.todo.open > 0 && (
+          <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+            {page.todo.open}
           </Typography>
-          {page.favorite && <StarIcon aria-label="Favourite" sx={{ fontSize: 16, color: "warning.main" }} />}
-        </Box>
-        {(page.excerpt || page.todo.open > 0) && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 0.25 }}>
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ flex: 1, minWidth: 0 }}>
-              {page.excerpt}
-            </Typography>
-            {page.todo.open > 0 && <Chip size="small" variant="outlined" label={`${page.todo.open} open`} />}
-          </Box>
         )}
-      </Box>
+        {page.favorite && (
+          <StarIcon aria-label="Favourite" sx={{ fontSize: 16, color: "warning.main", flexShrink: 0 }} />
+        )}
+      </ListItemButton>
       {canEdit && (
         <IconButton
           aria-label={`Actions for ${pageTitle(page.title)}`}
           size="small"
           onClick={(e) => onMenu(e.currentTarget)}
-          sx={{ alignSelf: "center", mr: 0.5 }}
+          sx={{ width: 40, height: 40, borderRadius: 1, ml: 0.5, mr: 1, flexShrink: 0 }}
         >
           <MoreVertIcon fontSize="small" />
         </IconButton>
@@ -141,7 +133,10 @@ export default function PageList(props: PageListProps) {
     props;
   const { listProps, drag, getRowProps } = useListDrag("data-page-row", props.onReorder);
   const canReorder =
-    canEdit && !reordering && pages.length > 1 && sections.find((section) => section.id === sectionId)?.kind !== "journal";
+    canEdit &&
+    !reordering &&
+    pages.length > 1 &&
+    sections.find((section) => section.id === sectionId)?.kind !== "journal";
   const [menu, setMenu] = useState<{ anchor: HTMLElement; page: PageTreeEntry } | null>(null);
   const close = () => setMenu(null);
   const page = menu?.page;
@@ -150,9 +145,9 @@ export default function PageList(props: PageListProps) {
     run();
   };
   return (
-    <Box {...listProps} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+    <Box {...listProps} sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
       {pages.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ px: 0.5, py: 0.75 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ px: 1.75, py: 0.75 }}>
           No pages
         </Typography>
       )}
@@ -173,7 +168,7 @@ export default function PageList(props: PageListProps) {
 
       {(archivedCount > 0 || showArchived) && (
         <FormControlLabel
-          sx={{ mt: 0.5, ml: 0.5 }}
+          sx={{ mt: 0.5, ml: 1.75 }}
           control={<Switch size="small" checked={showArchived} onChange={(e) => onShowArchived(e.target.checked)} />}
           label={<Typography variant="caption">Show archived</Typography>}
         />

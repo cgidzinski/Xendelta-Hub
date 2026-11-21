@@ -54,7 +54,7 @@ export default function TasksView({ notebookId }: { notebookId?: string }) {
   }
   return (
     <PageContainer>
-      <PageHeader title={title} subtitle={notebookId ? undefined : "All notebooks"} actions={<NoteNavButton />} />
+      <PageHeader title={title} subtitle={notebookId ? undefined : "All notebooks"} leading={<NoteNavButton />} />
       <Tabs
         value={done ? "done" : "open"}
         onChange={(_, value) => setDone(value === "done")}

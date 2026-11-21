@@ -96,7 +96,7 @@ export default function GraphView({ notebookId }: { notebookId?: string }) {
 
   return (
     <PageContainer width="wide">
-      <PageHeader title={title} subtitle={notebookId ? undefined : "All notebooks"} actions={<NoteNavButton />} />
+      <PageHeader title={title} subtitle={notebookId ? undefined : "All notebooks"} leading={<NoteNavButton />} />
       <Stack direction="row" gap={1.5} mb={2} alignItems="center" flexWrap="wrap">
         <ToggleButtonGroup
           value={modeShown}
