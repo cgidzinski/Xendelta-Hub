@@ -78,6 +78,8 @@ export const xenNotePageUpdateSchema = z.object({
 export const xenNotePageBodySchema = z.object({
   doc: z.looseObject({ type: z.literal("doc") }),
   base_rev: z.number().int().min(0),
+  // A random id each open editor makes up, handed back in the realtime event so an editor knows its own saves.
+  client_id: z.string().max(64).optional(),
 });
 
 export const xenNotePageMoveSchema = z
