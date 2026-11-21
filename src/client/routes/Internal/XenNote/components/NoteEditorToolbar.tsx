@@ -20,7 +20,7 @@ interface NoteEditorToolbarProps {
   onAddPhotos: (files: File[]) => void;
   onColor: (anchor: HTMLElement) => void;
   onLabels: (anchor: HTMLElement) => void;
-  onNotebook: (anchor: HTMLElement) => void;
+  onNotebook?: (anchor: HTMLElement) => void;
   onReminder: (anchor: HTMLElement) => void;
   /** Opens the Share dialog; for a read-only note it shows who has the note and lets the person leave it. */
   onShare: () => void;
@@ -91,11 +91,13 @@ export default function NoteEditorToolbar({
               <LabelOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Notebook">
-            <IconButton size="small" aria-label="Notebook" onClick={(e) => onNotebook(e.currentTarget)}>
-              <MenuBookOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {onNotebook && (
+            <Tooltip title="Notebook">
+              <IconButton size="small" aria-label="Notebook" onClick={(e) => onNotebook(e.currentTarget)}>
+                <MenuBookOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </>
       )}
       {live && (

@@ -33,10 +33,12 @@ export function XenNotePublicNote() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   // Signed in: a member goes to the note in the app (at their role), anyone else to the in-app read-only view.
   const access = useSharedLinkAccess("note", token, isAuthenticated);
-  const { data: note, isLoading, isError } = usePublicNote(isAuthenticated ? undefined : token);
+  const { data, isLoading, isError } = usePublicNote(!isAuthenticated || access.isError ? token : undefined);
+  const note = data?.note;
   useTitle(note?.title ? `${note.title} - XenNote` : "Shared note - XenNote");
 
   if (authLoading || (isAuthenticated && access.isLoading)) return <Loading />;
+  if (isAuthenticated && access.data?.page_id) return <Navigate to={`/n/p/${token}`} replace />;
   if (isAuthenticated && access.data) {
     const to =
       access.data.access === "member"
@@ -44,6 +46,7 @@ export function XenNotePublicNote() {
         : `/internal/xennote/shared/${token}`;
     return <Navigate to={to} replace />;
   }
+  if (data?.page_id) return <Navigate to={`/n/p/${token}`} replace />;
   if (isLoading) {
     return (
       <Frame>

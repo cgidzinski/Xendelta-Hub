@@ -138,7 +138,7 @@ export const useXenNoteBacklinks = (noteId: string | undefined) =>
 export const usePublicNote = (token: string | undefined) =>
   useQuery({
     queryKey: xennoteKeys.publicNote(token ?? ""),
-    queryFn: async () => (await api.get<{ note: PublicXenNote }>(`/api/xennote/public/note/${token}`)).note,
+    queryFn: () => api.get<{ note?: PublicXenNote; page_id?: string }>(`/api/xennote/public/note/${token}`),
     enabled: !!token,
     retry: false,
   });

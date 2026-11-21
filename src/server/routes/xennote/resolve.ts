@@ -1,10 +1,11 @@
 import type { Request, Response } from "express";
 import { validateParams, xenNoteTokenParamSchema } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
-import { XenNote, XenNotebook } from "../../models/xenNote";
+import { XenNotebook } from "../../models/xenNote";
 import { roleOf, type MemberRole } from "../../utils/membership";
 import { XenNotePage, XenNoteSection } from "../../models/xenNotePage";
 import { pageRole } from "../../utils/xenNotePages";
+import { existsLegacyNote, migratedLink } from "./legacy";
 import { noteRole } from "./shared";
 
 // A signed-in person opening a public link: which of its notes or notebooks are already theirs?
@@ -23,8 +24,18 @@ export function registerSharedLinkRoutes(app: any) {
     validateParams(xenNoteTokenParamSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const note = await XenNote.findOne({ "share.token": req.params.token, "share.enabled": true });
-      if (!note) throw new AppError(404, "Link not found");
+      const token = req.params.token as string;
+      const note = await existsLegacyNote(token);
+      if (!note) {
+        const page = await migratedLink(token);
+        const book = page ? await XenNotebook.findById(page.notebook_id, "members").lean() : null;
+        if (!page || !book) throw new AppError(404, "Link not found");
+        const parent = page.parent_id ? await XenNotePage.findById(page.parent_id, "members").lean() : null;
+        return reply(res, pageRole(page, book, parent, uid), {
+          page_id: page.id as string,
+          notebook_id: roleOf(book, uid) ? String(book._id) : null,
+        });
+      }
       const book = note.notebook_id ? await XenNotebook.findById(note.notebook_id) : null;
       const role: MemberRole | null = noteRole(note.toObject(), book?.toObject() ?? null, uid);
       reply(res, role, { note_id: note.id as string, notebook_id: note.notebook_id ? String(note.notebook_id) : null });

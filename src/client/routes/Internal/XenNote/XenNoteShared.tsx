@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, Button, Stack } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PageContainer from "../../../components/ui/PageContainer";
@@ -27,9 +27,11 @@ function OpenXenNote() {
  */
 export function XenNoteSharedNote() {
   const { token } = useParams<{ token: string }>();
-  const { data: note, isLoading, isError } = usePublicNote(token);
+  const { data, isLoading, isError } = usePublicNote(token);
+  const note = data?.note;
   useTitle(note?.title ? `${note.title} - XenNote` : "Shared note - XenNote");
 
+  if (data?.page_id) return <Navigate to={`/n/p/${token}`} replace />;
   if (isLoading) {
     return (
       <PageContainer width="narrow">

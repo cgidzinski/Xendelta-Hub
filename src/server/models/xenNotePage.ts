@@ -43,6 +43,7 @@ const pageSchema = new Schema({
   section_id: { type: Schema.Types.ObjectId, ref: "XenNoteSection", required: true },
   // Only one level: a page with a parent can't have sub-pages of its own (enforced when pages are created and moved).
   parent_id: { type: Schema.Types.ObjectId, ref: "XenNotePage", default: null },
+  migrated_from_note: { type: Boolean },
   order: { type: String, required: true },
 
   title: { type: String, default: "", maxlength: MAX_PAGE_TITLE },

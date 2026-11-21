@@ -1,6 +1,13 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Box, Button, Chip, IconButton, InputBase, TextField, Tooltip, Typography } from "@mui/material";
 import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
+import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../../../../config/api";
+import { xennoteKeys } from "../../../../hooks/xennote/keys";
+import type { XenNotePageDetail } from "../../../../types/XenNotePage";
+import NoteReminderMenu from "../components/NoteReminderMenu";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -104,6 +111,18 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
   const actions = useNotebookPageActions(page?.notebook_id ?? "");
   const { enqueueSnackbar } = useSnackbar();
   const confirm = useConfirm();
+  const [reminderAnchor, setReminderAnchor] = useState<HTMLElement | null>(null);
+  const queryClient = useQueryClient();
+  const reminderAction = useMutation({
+    mutationFn: (at: string | null) =>
+      api.put<{ reminder: XenNotePageDetail["reminder"] }>(`/api/xennote/pages/${pageId}/reminder`, { at }),
+    onSuccess: ({ reminder }) => {
+      queryClient.setQueryData<XenNotePageDetail>(
+        xennoteKeys.page(pageId),
+        (current) => current && { ...current, reminder },
+      );
+    },
+  });
   const [shareOpen, setShareOpen] = useState(false);
   const [label, setLabel] = useState<DraftLabel>("Saved");
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
@@ -219,6 +238,15 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
             </Tooltip>
           </>
         )}
+        <Tooltip title={data.reminder ? "Reminder" : "Remind me"}>
+          <IconButton
+            aria-label="Reminder"
+            color={data.reminder ? "primary" : "default"}
+            onClick={(e) => setReminderAnchor(e.currentTarget)}
+          >
+            {data.reminder ? <NotificationsActiveIcon /> : <NotificationsNoneIcon />}
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Share">
           <IconButton aria-label="Share page" onClick={() => setShareOpen(true)}>
             <ShareOutlinedIcon />
@@ -347,6 +375,15 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
             </Button>
           ))}
         </Box>
+      )}
+
+      {reminderAnchor && (
+        <NoteReminderMenu
+          anchor={reminderAnchor}
+          onClose={() => setReminderAnchor(null)}
+          reminder={data.reminder ?? null}
+          onSet={(at) => reminderAction.mutate(at, { onError: fail })}
+        />
       )}
 
       {shareOpen && (
