@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import AddIcon from "@mui/icons-material/Add";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MenuIcon from "@mui/icons-material/Menu";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
 import { api } from "../../../../config/api";
 import { xennoteKeys } from "../../../../hooks/xennote/keys";
@@ -101,6 +101,7 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
 
   const queryClient = useQueryClient();
   const [optionsMenu, setOptionsMenu] = useState<HTMLElement | null>(null);
+  const [newPageMenu, setNewPageMenu] = useState<HTMLElement | null>(null);
   const [templateDialog, setTemplateDialog] = useState<"create" | "journal" | null>(null);
   const [toolBusy, setToolBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -133,13 +134,13 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   const activeSection = sections.find((s) => s.id === activeId);
   // The sections and pages columns are a desktop layout; a phone browses the same tree in the drawer.
   const sidebarSection = wide ? activeSection : undefined;
-  const pageCreationSection = sidebarSection ?? activeSection;
   const templateSection = sections.find((s) => s.kind === "templates");
   const templates = pages.filter(
     (page) => !!templateSection && page.section_id === templateSection.id && !page.archived,
   );
-  const today = format(new Date(), "yyyy-MM-dd");
   const canEdit = notebook?.my_role === "owner" || notebook?.my_role === "editor";
+  const canUseTemplate = canEdit && activeSection?.kind === "normal" && templates.length > 0;
+  const creatingPage = actions.createPage.isPending || toolBusy;
   const fail = (e: unknown) => enqueueSnackbar((e as Error).message || "Couldn't save that", { variant: "error" });
 
   const notebookPath = `${BOARD}/b/${notebookId}`;
@@ -185,10 +186,10 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
     params.set("section", id);
     setSearchParams(params);
   };
-  const openTool = (next: "tasks" | "graph") => {
+  const openGraph = () => {
     setOptionsMenu(null);
     const params = new URLSearchParams(pageParams);
-    params.set("tool", `notebook-${next}`);
+    params.set("tool", "notebook-graph");
     navigate({ pathname: tool ? notebookPath : location.pathname, search: params.toString() });
   };
 
@@ -206,7 +207,9 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
   const refreshTree = () => queryClient.invalidateQueries({ queryKey: xennoteKeys.tree(notebookId) });
   const openToday = () =>
     runNotebookTool(async () => {
-      const page = await api.post<{ id: string }>(`/api/xennote/notebooks/${notebookId}/journal`, { date: today });
+      const page = await api.post<{ id: string }>(`/api/xennote/notebooks/${notebookId}/journal`, {
+        date: format(new Date(), "yyyy-MM-dd"),
+      });
       await refreshTree();
       openPage(page.id);
     });
@@ -224,8 +227,8 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
         await api.put(`/api/xennote/notebooks/${notebookId}/journal-template`, { page_id: id });
         await queryClient.invalidateQueries({ queryKey: xennoteKeys.notebooks() });
         setTemplateDialog(null);
-      } else if (id && sidebarSection) {
-        const page = await api.post<{ id: string }>(`/api/xennote/sections/${sidebarSection.id}/from-template`, {
+      } else if (id && activeSection?.kind === "normal") {
+        const page = await api.post<{ id: string }>(`/api/xennote/sections/${activeSection.id}/from-template`, {
           template_id: id,
         });
         await refreshTree();
@@ -235,14 +238,28 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
     });
 
   const createPage = async () => {
-    if (!pageCreationSection) return;
-    if (pageCreationSection.kind === "journal") return openToday();
+    setNewPageMenu(null);
+    if (!activeSection) return;
+    if (activeSection.kind === "journal") return openToday();
     try {
-      const made = await actions.createPage.mutateAsync({ sectionId: pageCreationSection.id });
+      const made = await actions.createPage.mutateAsync({ sectionId: activeSection.id });
       openPage(made.page.id);
     } catch (e) {
       fail(e);
     }
+  };
+  const startPage = (event: MouseEvent<HTMLElement>) => {
+    if (canUseTemplate) setNewPageMenu(event.currentTarget);
+    else void createPage();
+  };
+  const newPageMenuProps = (id: string) => {
+    const expanded = newPageMenu?.id === id;
+    return {
+      id,
+      "aria-haspopup": canUseTemplate ? ("menu" as const) : undefined,
+      "aria-controls": expanded ? "xennote-new-page-menu" : undefined,
+      "aria-expanded": canUseTemplate ? expanded : undefined,
+    };
   };
 
   // ---- sections
@@ -389,12 +406,14 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
               Share
             </Button>
           )}
-          {canEdit && pageCreationSection && (
+          {canEdit && activeSection && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              disabled={actions.createPage.isPending || toolBusy}
-              onClick={() => void createPage()}
+              endIcon={canUseTemplate ? <ExpandMoreIcon /> : undefined}
+              disabled={creatingPage}
+              onClick={startPage}
+              {...newPageMenuProps("xennote-new-page-header")}
             >
               New page
             </Button>
@@ -405,16 +424,10 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
             </IconButton>
           </Tooltip>
           <Menu anchorEl={optionsMenu} open={!!optionsMenu} onClose={() => setOptionsMenu(null)}>
-            <MenuItem onClick={() => openTool("graph")}>Graph</MenuItem>
-            <MenuItem onClick={() => openTool("tasks")}>Tasks</MenuItem>
-            {(canEdit || pages.some((p) => p.journal_date === today)) && (
-              <MenuItem disabled={toolBusy} onClick={() => void openToday()}>
-                Today's page
-              </MenuItem>
-            )}
+            <MenuItem onClick={openGraph}>Graph</MenuItem>
             {(canEdit || !!templateSection) && (
               <MenuItem disabled={toolBusy} onClick={() => void openTemplates()}>
-                Templates
+                Manage templates
               </MenuItem>
             )}
             {canEdit && !!templates.length && (
@@ -529,8 +542,9 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
             <IconButton
               aria-label="Add a page"
               size="small"
-              disabled={actions.createPage.isPending || toolBusy}
-              onClick={() => void createPage()}
+              disabled={creatingPage}
+              onClick={startPage}
+              {...newPageMenuProps("xennote-new-page-list")}
             >
               <AddIcon fontSize="small" />
             </IconButton>
@@ -540,21 +554,6 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
       {columnRule}
     </>
   );
-
-  // The open section's pages, with its quick actions above them.
-  const pagesColumn = sidebarSection ? (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-      {sidebarSection.kind === "journal" && (canEdit || pages.some((p) => p.journal_date === today)) && (
-        <Button startIcon={<TodayOutlinedIcon />} onClick={() => void openToday()} disabled={toolBusy}>
-          Today's page
-        </Button>
-      )}
-      {canEdit && sidebarSection.kind === "normal" && !!templates.length && (
-        <Button onClick={() => setTemplateDialog("create")}>From template</Button>
-      )}
-      {list}
-    </Box>
-  ) : null;
 
   const toolPane =
     activeTool === "tasks" ? (
@@ -658,7 +657,14 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
             description="Add a page to this section."
             action={
               canEdit ? (
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => void createPage()}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  endIcon={canUseTemplate ? <ExpandMoreIcon /> : undefined}
+                  disabled={creatingPage}
+                  onClick={startPage}
+                  {...newPageMenuProps("xennote-new-page-empty")}
+                >
                   New page
                 </Button>
               ) : undefined
@@ -733,7 +739,7 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
               data-list-drag-scroll
               sx={{ flex: 1, minHeight: 0, p: 2, pt: 0.75, overflowY: "auto" }}
             >
-              {pagesColumn}
+              {list}
             </Box>
           </Box>
         )}
@@ -828,6 +834,22 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
         {body}
       </Box>
 
+      <Menu
+        anchorEl={newPageMenu}
+        open={!!newPageMenu}
+        onClose={() => setNewPageMenu(null)}
+        slotProps={{ list: { id: "xennote-new-page-menu", "aria-labelledby": newPageMenu?.id } }}
+      >
+        <MenuItem onClick={() => void createPage()}>Blank page</MenuItem>
+        <MenuItem
+          onClick={() => {
+            setNewPageMenu(null);
+            setTemplateDialog("create");
+          }}
+        >
+          Use a template
+        </MenuItem>
+      </Menu>
       <SectionNameDialog
         open={!!sectionDialog}
         title={sectionDialog?.section ? "Rename section" : "Add a section"}

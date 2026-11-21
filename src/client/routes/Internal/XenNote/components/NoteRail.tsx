@@ -7,7 +7,6 @@ import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PeopleOutlineIcon from "@mui/icons-material/PeopleOutline";
 import NotesIcon from "@mui/icons-material/Notes";
-import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import { railItemSx, railPanelSx } from "../../../../components/ui/railStyles";
@@ -28,7 +27,6 @@ const isNotebookOrder = (value: unknown): value is string[] =>
 const UTILITIES = [
   { text: "Archive", to: `${BOARD}?scope=archive`, icon: <ArchiveOutlinedIcon /> },
   { text: "Trash", to: `${BOARD}?scope=trash`, icon: <DeleteOutlineIcon /> },
-  { text: "Tasks", to: `${BOARD}/tasks`, icon: <TaskAltIcon /> },
   { text: "Graph", to: `${BOARD}/graph`, icon: <HubOutlinedIcon /> },
 ];
 
@@ -223,7 +221,7 @@ export default function NoteRail({
       <Box sx={{ ...railGroupSx, pt: 1, mt: 1, borderTop: 1, borderColor: "divider" }}>
         {UTILITIES.map(({ text, to, icon }) => {
           const key = text.toLowerCase();
-          const isTool = key === "tasks" || key === "graph";
+          const isTool = key === "graph";
           return (
             <RailLink
               key={text}
