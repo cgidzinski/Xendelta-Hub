@@ -153,9 +153,7 @@ export function registerPageExportRoutes(app: any) {
       const notebook = await loadNotebook(req, req.params.id as string, "view");
       const [sections, pages] = await Promise.all([
         XenNoteSection.find({ notebook_id: notebook._id }, "name").lean(),
-        XenNotePage.find({ notebook_id: notebook._id }, "title section_id parent_id files")
-          .sort({ order: 1, _id: 1 })
-          .lean(),
+        XenNotePage.find({ notebook_id: notebook._id }, "title section_id files").sort({ order: 1, _id: 1 }).lean(),
       ]);
       const sectionNames = new Map(sections.map((section) => [String(section._id), filename(section.name)]));
       const pageNames = new Map(pages.map((page) => [String(page._id), page.title]));
@@ -177,14 +175,14 @@ export function registerPageExportRoutes(app: any) {
             ).lean(),
           ]);
           const names = new Map(fileRows.map((file) => [String(file._id), filePath(String(file._id), file.name)]));
-          const parentTitle = page.parent_id ? pageNames.get(String(page.parent_id)) : undefined;
-          const base = parentTitle ? `${section}/${filename(parentTitle)}-${page.parent_id}/` : `${section}/`;
           const text = docToMarkdown(body?.doc ?? emptyDoc(), {
             pageTitle: (id, stored) => pageNames.get(id) || stored,
-            fileUrl: (id) =>
-              names.has(id) ? `${parentTitle !== undefined ? "../../" : "../"}${markdownPath(names.get(id)!)}` : "",
+            fileUrl: (id) => {
+              const path = names.get(id);
+              return path ? `../${markdownPath(path)}` : "";
+            },
           });
-          const pagePath = `${base}${filename(page.title)}-${page._id}.md`;
+          const pagePath = `${section}/${filename(page.title)}-${page._id}.md`;
           yield { path: pagePath, stream: Readable.from([Buffer.from(markdownTitle(page.title) + text)]) };
           for (const file of fileRows) {
             const id = String(file._id);

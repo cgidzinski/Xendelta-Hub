@@ -15,8 +15,8 @@ export default function NoteLabelPopover({ anchor, options, value, onChange, onC
       open={!!anchor}
       anchorEl={anchor}
       onClose={onClose}
-      anchorOrigin={{ vertical: "top", horizontal: "left" }}
-      transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+      anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      transformOrigin={{ vertical: "bottom", horizontal: "right" }}
     >
       <Box sx={{ p: 1.5, width: 280 }}>
         <Autocomplete

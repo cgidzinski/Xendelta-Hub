@@ -13,11 +13,12 @@ import { AppError, callerId } from "../../utils/http";
 import { XenNotebook } from "../../models/xenNote";
 import { XenNotePage, XenNotePageBody } from "../../models/xenNotePage";
 import { SocketManager } from "../../infrastructure/SocketManager";
-import { pageRole, writePageBody } from "../../utils/xenNotePages";
+import { canEdit } from "../../utils/membership";
+import { writePageBody } from "../../utils/xenNotePages";
 import { searchPages, visiblePagesFilter } from "../../utils/xenNotePageSearch";
 import { findMention, linkFirstMention, mentionSnippet } from "../../../shared/xennote/linkMention";
 import { normalizeTitle } from "../../../shared/xennote/wikiLinks";
-import { loadPage, pageAudience } from "./pageAccess";
+import { loadPage, notebookAudience } from "./pageAccess";
 
 // Links between pages. A link names a page by id, so what a link shows is looked up when it is drawn ("peek"), and only
 // for pages the person can see: any other page, and any id that is no page at all, answers the same way (locked), so
@@ -97,17 +98,19 @@ export function registerPageLinkRoutes(app: any) {
       res.json({
         status: true,
         data: {
-          pages: rows.map((r) => {
+          pages: rows.flatMap((r) => {
             const book = bookById.get(String(r.notebook_id));
-            const member = !!book?.members.some((m) => m.user_id === uid);
-            return {
-              id: String(r._id),
-              title: r.title,
-              notebook_id: String(r.notebook_id),
-              notebook_name: member ? (book?.name ?? null) : null,
-              in_notebook: member,
-              snippet: findMention(r.search_text, target) ? mentionSnippet(r.search_text, target) : r.excerpt,
-            };
+            if (!book?.members.some((m) => m.user_id === uid)) return [];
+            return [
+              {
+                id: String(r._id),
+                title: r.title,
+                notebook_id: String(r.notebook_id),
+                notebook_name: book.name,
+                in_notebook: true,
+                snippet: findMention(r.search_text, target) ? mentionSnippet(r.search_text, target) : r.excerpt,
+              },
+            ];
           }),
         },
       });
@@ -134,7 +137,7 @@ export function registerPageLinkRoutes(app: any) {
             { search_text: { $regex: names.map(escapeRegex).join("|"), $options: "i" } },
           ],
         },
-        "title notebook_id parent_id members search_text",
+        "title notebook_id search_text",
       )
         .sort({ updated_at: -1 })
         .limit(MAX_RELATED * 2)
@@ -148,7 +151,7 @@ export function registerPageLinkRoutes(app: any) {
           title: c.title,
           snippet: mentionSnippet(c.search_text, target),
           // Whether "Link it" will work for this person (it edits that page).
-          can_edit: ["owner", "editor"].includes(pageRole(c, book, null, uid) ?? ""),
+          can_edit: !!book && canEdit(book, uid),
         }));
       res.json({ status: true, data: { pages: out } });
     },
@@ -162,7 +165,7 @@ export function registerPageLinkRoutes(app: any) {
     async (req: Request, res: Response) => {
       const uid = callerId(req);
       const { target_id } = xenNoteLinkMentionSchema.parse(req.body);
-      const { page, notebook, parent } = await loadPage(req, req.params.id as string, "edit");
+      const { page, notebook } = await loadPage(req, req.params.id as string, "edit");
       const visible = await visiblePagesFilter(uid);
       const target = await XenNotePage.findOne({ $and: [visible, { _id: target_id }] }, "title aliases").lean();
       if (!target) throw new AppError(404, "Page not found");
@@ -177,7 +180,7 @@ export function registerPageLinkRoutes(app: any) {
       if (!changed) throw new AppError(409, "That page isn't mentioned here any more");
       const { rev } = await writePageBody(page, doc, uid, page.rev);
       // Anyone with this page open gets the new text (the editor that is typing keeps its own, and is warned).
-      SocketManager.getInstance().notifyXenNotePageUpdate(pageAudience(notebook, page, parent), {
+      SocketManager.getInstance().notifyXenNotePageUpdate(notebookAudience(notebook), {
         pageId: page.id as string,
         notebookId: notebook.id as string,
         rev,

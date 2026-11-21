@@ -1,9 +1,24 @@
-import { useState, type FormEvent } from "react";
-import { Alert, Box, Button, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
-import { parseQuickLinkUrl, XENSTART_PATH, type QuickLink, type RegionStyles } from "@shared/xenstart";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Alert, Box, Button, InputAdornment, MenuItem, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import UploadOutlinedIcon from "@mui/icons-material/UploadOutlined";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  BACKGROUND_FITS,
+  BACKGROUND_UPLOAD_LIMIT,
+  parseQuickLinkUrl,
+  XENSTART_PATH,
+  type BackgroundFit,
+  type BookmarkMetadata,
+  type QuickLink,
+  type RegionStyles,
+} from "@shared/xenstart";
 import ResponsiveDialog from "../../../components/ui/ResponsiveDialog";
+import SectionCard from "../../../components/ui/SectionCard";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
-import { BackgroundImage } from "./Appearance";
+import { api } from "../../../config/api";
+import { xenstartKeys } from "../../../hooks/xenstart/keys";
+import { LinkIconImage } from "./QuickLinks";
 import RegionLayoutSettings from "./RegionLayoutSettings";
 
 interface DialogProps {
@@ -21,12 +36,37 @@ export function LinkDialog({
   error,
 }: DialogProps & {
   link: QuickLink | null;
-  onSave: (label: string, url: string) => void;
+  onSave: (bookmark: BookmarkMetadata & { url: string }) => void;
   onRemove: () => void;
 }) {
-  const [label, setLabel] = useState(link?.label ?? "");
+  const [label, setLabel] = useState<string>();
   const [url, setUrl] = useState(link?.url ?? "");
   const [urlError, setUrlError] = useState(false);
+  const [lookup, setLookup] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const parsed = parseQuickLinkUrl(url);
+  const changedUrl = url.trim() !== link?.url;
+  const client = useQueryClient();
+  const options = (address: string) => ({
+    queryKey: [...xenstartKeys.all, "bookmark", address],
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      api.post<BookmarkMetadata>("/api/xenstart/bookmark", { url: address }, { signal }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const metadata = useQuery({ ...options(lookup), enabled: !!lookup && changedUrl && lookup === parsed?.href });
+  const suggestion = changedUrl
+    ? ((lookup === parsed?.href ? metadata.data?.label : undefined) ??
+      parsed?.hostname.replace(/^www\./i, "").slice(0, 80))
+    : link?.label;
+  const disabled = saving || submitting;
+  useEffect(() => {
+    if (!changedUrl || !parsed?.href) return;
+    const address = parsed.href;
+    const timer = window.setTimeout(() => setLookup(address), 450);
+    return () => window.clearTimeout(timer);
+  }, [changedUrl, parsed?.href]);
+
   const confirm = useConfirm();
   const remove = async () => {
     if (
@@ -39,54 +79,57 @@ export function LinkDialog({
     )
       onRemove();
   };
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!parseQuickLinkUrl(url)) {
+    if (disabled) return;
+    if (!parsed) {
       setUrlError(true);
       return;
     }
-    if (label.trim()) onSave(label.trim(), url.trim());
+    setSubmitting(true);
+    try {
+      const details = changedUrl ? await client.fetchQuery(options(parsed.href)).catch(() => undefined) : link;
+      onSave({
+        label: label?.trim() || details?.label || parsed.hostname.replace(/^www\./i, "").slice(0, 80),
+        url: url.trim(),
+        iconUrl: details?.iconUrl,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
+  const previewIcon =
+    (changedUrl ? (lookup === parsed?.href ? metadata.data?.iconUrl : undefined) : link?.iconUrl) ??
+    (parsed ? new URL("/favicon.ico", parsed).href : undefined);
 
   return (
     <ResponsiveDialog
       open
       maxWidth="xs"
       title={link ? "Edit link" : "Add link"}
-      onClose={onClose}
+      onClose={() => !disabled && onClose()}
       actions={
         <>
           {link && (
-            <Button color="error" disabled={saving} onClick={() => void remove()} sx={{ mr: "auto" }}>
+            <Button color="error" disabled={disabled} onClick={() => void remove()} sx={{ mr: "auto" }}>
               Remove link
             </Button>
           )}
-          <Button onClick={onClose}>Cancel</Button>
-          <Button
-            type="submit"
-            form="xenstart-link"
-            variant="contained"
-            disabled={saving || !label.trim() || !url.trim()}
-          >
-            Save link
+          <Button disabled={disabled} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" form="xenstart-link" variant="contained" disabled={disabled || !url.trim()}>
+            {submitting ? "Looking up website…" : saving ? "Saving…" : "Save link"}
           </Button>
         </>
       }
     >
-      <Stack id="xenstart-link" component="form" spacing={2} onSubmit={submit} sx={{ pt: 1 }}>
+      <Stack id="xenstart-link" component="form" spacing={2} onSubmit={(event) => void submit(event)} sx={{ pt: 1 }}>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
           autoFocus
           required
-          disabled={saving}
-          label="Label"
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          slotProps={{ htmlInput: { maxLength: 80 } }}
-        />
-        <TextField
-          required
-          disabled={saving}
+          disabled={disabled}
           label="Website URL"
           value={url}
           placeholder="https://example.com"
@@ -95,16 +138,49 @@ export function LinkDialog({
             setUrlError(false);
           }}
           error={urlError}
-          helperText={urlError ? "Enter an HTTP or HTTPS website URL." : undefined}
+          helperText={urlError ? "Enter an HTTP or HTTPS website URL." : "XenStart fills in the title and icon."}
           slotProps={{ htmlInput: { inputMode: "url", maxLength: 2048 } }}
+        />
+        <TextField
+          disabled={disabled}
+          label="Title"
+          value={label ?? suggestion ?? ""}
+          onChange={(event) => setLabel(event.target.value)}
+          slotProps={{
+            htmlInput: { maxLength: 80 },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LinkIconImage key={previewIcon} url={previewIcon} />
+                </InputAdornment>
+              ),
+            },
+          }}
         />
       </Stack>
     </ResponsiveDialog>
   );
 }
 
+const backgroundFitLabels: Record<BackgroundFit, string> = {
+  cover: "Fill screen",
+  contain: "Fit to screen",
+  fill: "Stretch",
+  none: "Actual size",
+};
+
+export interface BackgroundDraft {
+  backgroundUrl: string;
+  backgroundFit: BackgroundFit;
+  clearUpload: boolean;
+  file?: File;
+}
+
 export function SettingsDialog({
-  initialBackground,
+  background,
+  onBackgroundChange,
+  backgroundPreview,
+  hasUpload,
   regionStyles,
   onRegionStylesChange,
   onClose,
@@ -112,17 +188,18 @@ export function SettingsDialog({
   saving,
   error,
 }: DialogProps & {
-  initialBackground: string;
+  background: BackgroundDraft;
+  onBackgroundChange: (background: BackgroundDraft) => void;
+  backgroundPreview: ReactNode;
+  hasUpload: boolean;
   regionStyles: RegionStyles;
   onRegionStylesChange: (styles: RegionStyles) => void;
-  onSave: (backgroundUrl: string) => void;
+  onSave: () => void;
 }) {
   const [tab, setTab] = useState("general");
-  const [value, setValue] = useState(initialBackground);
-  const [preview, setPreview] = useState(initialBackground);
-  const [backgroundError, setBackgroundError] = useState(false);
-  const backgroundUrl = value.trim();
-  const validBackground = !backgroundUrl || parseQuickLinkUrl(backgroundUrl)?.protocol === "https:";
+  const { backgroundUrl, backgroundFit, clearUpload, file } = background;
+  const [backgroundError, setBackgroundError] = useState("");
+  const trimmedUrl = backgroundUrl.trim();
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const homepage = new URL(XENSTART_PATH, window.location.origin).href;
 
@@ -139,17 +216,14 @@ export function SettingsDialog({
     <ResponsiveDialog
       open
       maxWidth="xs"
-      title="Settings"
+      title="XenStart settings"
       onClose={onClose}
-      slotProps={{
-        container: { sx: { alignItems: { md: "flex-start" }, justifyContent: { md: "flex-end" } } },
-        backdrop: { sx: { backgroundColor: { md: "transparent" } } },
-      }}
+      slotProps={{ paper: { sx: { bgcolor: "background.paper", backgroundImage: "none" } } }}
       actions={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" form="xenstart-settings" variant="contained" disabled={saving}>
-            Save settings
+            Done
           </Button>
         </>
       }
@@ -162,12 +236,12 @@ export function SettingsDialog({
         onSubmit={(event) => {
           event.preventDefault();
           if (saving) return;
-          if (!validBackground) {
-            setBackgroundError(true);
+          if (trimmedUrl && parseQuickLinkUrl(trimmedUrl)?.protocol !== "https:") {
+            setBackgroundError("Enter an HTTPS image URL.");
             setTab("appearance");
             return;
           }
-          onSave(backgroundUrl);
+          onSave();
         }}
       >
         {error && <Alert severity="error">{error}</Alert>}
@@ -193,28 +267,26 @@ export function SettingsDialog({
           aria-labelledby="xenstart-general-tab"
           hidden={tab !== "general"}
         >
-          <Stack spacing={1} alignItems="flex-start">
-            <Typography variant="body2" color="text.secondary">
-              Paste this address into your browser’s homepage settings.
-            </Typography>
-            <Button variant="outlined" onClick={() => void copy()}>
-              Copy homepage URL
-            </Button>
-            {copyState === "copied" && (
-              <Typography role="status" variant="body2">
-                Homepage URL copied.
-              </Typography>
-            )}
-            {copyState === "failed" && (
-              <TextField
-                label="Homepage URL"
-                fullWidth
-                value={homepage}
-                slotProps={{ input: { readOnly: true } }}
-                onFocus={(event) => event.target.select()}
-              />
-            )}
-          </Stack>
+          <SectionCard title="Browser homepage" description="Paste this address into your browser’s homepage settings.">
+            <TextField
+              label="Homepage URL"
+              fullWidth
+              size="small"
+              value={homepage}
+              slotProps={{ input: { readOnly: true } }}
+              onFocus={(event) => event.target.select()}
+            />
+            <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap">
+              <Button variant="outlined" startIcon={<ContentCopyOutlinedIcon />} onClick={() => void copy()}>
+                Copy address
+              </Button>
+              {copyState !== "idle" && (
+                <Typography role="status" variant="body2" color="text.secondary">
+                  {copyState === "copied" ? "Address copied." : "Select the address to copy it manually."}
+                </Typography>
+              )}
+            </Stack>
+          </SectionCard>
         </Box>
         <Box id="xenstart-layout-panel" role="tabpanel" aria-labelledby="xenstart-layout-tab" hidden={tab !== "layout"}>
           <RegionLayoutSettings styles={regionStyles} onChange={onRegionStylesChange} saving={saving} />
@@ -226,46 +298,76 @@ export function SettingsDialog({
           hidden={tab !== "appearance"}
         >
           <Stack spacing={2}>
+            <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+              <Button component="label" variant="outlined" disabled={saving} startIcon={<UploadOutlinedIcon />}>
+                Upload image
+                <Box
+                  component="input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                  aria-label="Upload background image"
+                  disabled={saving}
+                  sx={{ position: "absolute", width: "1px", height: "1px", clipPath: "inset(50%)", overflow: "hidden" }}
+                  onChange={(event) => {
+                    const image = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    if (!image) return;
+                    if (image.size > BACKGROUND_UPLOAD_LIMIT) {
+                      setBackgroundError("Choose a background image under 10 MB.");
+                      return;
+                    }
+                    onBackgroundChange({ ...background, file: image, backgroundUrl: "", clearUpload: false });
+                    setBackgroundError("");
+                  }}
+                />
+              </Button>
+              {(file || (hasUpload && !clearUpload && !trimmedUrl)) && (
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                  {file?.name ?? "Uploaded image"}
+                </Typography>
+              )}
+            </Stack>
             <TextField
               label="Background image URL"
               placeholder="https://example.com/photo.jpg"
-              value={value}
+              value={backgroundUrl}
               disabled={saving}
               onChange={(event) => {
-                setValue(event.target.value);
-                setBackgroundError(false);
-                if (!event.target.value.trim()) setPreview("");
+                onBackgroundChange({ ...background, backgroundUrl: event.target.value, file: undefined });
+                setBackgroundError("");
               }}
-              error={backgroundError}
-              helperText={
-                backgroundError
-                  ? "Enter an HTTPS image URL."
-                  : "The image fills the page and is dimmed behind the content."
-              }
+              error={!!backgroundError}
+              helperText={backgroundError || undefined}
               slotProps={{ htmlInput: { inputMode: "url", maxLength: 2048 } }}
             />
-            {backgroundUrl && (
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                <Button
-                  variant="outlined"
-                  disabled={!validBackground || saving}
-                  onClick={() => setPreview(backgroundUrl)}
-                >
-                  Preview
-                </Button>
-                <Button
-                  disabled={saving}
-                  onClick={() => {
-                    setValue("");
-                    setPreview("");
-                    setBackgroundError(false);
-                  }}
-                >
-                  Remove image
-                </Button>
-              </Stack>
+            {(trimmedUrl || file || (hasUpload && !clearUpload)) && (
+              <Button
+                sx={{ alignSelf: "flex-start" }}
+                disabled={saving}
+                onClick={() => {
+                  onBackgroundChange({ ...background, backgroundUrl: "", file: undefined, clearUpload: true });
+                  setBackgroundError("");
+                }}
+              >
+                Remove image
+              </Button>
             )}
-            {preview && <BackgroundImage key={preview} url={preview} preview />}
+            <TextField
+              select
+              label="Image sizing"
+              value={backgroundFit}
+              disabled={saving}
+              onChange={(event) =>
+                onBackgroundChange({ ...background, backgroundFit: event.target.value as BackgroundFit })
+              }
+            >
+              {BACKGROUND_FITS.map((fit) => (
+                <MenuItem key={fit} value={fit}>
+                  {backgroundFitLabels[fit]}
+                </MenuItem>
+              ))}
+            </TextField>
+            {backgroundPreview}
           </Stack>
         </Box>
       </Stack>

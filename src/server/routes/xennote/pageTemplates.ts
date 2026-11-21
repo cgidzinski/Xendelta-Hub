@@ -84,7 +84,7 @@ async function reserve(notebook: NotebookDoc, sectionId: unknown, uid: string, t
   if ((await XenNotePage.countDocuments({ notebook_id: notebook._id })) >= MAX_PAGES_PER_NOTEBOOK) {
     throw new AppError(400, `A notebook can have up to ${MAX_PAGES_PER_NOTEBOOK} pages`);
   }
-  const last = await XenNotePage.findOne({ section_id: sectionId, parent_id: null }, "order").sort({ order: -1 });
+  const last = await XenNotePage.findOne({ section_id: sectionId }, "order").sort({ order: -1 });
   return XenNotePage.create({
     notebook_id: notebook._id,
     section_id: sectionId,

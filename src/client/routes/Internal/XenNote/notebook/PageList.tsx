@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Box,
-  Button,
   Chip,
   FormControlLabel,
   IconButton,
@@ -12,27 +11,23 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import StarIcon from "@mui/icons-material/Star";
 import type { PageTreeEntry, XenNoteSection } from "../../../../types/XenNotePage";
-import { sectionLabelSx } from "../../../../components/ui/surfaceStyles";
 import { swatchColor } from "../noteColors";
-import { pageTitle, type PageNode } from "./pageTree";
+import { pageTitle, type PageDrop } from "./pageTree";
+import { reorderRowSx, useListDrag, type ReorderRowProps } from "./useListDrag";
 
 export interface PageActions {
   onOpen: (id: string) => void;
-  onCreate: (parentId: string | null) => void;
   onFavorite: (page: PageTreeEntry) => void;
-  onMove: (page: PageTreeEntry, direction: "up" | "down") => void;
+  onReorder: (id: string, position: { before?: string; after?: string }) => void;
   onMoveToSection: (page: PageTreeEntry, sectionId: string) => void;
-  onNest: (page: PageTreeEntry) => void;
-  onUnnest: (page: PageTreeEntry) => void;
   onDelete: (page: PageTreeEntry) => void;
 }
 
 interface PageListProps extends PageActions {
-  nodes: PageNode[];
+  pages: PageTreeEntry[];
   sections: XenNoteSection[];
   sectionId: string;
   activePageId: string | undefined;
@@ -41,45 +36,61 @@ interface PageListProps extends PageActions {
   /** How many archived pages the section has (the switch only shows when there are some). */
   archivedCount: number;
   onShowArchived: (show: boolean) => void;
-  /** The first top-level page can't be nested; this says which pages can be (those with a page above them). */
-  canNest: (page: PageTreeEntry) => boolean;
-  canMove: (page: PageTreeEntry, direction: "up" | "down") => boolean;
+  reordering: boolean;
 }
 
 function PageRow({
   page,
-  nested,
   selected,
   canEdit,
   onOpen,
   onMenu,
+  dragging,
+  dropEdge,
+  reorder,
 }: {
   page: PageTreeEntry;
-  nested: boolean;
   selected: boolean;
   canEdit: boolean;
   onOpen: () => void;
   onMenu: (anchor: HTMLElement) => void;
+  dragging: boolean;
+  dropEdge?: PageDrop["edge"];
+  reorder?: ReorderRowProps;
 }) {
   const theme = useTheme();
   const dot = swatchColor(theme, page.color as never);
   return (
     <Box
+      data-page-row={page.id}
       sx={{
         display: "flex",
+        position: "relative",
         alignItems: "stretch",
-        ml: nested ? 3 : 0,
         border: 1,
         borderColor: selected ? "primary.main" : "divider",
         bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : "background.paper",
         borderRadius: 2,
-        opacity: page.archived ? 0.6 : 1,
+        opacity: dragging ? 0.4 : page.archived ? 0.6 : 1,
+        ...(dropEdge && {
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            insetInline: 0,
+            [dropEdge === "before" ? "top" : "bottom"]: -5,
+            height: 2,
+            bgcolor: "primary.main",
+            borderRadius: 1,
+            pointerEvents: "none",
+          },
+        }),
       }}
     >
       <Box
         component="button"
         type="button"
         onClick={onOpen}
+        {...reorder}
         aria-current={selected ? "page" : undefined}
         sx={{
           all: "unset",
@@ -90,6 +101,7 @@ function PageRow({
           px: 1.5,
           py: 1.25,
           borderRadius: 2,
+          ...(reorder && reorderRowSx(dragging)),
           "&:focus-visible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main" },
         }}
       >
@@ -123,20 +135,13 @@ function PageRow({
   );
 }
 
-/** The pages of the open section: top-level pages with their sub-pages indented, and a menu on each. */
+/** The pages of the open section. */
 export default function PageList(props: PageListProps) {
-  const {
-    nodes,
-    sections,
-    sectionId,
-    activePageId,
-    canEdit,
-    showArchived,
-    archivedCount,
-    onShowArchived,
-    canNest,
-    canMove,
-  } = props;
+  const { pages, sections, sectionId, activePageId, canEdit, showArchived, archivedCount, onShowArchived, reordering } =
+    props;
+  const { listProps, drag, getRowProps } = useListDrag("data-page-row", props.onReorder);
+  const canReorder =
+    canEdit && !reordering && pages.length > 1 && sections.find((section) => section.id === sectionId)?.kind !== "journal";
   const [menu, setMenu] = useState<{ anchor: HTMLElement; page: PageTreeEntry } | null>(null);
   const close = () => setMenu(null);
   const page = menu?.page;
@@ -144,42 +149,26 @@ export default function PageList(props: PageListProps) {
     close();
     run();
   };
-
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <Box sx={{ display: "flex", alignItems: "center", px: 0.5 }}>
-        <Typography variant="caption" sx={{ ...sectionLabelSx, flex: 1 }}>
-          Pages
+    <Box {...listProps} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      {pages.length === 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ px: 0.5, py: 0.75 }}>
+          No pages
         </Typography>
-        {canEdit && (
-          <Button size="small" startIcon={<AddIcon />} onClick={() => props.onCreate(null)}>
-            New page
-          </Button>
-        )}
-      </Box>
+      )}
 
-      {nodes.map(({ page: p, children }) => (
-        <Box key={p.id} sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-          <PageRow
-            page={p}
-            nested={false}
-            selected={p.id === activePageId}
-            canEdit={canEdit}
-            onOpen={() => props.onOpen(p.id)}
-            onMenu={(anchor) => setMenu({ anchor, page: p })}
-          />
-          {children.map((c) => (
-            <PageRow
-              key={c.id}
-              page={c}
-              nested
-              selected={c.id === activePageId}
-              canEdit={canEdit}
-              onOpen={() => props.onOpen(c.id)}
-              onMenu={(anchor) => setMenu({ anchor, page: c })}
-            />
-          ))}
-        </Box>
+      {pages.map((page) => (
+        <PageRow
+          key={page.id}
+          page={page}
+          selected={page.id === activePageId}
+          canEdit={canEdit}
+          onOpen={() => props.onOpen(page.id)}
+          onMenu={(anchor) => setMenu({ anchor, page })}
+          dragging={drag?.id === page.id}
+          dropEdge={drag?.target?.id === page.id ? drag.target.edge : undefined}
+          reorder={canReorder ? getRowProps(page.id) : undefined}
+        />
       ))}
 
       {(archivedCount > 0 || showArchived) && (
@@ -191,26 +180,11 @@ export default function PageList(props: PageListProps) {
       )}
 
       <Menu anchorEl={menu?.anchor} open={!!menu} onClose={close}>
-        {page && !page.parent_id && <MenuItem onClick={pick(() => props.onCreate(page.id))}>Add a sub-page</MenuItem>}
         {page && (
           <MenuItem onClick={pick(() => props.onFavorite(page))}>
             {page.favorite ? "Remove from favourites" : "Add to favourites"}
           </MenuItem>
         )}
-        {page && (
-          <MenuItem disabled={!canMove(page, "up")} onClick={pick(() => props.onMove(page, "up"))}>
-            Move up
-          </MenuItem>
-        )}
-        {page && (
-          <MenuItem disabled={!canMove(page, "down")} onClick={pick(() => props.onMove(page, "down"))}>
-            Move down
-          </MenuItem>
-        )}
-        {page && !page.parent_id && canNest(page) && (
-          <MenuItem onClick={pick(() => props.onNest(page))}>Make it a sub-page of the page above</MenuItem>
-        )}
-        {page?.parent_id && <MenuItem onClick={pick(() => props.onUnnest(page))}>Make it a top-level page</MenuItem>}
         {page && sections.filter((s) => s.id !== sectionId && s.kind !== "journal").length > 0 && (
           <ListSubheader sx={{ lineHeight: 2 }}>Move to section</ListSubheader>
         )}

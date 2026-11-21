@@ -4,20 +4,17 @@ import { AppError, callerId } from "../../utils/http";
 import { XenNotebook } from "../../models/xenNote";
 import { XenNotePage, XenNoteSection, type XenNotePageAttrs, type XenNoteSectionAttrs } from "../../models/xenNotePage";
 import { SocketManager } from "../../infrastructure/SocketManager";
-import { canEdit, canView, type MemberRole } from "../../utils/membership";
-import { canManagePage, pageRole } from "../../utils/xenNotePages";
+import { canEdit, canView, roleOf, type MemberRole } from "../../utils/membership";
+import { canManagePage } from "../../utils/xenNotePages";
 import type { PageTreeEntry } from "../../../shared/xennote/pages";
 import type { NotebookDoc } from "./shared";
 
-// Who may do what with sections and pages. Sections follow their notebook alone. A page follows its notebook too, and
-// can also be shared with chosen people who are not in the notebook (`page.members`); someone added to a page also
-// sees its sub-pages. A person's role on a page is the best of those. Only notebook editors move, delete or share a
-// page. Someone who can't see a section or page gets a 404, so ids can't be probed.
+// Access to sections and pages follows notebook membership.
 
 export type SectionDoc = HydratedDocument<XenNoteSectionAttrs>;
 export type PageDoc = HydratedDocument<XenNotePageAttrs>;
 
-export { pageRole, canManagePage };
+export { canManagePage };
 
 interface LoadOptions {
   /** Also find what is in the trash (the Trash view, restoring, deleting for good). */
@@ -39,40 +36,30 @@ export async function loadSection(
   return { section, notebook };
 }
 
-/** A page, its notebook and its parent page (if a sub-page), checked for the access `need`. */
+/** A page and its notebook, checked for the requested access. */
 export async function loadPage(
   req: Request,
   id: string,
   need: "view" | "edit" | "manage",
   options: LoadOptions = {},
-): Promise<{ page: PageDoc; notebook: NotebookDoc; parent: PageDoc | null; role: MemberRole }> {
+): Promise<{ page: PageDoc; notebook: NotebookDoc; role: MemberRole }> {
   const uid = callerId(req);
   const include = { includeDeleted: !!options.includeDeleted };
   const page = await XenNotePage.findById(id).setOptions(include);
   if (!page) throw new AppError(404, "Page not found");
-  const [notebook, parent] = await Promise.all([
-    XenNotebook.findById(page.notebook_id),
-    page.parent_id ? XenNotePage.findById(page.parent_id).setOptions(include) : null,
-  ]);
+  const notebook = await XenNotebook.findById(page.notebook_id);
   if (!notebook) throw new AppError(404, "Page not found");
-  const role = pageRole(page.toObject(), notebook.toObject(), parent?.toObject() ?? null, uid);
+  const role = roleOf(notebook.toObject(), uid);
   if (!role) throw new AppError(404, "Page not found");
   if (need === "edit" && role === "viewer") throw new AppError(403, "You can only view this page");
   if (need === "manage" && !canManagePage(notebook.toObject(), uid)) {
     throw new AppError(403, "Only people who can edit the notebook can do that");
   }
-  return { page, notebook, parent, role };
+  return { page, notebook, role };
 }
 
-/** Everyone who can see a page: the notebook's people, and anyone added to the page or to its parent. */
-export function pageAudience(notebook: NotebookDoc, page: PageDoc, parent: PageDoc | null = null): string[] {
-  return [
-    ...new Set([
-      ...notebook.members.map((m) => m.user_id),
-      ...page.members.map((m) => m.user_id),
-      ...(parent?.members.map((m) => m.user_id) ?? []),
-    ]),
-  ];
+export function notebookAudience(notebook: NotebookDoc): string[] {
+  return notebook.members.map((member) => member.user_id);
 }
 
 /** Tell the people who can see a notebook that its sections or pages changed. */
@@ -80,8 +67,8 @@ export async function markNotebookChanged(notebook: NotebookDoc) {
   await XenNotebook.updateOne({ _id: notebook._id }, { $max: { content_updated_at: new Date() } });
 }
 
-export function notifyTree(notebook: NotebookDoc, extra: string[] = []) {
-  const ids = [...new Set([...notebook.members.map((m) => m.user_id), ...extra])];
+export function notifyTree(notebook: NotebookDoc) {
+  const ids = notebookAudience(notebook);
   SocketManager.getInstance().notifyXenNoteNotebookUpdate(ids, notebook.id as string);
 }
 
@@ -100,7 +87,6 @@ export const serializeSection = (s: SectionDoc) => ({
 export const treeEntry = (page: PageDoc, uid: string): PageTreeEntry => ({
   id: page.id as string,
   section_id: String(page.section_id),
-  parent_id: page.parent_id ? String(page.parent_id) : null,
   order: page.order,
   title: page.title,
   icon: page.icon ?? null,

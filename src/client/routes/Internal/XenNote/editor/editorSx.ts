@@ -10,7 +10,7 @@ const CALLOUT: Record<string, "info" | "success" | "warning" | "error"> = {
   danger: "error",
 };
 
-export const editorSx: SxProps<Theme> = (theme: Theme) => {
+export const editorSx = ((theme: Theme) => {
   // The card radius (RADIUS.lg in theme/index.ts, in px).
   const radius = Number(theme.shape.borderRadius) * 2;
   return {
@@ -133,4 +133,4 @@ export const editorSx: SxProps<Theme> = (theme: Theme) => {
     "& .ProseMirror .ProseMirror-selectednode": { outline: `2px solid ${theme.palette.primary.main}`, borderRadius: 4 },
     "& .ProseMirror .ProseMirror-gapcursor::after": { borderTopColor: theme.palette.text.primary },
   };
-};
+}) satisfies SxProps<Theme>;

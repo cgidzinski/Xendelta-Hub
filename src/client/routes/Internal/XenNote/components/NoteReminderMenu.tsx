@@ -9,6 +9,7 @@ import { formatReminder, reminderPresets } from "../reminders";
 interface NoteReminderMenuProps {
   anchor: HTMLElement | null;
   onClose: () => void;
+  openAbove?: boolean;
   /** My reminder on this note, if I have one. */
   reminder: XenNote["reminder"];
   /** An ISO time to set the reminder for, or null to remove it. */
@@ -16,7 +17,7 @@ interface NoteReminderMenuProps {
 }
 
 /** The quick choices for reminding me about a note, a date and time of my own, and removing it. */
-export default function NoteReminderMenu({ anchor, onClose, reminder, onSet }: NoteReminderMenuProps) {
+export default function NoteReminderMenu({ anchor, onClose, openAbove, reminder, onSet }: NoteReminderMenuProps) {
   const [custom, setCustom] = useState("");
   const now = new Date();
   const min = format(now, "yyyy-MM-dd'T'HH:mm");
@@ -29,7 +30,14 @@ export default function NoteReminderMenu({ anchor, onClose, reminder, onSet }: N
   };
 
   return (
-    <Menu open={!!anchor} anchorEl={anchor} onClose={onClose} slotProps={{ paper: { sx: { minWidth: 260 } } }}>
+    <Menu
+      open={!!anchor}
+      anchorEl={anchor}
+      onClose={onClose}
+      anchorOrigin={openAbove ? { vertical: "top", horizontal: "right" } : undefined}
+      transformOrigin={openAbove ? { vertical: "bottom", horizontal: "right" } : undefined}
+      slotProps={{ paper: { sx: { minWidth: 260 } } }}
+    >
       <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 0.5, display: "block" }}>
         {reminder
           ? reminder.sent

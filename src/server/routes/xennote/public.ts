@@ -38,37 +38,24 @@ export function registerPublicNoteRoutes(app: any) {
       if (!book) throw new AppError(404, "Link not found");
       const [sections, pages] = await Promise.all([
         XenNoteSection.find({ notebook_id: book._id }, "name order").sort({ order: 1, _id: 1 }).lean(),
-        XenNotePage.find({ notebook_id: book._id, ...visible }, "title section_id parent_id order")
+        XenNotePage.find({ notebook_id: book._id, ...visible }, "title section_id order")
           .sort({ order: 1, _id: 1 })
           .lean(),
       ]);
       const sectionIds = new Set(sections.map((s) => String(s._id)));
       const inSection = pages.filter((p) => sectionIds.has(String(p.section_id)));
-      const roots = new Set(inSection.filter((p) => !p.parent_id).map((p) => String(p._id)));
       res.json({
         status: true,
         data: {
           notebook: { name: book.name, color: book.color },
           sections: sections.map((s) => ({ id: String(s._id), name: s.name })),
-          pages: inSection
-            .filter((p) => !p.parent_id || roots.has(String(p.parent_id)))
-            .map((p) => ({
-              id: String(p._id),
-              title: p.title,
-              section_id: String(p.section_id),
-              parent_id: p.parent_id ? String(p.parent_id) : null,
-            })),
+          pages: inSection.map((p) => ({
+            id: String(p._id),
+            title: p.title,
+            section_id: String(p.section_id),
+          })),
         },
       });
-    },
-  );
-  app.get(
-    "/api/xennote/public/page/:token",
-    validateParams(xenNoteTokenParamSchema),
-    async (req: Request, res: Response) => {
-      const page = await XenNotePage.findOne({ "share.token": req.params.token, "share.enabled": true });
-      if (!page || !(await XenNotebook.exists({ _id: page.notebook_id }))) throw new AppError(404, "Link not found");
-      res.json({ status: true, data: await publicPage(page) });
     },
   );
 
@@ -81,11 +68,8 @@ export function registerPublicNoteRoutes(app: any) {
       if (!book) throw new AppError(404, "Link not found");
       const page = await XenNotePage.findOne({ _id: id, notebook_id: book._id, ...visible });
       if (!page) throw new AppError(404, "Link not found");
-      const [section, parent] = await Promise.all([
-        XenNoteSection.exists({ _id: page.section_id, notebook_id: book._id }),
-        page.parent_id ? XenNotePage.exists({ _id: page.parent_id, section_id: page.section_id, ...visible }) : true,
-      ]);
-      if (!section || !parent) throw new AppError(404, "Link not found");
+      const section = await XenNoteSection.exists({ _id: page.section_id, notebook_id: book._id });
+      if (!section) throw new AppError(404, "Link not found");
       res.json({ status: true, data: await publicPage(page) });
     },
   );

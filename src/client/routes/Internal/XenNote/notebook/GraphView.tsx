@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Autocomplete,
@@ -16,7 +16,6 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { NotebookGraph } from "@shared/xennote/graph";
 import { api } from "../../../../config/api";
 import { useLocalStorageState } from "../../../../hooks/useLocalStorageState";
@@ -27,6 +26,7 @@ import PageHeader from "../../../../components/ui/PageHeader";
 import DetailSkeleton from "../../../../components/ui/DetailSkeleton";
 import EmptyState from "../../../../components/ui/EmptyState";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
+import NoteNavButton from "../components/NoteNavButton";
 
 const Graph2D = lazy(() => import("./GraphCanvas2D"));
 const Graph3D = lazy(() => import("./GraphCanvas3D"));
@@ -34,8 +34,7 @@ const isMode = (value: unknown): value is "2d" | "3d" => value === "2d" || value
 const isBool = (value: unknown): value is boolean => typeof value === "boolean";
 const BOARD = "/internal/xennote";
 
-export default function GraphView() {
-  const { notebookId } = useParams();
+export default function GraphView({ notebookId }: { notebookId?: string }) {
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
@@ -62,7 +61,7 @@ export default function GraphView() {
       return api.get<NotebookGraph>(`/api/xennote/graph?${params}`);
     },
   });
-  const title = query.data?.notebook_name ? `Graph: ${query.data.notebook_name}` : "Notebook graph";
+  const title = query.data?.notebook_name ? `Graph: ${query.data.notebook_name}` : "Graph";
   useTitle(title);
   useEffect(() => {
     if (!frame.current) return;
@@ -83,7 +82,7 @@ export default function GraphView() {
   );
   const selected = nodes?.find((node) => node.id === selectedId) ?? null;
   const modeShown = webgl ? mode : "2d";
-  const height = mobile ? 420 : 580;
+  const height = mobile || (width > 0 && width < 480) ? 420 : 580;
   const openSelected = () => {
     if (!selected) return;
     const book = selected.notebook_id ? `/b/${selected.notebook_id}` : "";
@@ -97,20 +96,14 @@ export default function GraphView() {
 
   return (
     <PageContainer width="wide">
-      <PageHeader
-        title={title}
-        actions={
-          <Button component={Link} to={notebookId ? `${BOARD}/b/${notebookId}` : BOARD} startIcon={<ArrowBackIcon />}>
-            Back
-          </Button>
-        }
-      />
-      <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} mb={2} alignItems={{ sm: "center" }}>
+      <PageHeader title={title} subtitle={notebookId ? undefined : "All notebooks"} actions={<NoteNavButton />} />
+      <Stack direction="row" gap={1.5} mb={2} alignItems="center" flexWrap="wrap">
         <ToggleButtonGroup
           value={modeShown}
           exclusive
           size="small"
           aria-label="Graph dimension"
+          sx={{ "& .MuiToggleButton-root": { px: 2, py: 1 } }}
           onChange={(_, next: unknown) => {
             if (isMode(next)) setMode(next);
           }}
@@ -134,7 +127,7 @@ export default function GraphView() {
           getOptionKey={(n) => n.id}
           getOptionLabel={(n) => (n.notebook_name ? `${n.label} · ${n.notebook_name}` : n.label)}
           renderInput={(params) => <TextField {...params} label="Find a page or tag" size="small" />}
-          sx={{ minWidth: { sm: 260 }, flex: 1 }}
+          sx={{ minWidth: "min(240px, 100%)", flex: 1 }}
         />
       </Stack>
       <Paper variant="outlined" sx={{ overflow: "hidden", borderRadius: 2 }}>

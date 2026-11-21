@@ -26,20 +26,21 @@ it("only graphs accessible pages and edges and optionally merges equal tags acro
   await pages.updateOne({ _id: left.page }, { tags: ["trip"], links: [right.page, hidden.page] });
   await pages.updateOne({ _id: right.page }, { tags: ["trip"] });
   await note("post", `/notebooks/${left.b}/members`).send({ userIds: [guest.user.id], role: "viewer" });
-  await note("post", `/pages/${right.page}/people`).send({ userIds: [guest.user.id], role: "viewer" });
+  await note("post", `/notebooks/${right.b}/members`).send({ userIds: [guest.user.id], role: "viewer" });
+  await pages.updateOne({ _id: hidden.page }, { members: [{ user_id: guest.user.id, role: "viewer" }] });
 
   const visible = (await note("get", "/graph", guest)).body.data;
   expect(visible.nodes.filter((n: { kind: string }) => n.kind === "tag")).toHaveLength(2);
   expect(visible.nodes).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: hidden.page })]));
   expect(visible.nodes).toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: right.page, notebook_name: null, notebook_id: null })]),
+    expect.arrayContaining([expect.objectContaining({ id: right.page, notebook_name: "Right", notebook_id: right.b })]),
   );
   expect(visible.links.filter((edge: { kind: string }) => edge.kind === "link")).toEqual([
     { source: left.page, target: right.page, kind: "link" },
   ]);
   const merged = (await note("get", "/graph?mergeTags=true", guest)).body.data;
   expect(merged.nodes.filter((n: { kind: string }) => n.kind === "tag")).toHaveLength(1);
-  expect((await note("get", `/graph?notebook=${right.b}`, guest)).status).toBe(404);
+  expect((await note("get", `/graph?notebook=${hidden.b}`, guest)).status).toBe(404);
   const scoped = (await note("get", `/graph?notebook=${left.b}`, guest)).body.data;
   expect(scoped.notebook_name).toBe("Left");
   expect(scoped.links.every((edge: { kind: string }) => edge.kind === "tag")).toBe(true);

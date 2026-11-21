@@ -50,12 +50,13 @@ export default function DriveRail() {
         <ScheduleIcon fontSize="small" />
         Recent
       </Box>
+
+      <Box sx={{ flex: 1 }} />
+
       <Box component={NavLink} to={`${XENDRIVE_ROOT}/trash`} sx={railItemSx}>
         <DeleteOutlineIcon fontSize="small" />
         Trash
       </Box>
-
-      <Box sx={{ flex: 1 }} />
 
       {usage && (
         <Box sx={{ p: 1.75, border: 1, borderColor: "divider", borderRadius: 2.5 }}>

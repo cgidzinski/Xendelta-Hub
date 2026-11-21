@@ -190,7 +190,15 @@ export default function NotebookDialog({
       onClose={onClose}
       maxWidth="sm"
       title={live ? live.name : "New notebook"}
-      actions={<Button onClick={onClose}>Done</Button>}
+      actions={
+        live ? (
+          <Button onClick={onClose}>Done</Button>
+        ) : (
+          <Button variant="contained" onClick={saveGeneral} disabled={!name.trim() || actions.createNotebook.isPending}>
+            Create notebook
+          </Button>
+        )
+      }
     >
       {live && (
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
@@ -201,7 +209,7 @@ export default function NotebookDialog({
       )}
 
       {tab === "general" && (
-        <Stack spacing={2}>
+        <Stack spacing={2} sx={{ pt: live ? 0 : 1.5 }}>
           <TextField
             label="Name"
             value={name}
@@ -235,16 +243,14 @@ export default function NotebookDialog({
               ))}
             </Box>
           </Box>
-          {owner && (
+          {live && owner && (
             <Box sx={{ display: "flex", gap: 1 }}>
               <Button variant="contained" onClick={saveGeneral} disabled={!name.trim()}>
-                {live ? "Save" : "Create notebook"}
+                Save
               </Button>
-              {live && (
-                <Button color="error" onClick={remove} sx={{ ml: "auto" }}>
-                  Delete notebook
-                </Button>
-              )}
+              <Button color="error" onClick={remove} sx={{ ml: "auto" }}>
+                Delete notebook
+              </Button>
             </Box>
           )}
           {live && !owner && <Alert severity="info">Only the owner can rename or delete this notebook.</Alert>}

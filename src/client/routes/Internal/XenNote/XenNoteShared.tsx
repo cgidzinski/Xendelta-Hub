@@ -5,7 +5,7 @@ import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useTitle } from "../../../hooks/useTitle";
-import { SharedNotebookReader, SharedPageReader } from "../../External/XenNotePublic/SharedPageReader";
+import { SharedNotebookReader } from "../../External/XenNotePublic/SharedPageReader";
 import { usePublicNote, usePublicNotebook } from "../../../hooks/xennote/useXenNote";
 import NoteCard from "./components/NoteCard";
 
@@ -76,9 +76,4 @@ export function XenNoteSharedNotebook() {
     );
   }
   return <SharedNotebookReader data={data} signedIn />;
-}
-
-export function XenNoteSharedPublicPage() {
-  const { token } = useParams<{ token: string }>();
-  return <SharedPageReader token={token} signedIn />;
 }

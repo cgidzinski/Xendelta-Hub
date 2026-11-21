@@ -116,15 +116,10 @@ describe("XenNote notebook cutover", () => {
     expect(await all.collection("xennotesections").countDocuments({ notebook_id: book })).toBe(2);
 
     expect((await api("get", `/pages/${id}`, owner)).status).toBe(200);
-    expect((await api("get", `/pages/${id}`, guest)).status).toBe(200);
+    expect((await api("get", `/pages/${id}`, guest)).status).toBe(404);
     expect((await api("get", `/pages/${id}`, stranger)).status).toBe(404);
-    expect((await api("get", `/public/page/${token}`)).body.data.id).toBe(String(id));
-    expect((await api("get", `/shared/page/${token}`, guest)).body.data).toMatchObject({
-      access: "member",
-      role: "viewer",
-      page_id: String(id),
-      notebook_id: null,
-    });
+    expect((await api("get", `/public/page/${token}`, owner)).status).toBe(404);
+    expect((await api("get", `/shared/page/${token}`, guest)).status).toBe(404);
     expect((await api("get", `/public/notebook/${notebookShare}`)).body.data.pages).toHaveLength(2);
 
     const future = new Date(Date.now() + 120_000);
@@ -232,7 +227,7 @@ describe("XenNote notebook cutover", () => {
     ).toBe(400);
     expect((await api("get", `/public/note/${pageToken}`)).status).toBe(404);
     expect((await api("get", `/shared/note/${pageToken}`, owner)).status).toBe(404);
-    expect((await api("get", `/public/page/${pageToken}`)).body.data.id).toBe(String(legacy));
+    expect((await api("get", `/public/page/${pageToken}`, owner)).status).toBe(404);
     expect((await api("get", `/public/note/${noteToken}`)).body.data.note.title).toBe("Loose");
     expect((await api("get", `/shared/note/${noteToken}`, viewer)).body.data.access).toBe("link");
     const notebook = (await api("get", `/public/notebook/${bookToken}`)).body.data;

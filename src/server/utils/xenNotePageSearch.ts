@@ -12,8 +12,7 @@ export interface PageHit {
   title: string;
   notebook_id: string;
   notebook_name: string | null;
-  /** Whether the person is in the page's notebook (otherwise the page was shared with them alone). */
-  in_notebook: boolean;
+  in_notebook: true;
   section_id: string;
   section_name: string | null;
   color: string;
@@ -25,19 +24,10 @@ export interface PageHit {
   updated_at: string;
 }
 
-/** The pages `uid` can see: those in their notebooks, those shared with them, and the sub-pages of those. */
+/** The pages in notebooks the caller belongs to. */
 export async function visiblePagesFilter(uid: string): Promise<Record<string, unknown>> {
-  const [books, shared] = await Promise.all([
-    XenNotebook.find({ "members.user_id": uid }, "_id").lean(),
-    XenNotePage.find({ "members.user_id": uid }, "_id").lean(),
-  ]);
-  return {
-    $or: [
-      { notebook_id: { $in: books.map((b) => b._id) } },
-      { "members.user_id": uid },
-      { parent_id: { $in: shared.map((p) => p._id) } },
-    ],
-  };
+  const books = await XenNotebook.find({ "members.user_id": uid }, "_id").lean();
+  return { notebook_id: { $in: books.map((b) => b._id) } };
 }
 
 /** A short piece of `text` around the first of these words, for showing why a page matched. */
@@ -77,26 +67,27 @@ async function decorate(uid: string, rows: PageRow[], how: Map<string, { alias: 
   ]);
   const bookById = new Map(books.map((b) => [String(b._id), b]));
   const sectionById = new Map(sections.map((s) => [String(s._id), s.name]));
-  return rows.map((r): PageHit => {
+  return rows.flatMap((r): PageHit[] => {
     const book = bookById.get(String(r.notebook_id));
-    const inNotebook = !!book?.members.some((m) => m.user_id === uid);
+    if (!book?.members.some((m) => m.user_id === uid)) return [];
     const id = String(r._id);
-    return {
-      id,
-      title: r.title,
-      notebook_id: String(r.notebook_id),
-      // The notebook's name is only for people who are in it.
-      notebook_name: inNotebook ? (book?.name ?? null) : null,
-      in_notebook: inNotebook,
-      section_id: String(r.section_id),
-      section_name: inNotebook ? (sectionById.get(String(r.section_id)) ?? null) : null,
-      color: r.color,
-      icon: r.icon ?? null,
-      tags: r.tags,
-      snippet: how.get(id)?.snippet ?? r.excerpt,
-      matched_alias: how.get(id)?.alias ?? null,
-      updated_at: r.updated_at.toISOString(),
-    };
+    return [
+      {
+        id,
+        title: r.title,
+        notebook_id: String(r.notebook_id),
+        notebook_name: book.name,
+        in_notebook: true,
+        section_id: String(r.section_id),
+        section_name: sectionById.get(String(r.section_id)) ?? null,
+        color: r.color,
+        icon: r.icon ?? null,
+        tags: r.tags,
+        snippet: how.get(id)?.snippet ?? r.excerpt,
+        matched_alias: how.get(id)?.alias ?? null,
+        updated_at: r.updated_at.toISOString(),
+      },
+    ];
   });
 }
 

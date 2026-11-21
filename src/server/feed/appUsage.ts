@@ -24,7 +24,12 @@ const CHECKS: Record<string, (userId: string) => Promise<unknown>> = {
   xenstart: (id) =>
     XenStart.exists({
       owner_id: id,
-      $or: [{ "links.0": { $exists: true } }, { "sections.0": { $exists: true } }, { layout: { $exists: true } }],
+      $or: [
+        { "links.0": { $exists: true } },
+        { "sections.0": { $exists: true } },
+        { layout: { $exists: true } },
+        { "backgroundImage.id": { $exists: true } },
+      ],
     }),
 };
 

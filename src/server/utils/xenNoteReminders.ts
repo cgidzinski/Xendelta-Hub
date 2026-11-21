@@ -1,7 +1,7 @@
 import { XenNote, XenNotebook } from "../models/xenNote";
 import { XenNotePage } from "../models/xenNotePage";
 import { noteRole } from "../routes/xennote/shared";
-import { pageRole } from "./xenNotePages";
+import { canView } from "./membership";
 import { notify } from "./notificationUtils";
 
 // Sends the reminders people set on notes (routes/xennote/notes.ts). Runs every minute from the scheduler. A reminder
@@ -114,13 +114,9 @@ export async function runNoteReminders(now: Date = new Date()): Promise<void> {
       kind: "page",
       items: pages,
       canRead: async (page, uid) => {
-        const fresh = await XenNotePage.findById(page._id, "notebook_id parent_id members").lean();
-        if (!fresh) return false;
-        const [book, parent] = await Promise.all([
-          bookFor(String(fresh.notebook_id)),
-          fresh.parent_id ? XenNotePage.findById(fresh.parent_id, "members").lean() : null,
-        ]);
-        return !!book && !!pageRole(fresh, book, parent, uid);
+        const fresh = await XenNotePage.findById(page._id, "notebook_id").lean();
+        const book = fresh ? await bookFor(String(fresh.notebook_id)) : null;
+        return !!book && canView(book, uid);
       },
       claim: async (id, uid, at, time) =>
         (await XenNotePage.updateOne(pending(id, uid, at), { $set: { "reminders.$.notified_at": time } }))

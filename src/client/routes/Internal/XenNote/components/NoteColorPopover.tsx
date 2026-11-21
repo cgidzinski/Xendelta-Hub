@@ -6,20 +6,22 @@ import { NOTE_COLOR_LABELS, swatchColor } from "../noteColors";
 interface NoteColorPopoverProps {
   anchor: HTMLElement | null;
   value: string;
+  alignRight?: boolean;
   onPick: (color: (typeof NOTE_COLORS)[number]) => void;
   onClose: () => void;
 }
 
 /** The row of colour swatches for a note. */
-export default function NoteColorPopover({ anchor, value, onPick, onClose }: NoteColorPopoverProps) {
+export default function NoteColorPopover({ anchor, value, alignRight, onPick, onClose }: NoteColorPopoverProps) {
   const theme = useTheme();
+  const horizontal = alignRight ? "right" : "left";
   return (
     <Popover
       open={!!anchor}
       anchorEl={anchor}
       onClose={onClose}
-      anchorOrigin={{ vertical: "top", horizontal: "left" }}
-      transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+      anchorOrigin={{ vertical: "top", horizontal }}
+      transformOrigin={{ vertical: "bottom", horizontal }}
     >
       <Box sx={{ display: "flex", gap: 1, p: 1.5 }} role="group" aria-label="Note colour">
         {NOTE_COLORS.map((c) => {

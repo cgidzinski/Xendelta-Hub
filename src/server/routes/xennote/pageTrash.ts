@@ -5,11 +5,10 @@ import { XenNotePage, XenNoteSection } from "../../models/xenNotePage";
 import { purgeDate } from "../../utils/softDelete";
 import { deletePagesForever, deleteSectionForever, restorePage, restoreSection } from "../../utils/xenNotePages";
 import { loadNotebook } from "./shared";
-import { loadPage, loadSection, markNotebookChanged, notifyTree, pageAudience } from "./pageAccess";
+import { loadPage, loadSection, markNotebookChanged, notifyTree } from "./pageAccess";
 
 // The Trash for a notebook's sections and pages: anyone who can edit the notebook sees what was deleted in it, brings it
-// back, or removes it for good. A page deleted with its section (or a sub-page deleted with its page) is not listed on
-// its own: it comes back with the one that took it.
+// back, or removes it for good. Pages deleted with their section are restored with it.
 
 export function registerPageTrashRoutes(app: any) {
   app.get(
@@ -24,7 +23,7 @@ export function registerPageTrashRoutes(app: any) {
           .lean(),
         XenNotePage.find({ notebook_id: notebook._id, deleted_at: { $ne: null }, deleted_with: null })
           .setOptions({ includeDeleted: true })
-          .select("title section_id parent_id excerpt deleted_at deleted_by")
+          .select("title section_id excerpt deleted_at deleted_by")
           .sort({ deleted_at: -1 })
           .limit(500)
           .lean(),
@@ -66,16 +65,15 @@ export function registerPageTrashRoutes(app: any) {
     "/api/xennote/pages/:id/restore",
     validateParams(xenNoteIdParamSchema),
     async (req: Request, res: Response) => {
-      const { page, notebook, parent } = await loadPage(req, req.params.id as string, "manage", {
+      const { page, notebook } = await loadPage(req, req.params.id as string, "manage", {
         includeDeleted: true,
       });
       if (!page.deleted_at) throw new AppError(404, "Page not found in the Trash");
       const section = await XenNoteSection.findById(page.section_id).setOptions({ includeDeleted: true });
       if (!section || section.deleted_at) throw new AppError(409, "Restore its section first");
-      if (parent?.deleted_at) throw new AppError(409, "Restore its parent page first");
       await restorePage(page._id);
       await markNotebookChanged(notebook);
-      notifyTree(notebook, pageAudience(notebook, page, parent));
+      notifyTree(notebook);
       res.json({ status: true, message: "Page restored" });
     },
   );
@@ -86,7 +84,7 @@ export function registerPageTrashRoutes(app: any) {
     async (req: Request, res: Response) => {
       const { page, notebook } = await loadPage(req, req.params.id as string, "manage", { includeDeleted: true });
       if (!page.deleted_at) throw new AppError(404, "Page not found in the Trash");
-      await deletePagesForever({ $or: [{ _id: page._id }, { parent_id: page._id }] });
+      await deletePagesForever({ _id: page._id });
       await markNotebookChanged(notebook);
       notifyTree(notebook);
       res.json({ status: true, message: "Page deleted for good" });

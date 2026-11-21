@@ -1,19 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { PageTreeEntry, XenNoteSection } from "../../../../types/XenNotePage";
-import {
-  activeSectionId,
-  byOrder,
-  moveNeighbour,
-  pageNodes,
-  pageTitle,
-  previousTopLevel,
-  siblingsOf,
-} from "./pageTree";
+import { activeSectionId, byOrder, pageDropPosition, pagesInSection, pageTitle } from "./pageTree";
 
 const page = (id: string, order: string, extra: Partial<PageTreeEntry> = {}): PageTreeEntry => ({
   id,
   section_id: "s1",
-  parent_id: null,
   order,
   title: id,
   icon: null,
@@ -38,30 +29,20 @@ const section = (id: string): XenNoteSection => ({
   updated_at: "",
 });
 
-describe("pageNodes", () => {
+describe("pagesInSection", () => {
   const pages = [
     page("b", "a1"),
     page("a", "a0"),
-    page("a-2", "a1", { parent_id: "a" }),
-    page("a-1", "a0", { parent_id: "a" }),
     page("old", "a2", { archived: true }),
     page("other", "a0", { section_id: "s2" }),
   ];
 
-  it("lists a section's top-level pages in order, each with its sub-pages in order", () => {
-    const nodes = pageNodes(pages, "s1");
-    expect(nodes.map((n) => n.page.id)).toEqual(["a", "b"]);
-    expect(nodes[0].children.map((c) => c.id)).toEqual(["a-1", "a-2"]);
-    expect(nodes[1].children).toEqual([]);
+  it("lists a section's pages in order", () => {
+    expect(pagesInSection(pages, "s1").map((page) => page.id)).toEqual(["a", "b"]);
   });
 
   it("leaves out archived pages unless asked", () => {
-    expect(pageNodes(pages, "s1", true).map((n) => n.page.id)).toEqual(["a", "b", "old"]);
-  });
-
-  it("leaves out an archived page's sub-pages with it", () => {
-    const withArchivedParent = [page("p", "a0", { archived: true }), page("c", "a0", { parent_id: "p" })];
-    expect(pageNodes(withArchivedParent, "s1")).toEqual([]);
+    expect(pagesInSection(pages, "s1", true).map((page) => page.id)).toEqual(["a", "b", "old"]);
   });
 });
 
@@ -71,28 +52,21 @@ describe("byOrder", () => {
   });
 });
 
-describe("moving", () => {
-  const pages = [page("a", "a0"), page("b", "a1"), page("c", "a2"), page("a-1", "a0", { parent_id: "a" })];
+describe("pageDropPosition", () => {
+  const ids = ["a", "b", "c", "d"];
 
-  it("finds the sibling a page goes before when it moves up, and after when it moves down", () => {
-    expect(moveNeighbour(pages, pages[1], "up")).toEqual({ before: "a" });
-    expect(moveNeighbour(pages, pages[1], "down")).toEqual({ after: "c" });
+  it("places a page before or after the drop target", () => {
+    expect(pageDropPosition(ids, "d", { id: "a", edge: "before" })).toEqual({ before: "a" });
+    expect(pageDropPosition(ids, "a", { id: "d", edge: "after" })).toEqual({ after: "d" });
+    expect(pageDropPosition(ids, "a", { id: "c", edge: "before" })).toEqual({ before: "c" });
   });
 
-  it("can't move past either end", () => {
-    expect(moveNeighbour(pages, pages[0], "up")).toBeNull();
-    expect(moveNeighbour(pages, pages[2], "down")).toBeNull();
-  });
-
-  it("only counts pages with the same parent as siblings", () => {
-    expect(siblingsOf(pages, pages[3]).map((p) => p.id)).toEqual(["a-1"]);
-    expect(moveNeighbour(pages, pages[3], "down")).toBeNull();
-  });
-
-  it("names the page a page would nest under", () => {
-    expect(previousTopLevel(pages, pages[1])?.id).toBe("a");
-    expect(previousTopLevel(pages, pages[0])).toBeNull();
-    expect(previousTopLevel(pages, pages[3])).toBeNull();
+  it("ignores drops into the same spot or onto a page outside the visible list", () => {
+    expect(pageDropPosition(ids, "b", { id: "b", edge: "before" })).toBeNull();
+    expect(pageDropPosition(ids, "b", { id: "a", edge: "after" })).toBeNull();
+    expect(pageDropPosition(ids, "b", { id: "c", edge: "before" })).toBeNull();
+    expect(pageDropPosition(ids, "b", { id: "gone", edge: "after" })).toBeNull();
+    expect(pageDropPosition(ids, "gone", { id: "a", edge: "after" })).toBeNull();
   });
 });
 

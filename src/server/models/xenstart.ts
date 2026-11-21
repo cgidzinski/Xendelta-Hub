@@ -1,11 +1,13 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 import {
+  BACKGROUND_FITS,
   CLOCK_FORMATS,
   HUB_SECTIONS,
   REGION_ALIGNMENTS,
   REGION_HEIGHT_SHARES,
   SEARCH_ENGINES,
   WIDGET_TYPES,
+  WIDGET_SIZES,
 } from "@shared/xenstart";
 
 const quickLinkSchema = new Schema(
@@ -13,6 +15,8 @@ const quickLinkSchema = new Schema(
     id: { type: String, required: true },
     label: { type: String, required: true },
     url: { type: String, required: true },
+    iconUrl: String,
+    slot: Number,
   },
   { _id: false },
 );
@@ -45,6 +49,12 @@ const xenStartSchema = new Schema({
     ),
   },
   clockFormat: { type: String, enum: CLOCK_FORMATS },
+  clockSize: { type: String, enum: WIDGET_SIZES },
+  linkTileSize: { type: String, enum: WIDGET_SIZES },
+  backgroundFit: { type: String, enum: BACKGROUND_FITS },
+  backgroundImage: {
+    type: new Schema({ id: { type: String, required: true }, data: { type: Buffer, required: true } }, { _id: false }),
+  },
   layout: {
     type: new Schema(
       {

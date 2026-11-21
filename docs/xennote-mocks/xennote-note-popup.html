@@ -1,0 +1,261 @@
+<div id="xennote-note-popup" class="viz-dotted-background">
+  <section class="xn-board" aria-label="Loose notes" hidden>
+    <h2>Loose notes</h2>
+    <button type="button" class="xn-note-card" data-action="open">
+      <strong data-card-title>Studio handoff</strong>
+      <span data-card-excerpt>Send the latest proofs to Mina before Thursday’s review.</span>
+      <span class="xn-tag">Design</span>
+    </button>
+  </section>
+
+  <section class="xn-panel" role="dialog" aria-labelledby="xn-note-popup-heading" aria-label="Note popup appearance">
+    <header class="xn-header">
+      <div>
+        <h2 id="xn-note-popup-heading">Studio handoff</h2>
+        <div class="xn-meta" data-view-meta>
+          <span class="xn-tag">Design</span>
+          <span data-edited>Edited 20 minutes ago</span>
+        </div>
+      </div>
+      <button type="button" class="xn-icon" data-action="close" aria-label="Close note" data-tooltip="Close note">
+        <i data-lucide="x" aria-hidden="true"></i><span aria-hidden="true">×</span>
+      </button>
+    </header>
+
+    <div data-mode="view">
+      <div class="xn-content" data-note-body>
+        <p>Send the latest proofs to Mina before Thursday’s review.</p>
+        <p><strong>Still to check</strong></p>
+        <ul>
+          <li>Cover layout and image credits</li>
+          <li>Print and screen versions of the exports</li>
+        </ul>
+      </div>
+      <footer class="xn-footer">
+        <button type="button" class="xn-button xn-quiet" data-action="pin" aria-pressed="false">
+          <i data-lucide="pin" aria-hidden="true"></i><span>Pin note</span>
+        </button>
+        <button type="button" class="xn-button xn-primary" data-action="edit">
+          <i data-lucide="pencil" aria-hidden="true"></i>Edit note
+        </button>
+      </footer>
+    </div>
+
+    <div data-mode="edit" hidden>
+      <div class="xn-fields">
+        <label class="xn-field">Title <input name="title" type="text" maxlength="200" /></label>
+        <div class="xn-field">
+          <label for="xn-note-popup-body">Note</label>
+          <div class="xn-body-editor">
+            <div class="xn-tools" role="group" aria-label="Text formatting">
+              <button type="button" class="xn-icon" data-format="bold" aria-label="Bold" data-tooltip="Bold"><strong aria-hidden="true">B</strong></button>
+              <button type="button" class="xn-icon" data-format="italic" aria-label="Italic" data-tooltip="Italic"><em aria-hidden="true">I</em></button>
+              <button type="button" class="xn-icon" data-format="list" aria-label="Bulleted list" data-tooltip="Bulleted list">
+                <i data-lucide="list" aria-hidden="true"></i><span aria-hidden="true">☷</span>
+              </button>
+            </div>
+            <textarea id="xn-note-popup-body" name="body" rows="6" maxlength="20000" spellcheck="true"></textarea>
+          </div>
+        </div>
+      </div>
+      <footer class="xn-footer xn-edit-footer">
+        <button type="button" class="xn-button xn-quiet" data-action="cancel">Cancel</button>
+        <button type="button" class="xn-button xn-primary" data-action="save">Save changes</button>
+      </footer>
+    </div>
+  </section>
+  <span class="xn-sr" role="status" data-status></span>
+</div>
+
+<style>
+  #xennote-note-popup {
+    --xn-paper: light-dark(#fff, #1a1e26);
+    --xn-tint: light-dark(#f5f7fc, #222935);
+    --xn-text: light-dark(#202532, #edf0f6);
+    --xn-muted: light-dark(#535e72, #b4becf);
+    --xn-border: light-dark(#dbe1eb, #3a4352);
+    --xn-primary: light-dark(#285ec7, #acc4ff);
+    --xn-on-primary: light-dark(#fff, #13264c);
+    --xn-accent: light-dark(#eaf1fc, #283855);
+    --xn-shadow: light-dark(#23335422, #080c1670);
+    --xn-radius: 16px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: clamp(12px, 4vw, 32px);
+    color: var(--xn-text);
+    font: 15px/1.55 system-ui, sans-serif;
+  }
+  #xennote-note-popup * { box-sizing: border-box; }
+  #xennote-note-popup :is(button, input, textarea) { color: inherit; font: inherit; }
+  #xennote-note-popup h2 { margin: 0; color: inherit; font-size: clamp(22px, 4vw, 29px); font-weight: 650; line-height: 1.18; letter-spacing: -.025em; overflow-wrap: anywhere; }
+  #xennote-note-popup .xn-panel {
+    max-width: 620px;
+    margin: 0 auto;
+    overflow: hidden;
+    border: 1px solid var(--xn-border);
+    border-radius: var(--xn-radius);
+    background: var(--xn-paper);
+    box-shadow: 0 10px 32px var(--xn-shadow);
+  }
+  #xennote-note-popup .xn-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 22px clamp(16px, 4vw, 26px) 0; }
+  #xennote-note-popup .xn-header > div { min-width: 0; }
+  #xennote-note-popup .xn-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 11px; margin-top: 10px; color: var(--xn-muted); font-size: 12px; }
+  #xennote-note-popup .xn-tag { display: inline-flex; width: fit-content; align-items: center; border-radius: 6px; padding: 2px 8px; background: var(--xn-accent); color: var(--xn-primary); font-size: 12px; font-weight: 550; }
+  #xennote-note-popup .xn-content { padding: 22px clamp(16px, 4vw, 26px) 26px; overflow-wrap: anywhere; }
+  #xennote-note-popup .xn-content :is(p, ul) { margin: 0 0 10px; }
+  #xennote-note-popup .xn-content ul { padding-left: 21px; }
+  #xennote-note-popup .xn-content :last-child { margin-bottom: 0; }
+  #xennote-note-popup .xn-footer { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 12px clamp(16px, 4vw, 26px); border-top: 1px solid var(--xn-border); background: var(--xn-tint); }
+  #xennote-note-popup .xn-edit-footer { justify-content: flex-end; }
+  #xennote-note-popup :is(.xn-button, .xn-icon) { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 6px 12px; background: transparent; border: 1px solid transparent; border-radius: 8px; font-weight: 560; white-space: nowrap; }
+  #xennote-note-popup .xn-icon { width: 44px; padding: 0; flex: none; color: var(--xn-muted); }
+  #xennote-note-popup .xn-icon svg + span { display: none; }
+  #xennote-note-popup .xn-icon > span { font-size: 21px; }
+  #xennote-note-popup .xn-quiet { color: var(--xn-muted); }
+  #xennote-note-popup :is(.xn-quiet, .xn-icon):hover, #xennote-note-popup [aria-pressed="true"] { background: var(--xn-accent); color: var(--xn-primary); }
+  #xennote-note-popup .xn-primary { background: var(--xn-primary); color: var(--xn-on-primary); }
+  #xennote-note-popup .xn-primary:hover { filter: brightness(.92); }
+  #xennote-note-popup .xn-fields { display: grid; gap: 14px; padding: 16px clamp(16px, 4vw, 26px) 20px; }
+  #xennote-note-popup .xn-field { display: grid; gap: 5px; min-width: 0; color: var(--xn-muted); font-size: 13px; font-weight: 550; }
+  #xennote-note-popup .xn-field :is(input, textarea) { display: block; min-width: 0; width: 100%; background: var(--xn-paper); color: var(--xn-text); padding: 9px 11px; font-size: 16px; font-weight: 400; }
+  #xennote-note-popup .xn-field input { border: 1px solid var(--xn-border); border-radius: 8px; }
+  #xennote-note-popup .xn-body-editor { min-width: 0; border: 1px solid var(--xn-border); border-radius: 8px; }
+  #xennote-note-popup .xn-tools { display: flex; flex-wrap: wrap; gap: 1px; padding: 3px; background: var(--xn-tint); border-bottom: 1px solid var(--xn-border); border-radius: 7px 7px 0 0; }
+  #xennote-note-popup textarea { min-height: 136px; border: 0; border-radius: 0 0 7px 7px; resize: vertical; }
+  #xennote-note-popup .xn-board { max-width: 620px; margin: 0 auto; padding: 16px 0 24px; }
+  #xennote-note-popup .xn-note-card { display: grid; gap: 7px; width: min(100%, 320px); margin-top: 16px; padding: 16px; color: var(--xn-text); background: var(--xn-paper); border: 1px solid var(--xn-border); border-radius: 10px; text-align: left; overflow-wrap: anywhere; }
+  #xennote-note-popup [data-card-excerpt] { color: var(--xn-muted); }
+  #xennote-note-popup .xn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #xennote-note-popup [hidden] { display: none; }
+</style>
+
+<script>
+  (() => {
+    const root = document.getElementById('xennote-note-popup');
+    const find = (selector) => root.querySelector(selector);
+    const board = find('.xn-board');
+    const panel = find('.xn-panel');
+    const heading = find('h2[id]');
+    const view = find('[data-mode="view"]');
+    const form = find('[data-mode="edit"]');
+    const titleInput = find('[name="title"]');
+    const bodyInput = find('[name="body"]');
+    const editButton = find('[data-action="edit"]');
+    const closeButton = find('[data-action="close"]');
+    const pin = find('[data-action="pin"]');
+    const open = find('[data-action="open"]');
+    const meta = find('[data-view-meta]');
+    const note = {
+      title: heading.textContent,
+      body: 'Send the latest proofs to Mina before Thursday’s review.\n\n**Still to check**\n- Cover layout and image credits\n- Print and screen versions of the exports',
+      edited: false,
+      pinned: false,
+    };
+
+    function appendInline(element, value) {
+      for (const piece of value.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g)) {
+        if (piece.startsWith('*') && piece.endsWith('*') && piece.length > 2) {
+          const bold = piece.startsWith('**');
+          const mark = document.createElement(bold ? 'strong' : 'em');
+          mark.textContent = bold ? piece.slice(2, -2) : piece.slice(1, -1);
+          element.append(mark);
+        } else element.append(piece);
+      }
+    }
+
+    function drawNote() {
+      heading.textContent = note.title;
+      find('[data-card-title]').textContent = note.title;
+      find('[data-card-excerpt]').textContent = note.body.split('\n').find(line => line.trim()) ?? '';
+      find('[data-edited]').textContent = note.edited ? 'Edited just now' : 'Edited 20 minutes ago';
+      pin.setAttribute('aria-pressed', String(note.pinned));
+      pin.querySelector('span').textContent = note.pinned ? 'Pinned' : 'Pin note';
+      const content = find('[data-note-body]');
+      content.replaceChildren();
+      let list;
+      for (const line of note.body.split('\n')) {
+        if (line.startsWith('- ')) {
+          if (!list) {
+            list = document.createElement('ul');
+            content.append(list);
+          }
+          const item = document.createElement('li');
+          appendInline(item, line.slice(2));
+          list.append(item);
+        } else {
+          list = undefined;
+          if (!line.trim()) continue;
+          const paragraph = document.createElement('p');
+          appendInline(paragraph, line);
+          content.append(paragraph);
+        }
+      }
+    }
+
+    function edit() {
+      titleInput.value = note.title;
+      bodyInput.value = note.body;
+      heading.textContent = 'Edit note';
+      meta.hidden = true;
+      view.hidden = true;
+      form.hidden = false;
+      bodyInput.focus();
+    }
+
+    function read() {
+      form.hidden = true;
+      view.hidden = false;
+      meta.hidden = false;
+      drawNote();
+      editButton.focus();
+    }
+
+    editButton.addEventListener('click', edit);
+    find('[data-action="cancel"]').addEventListener('click', read);
+    find('[data-action="save"]').addEventListener('click', () => {
+      note.title = titleInput.value.trim() || 'Untitled note';
+      note.body = bodyInput.value.trim();
+      note.edited = true;
+      read();
+      find('[data-status]').textContent = 'Note saved';
+    });
+    pin.addEventListener('click', () => {
+      note.pinned = !note.pinned;
+      drawNote();
+    });
+    closeButton.addEventListener('click', () => {
+      read();
+      panel.hidden = true;
+      board.hidden = false;
+      open.focus();
+    });
+    open.addEventListener('click', () => {
+      board.hidden = true;
+      panel.hidden = false;
+      editButton.focus();
+    });
+
+    for (const button of root.querySelectorAll('[data-format]')) {
+      button.addEventListener('click', () => {
+        const { selectionStart, selectionEnd, value } = bodyInput;
+        const selected = value.slice(selectionStart, selectionEnd);
+        const format = button.dataset.format;
+        const prefix = format === 'bold' ? '**' : '*';
+        const newText = format === 'list'
+          ? selected.split('\n').map(line => '- ' + line).join('\n')
+          : prefix + selected + prefix;
+        bodyInput.setRangeText(newText, selectionStart, selectionEnd, 'select');
+        bodyInput.focus();
+        if (!selected && format !== 'list') {
+          bodyInput.setSelectionRange(selectionStart + prefix.length, selectionStart + prefix.length);
+        }
+      });
+    }
+
+    if (globalThis.Tweak) {
+      const appearance = { radius: 16 };
+      const tweak = new Tweak({ container: panel, onChange: () => root.style.setProperty('--xn-radius', `${appearance.radius}px`) });
+      tweak.addSlider(appearance, 'radius', { label: 'Corner radius', min: 4, max: 24, unit: 'px', reference: '--xn-radius' });
+    }
+  })();
+</script>

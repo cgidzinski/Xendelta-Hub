@@ -9,6 +9,7 @@ import { isSafeUrl } from "@shared/xennote/notes";
 import { normalizeTitle } from "@shared/xennote/wikiLinks";
 import { noteDocToMarkdown, noteMarkdownToDoc } from "@shared/xennote/noteBlockMarkdown";
 import ResponsiveDialog from "../../../../components/ui/ResponsiveDialog";
+import { noteFieldSx, textNoteMinHeight } from "../noteFieldSx";
 import EditorToolbar from "./EditorToolbar";
 import { WikiLinkSuggestion, type LinkMenuState } from "./LinkSuggestions";
 import LinkMenu from "./LinkMenu";
@@ -108,6 +109,7 @@ export default function NoteBlockEditor({
   mobileToolbar?: HTMLDivElement | null;
 }) {
   const source = useRef(body);
+  const [content] = useState(() => noteMarkdownToDoc(body));
   const initial = useRef("");
   const latest = useRef({ titles, noteId, onBody });
   latest.current = { titles, noteId, onBody };
@@ -157,7 +159,7 @@ export default function NoteBlockEditor({
   );
   const editor = useEditor({
     extensions,
-    content: noteMarkdownToDoc(source.current),
+    content,
     immediatelyRender: false,
     editorProps: { attributes: { role: "textbox", "aria-label": "Note", "aria-multiline": "true" } },
     onCreate: ({ editor }) => {
@@ -193,14 +195,28 @@ export default function NoteBlockEditor({
         open: onOpenNote,
       }}
     >
-      <Stack spacing={1}>
+      <Stack spacing={1} sx={{ flex: "1 0 auto" }}>
+        <Box
+          component={EditorContent}
+          editor={editor}
+          sx={[
+            editorSx,
+            (theme) => ({
+              ...noteFieldSx(theme, true),
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              flex: "1 0 auto",
+              p: 0,
+              minHeight: textNoteMinHeight,
+              "& .ProseMirror": { flex: "1 0 auto", minHeight: textNoteMinHeight - 2, p: 2, lineHeight: 1.6 },
+            }),
+          ]}
+        />
+        {mobileToolbar === undefined && toolbar}
         <Button size="small" onClick={onSource} sx={{ alignSelf: "end" }}>
           Edit Markdown source
         </Button>
-        {mobileToolbar === undefined && toolbar}
-        <Box sx={{ ...editorSx, minHeight: 160 }}>
-          <EditorContent editor={editor} />
-        </Box>
         {mobileToolbar && toolbar && createPortal(toolbar, mobileToolbar)}
       </Stack>
       <SlashMenu state={slash} keyRef={slashKey} />

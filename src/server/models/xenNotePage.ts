@@ -5,9 +5,7 @@ import { NOTE_COLORS } from "../../shared/xennote/notes";
 import { MAX_PAGE_TITLE, MAX_SECTION_NAME, PAGE_SCHEMA_VERSION, SECTION_KINDS } from "../../shared/xennote/pages";
 import { reminderSchema, xenNoteShareMemberSchema } from "./xenNote";
 
-// Notebook pages. A notebook (XenNotebook in xenNote.ts) holds sections, a section holds pages, and a page can hold
-// sub-pages (one level). Who may see a page comes from the notebook's members, plus anyone added to the page itself
-// (see routes/xennote/shared.ts).
+// A notebook holds sections, and each section holds pages. Page permissions come from notebook membership.
 //
 // A page is split in two so that listing, moving and searching pages never loads a body:
 //   XenNotePage      what the tree, backlinks, search and the graph need: title, place, tags, and everything derived
@@ -42,8 +40,6 @@ sectionSchema.pre("save", function (next) {
 const pageSchema = new Schema({
   notebook_id: { type: Schema.Types.ObjectId, ref: "XenNotebook", required: true },
   section_id: { type: Schema.Types.ObjectId, ref: "XenNoteSection", required: true },
-  // Only one level: a page with a parent can't have sub-pages of its own (enforced when pages are created and moved).
-  parent_id: { type: Schema.Types.ObjectId, ref: "XenNotePage", default: null },
   order: { type: String, required: true },
 
   title: { type: String, default: "", maxlength: MAX_PAGE_TITLE },
@@ -80,7 +76,7 @@ const pageSchema = new Schema({
   journal_date: { type: String, default: null },
   reminders: { type: [reminderSchema], default: [] },
 
-  // People added to this page (and its sub-pages) who are not members of the notebook.
+  // Legacy share data from before notebook membership became the only source of page permissions.
   members: { type: [xenNoteShareMemberSchema], default: [] },
   share: {
     enabled: { type: Boolean, default: false },
@@ -133,7 +129,7 @@ const pageSchema = new Schema({
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
 });
-pageSchema.index({ section_id: 1, parent_id: 1, order: 1 });
+pageSchema.index({ section_id: 1, order: 1 });
 pageSchema.index({ notebook_id: 1, updated_at: -1 });
 pageSchema.index({ links: 1 });
 pageSchema.index({ notebook_id: 1, "task_items.done": 1 });

@@ -6,7 +6,7 @@ import { Types } from "mongoose";
 import { XenNote, XenNotebook } from "../models/xenNote";
 import { XenNotePage } from "../models/xenNotePage";
 import { SocketManager } from "../infrastructure/SocketManager";
-import { pageRole } from "./xenNotePages";
+import { canEdit } from "./membership";
 import { registerDriveSource } from "./driveSources";
 import { deleteFromStorage } from "./storageUtils";
 import { removeAppFiles } from "./appFiles";
@@ -19,25 +19,16 @@ registerDriveSource(XENNOTE_SOURCE, {
     if (!Types.ObjectId.isValid(ref)) return false;
     const note = await XenNote.findById(ref, "owner_id").lean();
     if (note) return note.owner_id === userId;
-    // A page: anyone who can edit it, through its notebook or because it was shared with them.
-    const page = await XenNotePage.findById(ref, "notebook_id parent_id members").lean();
-    if (!page) return false;
-    const [notebook, parent] = await Promise.all([
-      XenNotebook.findById(page.notebook_id, "members").lean(),
-      page.parent_id ? XenNotePage.findById(page.parent_id, "members").lean() : null,
-    ]);
-    const role = pageRole(page, notebook, parent, userId);
-    return role === "owner" || role === "editor";
+    const page = await XenNotePage.findById(ref, "notebook_id").lean();
+    const notebook = page ? await XenNotebook.findById(page.notebook_id, "members").lean() : null;
+    return !!notebook && canEdit(notebook, userId);
   },
   describe: async (userId, refs) => {
     const valid = refs.filter((r) => Types.ObjectId.isValid(r));
     const notes = await XenNote.find({ _id: { $in: valid }, owner_id: userId }, "title").lean();
     const names = new Map(notes.map((note) => [String(note._id), note.title?.trim() || "Untitled note"]));
-    // Pages: seen through the notebook, or because the page (or its parent) was shared with the person.
-    const pages =
-      valid.length > 0
-        ? await XenNotePage.find({ _id: { $in: valid } }, "notebook_id parent_id title members").lean()
-        : [];
+    // Pages are visible through notebook membership.
+    const pages = valid.length > 0 ? await XenNotePage.find({ _id: { $in: valid } }, "notebook_id title").lean() : [];
     const pageBooks = new Set(
       (
         await XenNotebook.find(
@@ -46,21 +37,8 @@ registerDriveSource(XENNOTE_SOURCE, {
         ).lean()
       ).map((b) => String(b._id)),
     );
-    const parents = new Map(
-      (
-        await XenNotePage.find(
-          { _id: { $in: pages.flatMap((p) => (p.parent_id ? [p.parent_id] : [])) } },
-          "members",
-        ).lean()
-      ).map((p) => [String(p._id), p]),
-    );
-    for (const p of pages) {
-      const parent = p.parent_id ? parents.get(String(p.parent_id)) : undefined;
-      const sees =
-        pageBooks.has(String(p.notebook_id)) ||
-        p.members.some((m) => m.user_id === userId) ||
-        !!parent?.members.some((m) => m.user_id === userId);
-      if (sees) names.set(String(p._id), p.title?.trim() || "Untitled page");
+    for (const page of pages) {
+      if (pageBooks.has(String(page.notebook_id))) names.set(String(page._id), page.title?.trim() || "Untitled page");
     }
     // A note or page the person can no longer see (or that was deleted) keeps its files until they delete them.
     return new Map(refs.map((ref) => [ref, names.get(ref) ?? "A note you can't see anymore"]));

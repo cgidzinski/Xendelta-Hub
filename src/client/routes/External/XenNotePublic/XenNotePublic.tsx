@@ -4,7 +4,7 @@ import { useTitle } from "../../../hooks/useTitle";
 import PublicJoinCard from "../components/PublicJoinCard";
 import { useAuth } from "../../../contexts/AuthContext";
 import { usePublicNote, usePublicNotebook, useSharedLinkAccess } from "../../../hooks/xennote/useXenNote";
-import { SharedNotebookReader, SharedPageReader } from "./SharedPageReader";
+import { SharedNotebookReader } from "./SharedPageReader";
 import NoteCard from "../../Internal/XenNote/components/NoteCard";
 
 const GONE = "This link doesn't work any more. Ask the person who shared it for a new one.";
@@ -112,20 +112,3 @@ export function XenNotePublicNotebook() {
 }
 
 /** One notebook page opened by link, with a member's normal access when signed in. */
-export function XenNotePublicPage() {
-  const { token } = useParams<{ token: string }>();
-  const { isAuthenticated, isLoading } = useAuth();
-  const access = useSharedLinkAccess("page", token, isAuthenticated);
-  if (isLoading || (isAuthenticated && access.isLoading)) return <Loading />;
-  if (isAuthenticated && access.data) {
-    const { access: kind, notebook_id: notebook, page_id: page } = access.data;
-    const to =
-      kind === "link"
-        ? `/internal/xennote/shared/p/${token}`
-        : notebook
-          ? `/internal/xennote/b/${notebook}/p/${page}`
-          : `/internal/xennote/p/${page}`;
-    return <Navigate to={to} replace />;
-  }
-  return <SharedPageReader token={token} signedIn={isAuthenticated} />;
-}

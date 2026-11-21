@@ -1,30 +1,36 @@
 import { useRef, useState, type PointerEvent } from "react";
-import { Box, ButtonBase, IconButton, Stack, Typography } from "@mui/material";
+import { Box, ButtonBase, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import LinkIcon from "@mui/icons-material/Link";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { DEFAULT_APPEARANCE, parseQuickLinkUrl, type QuickLink } from "@shared/xenstart";
+import {
+  DEFAULT_APPEARANCE,
+  parseQuickLinkUrl,
+  quickLinkSlots,
+  type QuickLink,
+  type WidgetSize,
+} from "@shared/xenstart";
 import { RADIUS } from "../../../theme";
 
 export function quickLinkColumns(columns = DEFAULT_APPEARANCE.columns) {
   return { xs: Math.min(columns, 3), sm: Math.min(columns, 4), md: columns };
 }
 
-function LinkIconImage({ origin }: { origin: string }) {
+export function LinkIconImage({ url, size = 20 }: { url?: string; size?: number }) {
   const [failed, setFailed] = useState(false);
-  if (failed || !origin) return <LinkIcon fontSize="small" aria-hidden />;
+  const iconSx = { width: size, height: size, maxWidth: "75%", objectFit: "contain" } as const;
+  if (failed || !url) return <LinkIcon sx={iconSx} aria-hidden />;
   return (
     <Box
       component="img"
-      src={`${origin}/favicon.ico`}
+      src={url}
       alt=""
-      width={20}
-      height={20}
+      width={size}
+      height={size}
+      draggable={false}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      sx={{ objectFit: "contain" }}
+      sx={iconSx}
     />
   );
 }
@@ -34,48 +40,87 @@ interface QuickLinksProps {
   rows: number;
   compact?: boolean;
   columns: number;
+  size?: WidgetSize;
   editing: boolean;
   saving: boolean;
-  onEdit: (link: QuickLink | null) => void;
-  onMove: (from: string, to: string) => void;
+  onEdit: (link: QuickLink | null, slot: number) => void;
+  onMove: (from: string, to: number) => void;
+}
+
+const tileWidths: Record<WidgetSize, number> = { small: 64, medium: 88, large: 120 };
+const iconWidths: Record<WidgetSize, number> = { small: 24, medium: 30, large: 38 };
+const dragThreshold = 5;
+
+interface TileDrag {
+  pointerId: number;
+  x: number;
+  y: number;
+  moved: boolean;
 }
 
 export default function QuickLinks({
   links,
   rows,
   columns,
+  size = "medium",
   compact,
   editing,
   saving,
   onEdit,
   onMove,
 }: QuickLinksProps) {
-  const visible = links.slice(0, rows * columns);
+  const visible = quickLinkSlots(links).slice(0, rows * columns);
   const grid = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; pointer: number } | null>(null);
-  const [target, setTarget] = useState<string>();
+  const drag = useRef<TileDrag | null>(null);
+  const suppressClick = useRef(false);
+  const [target, setTarget] = useState<number>();
   const targetAt = (event: PointerEvent) => {
-    const tile = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-link-id]");
-    return tile && grid.current?.contains(tile) ? tile.dataset.linkId : undefined;
+    const tile = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-link-slot]");
+    return tile && grid.current?.contains(tile) ? Number(tile.dataset.linkSlot) : undefined;
   };
   const clearDrag = () => {
     drag.current = null;
     setTarget(undefined);
   };
+  const startDrag = (event: PointerEvent<HTMLButtonElement>) => {
+    if (saving || !event.isPrimary || event.button !== 0) return;
+    suppressClick.current = false;
+    drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const trackDrag = (event: PointerEvent) => {
+    const current = drag.current;
+    if (current?.pointerId !== event.pointerId) return;
+    if (!current.moved && Math.hypot(event.clientX - current.x, event.clientY - current.y) < dragThreshold) return;
+    current.moved = true;
+    suppressClick.current = true;
+    setTarget(targetAt(event));
+  };
+  const cancelDrag = (event: PointerEvent) => {
+    if (drag.current?.pointerId === event.pointerId) clearDrag();
+  };
 
   const faceSx = {
     width: "100%",
-    minHeight: 76,
+    height: "100%",
     display: "flex",
     flexDirection: "column",
     gap: 0.65,
     px: 0.75,
-    py: 1,
+    overflow: "hidden",
     borderRadius: RADIUS.lg,
     color: "inherit",
     textDecoration: "none",
     "&:hover": { bgcolor: "action.hover" },
     "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+  } as const;
+  const tileSx = {
+    position: "relative",
+    minWidth: 0,
+    aspectRatio: "1",
+    border: "1px solid",
+    borderColor: "divider",
+    borderRadius: RADIUS.lg,
   } as const;
 
   return (
@@ -83,41 +128,92 @@ export default function QuickLinks({
       ref={grid}
       sx={{
         display: "grid",
+        justifyContent: "center",
         gridTemplateColumns: Object.fromEntries(
           Object.entries(quickLinkColumns(columns)).map(([breakpoint, count]) => [
             breakpoint,
-            `repeat(${compact ? Math.min(count, 2) : count}, minmax(0, 1fr))`,
+            `repeat(${compact ? Math.min(count, 2) : count}, minmax(0, ${tileWidths[size]}px))`,
           ]),
         ),
         gap: 1,
       }}
     >
-      {visible.map((link, index) => {
-        const origin = parseQuickLinkUrl(link.url)?.origin ?? "";
+      {visible.map((link, slot) => {
+        const borderColor = target === slot ? "primary.main" : "divider";
+        if (!link)
+          return editing ? (
+            <ButtonBase
+              key={slot}
+              data-link-slot={slot}
+              disabled={saving}
+              onClick={() => onEdit(null, slot)}
+              sx={{
+                ...faceSx,
+                ...tileSx,
+                height: "auto",
+                borderStyle: "dashed",
+                borderColor,
+                bgcolor: target === slot ? "action.selected" : undefined,
+                color: "text.secondary",
+              }}
+            >
+              <AddIcon fontSize="small" />
+              <Typography variant="caption">Add link</Typography>
+            </ButtonBase>
+          ) : (
+            <Box key={slot} aria-hidden="true" sx={tileSx} />
+          );
+        const icon =
+          parseQuickLinkUrl(link.iconUrl ?? "") ?? (parseQuickLinkUrl(link.url) && new URL("/favicon.ico", link.url));
         const label = (
           <>
-            <LinkIconImage key={origin} origin={origin} />
-            <Typography variant="body2" sx={{ maxWidth: "100%" }} noWrap>
+            <LinkIconImage key={icon?.href} url={icon?.href} size={iconWidths[size]} />
+            <Typography variant="caption" sx={{ maxWidth: "100%" }} noWrap>
               {link.label}
             </Typography>
           </>
         );
-        const earlier = visible[index - 1];
-        const later = visible[index + 1];
         return (
           <Box
             key={link.id}
-            data-link-id={link.id}
+            data-link-slot={slot}
             sx={{
-              minWidth: 0,
+              ...tileSx,
               bgcolor: "background.paper",
-              border: "1px solid",
-              borderColor: target === link.id ? "primary.main" : "divider",
-              borderRadius: RADIUS.lg,
+              borderColor,
             }}
           >
             {editing ? (
-              <ButtonBase sx={faceSx} onClick={() => onEdit(link)} disabled={saving} aria-label={`Edit ${link.label}`}>
+              <ButtonBase
+                sx={{
+                  ...faceSx,
+                  touchAction: "none",
+                  userSelect: "none",
+                  cursor: "grab",
+                  "&:active": { cursor: "grabbing" },
+                }}
+                disableRipple
+                onPointerDown={startDrag}
+                onPointerMove={trackDrag}
+                onPointerUp={(event) => {
+                  const current = drag.current;
+                  if (current?.pointerId !== event.pointerId) return;
+                  const destination = targetAt(event);
+                  const moved =
+                    current.moved || Math.hypot(event.clientX - current.x, event.clientY - current.y) >= dragThreshold;
+                  suppressClick.current = moved;
+                  clearDrag();
+                  if (moved && destination !== undefined && slot !== destination) onMove(link.id, destination);
+                }}
+                onLostPointerCapture={cancelDrag}
+                onPointerCancel={cancelDrag}
+                onClick={(event) => {
+                  if (event.detail === 0 || !suppressClick.current) onEdit(link, slot);
+                  suppressClick.current = false;
+                }}
+                disabled={saving}
+                aria-label={`Edit ${link.label}`}
+              >
                 {label}
               </ButtonBase>
             ) : (
@@ -126,83 +222,27 @@ export default function QuickLinks({
               </ButtonBase>
             )}
             {editing && (
-              <Stack direction="row" justifyContent="center" sx={{ borderTop: "1px solid", borderColor: "divider" }}>
-                <Box
-                  component="span"
-                  aria-hidden="true"
-                  onPointerDown={(event) => {
-                    if (saving || !event.isPrimary || event.button !== 0) return;
-                    event.preventDefault();
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    drag.current = { id: link.id, pointer: event.pointerId };
-                    setTarget(link.id);
-                  }}
-                  onPointerMove={(event) => {
-                    if (drag.current?.pointer === event.pointerId) setTarget(targetAt(event));
-                  }}
-                  onPointerUp={(event) => {
-                    if (drag.current?.pointer !== event.pointerId) return;
-                    const destination = targetAt(event);
-                    const from = drag.current.id;
-                    clearDrag();
-                    if (destination && from !== destination) onMove(from, destination);
-                  }}
-                  onLostPointerCapture={clearDrag}
-                  onPointerCancel={clearDrag}
-                  sx={{
-                    display: "grid",
-                    placeItems: "center",
-                    minWidth: 22,
-                    minHeight: 36,
-                    color: "text.secondary",
-                    touchAction: "none",
-                    cursor: "grab",
-                  }}
-                >
-                  <DragIndicatorIcon fontSize="small" />
-                </Box>
-                <IconButton
-                  size="small"
-                  aria-label={`Move ${link.label} earlier`}
-                  disabled={saving || !earlier}
-                  onClick={() => earlier && onMove(link.id, earlier.id)}
-                  sx={{ px: 0.25 }}
-                >
-                  <ChevronLeftIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  aria-label={`Move ${link.label} later`}
-                  disabled={saving || !later}
-                  onClick={() => later && onMove(link.id, later.id)}
-                  sx={{ px: 0.25 }}
-                >
-                  <ChevronRightIcon fontSize="small" />
-                </IconButton>
-              </Stack>
+              <Box
+                component="span"
+                aria-hidden="true"
+                sx={{
+                  display: "grid",
+                  placeItems: "center",
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  width: 28,
+                  height: 24,
+                  color: "text.secondary",
+                  pointerEvents: "none",
+                }}
+              >
+                <DragIndicatorIcon fontSize="small" />
+              </Box>
             )}
           </Box>
         );
       })}
-      {Array.from({ length: rows * columns - visible.length }, (_, i) =>
-        editing ? (
-          <ButtonBase
-            key={i}
-            disabled={saving}
-            onClick={() => onEdit(null)}
-            sx={{ ...faceSx, minWidth: 0, border: "1px dashed", borderColor: "divider", color: "text.secondary" }}
-          >
-            <AddIcon fontSize="small" />
-            <Typography variant="body2">Add link</Typography>
-          </ButtonBase>
-        ) : (
-          <Box
-            key={i}
-            aria-hidden="true"
-            sx={{ minHeight: 78, border: "1px solid", borderColor: "divider", borderRadius: RADIUS.lg }}
-          />
-        ),
-      )}
     </Box>
   );
 }

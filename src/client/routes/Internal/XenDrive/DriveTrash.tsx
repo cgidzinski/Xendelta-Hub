@@ -1,4 +1,4 @@
-import { Box, Button, Card, Stack, Typography } from "@mui/material";
+import { Box, Button, Stack, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useSnackbar } from "notistack";
@@ -10,6 +10,8 @@ import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useXendriveTrash, useXendriveTrashActions } from "../../../hooks/xendrive/useXendrive";
 import { formatFileSize } from "../../../utils/fileUtils";
 import type { TrashedXenDriveFile } from "../../../types/XenDriveFile";
+import { DriveHeader, DriveHeading } from "./components/DriveHeader";
+import FileTypeIcon from "./components/FileTypeIcon";
 
 /** Files you deleted, kept for 30 days: put one back, delete it for good, or empty the lot. */
 export default function DriveTrash() {
@@ -48,20 +50,24 @@ export default function DriveTrash() {
   };
 
   return (
-    <Box sx={{ px: { xs: 2, md: 4 }, pt: { xs: 1.5, md: 3 }, pb: 12, maxWidth: 900 }}>
-      <Stack direction="row" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 500, flex: 1 }}>
-          Trash
-        </Typography>
+    <>
+      <DriveHeader>
+        <DriveHeading title="Trash" icon={<DeleteOutlineIcon fontSize="small" />} />
         {!!files?.length && (
-          <Button color="error" onClick={emptyTrash} disabled={empty.isPending}>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteOutlineIcon />}
+            onClick={emptyTrash}
+            disabled={empty.isPending}
+          >
             Empty Trash
           </Button>
         )}
-      </Stack>
+      </DriveHeader>
 
       {isLoading ? (
-        <ListSkeleton rows={3} height={72} gap={1.5} />
+        <ListSkeleton rows={6} height={56} gap={1} />
       ) : isError ? (
         <ErrorDisplay error={error ?? null} title="Couldn't load the Trash" onRetry={() => refetch()} />
       ) : !files || files.length === 0 ? (
@@ -75,18 +81,50 @@ export default function DriveTrash() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             Files are removed for good 30 days after you delete them. Until then they still count toward your storage.
           </Typography>
-          <Stack spacing={1.25}>
+          <Box
+            component="ul"
+            aria-label="Deleted files"
+            sx={{
+              m: 0,
+              p: 0,
+              listStyle: "none",
+              border: 1,
+              borderColor: "divider",
+              borderRadius: 3,
+              bgcolor: "background.paper",
+            }}
+          >
             {files.map((f) => (
-              <Card key={f._id} variant="outlined" sx={{ p: 1.5 }}>
-                <Typography sx={{ fontWeight: 600 }} noWrap>
-                  {f.name}
-                </Typography>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-                  <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 180 }}>
-                    {formatFileSize(f.size)} · deleted{" "}
-                    {formatDistanceToNowStrict(new Date(f.deleted_at), { addSuffix: true })} · gone for good{" "}
-                    {formatDistanceToNowStrict(new Date(f.purge_at), { addSuffix: true })}
-                  </Typography>
+              <Box
+                key={f._id}
+                component="li"
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) auto" },
+                  alignItems: "center",
+                  gap: 1,
+                  minHeight: 56,
+                  px: 1.5,
+                  py: 0.5,
+                  borderBottom: 1,
+                  borderColor: "divider",
+                  "&:last-child": { borderBottom: 0 },
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+                  <FileTypeIcon mimeType={f.mimeType} />
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 500 }} noWrap>
+                      {f.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" component="div">
+                      {formatFileSize(f.size)} · deleted{" "}
+                      {formatDistanceToNowStrict(new Date(f.deleted_at), { addSuffix: true })} · gone for good{" "}
+                      {formatDistanceToNowStrict(new Date(f.purge_at), { addSuffix: true })}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Stack direction="row" justifyContent="flex-end" spacing={1} flexWrap="wrap" useFlexGap>
                   <Button
                     size="small"
                     onClick={() => run(restore.mutateAsync(f._id), "File restored", "Couldn't restore the file")}
@@ -103,11 +141,11 @@ export default function DriveTrash() {
                     Delete for good
                   </Button>
                 </Stack>
-              </Card>
+              </Box>
             ))}
-          </Stack>
+          </Box>
         </>
       )}
-    </Box>
+    </>
   );
 }

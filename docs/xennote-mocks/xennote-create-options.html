@@ -1,0 +1,275 @@
+<div id="xennote-create-options" class="viz-carousel" aria-label="XenNote creation layouts">
+  <section data-variant="Header actions" aria-label="Header actions">
+    <div class="xn-actions" data-slot="header" aria-label="Header actions appearance">
+      <button class="xn-primary" type="button" data-compose="note"><i data-lucide="plus" aria-hidden="true"></i> New note</button>
+      <button type="button" data-compose="list"><i data-lucide="list-checks" aria-hidden="true"></i> New list</button>
+    </div>
+  </section>
+  <section data-variant="Quick capture" aria-label="Quick capture" hidden>
+    <div class="xn-capture" data-slot="capture" aria-label="Quick capture appearance">
+      <button class="xn-prompt" type="button" data-compose="note"><i data-lucide="square-pen" aria-hidden="true"></i> Take a note…</button>
+      <button type="button" data-compose="list"><i data-lucide="list-checks" aria-hidden="true"></i> New list</button>
+    </div>
+  </section>
+  <section data-variant="Split button" aria-label="Split button" hidden>
+    <div class="xn-split" data-slot="header" aria-label="Split button appearance">
+      <button class="xn-primary" type="button" data-compose="note"><i data-lucide="plus" aria-hidden="true"></i> New note</button>
+      <button class="xn-primary xn-more" type="button" aria-label="More create options" aria-controls="xn-create-types" aria-expanded="false"><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+      <div class="xn-popover" id="xn-create-types" hidden>
+        <button type="button" data-compose="list"><i data-lucide="list-checks" aria-hidden="true"></i> New list</button>
+      </div>
+    </div>
+  </section>
+  <template>
+    <div class="xn-shell">
+      <aside class="xn-rail" aria-label="Notes navigation preview">
+        <div class="xn-brand"><i data-lucide="notebook-pen" aria-hidden="true"></i> XenNote</div>
+        <div class="xn-rail-item xn-active"><i data-lucide="files" aria-hidden="true"></i> All notes</div>
+        <div class="xn-rail-item"><i data-lucide="lock" aria-hidden="true"></i> My notes</div>
+        <div class="xn-rail-item"><i data-lucide="users" aria-hidden="true"></i> Shared with me</div>
+        <div class="xn-label">Notebooks</div>
+        <div class="xn-rail-item"><i data-lucide="book-open" aria-hidden="true"></i> Personal</div>
+        <div class="xn-rail-item"><i data-lucide="book-open" aria-hidden="true"></i> Work</div>
+        <div class="xn-rail-item xn-accent"><i data-lucide="plus" aria-hidden="true"></i> New notebook</div>
+      </aside>
+      <div class="xn-board">
+        <header class="xn-header"><h2>All notes</h2></header>
+        <div class="xn-tools">
+          <label class="xn-search"><i data-lucide="search" aria-hidden="true"></i><input type="search" aria-label="Search notes" placeholder="Search notes, lists and links" /></label>
+          <select aria-label="Sort notes"><option>Last edited</option><option>Title</option></select>
+        </div>
+        <div class="xn-filters" aria-label="Filter by type">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="list" aria-pressed="false">Lists</button>
+          <button type="button" data-filter="note" aria-pressed="false">Notes</button>
+        </div>
+        <div class="xn-label xn-pinned"><i data-lucide="pin" aria-hidden="true"></i> Pinned</div>
+        <div class="xn-grid">
+          <article data-kind="note"><h3>Weekend ideas</h3><p>Bike to the waterfront and pick up coffee on the way.</p></article>
+          <article data-kind="list"><h3>Studio supplies</h3><p>☐ Painter’s tape<br />☐ Dot-grid notebook</p></article>
+          <article data-kind="note"><h3>Reading notes</h3><p>Collect the passages worth coming back to.</p></article>
+        </div>
+        <p class="xn-empty" role="status" hidden>No notes match.</p>
+      </div>
+      <dialog class="xn-editor" aria-label="Create a note">
+        <form method="dialog">
+          <h3 data-editor-heading></h3>
+          <input name="title" aria-label="Title" placeholder="Title" />
+          <textarea name="body" aria-label="Content" rows="3"></textarea>
+          <div class="xn-editor-actions">
+            <button value="cancel">Cancel</button><button class="xn-primary" value="save">Save</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  </template>
+</div>
+
+<style>
+  #xennote-create-options .xn-shell {
+    --xn-app: light-dark(#f9fafc, #12151b);
+    --xn-surface: light-dark(#fff, #1a1e26);
+    --xn-ink: light-dark(#202532, #eef0f5);
+    --xn-muted: light-dark(#575f70, #a6aebf);
+    --xn-line: light-dark(#dce1eb, #353d4a);
+    --xn-blue: light-dark(#265cca, #a4c0ff);
+    --xn-on-blue: light-dark(#fff, #10254d);
+    --xn-tint: light-dark(#eaf1ff, #263655);
+    --xn-radius: 9px;
+    display: grid;
+    grid-template-columns: 172px minmax(0, 1fr);
+    min-height: 390px;
+    background: var(--xn-app);
+    color: var(--xn-ink);
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  #xennote-create-options .xn-shell * { box-sizing: border-box; }
+  #xennote-create-options .xn-shell [hidden] { display: none; }
+  #xennote-create-options .xn-shell :is(button, input, select, textarea) { font: inherit; color: inherit; }
+  #xennote-create-options .xn-shell :is(button, select) {
+    min-height: 38px;
+    padding: 6px 10px;
+    border: 1px solid var(--xn-line);
+    border-radius: var(--xn-radius);
+    background: var(--xn-surface);
+  }
+  #xennote-create-options .xn-shell button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  #xennote-create-options .xn-shell button:hover { background: var(--xn-tint); }
+  #xennote-create-options .xn-shell .xn-primary { background: var(--xn-blue); color: var(--xn-on-blue); border-color: var(--xn-blue); }
+  #xennote-create-options .xn-shell .xn-primary:hover { filter: brightness(.92); }
+  #xennote-create-options .xn-shell svg { flex: none; width: 16px; height: 16px; }
+  #xennote-create-options .xn-rail { padding: 16px 10px; border-inline-end: 1px solid var(--xn-line); background: var(--xn-surface); }
+  #xennote-create-options :is(.xn-brand, .xn-rail-item, .xn-label) { display: flex; align-items: center; gap: 8px; }
+  #xennote-create-options .xn-brand { color: var(--xn-blue); padding: 5px 8px 15px; font-weight: 650; }
+  #xennote-create-options .xn-rail-item { padding: 8px; color: var(--xn-muted); border-radius: 8px; }
+  #xennote-create-options .xn-active { background: var(--xn-tint); color: var(--xn-blue); font-weight: 600; }
+  #xennote-create-options .xn-accent { color: var(--xn-blue); }
+  #xennote-create-options .xn-label { color: var(--xn-muted); font-size: 12px; font-weight: 600; }
+  #xennote-create-options .xn-rail .xn-label { padding: 14px 8px 4px; }
+  #xennote-create-options .xn-board { display: grid; align-content: start; gap: 13px; min-width: 0; padding: 22px clamp(12px, 3vw, 28px); }
+  #xennote-create-options .xn-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-height: 39px; }
+  #xennote-create-options .xn-shell h2 { margin: 0; font-size: 24px; line-height: 1.15; letter-spacing: -.03em; }
+  #xennote-create-options .xn-shell h3 { margin: 0; font: 600 15px/1.4 system-ui, sans-serif; }
+  #xennote-create-options .xn-shell p { margin: 6px 0 0; color: var(--xn-muted); }
+  #xennote-create-options :is(.xn-actions, .xn-tools, .xn-filters, .xn-editor-actions) { display: flex; align-items: center; gap: 8px; }
+  #xennote-create-options .xn-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid var(--xn-line); border-radius: 9px; color: var(--xn-muted); background: var(--xn-surface); }
+  #xennote-create-options .xn-search input { min-width: 0; width: 100%; background: transparent; border: 0; color: var(--xn-ink); }
+  #xennote-create-options .xn-search input::placeholder { color: var(--xn-muted); }
+  #xennote-create-options .xn-filters button { min-height: 30px; padding: 3px 10px; border-radius: 20px; }
+  #xennote-create-options .xn-filters button[aria-pressed="true"] { background: var(--xn-tint); color: var(--xn-blue); border-color: transparent; }
+  #xennote-create-options .xn-pinned { padding-top: 3px; }
+  #xennote-create-options .xn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 10px; align-items: start; }
+  #xennote-create-options .xn-grid article { min-height: 90px; padding: 12px; border: 1px solid var(--xn-line); border-radius: 10px; background: var(--xn-surface); overflow-wrap: anywhere; }
+  #xennote-create-options .xn-capture { display: flex; gap: 6px; padding: 5px; border: 1px solid var(--xn-line); border-radius: calc(var(--xn-radius) + 4px); background: var(--xn-surface); }
+  #xennote-create-options .xn-capture button { border-color: transparent; color: var(--xn-blue); }
+  #xennote-create-options .xn-capture .xn-prompt { justify-content: flex-start; flex: 1; color: var(--xn-muted); }
+  #xennote-create-options .xn-split { display: flex; position: relative; }
+  #xennote-create-options .xn-split button:first-child { border-start-end-radius: 0; border-end-end-radius: 0; }
+  #xennote-create-options .xn-split button.xn-more { border-start-start-radius: 0; border-end-start-radius: 0; border-inline-start-color: var(--xn-on-blue); }
+  #xennote-create-options .xn-popover { position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 2; padding: 4px; border: 1px solid var(--xn-line); border-radius: 9px; background: var(--xn-surface); }
+  #xennote-create-options .xn-popover button:first-child { border: 0; border-radius: 6px; }
+  #xennote-create-options .xn-editor { width: min(420px, calc(100% - 24px)); padding: 16px; color: var(--xn-ink); background: var(--xn-surface); border: 1px solid var(--xn-line); border-radius: 12px; }
+  #xennote-create-options .xn-editor.xn-inline { position: static; margin: 0; width: 100%; }
+  #xennote-create-options .xn-editor::backdrop { background: color-mix(in srgb, var(--xn-ink) 35%, transparent); }
+  #xennote-create-options .xn-editor form { display: grid; gap: 10px; }
+  #xennote-create-options .xn-editor :is(input, textarea) { width: 100%; padding: 8px; border: 1px solid var(--xn-line); border-radius: 8px; background: var(--xn-surface); }
+  #xennote-create-options .xn-editor-actions { justify-content: flex-end; }
+  @media (max-width: 650px) {
+    #xennote-create-options .xn-shell { grid-template-columns: minmax(0, 1fr); min-height: 478px; }
+    #xennote-create-options .xn-rail { display: none; }
+  }
+  @media (pointer: coarse) {
+    #xennote-create-options .xn-shell :is(button, select) { min-height: 44px; }
+  }
+</style>
+
+<script>
+  (() => {
+    const root = document.getElementById('xennote-create-options');
+    const template = root.querySelector('template');
+    for (const variant of root.querySelectorAll('[data-variant]')) {
+      const actions = variant.querySelector('[data-slot]');
+      variant.append(template.content.cloneNode(true));
+      const shell = variant.querySelector('.xn-shell');
+      const header = shell.querySelector('.xn-header');
+      if (actions.dataset.slot === 'capture') header.after(actions);
+      else header.append(actions);
+
+      const editor = shell.querySelector('dialog');
+      const quickCapture = actions.dataset.slot === 'capture';
+      if (quickCapture) actions.after(editor);
+      const heading = editor.querySelector('[data-editor-heading]');
+      const title = editor.querySelector('[name="title"]');
+      const body = editor.querySelector('[name="body"]');
+      const grid = shell.querySelector('.xn-grid');
+      const search = shell.querySelector('input[type="search"]');
+      const sort = shell.querySelector('select');
+      const filters = [...shell.querySelectorAll('[data-filter]')];
+      const more = actions.querySelector('.xn-more');
+      const popover = actions.querySelector('.xn-popover');
+      let kind = 'note';
+      const originalOrder = [...grid.children];
+
+      function updateGrid() {
+        const selected = filters.find(button => button.getAttribute('aria-pressed') === 'true').dataset.filter;
+        const query = search.value.trim().toLowerCase();
+        for (const card of grid.children) {
+          card.hidden = (selected !== 'all' && card.dataset.kind !== selected) || !card.textContent.toLowerCase().includes(query);
+        }
+        shell.querySelector('.xn-empty').hidden = [...grid.children].some(card => !card.hidden);
+      }
+
+      function setMenu(open) {
+        if (!more) return;
+        more.setAttribute('aria-expanded', String(open));
+        popover.hidden = !open;
+      }
+
+      if (more) {
+        more.addEventListener('click', () => setMenu(popover.hidden));
+        actions.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && !popover.hidden) {
+            setMenu(false);
+            more.focus();
+          }
+        });
+        actions.addEventListener('focusout', event => {
+          if (!actions.contains(event.relatedTarget)) setMenu(false);
+        });
+      }
+
+      for (const button of actions.querySelectorAll('[data-compose]')) {
+        button.addEventListener('click', () => {
+          kind = button.dataset.compose;
+          if (more && !popover.hidden) more.focus();
+          setMenu(false);
+          heading.textContent = kind === 'list' ? 'New list' : 'New note';
+          body.placeholder = kind === 'list' ? 'Add items, one per line' : 'Take a note…';
+          editor.querySelector('form').reset();
+          editor.returnValue = '';
+          const inline = quickCapture && kind === 'note';
+          editor.classList.toggle('xn-inline', inline);
+          if (inline) {
+            actions.hidden = true;
+            editor.show();
+          } else editor.showModal();
+          title.focus();
+        });
+      }
+
+      function updateSort() {
+        const cards = sort.selectedIndex === 0 ? originalOrder : [...originalOrder].sort((a, b) =>
+          a.querySelector('h3').textContent.localeCompare(b.querySelector('h3').textContent));
+        grid.append(...cards);
+      }
+
+      editor.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && editor.classList.contains('xn-inline')) editor.close();
+      });
+
+      editor.addEventListener('close', () => {
+        if (editor.classList.contains('xn-inline')) {
+          actions.hidden = false;
+          actions.querySelector('[data-compose="note"]').focus();
+        }
+        if (editor.returnValue !== 'save' || (!title.value.trim() && !body.value.trim())) return;
+        const card = document.createElement('article');
+        const label = document.createElement('h3');
+        const content = document.createElement('p');
+        card.dataset.kind = kind;
+        label.textContent = title.value.trim() || (kind === 'list' ? 'Untitled list' : 'Untitled note');
+        if (kind === 'list') {
+          body.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
+            if (index) content.append(document.createElement('br'));
+            content.append(`☐ ${line}`);
+          });
+        } else content.textContent = body.value.trim();
+        card.append(label, content);
+        originalOrder.unshift(card);
+        updateSort();
+        updateGrid();
+      });
+
+      search.addEventListener('input', updateGrid);
+      sort.addEventListener('change', updateSort);
+      for (const button of filters) {
+        button.addEventListener('click', () => {
+          for (const filter of filters) filter.setAttribute('aria-pressed', String(filter === button));
+          updateGrid();
+        });
+      }
+
+      if (globalThis.Tweak) {
+        const design = { radius: 9 };
+        const tweak = new Tweak({ container: actions, onChange: () => shell.style.setProperty('--xn-radius', `${design.radius}px`) });
+        tweak.addSlider(design, 'radius', { label: 'Corner radius', min: 4, max: 20, unit: 'px', reference: '--xn-radius' });
+      }
+    }
+  })();
+</script>

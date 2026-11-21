@@ -1,41 +1,28 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Box,
-  Tab,
-  Tabs,
   Button,
-  Card,
-  Chip,
-  Drawer,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   MenuItem,
-  SpeedDial,
-  SpeedDialAction,
-  SpeedDialIcon,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography,
-  useMediaQuery,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import AddIcon from "@mui/icons-material/Add";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
 import ChecklistIcon from "@mui/icons-material/Checklist";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
-import LinkIcon from "@mui/icons-material/Link";
-import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
-import NotesIcon from "@mui/icons-material/Notes";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import StickyNote2OutlinedIcon from "@mui/icons-material/StickyNote2Outlined";
 import { closeSnackbar, useSnackbar } from "notistack";
 import type { NoteType } from "@shared/xennote/notes";
 import { normalizeTitle } from "@shared/xennote/wikiLinks";
-import { matchesKind, type NoteKind } from "./noteDraft";
-import { railPanelSx } from "../../../components/ui/railStyles";
 import { sectionLabelSx } from "../../../components/ui/surfaceStyles";
 import PageHeader from "../../../components/ui/PageHeader";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -48,9 +35,7 @@ import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import { xennoteKeys } from "../../../hooks/xennote/keys";
 import {
   useXenNoteActions,
-  useXenNoteCounts,
   useXenNoteLabels,
-  useXenNotebooks,
   useXenNoteTrashActions,
   useXenNotes,
 } from "../../../hooks/xennote/useXenNote";
@@ -59,21 +44,8 @@ import { NOTE_SORTS, isNoteSort, sortNotes, type NoteSort } from "./noteSort";
 import NoteCard from "./components/NoteCard";
 import NoteEditor from "./components/NoteEditor";
 import NoteTrash from "./components/NoteTrash";
-import SharedItems from "./notebook/SharedItems";
-import NoteShareDialog from "./components/NoteShareDialog";
 import NoteBulkBar from "./components/NoteBulkBar";
-import NoteRail, { type Scope } from "./components/NoteRail";
-import NotebookDialog from "./components/NotebookDialog";
-
-/** The type chips above the board narrow what is shown; "all" shows every type. */
-type TypeFilter = NoteKind;
-const TYPE_FILTERS: Array<{ id: TypeFilter; label: string; icon?: ReactElement }> = [
-  { id: "all", label: "All" },
-  { id: "lists", label: "Lists", icon: <CheckBoxOutlinedIcon /> },
-  { id: "photos", label: "Photos", icon: <ImageOutlinedIcon /> },
-  { id: "links", label: "Links", icon: <LinkIcon /> },
-  { id: "notes", label: "Notes", icon: <NotesIcon /> },
-];
+import NoteNavButton from "./components/NoteNavButton";
 
 export default function XenNote() {
   useTitle("XenNote");
@@ -82,31 +54,27 @@ export default function XenNote() {
   const { restore } = useXenNoteTrashActions();
   const confirm = useConfirm();
   const queryClient = useQueryClient();
-  const theme = useTheme();
-  const wide = useMediaQuery(theme.breakpoints.up("md"));
-  const phone = useMediaQuery(theme.breakpoints.down("sm"));
-
-  const navigate = useNavigate();
-  const [sharedTab, setSharedTab] = useState<"pages" | "notes">("pages");
-  const [scope, setScope] = useState<Scope>("all");
-  const [shareNoteId, setShareNoteId] = useState<string | null>(null);
-  const [label, setLabel] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedScope = searchParams.get("scope");
+  const scope = requestedScope === "archive" || requestedScope === "trash" ? requestedScope : "loose";
+  const sharedOnly = scope === "loose" && searchParams.get("ownership") === "shared";
+  const label = searchParams.get("label");
+  const search = searchParams.get("q") ?? "";
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next, { replace: true });
+  };
   const [sort, setSort] = useLocalStorageState<NoteSort>("xennote_sort", "edited", isNoteSort);
-  const [railOpen, setRailOpen] = useState(false);
   // Choosing several notes to change or trash together.
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const q = useDeferredValue(search);
 
   const [editor, setEditor] = useState<{ note: Note | null; startType?: NoteType } | null>(null);
-  const [newNotebookOpen, setNewNotebookOpen] = useState(false);
 
-  // A link to a note (a reminder's notification) opens it: /internal/xennote?note=<id>. The address is tidied once
-  // the note has loaded, so closing it and reloading doesn't reopen it. `handled` stops a re-render from fetching twice,
-  // and is cleared with the address so the same link works again later.
-  const [searchParams, setSearchParams] = useSearchParams();
+  // Consume a linked note while keeping board filters in the URL for Back navigation.
   const linkedNoteId = searchParams.get("note");
   const handled = useRef<string | null>(null);
   useEffect(() => {
@@ -123,34 +91,20 @@ export default function XenNote() {
       } catch {
         enqueueSnackbar("That note isn't available any more", { variant: "info" });
       }
-      setSearchParams({}, { replace: true });
     };
     void openLinkedNote();
-  }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
-
-  // A link back from a notebook's screen to one of the board's views: /internal/xennote?scope=shared.
-  const linkedScope = searchParams.get("scope");
-  useEffect(() => {
-    if (!linkedScope) return;
-    if (
-      linkedScope === "all" ||
-      linkedScope === "none" ||
-      linkedScope === "shared" ||
-      linkedScope === "archive" ||
-      linkedScope === "trash"
-    )
-      setScope(linkedScope);
     setSearchParams(
-      (p) => {
-        p.delete("scope");
-        return p;
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("note");
+        return next;
       },
       { replace: true },
     );
-  }, [linkedScope, setSearchParams]);
+  }, [linkedNoteId, setSearchParams, enqueueSnackbar]);
 
   const filters: NoteFilters = {
-    scope: scope === "none" ? "mine" : scope === "shared" ? "shared" : undefined,
+    scope: sharedOnly ? "shared" : undefined,
     archived: scope === "archive",
     label: label ?? undefined,
     q,
@@ -173,16 +127,11 @@ export default function XenNote() {
     if (found) setEditor({ note: found });
     else enqueueSnackbar("That note isn't available", { variant: "info" });
   };
-  const { data: notebooks = [] } = useXenNotebooks();
   const { data: labels = [] } = useXenNoteLabels();
-  const { data: counts } = useXenNoteCounts();
 
-  const notes = useMemo(() => {
-    const shown = typeFilter === "all" ? allNotes : allNotes?.filter((n) => matchesKind(n, typeFilter));
-    return shown && sortNotes(shown, sort);
-  }, [allNotes, typeFilter, sort]);
+  const notes = useMemo(() => allNotes && sortNotes(allNotes, sort), [allNotes, sort]);
   // What is ticked belongs to the view it was ticked in; a new view, search or filter starts again.
-  const viewKey = `${scope}|${label ?? ""}|${typeFilter}|${q}`;
+  const viewKey = `${scope}|${sharedOnly}|${label ?? ""}|${q}`;
   useEffect(() => setSelectedIds([]), [viewKey]);
   const stopSelecting = () => {
     setSelecting(false);
@@ -245,6 +194,7 @@ export default function XenNote() {
     if (!ok) return;
     try {
       await deleteNote.mutateAsync(note._id);
+      setEditor((current) => (current?.note?._id === note._id ? null : current));
       enqueueSnackbar("Note moved to Trash", {
         variant: "success",
         action: (key) => (
@@ -269,7 +219,7 @@ export default function XenNote() {
   };
 
   const renderNotes = (list: Note[]) => (
-    <Box sx={{ columnCount: { xs: 2, md: 2, lg: 3, xl: 4 }, columnGap: 2 }}>
+    <Box sx={{ columnWidth: 220, columnCount: 4, columnGap: 2 }}>
       {list.map((n) => (
         <NoteCard
           key={n._id}
@@ -277,10 +227,6 @@ export default function XenNote() {
           onOpen={() => setEditor({ note: n })}
           onToggleItem={n.can_edit ? (i) => toggleItem(n, i) : undefined}
           onTogglePin={() => save(n._id, { pinned: !n.pinned })}
-          onArchive={() => save(n._id, { archived: !n.archived })}
-          onColor={(color) => save(n._id, { color })}
-          onDelete={n.can_manage ? () => removeNote(n) : undefined}
-          onShare={() => setShareNoteId(n._id)}
           resolveTitle={resolveTitle}
           onOpenLinked={openNoteById}
           selected={selecting ? selectedIds.includes(n._id) : undefined}
@@ -290,51 +236,11 @@ export default function XenNote() {
     </Box>
   );
 
-  const scopeTitle =
-    scope === "all"
-      ? "All notes"
-      : scope === "none"
-        ? "My notes"
-        : scope === "shared"
-          ? "Shared with me"
-          : scope === "archive"
-            ? "Archive"
-            : "Trash";
+  const scopeTitle = scope === "loose" ? "Loose notes" : scope === "archive" ? "Archive" : "Trash";
   const startNote = (type?: NoteType) => setEditor({ note: null, startType: type });
   const empty = !!notes && notes.length === 0;
-  const canWrite = scope !== "archive" && scope !== "trash" && scope !== "shared";
-
-  const sharedPages = scope === "shared" && sharedTab === "pages";
-  const pickScope = (next: Scope) => {
-    if (next === "shared") setSharedTab("pages");
-    setScope(next);
-    setTypeFilter("all");
-    setRailOpen(false);
-  };
-
-  const rail = (
-    <NoteRail
-      scope={scope}
-      onScope={pickScope}
-      counts={counts}
-      showShared
-      onOpenTasks={() => navigate("/internal/xennote/tasks")}
-      onOpenGraph={() => navigate("/internal/xennote/graph")}
-      notebooks={notebooks}
-      labels={labels}
-      label={label}
-      onLabel={(l) => {
-        setLabel(l);
-        setRailOpen(false);
-      }}
-      onNewNote={canWrite || sharedPages ? () => startNote() : undefined}
-      onOpenNotebook={(id) => navigate(`/internal/xennote/b/${id}`)}
-      onNewNotebook={() => {
-        setRailOpen(false);
-        setNewNotebookOpen(true);
-      }}
-    />
-  );
+  const canWrite = scope === "loose" && !sharedOnly;
+  const hasLabelFilter = labels.length > 0 || !!label;
 
   const sectionHeader = (text: string, count: number, icon?: ReactNode) => (
     <Typography
@@ -354,235 +260,191 @@ export default function XenNote() {
     </Typography>
   );
 
-  const typeCount = (type: TypeFilter) =>
-    type === "all" ? (allNotes?.length ?? 0) : (allNotes?.filter((n) => matchesKind(n, type)).length ?? 0);
-
   return (
     <>
-      <Box sx={{ display: "flex", alignItems: "flex-start", minHeight: "calc(100vh - 64px)" }}>
-        {wide ? (
-          <Box sx={railPanelSx}>{rail}</Box>
-        ) : (
-          <Drawer
-            open={railOpen}
-            onClose={() => setRailOpen(false)}
-            slotProps={{ paper: { sx: { width: 280, p: 1.5, pt: 9 } } }}
-          >
-            {rail}
-          </Drawer>
+      <Box
+        sx={{
+          maxWidth: 1200,
+          mx: "auto",
+          px: { xs: 1.5, sm: 4 },
+          pt: { xs: 2, sm: 3 },
+          pb: 4,
+        }}
+      >
+        <PageHeader
+          title={scopeTitle}
+          mb={2.5}
+          actions={
+            <>
+              {canWrite && (
+                <>
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => startNote("text")}>
+                    New note
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<CheckBoxOutlinedIcon />}
+                    onClick={() => startNote("checklist")}
+                  >
+                    New list
+                  </Button>
+                </>
+              )}
+              <NoteNavButton />
+            </>
+          }
+        />
+
+        {scope === "trash" && <NoteTrash />}
+
+        {scope !== "trash" && (
+          <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+            <TextField
+              fullWidth
+              placeholder="Search notes, lists and links"
+              value={search}
+              onChange={(e) => setFilter("q", e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: 3, height: 44 },
+                },
+              }}
+              sx={{ flex: 1, minWidth: 0 }}
+            />
+            <TextField
+              select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as NoteSort)}
+              aria-label="Sort notes"
+              slotProps={{ input: { sx: { borderRadius: 3, height: 44 } } }}
+              sx={{ width: { xs: 130, sm: 160 } }}
+            >
+              {NOTE_SORTS.map((s) => (
+                <MenuItem key={s.value} value={s.value}>
+                  {s.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Tooltip title={selecting ? "Stop selecting" : "Select notes to change together"}>
+              <span>
+                <IconButton
+                  aria-label="Select notes"
+                  aria-pressed={selecting}
+                  color={selecting ? "primary" : "default"}
+                  disabled={!notes || notes.length === 0}
+                  onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                  sx={{ height: 44, width: 44 }}
+                >
+                  <ChecklistIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
         )}
 
-        <Box sx={{ flex: 1, minWidth: 0, px: { xs: 1.5, sm: 4 }, pt: { xs: 2, sm: 3 }, pb: { xs: 10, sm: 4 } }}>
-          <PageHeader
-            title={scopeTitle}
-            mb={2.5}
-            actions={
-              !wide && (
-                <IconButton aria-label="Open notebooks" onClick={() => setRailOpen(true)}>
-                  <MenuBookOutlinedIcon />
-                </IconButton>
-              )
-            }
-          />
-
-          {scope === "shared" && (
-            <Tabs
-              value={sharedTab}
-              onChange={(_, value: "pages" | "notes") => setSharedTab(value)}
-              aria-label="Shared items"
-              sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}
-            >
-              <Tab value="pages" label="Notebooks and pages" />
-              <Tab value="notes" label="Loose notes" />
-            </Tabs>
-          )}
-          {sharedPages && <SharedItems />}
-          {scope === "trash" && <NoteTrash />}
-
-          {!sharedPages && scope !== "trash" && (
-            <Box sx={{ display: "flex", gap: 1, maxWidth: 640, mx: "auto", mb: 2.25 }}>
-              <TextField
-                fullWidth
-                placeholder="Search notes, lists and links"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                    sx: { borderRadius: 3, height: 44 },
-                  },
-                }}
-                sx={{ flex: 1, minWidth: 0 }}
+        {(scope === "loose" || (scope === "archive" && hasLabelFilter)) && (
+          <Stack direction="row" sx={{ gap: 2, alignItems: "center", flexWrap: "wrap", mb: 2.75 }}>
+            {scope === "loose" && (
+              <FormControlLabel
+                label="Shared with me"
+                control={
+                  <Switch
+                    checked={sharedOnly}
+                    onChange={(_, checked) => setFilter("ownership", checked ? "shared" : "")}
+                    slotProps={{ input: { role: "switch" } }}
+                  />
+                }
+                sx={{ m: 0 }}
               />
+            )}
+            {hasLabelFilter && (
               <TextField
                 select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as NoteSort)}
-                aria-label="Sort notes"
-                slotProps={{ input: { sx: { borderRadius: 3, height: 44 } } }}
-                sx={{ width: { xs: 130, sm: 160 } }}
+                id="xennote-label"
+                label="Label"
+                size="small"
+                value={label ?? ""}
+                onChange={(e) => setFilter("label", e.target.value)}
+                sx={{ minWidth: 128, maxWidth: 220 }}
               >
-                {NOTE_SORTS.map((s) => (
-                  <MenuItem key={s.value} value={s.value}>
-                    {s.label}
+                <MenuItem value="">Any label</MenuItem>
+                {label && !labels.some(({ name }) => name === label) && <MenuItem value={label}>{label}</MenuItem>}
+                {labels.map(({ name }) => (
+                  <MenuItem key={name} value={name}>
+                    {name}
                   </MenuItem>
                 ))}
               </TextField>
-              <Tooltip title={selecting ? "Stop selecting" : "Select notes to change together"}>
-                <span>
-                  <IconButton
-                    aria-label="Select notes"
-                    aria-pressed={selecting}
-                    color={selecting ? "primary" : "default"}
-                    disabled={!notes || notes.length === 0}
-                    onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
-                    sx={{ height: 44, width: 44 }}
-                  >
-                    <ChecklistIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Box>
-          )}
+            )}
+          </Stack>
+        )}
 
-          {canWrite && !phone && (
-            <Card
-              variant="outlined"
-              sx={{
-                mb: 4,
-                pl: 2.5,
-                pr: 1.25,
-                height: 54,
-                display: "flex",
-                alignItems: "center",
-                gap: 0.5,
-                maxWidth: 640,
-                mx: "auto",
-                borderRadius: 3,
-              }}
-            >
-              <Typography
-                role="button"
-                tabIndex={0}
-                onClick={() => startNote()}
-                onKeyDown={(e) => e.key === "Enter" && startNote()}
-                color="text.secondary"
-                sx={{ flex: 1, cursor: "text" }}
-              >
-                Take a note…
-              </Typography>
-              <Tooltip title="New note">
-                <IconButton aria-label="New note" onClick={() => startNote("text")}>
-                  <NotesIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="New list">
-                <IconButton aria-label="New list" onClick={() => startNote("checklist")}>
-                  <CheckBoxOutlinedIcon />
-                </IconButton>
-              </Tooltip>
-            </Card>
-          )}
+        {selecting && scope !== "trash" && (
+          <NoteBulkBar
+            count={selectedIds.length}
+            inArchive={scope === "archive"}
+            busy={bulkUpdateNotes.isPending || bulkDeleteNotes.isPending}
+            labels={labels.map((l) => l.name)}
+            onSelectAll={() => setSelectedIds(editableShown.map((n) => n._id))}
+            onArchive={(archived) =>
+              bulk(
+                () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, archived: !archived }),
+                `${countLabel} ${archived ? "unarchived" : "archived"}`,
+              )
+            }
+            onColor={(color) =>
+              bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, color }), `${countLabel} recoloured`)
+            }
+            onAddLabel={(l) =>
+              bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, add_label: l }), `Labelled ${countLabel}`)
+            }
+            onDelete={bulkDelete}
+            onDone={stopSelecting}
+          />
+        )}
 
-          {!sharedPages && scope !== "trash" && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", mb: 2.75 }}>
-              <Stack direction="row" sx={{ gap: 1, flex: 1, flexWrap: "wrap" }} aria-label="Filter by type">
-                {TYPE_FILTERS.map((f) => (
-                  <Chip
-                    key={f.id}
-                    icon={f.icon}
-                    label={f.id === "all" ? f.label : `${f.label} · ${typeCount(f.id)}`}
-                    color={typeFilter === f.id ? "primary" : "default"}
-                    variant={typeFilter === f.id ? "filled" : "outlined"}
-                    onClick={() => setTypeFilter(f.id)}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {!sharedPages && selecting && scope !== "trash" && (
-            <NoteBulkBar
-              count={selectedIds.length}
-              inArchive={scope === "archive"}
-              busy={bulkUpdateNotes.isPending || bulkDeleteNotes.isPending}
-              labels={labels.map((l) => l.name)}
-              onSelectAll={() => setSelectedIds(editableShown.map((n) => n._id))}
-              onArchive={(archived) =>
-                bulk(
-                  () => bulkUpdateNotes.mutateAsync({ ids: selectedIds, archived: !archived }),
-                  `${countLabel} ${archived ? "unarchived" : "archived"}`,
-                )
-              }
-              onColor={(color) =>
-                bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, color }), `${countLabel} recoloured`)
-              }
-              onAddLabel={(l) =>
-                bulk(() => bulkUpdateNotes.mutateAsync({ ids: selectedIds, add_label: l }), `Labelled ${countLabel}`)
-              }
-              onDelete={bulkDelete}
-              onDone={stopSelecting}
-            />
-          )}
-
-          {sharedPages || scope === "trash" ? null : isLoading && !notes ? (
-            <ListSkeleton rows={4} height={96} gap={2} />
-          ) : isError ? (
-            <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />
-          ) : empty ? (
-            <EmptyState
-              icon={<StickyNote2OutlinedIcon />}
-              title={
-                scope === "archive"
-                  ? "Nothing archived"
-                  : search || label || typeFilter !== "all"
-                    ? "No notes match"
-                    : scope === "shared"
-                      ? "No shared notes yet"
-                      : "No notes yet"
-              }
-              description={
-                scope === "archive"
-                  ? "Archived notes are kept here."
-                  : scope === "shared"
-                    ? "Loose notes people share with you will appear here."
-                    : "Take a note, make a list, save a photo or a link."
-              }
-            />
-          ) : (
-            <>
-              {pinned.length > 0 && (
-                <>
-                  {sectionHeader("Pinned", pinned.length, <PushPinOutlinedIcon sx={{ fontSize: 15 }} />)}
-                  {renderNotes(pinned)}
-                  {others.length > 0 && <Box sx={{ mt: 2.75 }}>{sectionHeader("Others", others.length)}</Box>}
-                </>
-              )}
-              {others.length > 0 && renderNotes(others)}
-            </>
-          )}
-        </Box>
+        {scope === "trash" ? null : isLoading && !notes ? (
+          <ListSkeleton rows={4} height={96} gap={2} />
+        ) : isError ? (
+          <ErrorDisplay error={error ?? null} title="Couldn't load your notes" onRetry={() => refetch()} />
+        ) : empty ? (
+          <EmptyState
+            icon={<StickyNote2OutlinedIcon />}
+            title={
+              scope === "archive"
+                ? "Nothing archived"
+                : search || label
+                  ? "No notes match"
+                  : sharedOnly
+                    ? "No shared notes yet"
+                    : "No notes yet"
+            }
+            description={
+              scope === "archive"
+                ? "Archived notes are kept here."
+                : sharedOnly
+                  ? "Loose notes people share with you will appear here."
+                  : "Take a note, make a list, save a photo or a link."
+            }
+          />
+        ) : (
+          <>
+            {pinned.length > 0 && (
+              <>
+                {sectionHeader("Pinned", pinned.length, <PushPinOutlinedIcon sx={{ fontSize: 15 }} />)}
+                {renderNotes(pinned)}
+                {others.length > 0 && <Box sx={{ mt: 2.75 }}>{sectionHeader("Others", others.length)}</Box>}
+              </>
+            )}
+            {others.length > 0 && renderNotes(others)}
+          </>
+        )}
       </Box>
-
-      {canWrite && phone && (
-        <SpeedDial ariaLabel="Add a note" icon={<SpeedDialIcon />} sx={{ position: "fixed", right: 16, bottom: 16 }}>
-          <SpeedDialAction
-            icon={<NotesIcon />}
-            slotProps={{ tooltip: { open: true, title: "Note" } }}
-            onClick={() => startNote("text")}
-          />
-          <SpeedDialAction
-            icon={<CheckBoxOutlinedIcon />}
-            slotProps={{ tooltip: { open: true, title: "List" } }}
-            onClick={() => startNote("checklist")}
-          />
-        </SpeedDial>
-      )}
-
       <NoteEditor
         open={!!editor}
         onClose={() => setEditor(null)}
@@ -591,13 +453,7 @@ export default function XenNote() {
         labelSuggestions={labels.map((l) => l.name)}
         titles={titles}
         onOpenNote={openNoteById}
-      />
-      <NoteShareDialog noteId={shareNoteId} onClose={() => setShareNoteId(null)} />
-      <NotebookDialog
-        open={newNotebookOpen}
-        onClose={() => setNewNotebookOpen(false)}
-        notebook={null}
-        onGone={() => setScope("all")}
+        onDelete={removeNote}
       />
     </>
   );

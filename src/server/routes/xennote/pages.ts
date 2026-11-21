@@ -14,7 +14,6 @@ import { AppError, callerId } from "../../utils/http";
 import { FileRecord } from "../../models/fileRecord";
 import { XenNotePage, XenNotePageBody, XenNoteSection } from "../../models/xenNotePage";
 import { signedUrlsFor, thumbnailUrlsFor } from "../../utils/appFiles";
-import { canView } from "../../utils/membership";
 import { orderFor } from "../../utils/xenNoteOrder";
 import { trashPage, unionTags, writePageBody } from "../../utils/xenNotePages";
 import { SocketManager } from "../../infrastructure/SocketManager";
@@ -26,7 +25,7 @@ import {
   loadSection,
   markNotebookChanged,
   notifyTree,
-  pageAudience,
+  notebookAudience,
   serializePage,
   type PageDoc,
 } from "./pageAccess";
@@ -67,28 +66,20 @@ export async function pageDetail(page: PageDoc, notebook: NotebookDoc, role: Mem
     XenNotePageBody.findOne({ page_id: page._id }).lean(),
     XenNoteSection.findById(page.section_id).lean(),
   ]);
-  // Someone who was added to this page alone sees the page, not the notebook around it.
-  const member = canView(notebook.toObject(), uid);
-  const children = !member
-    ? await XenNotePage.find({ parent_id: page._id, archived: { $ne: true } }, "title")
-        .sort({ order: 1, _id: 1 })
-        .lean()
-    : [];
   const own = page.reminders.find((item) => item.user_id === uid);
   return {
     properties: page.properties,
     reminder: own ? { at: own.at, sent: !!own.notified_at } : null,
-    children: children.map((p) => ({ id: String(p._id), title: p.title })),
     page: serializePage(page, uid, role, canManagePage(notebook.toObject(), uid)),
     doc: body?.doc ?? ensureBlockIds(emptyDoc()),
     files: await fileMapFor(page.files),
-    notebook: member ? { id: notebook.id as string, name: notebook.name } : null,
-    section: member && section ? { id: String(section._id), name: section.name, kind: section.kind } : null,
+    notebook: { id: notebook.id as string, name: notebook.name },
+    section: section ? { id: String(section._id), name: section.name, kind: section.kind } : null,
   };
 }
 
-const siblingsOf = async (sectionId: unknown, parentId: unknown, except?: unknown) => {
-  const rows = await XenNotePage.find({ section_id: sectionId, parent_id: parentId }, "order").lean();
+const siblingsOf = async (sectionId: unknown, except?: unknown) => {
+  const rows = await XenNotePage.find({ section_id: sectionId }, "order").lean();
   return rows.filter((r) => String(r._id) !== String(except)).map((r) => ({ id: String(r._id), order: r.order }));
 };
 
@@ -104,38 +95,27 @@ export function registerPageRoutes(app: any) {
       if ((await XenNotePage.countDocuments({ notebook_id: notebook._id })) >= MAX_PAGES_PER_NOTEBOOK) {
         throw new AppError(400, `A notebook can have up to ${MAX_PAGES_PER_NOTEBOOK} pages`);
       }
-      const { title, parent_id, before, after } = xenNotePageCreateSchema.parse(req.body); // validate() only checks; parsing again gives the trimmed, defaulted values
+      const { title, before, after } = xenNotePageCreateSchema.parse(req.body); // validate() only checks; parsing again gives the trimmed, defaulted values
 
-      let parent: PageDoc | null = null;
-      if (parent_id) {
-        parent = await XenNotePage.findOne({ _id: parent_id, section_id: section._id });
-        if (!parent) throw new AppError(400, "That parent page isn't in this section");
-        if (parent.parent_id) throw new AppError(400, "A sub-page can't have sub-pages of its own");
-      }
       const page = await XenNotePage.create({
         notebook_id: notebook._id,
         section_id: section._id,
-        parent_id: parent?._id ?? null,
-        order: orderFor(await siblingsOf(section._id, parent?._id ?? null), { before, after }),
+        order: orderFor(await siblingsOf(section._id), { before, after }),
         title,
         created_by: uid,
         updated_by: uid,
       });
       await XenNotePageBody.create({ page_id: page._id, doc: ensureBlockIds(emptyDoc()), rev: 0 });
       await markNotebookChanged(notebook);
-      notifyTree(
-        notebook,
-        parent?.members.map((m) => m.user_id),
-      );
+      notifyTree(notebook);
       res.json({ status: true, message: "Page added", data: await pageDetail(page, notebook, "owner", uid) });
     },
   );
 
   app.get("/api/xennote/pages/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
-    const viewed_at = new Date();
     const uid = callerId(req);
     const { page, notebook, role } = await loadPage(req, req.params.id as string, "view");
-    res.json({ status: true, data: { ...(await pageDetail(page, notebook, role, uid)), viewed_at } });
+    res.json({ status: true, data: await pageDetail(page, notebook, role, uid) });
   });
 
   // Name, icon, colour, archive, tags and aliases. The text is saved on its own (below).
@@ -145,7 +125,7 @@ export function registerPageRoutes(app: any) {
     validate(xenNotePageUpdateSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { page, notebook, parent, role } = await loadPage(req, req.params.id as string, "edit");
+      const { page, notebook, role } = await loadPage(req, req.params.id as string, "edit");
       const body = xenNotePageUpdateSchema.parse(req.body);
       if (body.title !== undefined) page.title = body.title;
       if (body.icon !== undefined) page.icon = body.icon;
@@ -159,7 +139,7 @@ export function registerPageRoutes(app: any) {
       page.updated_by = uid;
       await page.save();
       await markNotebookChanged(notebook);
-      notifyTree(notebook, pageAudience(notebook, page, parent));
+      notifyTree(notebook);
       res.json({ status: true, message: "Saved", data: await pageDetail(page, notebook, role, uid) });
     },
   );
@@ -172,13 +152,13 @@ export function registerPageRoutes(app: any) {
     validate(xenNotePageBodySchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { page, notebook, parent } = await loadPage(req, req.params.id as string, "edit");
+      const { page, notebook } = await loadPage(req, req.params.id as string, "edit");
       const { doc, base_rev, client_id } = xenNotePageBodySchema.parse(req.body);
 
       const { rev, conflict } = await writePageBody(page, doc, uid, base_rev);
 
       await markNotebookChanged(notebook);
-      SocketManager.getInstance().notifyXenNotePageUpdate(pageAudience(notebook, page, parent), {
+      SocketManager.getInstance().notifyXenNotePageUpdate(notebookAudience(notebook), {
         pageId: page.id as string,
         notebookId: notebook.id as string,
         rev,
@@ -189,15 +169,15 @@ export function registerPageRoutes(app: any) {
     },
   );
 
-  // Move a page to another section, make it a sub-page (or top-level), and put it before or after a sibling.
+  // Move a page to another section or reposition it in the same section.
   app.post(
     "/api/xennote/pages/:id/move",
     validateParams(xenNoteIdParamSchema),
     validate(xenNotePageMoveSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { page, notebook, parent: oldParent, role } = await loadPage(req, req.params.id as string, "manage");
-      const { section_id, parent_id, before, after } = xenNotePageMoveSchema.parse(req.body);
+      const { page, notebook, role } = await loadPage(req, req.params.id as string, "manage");
+      const { section_id, before, after } = xenNotePageMoveSchema.parse(req.body);
       if (page.journal_date) throw new AppError(400, "Journal pages stay in the journal");
       if (before === page.id || after === page.id) throw new AppError(400, "A page can't go next to itself");
 
@@ -208,28 +188,12 @@ export function registerPageRoutes(app: any) {
         if (target.kind === "journal") throw new AppError(400, "Pages can't be moved into the journal");
       }
       const sectionId = sectionChanged ? (section_id as string) : String(page.section_id);
-      const parentId =
-        parent_id !== undefined ? parent_id : sectionChanged ? null : page.parent_id ? String(page.parent_id) : null;
-
-      if (parentId) {
-        if (parentId === page.id) throw new AppError(400, "A page can't be its own parent");
-        const parent = await XenNotePage.findOne({ _id: parentId, section_id: sectionId });
-        if (!parent) throw new AppError(400, "That parent page isn't in this section");
-        if (parent.parent_id) throw new AppError(400, "A sub-page can't have sub-pages of its own");
-        if (await XenNotePage.exists({ parent_id: page._id })) {
-          throw new AppError(400, "A page with sub-pages can't become a sub-page");
-        }
-      }
-
       page.set("section_id", sectionId);
-      page.set("parent_id", parentId);
-      page.order = orderFor(await siblingsOf(sectionId, parentId, page._id), { before, after });
+      page.order = orderFor(await siblingsOf(sectionId, page._id), { before, after });
       page.updated_by = uid;
       await page.save();
-      // Its sub-pages go with it.
-      if (sectionChanged) await XenNotePage.updateMany({ parent_id: page._id }, { $set: { section_id: sectionId } });
       await markNotebookChanged(notebook);
-      notifyTree(notebook, pageAudience(notebook, page, oldParent));
+      notifyTree(notebook);
       res.json({ status: true, message: "Moved", data: await pageDetail(page, notebook, role, uid) });
     },
   );
@@ -273,13 +237,12 @@ export function registerPageRoutes(app: any) {
     },
   );
 
-  // Deleting a page puts it and its sub-pages in the Trash for 30 days.
+  // Deleting a page puts it in the Trash for 30 days.
   app.delete("/api/xennote/pages/:id", validateParams(xenNoteIdParamSchema), async (req: Request, res: Response) => {
-    const { page, notebook, parent } = await loadPage(req, req.params.id as string, "manage");
-    const audience = pageAudience(notebook, page, parent);
+    const { page, notebook } = await loadPage(req, req.params.id as string, "manage");
     await trashPage(page._id, callerId(req));
     await markNotebookChanged(notebook);
-    notifyTree(notebook, audience);
+    notifyTree(notebook);
     res.json({ status: true, message: "Page deleted" });
   });
 }

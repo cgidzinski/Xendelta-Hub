@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
+import sharp from "sharp";
 import {
   defaultXenStartConfig,
   QUICK_LINK_LIMIT,
@@ -9,6 +10,9 @@ import {
   type XenStartConfig,
 } from "@shared/xenstart";
 import { createUser, startTestApp, type TestApp } from "../testing/testApp";
+
+const { fetchPublic } = vi.hoisted(() => ({ fetchPublic: vi.fn() }));
+vi.mock("../utils/safeFetch", () => ({ fetchPublic }));
 
 let t: TestApp;
 const path = "/api/xenstart";
@@ -27,6 +31,26 @@ const get = (token: string) => request(t.app).get(path).set(auth(token));
 const save = (token: string, config: XenStartConfig) => request(t.app).put(path).set(auth(token)).send(config);
 
 describe("XenStart", () => {
+  it("persists sparse quick-link slots and background sizing and rejects invalid values", async () => {
+    const { token } = await createUser();
+    const links = [
+      { ...link("First"), slot: 0 },
+      { ...link("Last"), slot: 8 },
+    ];
+    const saved = (await save(token, { ...defaultXenStartConfig(), links, backgroundFit: "contain" }).expect(200)).body
+      .data;
+    expect((await get(token).expect(200)).body.data).toMatchObject({ links, backgroundFit: "contain" });
+    const { backgroundFit: _fit, ...olderClient } = saved;
+    expect((await save(token, olderClient).expect(200)).body.data.backgroundFit).toBe("contain");
+    await save(token, { ...saved, links: [links[0], { ...links[1], slot: 0 }] }).expect(400);
+    await save(token, { ...saved, links: [{ ...links[0], slot: QUICK_LINK_LIMIT }] }).expect(400);
+    await request(t.app)
+      .put(path)
+      .set(auth(token))
+      .send({ ...saved, backgroundFit: "invalid" })
+      .expect(400);
+  });
+
   it("persists region overrides, retains them on older requests, and resets without moving widgets", async () => {
     const { token } = await createUser();
     const initial = defaultXenStartConfig();
@@ -208,5 +232,99 @@ describe("XenStart", () => {
     const removed = (await save(token, { ...olderClient, layout }).expect(200)).body.data;
     expect(removed.clockFormat).toBe("24-hour");
     expect((await get(token).expect(200)).body.data.clockFormat).toBe("24-hour");
+  });
+
+  it("keeps widget sizes and favicons after saving and accepts older size-less updates", async () => {
+    const { token } = await createUser();
+    const links = [{ ...link("Example"), iconUrl: "https://example.com/icons/bookmark.png" }];
+    const saved = (
+      await save(token, {
+        ...defaultXenStartConfig(),
+        clockSize: "large",
+        linkTileSize: "small",
+        links,
+      }).expect(200)
+    ).body.data;
+    const { clockSize: _clockSize, linkTileSize: _tileSize, ...olderClient } = saved;
+    await save(token, olderClient).expect(200);
+    expect((await get(token).expect(200)).body.data).toMatchObject({
+      clockSize: "large",
+      linkTileSize: "small",
+      links,
+    });
+    await request(t.app)
+      .put(path)
+      .set(auth(token))
+      .send({ ...saved, clockSize: "huge" })
+      .expect(400);
+  });
+
+  it("suggests a title and the page’s favicon, with a fallback when a site is unavailable", async () => {
+    const { token } = await createUser();
+    const bookmarkPath = `${path}/bookmark`;
+    const lookup = (url: string) => request(t.app).post(bookmarkPath).set(auth(token)).send({ url });
+    await request(t.app).post(bookmarkPath).send({ url: "https://example.com" }).expect(401);
+    await lookup("javascript:alert(1)").expect(400);
+    fetchPublic.mockResolvedValueOnce({
+      url: "https://example.com/articles/one",
+      body: Buffer.from('<title>News &amp; Notes</title><link rel="shortcut icon" href="../icons/site.png">'),
+    });
+    expect((await lookup("https://www.example.com").expect(200)).body.data).toEqual({
+      label: "News & Notes",
+      iconUrl: "https://example.com/icons/site.png",
+    });
+    fetchPublic.mockRejectedValueOnce(new Error("Page unavailable"));
+    expect((await lookup("https://www.example.com").expect(200)).body.data).toEqual({ label: "example.com" });
+  });
+
+  it("stores one private background, keeps it through other edits, and clears it on replacement or removal", async () => {
+    const [owner, other] = await Promise.all([createUser(), createUser()]);
+    const png = await sharp({ create: { width: 20, height: 10, channels: 3, background: "white" } })
+      .png()
+      .toBuffer();
+    const upload = (config: XenStartConfig, bytes = png) =>
+      request(t.app)
+        .put(path)
+        .set(auth(owner.token))
+        .field("config", JSON.stringify(config))
+        .attach("background", bytes, "background.png");
+    const initial = defaultXenStartConfig();
+    await upload(initial, Buffer.from("not an image")).expect(400);
+    expect((await get(owner.token).expect(200)).body.data).toEqual(initial);
+
+    const uploaded = (await upload(initial).expect(200)).body.data;
+    const imagePath = `${path}/background/${uploaded.backgroundImageId}`;
+    expect(uploaded).not.toHaveProperty("backgroundImage");
+    expect((await get(owner.token).expect(200)).body.data).toEqual(uploaded);
+    const image = await request(t.app)
+      .get(imagePath)
+      .set(auth(owner.token))
+      .expect("Content-Type", "image/webp")
+      .expect(200);
+    expect(await sharp(image.body).metadata()).toMatchObject({ format: "webp", width: 20, height: 10 });
+    await request(t.app).get(imagePath).expect(401);
+    await request(t.app).get(imagePath).set(auth(other.token)).expect(404);
+    expect((await request(t.app).get(usagePath).set(auth(owner.token)).expect(200)).body.data.used).toContain(
+      "xenstart",
+    );
+
+    const { backgroundImageId: _imageId, ...olderClient } = uploaded;
+    const retained = (await save(owner.token, { ...olderClient, engine: "Bing" }).expect(200)).body.data;
+    expect(retained.backgroundImageId).toBe(uploaded.backgroundImageId);
+    await upload(uploaded).expect(409);
+    const replaced = (await upload(retained).expect(200)).body.data;
+    expect(replaced.backgroundImageId).not.toBe(uploaded.backgroundImageId);
+    await request(t.app).get(imagePath).set(auth(owner.token)).expect(404);
+
+    const removed = (await save(owner.token, { ...replaced, backgroundImageId: null }).expect(200)).body.data;
+    expect(removed.backgroundImageId).toBeUndefined();
+    await request(t.app).get(`${path}/background/${replaced.backgroundImageId}`).set(auth(owner.token)).expect(404);
+    const restored = (await upload(removed).expect(200)).body.data;
+    const backgroundUrl = "https://example.com/wallpaper.jpg";
+    const remote = (
+      await save(owner.token, { ...restored, appearance: { ...restored.appearance, backgroundUrl } }).expect(200)
+    ).body.data;
+    expect(remote.backgroundImageId).toBeUndefined();
+    expect(remote.appearance.backgroundUrl).toBe(backgroundUrl);
   });
 });

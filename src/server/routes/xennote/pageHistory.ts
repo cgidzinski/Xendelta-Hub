@@ -4,7 +4,7 @@ import { AppError, callerId } from "../../utils/http";
 import { validateParams, xenNoteIdParamSchema, xenNoteVersionParamSchema } from "../../utils/validation";
 import { filesOfPage, writePageBody } from "../../utils/xenNotePages";
 import { SocketManager } from "../../infrastructure/SocketManager";
-import { loadPage, markNotebookChanged, pageAudience } from "./pageAccess";
+import { loadPage, markNotebookChanged, notebookAudience } from "./pageAccess";
 import { fileMapFor } from "./pages";
 
 export function registerPageHistoryRoutes(app: any) {
@@ -48,11 +48,11 @@ export function registerPageHistoryRoutes(app: any) {
     async (req: Request, res: Response) => {
       const uid = callerId(req);
       const { id, versionId } = xenNoteVersionParamSchema.parse(req.params);
-      const { page, notebook, parent } = await loadPage(req, id, "edit");
+      const { page, notebook } = await loadPage(req, id, "edit");
       const version = await getVersion(page._id, versionId);
       const saved = await writePageBody(page, version.doc, uid, page.rev, version.title);
       await markNotebookChanged(notebook);
-      SocketManager.getInstance().notifyXenNotePageUpdate(pageAudience(notebook, page, parent), {
+      SocketManager.getInstance().notifyXenNotePageUpdate(notebookAudience(notebook), {
         pageId: id,
         notebookId: String(notebook._id),
         rev: saved.rev,

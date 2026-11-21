@@ -38,13 +38,8 @@ it("scope-checks live blocks, backlinks, public embeds and Markdown export", asy
   expect((await route("get", blockPath, guest)).body.data).toEqual({ status: "locked" });
   expect((await route("get", `${blockPath}/backlinks`, owner)).body.data).toEqual([{ id: source, title: "Source" }]);
   expect((await route("get", `/pages/${source}/export`, owner)).text).toContain("> Block contents");
-  await post(`/pages/${source}/people`, { userIds: [guest.user.id], role: "viewer" });
-  expect((await route("get", `/pages/${source}/export`, guest)).text).toContain("> Locked block");
-  const pageToken = (await post(`/pages/${source}/share`)).body.data.token;
+  expect((await route("get", `/pages/${source}/export`, guest)).status).toBe(404);
   const bookToken = (await post(`/notebooks/${book}/share`)).body.data.notebook.share.token;
-  expect((await route("get", `/public/page/${pageToken}/blocks/${target}/original`)).body.data).toEqual({
-    status: "locked",
-  });
   expect((await route("get", `/public/notebook/${bookToken}/blocks/${target}/original`)).body.data).toMatchObject({
     status: "available",
     excerpt: "Block contents",

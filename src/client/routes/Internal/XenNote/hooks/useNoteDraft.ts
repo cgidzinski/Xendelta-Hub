@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSnackbar } from "notistack";
 import { isSafeUrl, type NoteType } from "@shared/xennote/notes";
-import { useConfirm } from "../../../../components/ui/ConfirmProvider";
 import { useXenNoteActions } from "../../../../hooks/xennote/useXenNote";
 import type { XenNote } from "../../../../types/XenNote";
 import { draftFromNote, emptyDraft, isDirty, isEmptyDraft, toInput, type NoteDraft } from "../noteDraft";
@@ -19,11 +18,10 @@ interface UseNoteDraftOptions {
 
 /**
  * The state behind the note editor: the draft being typed, the note as the server holds it (`live`), autosave,
- * saving on close, and the actions that change the note outside the draft (photos, reminder, public link, delete).
+ * saving on close, and the actions that change the note outside the draft (photos and reminders).
  */
 export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: UseNoteDraftOptions) {
   const { enqueueSnackbar } = useSnackbar();
-  const confirm = useConfirm();
   const actions = useXenNoteActions();
 
   const initial = useMemo(
@@ -143,22 +141,6 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
     }
   };
 
-  const remove = async () => {
-    if (!live) return onClose();
-    const ok = await confirm({
-      title: "Move this note to the Trash?",
-      message: "It disappears for everyone who can see it. You can bring it back from the Trash for 30 days.",
-      confirmLabel: "Move to Trash",
-    });
-    if (!ok) return;
-    try {
-      await actions.deleteNote.mutateAsync(live._id);
-      onClose();
-    } catch (e) {
-      enqueueSnackbar((e as Error).message || "Couldn't delete the note", { variant: "error" });
-    }
-  };
-
   const addPhotos = async (files: ArrayLike<File> | null) => {
     if (!files || files.length === 0) return;
     const list = Array.from(files);
@@ -192,7 +174,6 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
     saveAndClose,
     openLinked,
     setReminder,
-    remove,
     addPhotos,
     removePhoto,
   };

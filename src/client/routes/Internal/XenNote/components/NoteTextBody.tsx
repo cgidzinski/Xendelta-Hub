@@ -4,7 +4,7 @@ import { useTheme } from "@mui/material/styles";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import { completeWikiLink, normalizeTitle, openWikiLink } from "@shared/xennote/wikiLinks";
-import { noteFieldSx } from "../noteFieldSx";
+import { noteFieldSx, textNoteMinHeight } from "../noteFieldSx";
 import NoteMarkdown from "./NoteMarkdown";
 
 interface NoteTextBodyProps {
@@ -42,7 +42,11 @@ export default function NoteTextBody({
   const [caret, setCaret] = useState(0);
   const [suggestIndex, setSuggestIndex] = useState(0);
   const [suggestDismissed, setSuggestDismissed] = useState(false);
-  const fieldSx = noteFieldSx(theme);
+  const fieldSx = {
+    ...noteFieldSx(theme, !readOnly && mode === "write"),
+    flex: "1 0 auto",
+    ...(type === "text" && { minHeight: textNoteMinHeight }),
+  };
 
   useEffect(() => {
     setMode("write");
@@ -84,29 +88,15 @@ export default function NoteTextBody({
 
   return (
     <>
-      {type === "text" && !readOnly && (
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={mode}
-          onChange={(_, v: "write" | "preview" | null) => v && setMode(v)}
-          aria-label="Write or preview"
-          sx={{ alignSelf: "flex-end" }}
-        >
-          <ToggleButton value="write" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
-            <EditOutlinedIcon fontSize="small" />
-            Write
-          </ToggleButton>
-          <ToggleButton value="preview" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
-            <VisibilityOutlinedIcon fontSize="small" />
-            Preview
-          </ToggleButton>
-        </ToggleButtonGroup>
-      )}
       {type === "text" && (mode === "preview" || readOnly) ? (
-        <Box sx={{ ...fieldSx, display: "block", minHeight: 160 }}>
+        <Box sx={{ ...fieldSx, display: "block", overflowX: "auto" }}>
           {body.trim() ? (
-            <NoteMarkdown text={body} resolve={resolveTitle} onOpenNote={onOpenNote} />
+            <NoteMarkdown
+              text={body}
+              resolve={resolveTitle}
+              onOpenNote={onOpenNote}
+              sx={{ fontSize: "inherit", lineHeight: "inherit" }}
+            />
           ) : (
             <Typography variant="body2" color="text.secondary">
               Nothing to preview yet.
@@ -118,9 +108,13 @@ export default function NoteTextBody({
           <InputBase
             fullWidth
             multiline
-            minRows={type === "image" ? 4 : 9}
-            maxRows={22}
-            sx={fieldSx}
+            minRows={type === "image" ? 4 : 11}
+            sx={{
+              ...fieldSx,
+              flexDirection: "column",
+              alignItems: "stretch",
+              "& .MuiInputBase-input": { flex: "1 0 auto" },
+            }}
             autoFocus={!noteId && type === "text"}
             placeholder={type === "image" ? "Add a caption" : "Take a note… (Markdown works; [[ links to another note)"}
             value={body}
@@ -186,6 +180,25 @@ export default function NoteTextBody({
             </Box>
           )}
         </>
+      )}
+      {type === "text" && !readOnly && (
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={mode}
+          onChange={(_, v: "write" | "preview" | null) => v && setMode(v)}
+          aria-label="Write or preview"
+          sx={{ alignSelf: "flex-end" }}
+        >
+          <ToggleButton value="write" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
+            <EditOutlinedIcon fontSize="small" />
+            Write
+          </ToggleButton>
+          <ToggleButton value="preview" sx={{ gap: 0.5, px: 1.25, py: 0.25, textTransform: "none" }}>
+            <VisibilityOutlinedIcon fontSize="small" />
+            Preview
+          </ToggleButton>
+        </ToggleButtonGroup>
       )}
     </>
   );

@@ -69,7 +69,6 @@ const tree = async (who: U, nb: string) =>
     pages: Array<{
       id: string;
       title: string;
-      parent_id: string | null;
       section_id: string;
       excerpt: string;
       tags: string[];
@@ -177,21 +176,15 @@ describe("pages", () => {
     expect(names((await tree(owner, nb)).pages, "title")).toEqual(["C", "B", "A"]);
   });
 
-  it("can have sub-pages, but only one level", async () => {
+  it("rejects requests to create or move a nested page", async () => {
     const { owner, nb, section } = await setup();
-    const parent = await newPage(owner, section, { title: "Parent" });
-    const child = await newPage(owner, section, { title: "Child", parent_id: parent.page.id });
-    expect((await tree(owner, nb)).pages.find((x) => x.id === child.page.id)?.parent_id).toBe(parent.page.id);
-
-    const grandchild = await api(owner).post(`/sections/${section}/pages`, { title: "G", parent_id: child.page.id });
-    expect(grandchild.status).toBe(400);
-    expect(grandchild.body.message).toMatch(/sub-page can't have sub-pages/);
-
-    // A parent from another section is refused too.
-    const other = (await api(owner).post(`/notebooks/${nb}/sections`, { name: "Other" })).body.data.section;
+    const first = await newPage(owner, section, { title: "First" });
+    const second = await newPage(owner, section, { title: "Second" });
     expect(
-      (await api(owner).post(`/sections/${other.id}/pages`, { title: "x", parent_id: parent.page.id })).status,
+      (await api(owner).post(`/sections/${section}/pages`, { title: "Nested", parent_id: first.page.id })).status,
     ).toBe(400);
+    expect((await api(owner).post(`/pages/${second.page.id}/move`, { parent_id: first.page.id })).status).toBe(400);
+    expect(names((await tree(owner, nb)).pages, "title")).toEqual(["First", "Second"]);
   });
 
   it("are renamed, recoloured, archived, tagged and given aliases", async () => {
@@ -231,39 +224,19 @@ describe("pages", () => {
     expect((await tree(owner, nb)).pages[0].favorite).toBe(false);
   });
 
-  it("are moved between sections with their sub-pages, and keep to the one-level rule", async () => {
+  it("moves one page between sections of its notebook", async () => {
     const { owner, nb, section } = await setup();
     const other = (await api(owner).post(`/notebooks/${nb}/sections`, { name: "Other" })).body.data.section;
-    const parent = await newPage(owner, section, { title: "Parent" });
-    const child = await newPage(owner, section, { title: "Child", parent_id: parent.page.id });
-    const lone = await newPage(owner, section, { title: "Lone" });
+    const moved = await newPage(owner, section, { title: "Move me" });
+    const stay = await newPage(owner, section, { title: "Stay here" });
 
-    await api(owner).post(`/pages/${parent.page.id}/move`, { section_id: other.id });
-    let pages = (await tree(owner, nb)).pages;
-    expect(pages.find((x) => x.id === parent.page.id)?.section_id).toBe(other.id);
-    expect(pages.find((x) => x.id === child.page.id)).toMatchObject({
-      section_id: other.id,
-      parent_id: parent.page.id,
-    });
+    expect((await api(owner).post(`/pages/${moved.page.id}/move`, { section_id: other.id })).status).toBe(200);
+    const pages = (await tree(owner, nb)).pages;
+    expect(pages.find((page) => page.id === moved.page.id)?.section_id).toBe(other.id);
+    expect(pages.find((page) => page.id === stay.page.id)?.section_id).toBe(section);
 
-    // A page with sub-pages can't become a sub-page, and a sub-page can't be nested deeper or under itself.
-    expect((await api(owner).post(`/pages/${parent.page.id}/move`, { parent_id: lone.page.id })).status).toBe(400);
-    expect((await api(owner).post(`/pages/${lone.page.id}/move`, { parent_id: child.page.id })).status).toBe(400);
-    expect((await api(owner).post(`/pages/${lone.page.id}/move`, { parent_id: lone.page.id })).status).toBe(400);
-
-    // A lone page can become a sub-page in its own section, then go back to the top level.
-    expect(
-      (await api(owner).post(`/pages/${lone.page.id}/move`, { section_id: other.id, parent_id: parent.page.id }))
-        .status,
-    ).toBe(200);
-    pages = (await tree(owner, nb)).pages;
-    expect(pages.find((x) => x.id === lone.page.id)?.parent_id).toBe(parent.page.id);
-    await api(owner).post(`/pages/${lone.page.id}/move`, { parent_id: null });
-    expect((await tree(owner, nb)).pages.find((x) => x.id === lone.page.id)?.parent_id).toBeNull();
-
-    // Only sections of this notebook.
     const elsewhere = await setup();
-    expect((await api(owner).post(`/pages/${lone.page.id}/move`, { section_id: elsewhere.section })).status).toBe(400);
+    expect((await api(owner).post(`/pages/${moved.page.id}/move`, { section_id: elsewhere.section })).status).toBe(400);
   });
 
   it("can't be moved into, or out of, the journal", async () => {
@@ -285,20 +258,17 @@ describe("pages", () => {
     expect((await api(owner).post(`/sections/${journal._id}/pages`, { title: "x" })).status).toBe(400);
   });
 
-  it("go to the Trash with their sub-pages and come back with them", async () => {
+  it("moves and restores only the selected page in the Trash", async () => {
     const { owner, nb, section } = await setup();
-    const parent = await newPage(owner, section, { title: "Parent" });
-    await newPage(owner, section, { title: "Child", parent_id: parent.page.id });
-    await api(owner).del(`/pages/${parent.page.id}`);
-    expect((await tree(owner, nb)).pages).toEqual([]);
-    expect((await api(owner).get(`/pages/${parent.page.id}`)).status).toBe(404);
-
-    // The sub-page isn't listed on its own: it belongs to its parent.
+    const first = await newPage(owner, section, { title: "First" });
+    await newPage(owner, section, { title: "Second" });
+    await api(owner).del(`/pages/${first.page.id}`);
+    expect(names((await tree(owner, nb)).pages, "title")).toEqual(["Second"]);
+    expect((await api(owner).get(`/pages/${first.page.id}`)).status).toBe(404);
     const trash = (await api(owner).get(`/notebooks/${nb}/trash`)).body.data;
-    expect(names(trash.pages, "title")).toEqual(["Parent"]);
-
-    await api(owner).post(`/pages/${parent.page.id}/restore`);
-    expect(names((await tree(owner, nb)).pages, "title").sort()).toEqual(["Child", "Parent"]);
+    expect(names(trash.pages, "title")).toEqual(["First"]);
+    await api(owner).post(`/pages/${first.page.id}/restore`);
+    expect(names((await tree(owner, nb)).pages, "title")).toEqual(["First", "Second"]);
   });
 
   it("can be deleted for good, with their body and history", async () => {
@@ -316,18 +286,15 @@ describe("pages", () => {
     expect(await mongoose.model("XenNotePageVersion").countDocuments({ page_id: made.page.id })).toBe(0);
   });
 
-  it("can't be restored into a deleted section or under a deleted parent", async () => {
+  it("requires the page's section to be restored first", async () => {
     const { owner, nb, section } = await setup();
-    const parent = await newPage(owner, section, { title: "Parent" });
-    const child = await newPage(owner, section, { title: "Child", parent_id: parent.page.id });
-    await api(owner).del(`/pages/${child.page.id}`);
-    await api(owner).del(`/pages/${parent.page.id}`);
-    // The child went to the Trash on its own first, then its parent did: restoring it alone needs the parent back.
-    const res = await api(owner).post(`/pages/${child.page.id}/restore`);
-    expect(res.status).toBe(409);
-    await api(owner).post(`/pages/${parent.page.id}/restore`);
-    expect((await api(owner).post(`/pages/${child.page.id}/restore`)).status).toBe(200);
-    expect((await tree(owner, nb)).pages).toHaveLength(2);
+    const first = await newPage(owner, section);
+    await api(owner).del(`/pages/${first.page.id}`);
+    await api(owner).del(`/sections/${section}`);
+    expect((await api(owner).post(`/pages/${first.page.id}/restore`)).status).toBe(409);
+    await api(owner).post(`/sections/${section}/restore`);
+    expect((await api(owner).post(`/pages/${first.page.id}/restore`)).status).toBe(200);
+    expect((await tree(owner, nb)).pages).toHaveLength(1);
   });
 });
 
@@ -507,69 +474,6 @@ describe("who can do what", () => {
     expect((await api(editor).put(`/pages/${id}/body`, { doc: doc(p("by editor")), base_rev: 0 })).status).toBe(200);
     expect((await api(editor).post(`/pages/${id}/move`, {})).status).toBe(200);
     expect((await api(editor).del(`/pages/${id}`)).status).toBe(200);
-  });
-
-  it("lets people added to one page work on just that page and its sub-pages", async () => {
-    const { owner, nb, section } = await setup();
-    const guest = await createUser();
-    const parent = await newPage(owner, section, { title: "Parent" });
-    const child = await newPage(owner, section, { title: "Child", parent_id: parent.page.id });
-    const sibling = await newPage(owner, section, { title: "Sibling" });
-
-    expect((await api(guest).get(`/pages/${parent.page.id}`)).status).toBe(404);
-    const added = await api(owner).post(`/pages/${parent.page.id}/people`, { userIds: [uid(guest)], role: "viewer" });
-    expect(added.status, JSON.stringify(added.body)).toBe(200);
-    expect(added.body.data.members).toMatchObject([{ user_id: uid(guest), role: "viewer" }]);
-
-    // They read the page and its sub-page, but not the notebook or its other pages.
-    const read = await api(guest).get(`/pages/${parent.page.id}`);
-    expect(read.status).toBe(200);
-    expect(read.body.data.notebook).toBeNull();
-    expect(read.body.data.section).toBeNull();
-    expect((await api(guest).get(`/pages/${child.page.id}`)).status).toBe(200);
-    expect((await api(guest).get(`/pages/${sibling.page.id}`)).status).toBe(404);
-    expect((await api(guest).get(`/notebooks/${nb}/tree`)).status).toBe(404);
-    expect((await api(guest).put(`/pages/${parent.page.id}/body`, { doc: doc(p("x")), base_rev: 0 })).status).toBe(403);
-
-    // As an editor they write, but still don't move, delete or share.
-    await api(owner).put(`/pages/${parent.page.id}/people/${uid(guest)}`, { role: "editor" });
-    expect(
-      (await api(guest).put(`/pages/${parent.page.id}/body`, { doc: doc(p("by guest")), base_rev: 0 })).status,
-    ).toBe(200);
-    expect((await api(guest).put(`/pages/${child.page.id}`, { title: "Renamed by guest" })).status).toBe(200);
-    expect((await api(guest).post(`/pages/${parent.page.id}/move`, {})).status).toBe(403);
-    expect((await api(guest).del(`/pages/${parent.page.id}`)).status).toBe(403);
-    expect(
-      (await api(guest).post(`/pages/${parent.page.id}/people`, { userIds: [uid(owner)], role: "viewer" })).status,
-    ).toBe(403);
-    expect((await api(guest).post(`/sections/${section}/pages`, { title: "x" })).status).toBe(404);
-
-    // They can see who the page is shared with, and leave. The owner can remove anyone.
-    expect((await api(guest).get(`/pages/${parent.page.id}/people`)).status).toBe(200);
-    const another = await createUser();
-    await api(owner).post(`/pages/${parent.page.id}/people`, { userIds: [uid(another)], role: "viewer" });
-    expect((await api(guest).del(`/pages/${parent.page.id}/people/${uid(another)}`)).status).toBe(403);
-    expect((await api(guest).del(`/pages/${parent.page.id}/people/${uid(guest)}`)).status).toBe(200);
-    expect((await api(guest).get(`/pages/${parent.page.id}`)).status).toBe(404);
-    expect((await api(owner).del(`/pages/${parent.page.id}/people/${uid(another)}`)).status).toBe(200);
-  });
-
-  it("doesn't add notebook members to a page, or the same person twice", async () => {
-    const { owner, nb, section } = await setup();
-    const member = await createUser();
-    const guest = await createUser();
-    await addPerson(owner, nb, member, "viewer");
-    const made = await newPage(owner, section);
-    const res = await api(owner).post(`/pages/${made.page.id}/people`, {
-      userIds: [uid(member), uid(guest)],
-      role: "editor",
-    });
-    expect(res.body.data.members.map((m: any) => m.user_id)).toEqual([uid(guest)]);
-    const again = await api(owner).post(`/pages/${made.page.id}/people`, { userIds: [uid(guest)], role: "viewer" });
-    expect(again.body.message).toBe("Already shared with them");
-    expect(again.body.data.members).toHaveLength(1);
-    expect((await api(owner).put(`/pages/${made.page.id}/people/${uid(member)}`, { role: "viewer" })).status).toBe(404);
-    expect((await api(owner).put(`/pages/${made.page.id}/people/${uid(guest)}`, { role: "owner" })).status).toBe(400);
   });
 });
 

@@ -16,10 +16,13 @@ it("writes validated typed properties and scopes queries to live, accessible pag
     request(app.app)[method](`/api/xennote${path}`).auth(user.token, { type: "bearer" });
   const addBook = async (name: string) => {
     const book = (await route("post", "/notebooks").send({ name })).body.data.notebook._id;
-    return (await route("post", `/notebooks/${book}/sections`).send({ name: "Notes" })).body.data.section.id;
+    return {
+      book,
+      section: (await route("post", `/notebooks/${book}/sections`).send({ name: "Notes" })).body.data.section.id,
+    };
   };
-  const section = await addBook("Properties");
-  const other = await addBook("Other");
+  const { book, section } = await addBook("Properties");
+  const { section: other } = await addBook("Other");
   const addPage = async (area: string, title: string) =>
     (await route("post", `/sections/${area}/pages`).send({ title })).body.data.page.id;
   const [dashboard, match, hidden, outside] = await Promise.all([
@@ -46,9 +49,8 @@ it("writes validated typed properties and scopes queries to live, accessible pag
       })
     ).status,
   ).toBe(400);
-  for (const id of [dashboard, match, outside]) {
-    await route("post", `/pages/${id}/people`).send({ userIds: [guest.user.id], role: "viewer" });
-  }
+  await route("post", `/notebooks/${book}/members`).send({ userIds: [guest.user.id], role: "viewer" });
+  await route("put", `/pages/${hidden}`).send({ archived: true });
   const run = (body: object) => route("post", `/pages/${dashboard}/query`, guest).send(body);
   const query = { key: "Hours", type: "number", operator: "atLeast", value: 3 };
   const result = await run(query);

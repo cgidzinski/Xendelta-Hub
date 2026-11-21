@@ -209,7 +209,7 @@ export const useNotebookPageActions = (notebookId: string) => {
       onSuccess: refreshTree,
     }),
     createPage: useMutation({
-      mutationFn: (v: { sectionId: string; title?: string; parent_id?: string | null } & Position) => {
+      mutationFn: (v: { sectionId: string; title?: string } & Position) => {
         const { sectionId, ...input } = v;
         return api.post<XenNotePageDetail>(`/api/xennote/sections/${sectionId}/pages`, input);
       },
@@ -236,13 +236,13 @@ export const useNotebookPageActions = (notebookId: string) => {
       },
     }),
     movePage: useMutation({
-      mutationFn: (v: { id: string; section_id?: string; parent_id?: string | null } & Position) => {
+      mutationFn: (v: { id: string; section_id?: string } & Position) => {
         const { id, ...input } = v;
         return api.post<XenNotePageDetail>(`/api/xennote/pages/${id}/move`, input);
       },
       onSuccess: (_data, v) => {
-        refreshTree();
         refreshPage(v.id);
+        return refreshTree();
       },
     }),
     favoritePage: useMutation({

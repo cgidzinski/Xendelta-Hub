@@ -1,10 +1,29 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Typography, alpha } from "@mui/material";
-import type { ClockFormat } from "@shared/xenstart";
+import { DEFAULT_BACKGROUND_FIT, type BackgroundFit, type ClockFormat, type WidgetSize } from "@shared/xenstart";
 import { RADIUS } from "../../../theme";
 
-export function BackgroundImage({ url, preview = false }: { url: string; preview?: boolean }) {
+export function BackgroundImage({
+  url,
+  blob,
+  fit = DEFAULT_BACKGROUND_FIT,
+  preview = false,
+}: {
+  url?: string;
+  blob?: Blob;
+  fit?: BackgroundFit;
+  preview?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
+  const attachBlob = useCallback(
+    (image: HTMLImageElement | null) => {
+      if (!image || !blob) return;
+      const source = URL.createObjectURL(blob);
+      image.src = source;
+      return () => URL.revokeObjectURL(source);
+    },
+    [blob],
+  );
   if (failed) return preview ? <Alert severity="warning">Couldn’t load the background preview.</Alert> : null;
 
   return (
@@ -17,17 +36,18 @@ export function BackgroundImage({ url, preview = false }: { url: string; preview
           content: '""',
           position: "absolute",
           inset: 0,
-          bgcolor: (theme) => alpha(theme.palette.background.default, 0.72),
+          bgcolor: (theme) => alpha(theme.palette.background.default, preview ? 0.15 : 0.72),
         },
       }}
     >
       <Box
         component="img"
-        src={url}
+        ref={attachBlob}
+        src={blob ? undefined : url}
         alt=""
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        sx={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+        sx={{ display: "block", width: "100%", height: "100%", objectFit: fit, objectPosition: "center" }}
       />
     </Box>
   );
@@ -49,7 +69,13 @@ const clockFormats: Record<ClockFormat, Intl.DateTimeFormat> = {
   }),
 };
 
-export function Clock({ compact = false, format = "locale" }: { compact?: boolean; format?: ClockFormat }) {
+const clockSizes: Record<WidgetSize, string> = {
+  small: "clamp(1rem, 8cqi, 2rem)",
+  medium: "clamp(1.25rem, 11cqi, 4rem)",
+  large: "clamp(1.5rem, 14cqi, 5.5rem)",
+};
+
+export function Clock({ format = "locale", size = "medium" }: { format?: ClockFormat; size?: WidgetSize }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let timer: number;
@@ -68,20 +94,22 @@ export function Clock({ compact = false, format = "locale" }: { compact?: boolea
   }, []);
 
   return (
-    <Typography
-      component="time"
-      dateTime={now.toISOString()}
-      sx={{
-        display: "block",
-        mb: 2,
-        textAlign: "center",
-        fontSize: compact ? "clamp(1.5rem, 5vw, 2rem)" : "clamp(2rem, 8vw, 4rem)",
-        fontWeight: 500,
-        fontVariantNumeric: "tabular-nums",
-        lineHeight: 1.15,
-      }}
-    >
-      {clockFormats[format].format(now)}
-    </Typography>
+    <Box sx={{ containerType: "inline-size" }}>
+      <Typography
+        component="time"
+        dateTime={now.toISOString()}
+        sx={{
+          display: "block",
+          mb: 2,
+          textAlign: "center",
+          fontSize: clockSizes[size],
+          fontWeight: 500,
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1.15,
+        }}
+      >
+        {clockFormats[format].format(now)}
+      </Typography>
+    </Box>
   );
 }

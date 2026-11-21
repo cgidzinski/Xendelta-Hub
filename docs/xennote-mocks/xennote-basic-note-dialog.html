@@ -1,0 +1,235 @@
+<div id="xennote-basic-note-dialog" class="viz-dotted-background">
+  <section class="xn-dialog" role="dialog" aria-label="Basic note">
+    <header class="xn-header">
+      <div class="xn-mode" role="status"><i data-lucide="file-text" aria-hidden="true"></i><span data-mode>Preview</span></div>
+      <button class="xn-primary" type="button" data-primary aria-label="Edit note" data-tooltip="Edit note">
+        <span class="xn-pencil" aria-hidden="true"><i data-lucide="pencil"></i></span>
+        <span class="xn-check" aria-hidden="true"><i data-lucide="check"></i></span>
+      </button>
+      <button class="xn-close" type="button" aria-label="Close note" data-close>&times;</button>
+    </header>
+    <div class="xn-content">
+      <div class="xn-title-group">
+        <label for="xn-basic-title">Title</label>
+        <input id="xn-basic-title" value="Studio handoff" placeholder="Untitled note" maxlength="200" readonly>
+      </div>
+      <div class="xn-meta">
+        <span class="xn-tag">Design</span><span data-updated>Edited 20 minutes ago</span>
+      </div>
+      <div class="xn-body-group">
+        <span id="xn-basic-body-label">Note</span>
+        <div class="xn-body" role="textbox" aria-multiline="true" aria-readonly="true" aria-labelledby="xn-basic-body-label" data-body>
+          <p>Send the latest proofs to Mina before Thursday&rsquo;s review.</p>
+          <p><strong>Still to check</strong></p>
+          <ul>
+            <li>Cover layout and image credits</li>
+            <li>Print and screen versions of the exports</li>
+            <li>Confirm the final delivery date</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="xn-launch" hidden>
+    <button class="xn-note-tile" type="button" data-open>
+      <span data-card-title>Studio handoff</span>
+      <small>Open note</small>
+    </button>
+  </div>
+</div>
+
+<style>
+  #xennote-basic-note-dialog {
+    color-scheme: light dark;
+    --xn-paper: light-dark(#fff, #1c2027);
+    --xn-field: light-dark(#f9fafc, #171b22);
+    --xn-text: light-dark(#20252e, #f0f2f6);
+    --xn-muted: light-dark(#515b6d, #b4becd);
+    --xn-divider: light-dark(#e1e5ec, #3a4351);
+    --xn-outline: light-dark(#79889f, #8997ad);
+    --xn-blue: light-dark(#1559b3, #acc9ff);
+    --xn-on-blue: light-dark(#fff, #12294e);
+    --xn-hover: light-dark(#e9f0fc, #2b3648);
+    --xn-shadow: light-dark(#273c6426, #05091280);
+    padding: 16px clamp(10px, 2.6vw, 24px) 24px;
+    color: var(--xn-text);
+    font: 15px/1.5 Roboto, system-ui, sans-serif;
+  }
+  #xennote-basic-note-dialog *, #xennote-basic-note-dialog { box-sizing: border-box; }
+  #xennote-basic-note-dialog [hidden] { display: none; }
+  #xennote-basic-note-dialog :is(button, input) { font: inherit; }
+  #xennote-basic-note-dialog :focus-visible { outline: 2px solid var(--xn-blue); outline-offset: 2px; }
+  #xennote-basic-note-dialog .xn-dialog {
+    max-inline-size: 880px;
+    margin-inline: auto;
+    border: 1px solid var(--xn-divider);
+    border-radius: 16px;
+    background: var(--xn-paper);
+    box-shadow: 0 12px 32px var(--xn-shadow);
+  }
+  #xennote-basic-note-dialog .xn-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px 44px;
+    align-items: center;
+    gap: 8px;
+    padding: 10px clamp(12px, 3.3vw, 24px);
+    border-bottom: 1px solid var(--xn-divider);
+  }
+  #xennote-basic-note-dialog .xn-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--xn-muted);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  #xennote-basic-note-dialog .xn-header button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 44px;
+    border: 0;
+    border-radius: 8px;
+  }
+  #xennote-basic-note-dialog .xn-header .xn-primary {
+    gap: 6px;
+    padding-inline: 8px;
+    color: var(--xn-on-blue);
+    background: var(--xn-blue);
+    font-weight: 500;
+  }
+  #xennote-basic-note-dialog .xn-pencil,
+  #xennote-basic-note-dialog .xn-dialog[data-editing] .xn-check { display: inline-flex; }
+  #xennote-basic-note-dialog .xn-check,
+  #xennote-basic-note-dialog .xn-dialog[data-editing] .xn-pencil { display: none; }
+  #xennote-basic-note-dialog .xn-close { background: transparent; color: var(--xn-muted); }
+  #xennote-basic-note-dialog .xn-header .xn-close { font-size: 24px; }
+  #xennote-basic-note-dialog .xn-close:hover { background: var(--xn-hover); }
+  #xennote-basic-note-dialog .xn-content { padding: 24px clamp(14px, 4vw, 32px) 28px; }
+  #xennote-basic-note-dialog :is(.xn-title-group, .xn-body-group) { display: grid; gap: 6px; }
+  #xennote-basic-note-dialog :is(.xn-title-group label, #xn-basic-body-label) {
+    color: var(--xn-muted);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  #xennote-basic-note-dialog #xn-basic-title {
+    inline-size: 100%;
+    min-block-size: 53px;
+    padding: 5px 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--xn-text);
+    background: transparent;
+    font-size: clamp(22px, 4vw, 29px);
+    font-weight: 500;
+  }
+  #xennote-basic-note-dialog .xn-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-block: 10px 20px;
+    color: var(--xn-muted);
+    font-size: 12px;
+  }
+  #xennote-basic-note-dialog .xn-tag {
+    padding: 2px 9px;
+    border: 1px solid var(--xn-divider);
+    border-radius: 16px;
+  }
+  #xennote-basic-note-dialog .xn-body {
+    min-block-size: 300px;
+    padding: 16px 18px;
+    border: 1px solid var(--xn-divider);
+    border-radius: 8px;
+    background: var(--xn-field);
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  #xennote-basic-note-dialog .xn-body p { margin: 0 0 12px; }
+  #xennote-basic-note-dialog .xn-body p:has(+ ul) { margin-bottom: 4px; }
+  #xennote-basic-note-dialog .xn-body ul { margin: 0; padding-inline-start: 22px; }
+  #xennote-basic-note-dialog .xn-dialog[data-editing] :is(#xn-basic-title, .xn-body) {
+    border-color: var(--xn-outline);
+    background: var(--xn-paper);
+  }
+  #xennote-basic-note-dialog .xn-dialog[data-editing] :is(#xn-basic-title, .xn-body):focus {
+    outline: 2px solid var(--xn-blue);
+    outline-offset: -1px;
+  }
+  #xennote-basic-note-dialog .xn-launch { display: grid; place-items: center; min-block-size: 520px; }
+  #xennote-basic-note-dialog .xn-note-tile {
+    display: grid;
+    gap: 6px;
+    min-inline-size: 180px;
+    max-inline-size: 100%;
+    padding: 16px;
+    border: 1px solid var(--xn-divider);
+    border-radius: 12px;
+    background: var(--xn-paper);
+    color: var(--xn-text);
+    text-align: start;
+    overflow-wrap: anywhere;
+  }
+  #xennote-basic-note-dialog .xn-note-tile small { color: var(--xn-muted); }
+</style>
+
+<script>
+  (() => {
+    const root = document.getElementById('xennote-basic-note-dialog');
+    const dialog = root.querySelector('.xn-dialog');
+    const launch = root.querySelector('.xn-launch');
+    const mode = root.querySelector('[data-mode]');
+    const primary = root.querySelector('[data-primary]');
+    const openNote = root.querySelector('[data-open]');
+    const title = root.querySelector('#xn-basic-title');
+    const body = root.querySelector('[data-body]');
+    const updated = root.querySelector('[data-updated]');
+    const cardTitle = root.querySelector('[data-card-title]');
+    let savedTitle = title.value;
+    let savedBody = body.innerHTML;
+
+    function setEditing(editing) {
+      dialog.toggleAttribute('data-editing', editing);
+      title.readOnly = !editing;
+      body.contentEditable = editing ? 'plaintext-only' : 'false';
+      body.setAttribute('aria-readonly', String(!editing));
+      mode.textContent = editing ? 'Editing' : 'Preview';
+      const actionLabel = editing ? 'Done' : 'Edit note';
+      primary.setAttribute('aria-label', actionLabel);
+      primary.setAttribute('data-tooltip', actionLabel);
+      if (editing) {
+        title.focus();
+        title.setSelectionRange(title.value.length, title.value.length);
+      }
+    }
+
+    function closeNote() {
+      if (title.value !== savedTitle || body.innerHTML !== savedBody) {
+        savedTitle = title.value;
+        savedBody = body.innerHTML;
+        cardTitle.textContent = savedTitle.trim() || 'Untitled note';
+        updated.textContent = 'Edited just now';
+      }
+      setEditing(false);
+      dialog.hidden = true;
+      launch.hidden = false;
+      openNote.focus();
+    }
+
+    primary.addEventListener('click', () => {
+      if (dialog.hasAttribute('data-editing')) closeNote();
+      else setEditing(true);
+    });
+    root.querySelector('[data-close]').addEventListener('click', closeNote);
+    dialog.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeNote();
+    });
+    openNote.addEventListener('click', () => {
+      launch.hidden = true;
+      dialog.hidden = false;
+      primary.focus();
+    });
+  })();
+</script>

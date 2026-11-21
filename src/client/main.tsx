@@ -58,9 +58,6 @@ const AuthCallback = lazyPage(() => import("./routes/External/Auth/AuthCallback"
 const XenNotePublicNote = lazyPage<object>(() =>
   import("./routes/External/XenNotePublic/XenNotePublic").then((m) => ({ default: m.XenNotePublicNote })),
 );
-const XenNotePublicPage = lazyPage<object>(() =>
-  import("./routes/External/XenNotePublic/XenNotePublic").then((m) => ({ default: m.XenNotePublicPage })),
-);
 const XenNotePublicNotebook = lazyPage<object>(() =>
   import("./routes/External/XenNotePublic/XenNotePublic").then((m) => ({ default: m.XenNotePublicNotebook })),
 );
@@ -188,7 +185,6 @@ const router = createBrowserRouter(
       <Route path="/xendrive/:shareToken" element={<XenDriveDownload />} errorElement={<ErrorPage />} />
       <Route path="/xendrive/f/:token" element={<XenDriveFolderPublic />} errorElement={<ErrorPage />} />
       <Route path="/n/:token" element={<XenNotePublicNote />} errorElement={<ErrorPage />} />
-      <Route path="/n/p/:token" element={<XenNotePublicPage />} errorElement={<ErrorPage />} />
       <Route path="/n/b/:token" element={<XenNotePublicNotebook />} errorElement={<ErrorPage />} />
       <Route path="/x/:slug" element={<XenLinkRedirect />} errorElement={<ErrorPage />} />
       <Route path="/recipaint/:id" element={<RecipaintPublic />} errorElement={<ErrorPage />} />

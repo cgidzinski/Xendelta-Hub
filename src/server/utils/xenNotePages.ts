@@ -13,7 +13,7 @@ import { deriveTasks } from "../../shared/xennote/tasks";
 import { blockTarget, deriveBlockRefs } from "../../shared/xennote/blockReferences";
 import { deriveFromDoc } from "../../shared/xennote/deriveFromDoc";
 import { MAX_PAGE_TAGS, MAX_PAGE_VERSIONS, PAGE_SCHEMA_VERSION } from "../../shared/xennote/pages";
-import { bestRole, canEdit, roleOf, type MemberRole } from "./membership";
+import { canEdit, type MemberRole } from "./membership";
 import { checkPageDoc, stripUnsafeLinks } from "../../shared/xennote/pageSchema";
 import { AppError } from "./http";
 import { removeAppFiles } from "./appFiles";
@@ -24,19 +24,7 @@ export const XENNOTE_APP = "xennote";
 
 type People = { members: Array<{ user_id: string; role: MemberRole }> };
 
-/**
- * What a person may do with a page: the best of their role in its notebook, the role the page itself gives them, and
- * the role its parent page gives them (people added to a page also see its sub-pages).
- */
-export const pageRole = (
-  page: People,
-  notebook: People | null,
-  parent: People | null,
-  uid: string,
-): MemberRole | null =>
-  bestRole([notebook ? roleOf(notebook, uid) : null, roleOf(page, uid), parent ? roleOf(parent, uid) : null]);
-
-/** Moving, deleting and sharing a page is for people who can edit the whole notebook. */
+/** Moving or deleting a page requires notebook edit access. */
 export const canManagePage = (notebook: People | null, uid: string): boolean => !!notebook && canEdit(notebook, uid);
 
 const isId = (value: unknown): value is string =>
@@ -165,19 +153,14 @@ export async function deleteNotebookPages(notebookId: unknown): Promise<void> {
   await XenNoteSection.deleteMany({ notebook_id: notebookId });
 }
 
-/** Put a page in the Trash, and its sub-pages with it (they come back with it). */
+/** Put a page in the Trash. */
 export async function trashPage(pageId: unknown, uid: string, now = new Date()): Promise<void> {
-  await XenNotePage.updateMany(
-    { parent_id: pageId },
-    { $set: { deleted_at: now, deleted_by: uid, deleted_with: pageId } },
-  );
   await XenNotePage.updateOne({ _id: pageId }, { $set: { deleted_at: now, deleted_by: uid } });
 }
 
-/** Bring a page back from the Trash with the sub-pages that went with it. */
+/** Bring a page back from the Trash. */
 export async function restorePage(pageId: unknown): Promise<void> {
   const clear = { $set: { deleted_at: null, deleted_by: null, deleted_with: null } };
-  await XenNotePage.updateMany({ deleted_with: pageId }, clear).setOptions({ includeDeleted: true });
   await XenNotePage.updateOne({ _id: pageId }, clear).setOptions({ includeDeleted: true });
 }
 

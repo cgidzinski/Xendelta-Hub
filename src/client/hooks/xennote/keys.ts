@@ -44,7 +44,6 @@ export const xennoteKeys = {
     [...xennoteKeys.all, "block-preview", page, block, token ?? "", kind ?? ""] as const,
   pageHistory: (id: string) => [...xennoteKeys.all, "page-history", id] as const,
   pageVersion: (id: string, version: string) => [...xennoteKeys.all, "page-version", id, version] as const,
-  pagePeople: (pageId: string) => [...xennoteKeys.all, "page-people", pageId] as const,
   sharedItems: () => [...xennoteKeys.all, "shared-items"] as const,
   publicPage: (token: string, pageId?: string) => [...xennoteKeys.all, "public-page", token, pageId ?? ""] as const,
   publicNotebook: (token: string) => [...xennoteKeys.all, "public-notebook", token] as const,

@@ -1,7 +1,8 @@
 import { useRef } from "react";
-import { Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
@@ -9,37 +10,34 @@ import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import type { XenNote } from "../../../../types/XenNote";
 
 interface NoteEditorToolbarProps {
-  readOnly: boolean;
+  editing: boolean;
   /** The saved note, or null while it is new (the reminder needs a saved note). */
   live: XenNote | null;
   autosave: "idle" | "saving" | "saved";
   addingPhotos: boolean;
-  /** Done is disabled while saving or when the link is not valid. */
-  doneDisabled: boolean;
   onAddPhotos: (files: File[]) => void;
-  onColor: (anchor: HTMLElement) => void;
+  onColor?: (anchor: HTMLElement) => void;
   onLabels: (anchor: HTMLElement) => void;
   onReminder: (anchor: HTMLElement) => void;
   /** Opens the Share dialog; for a read-only note it shows who has the note and lets the person leave it. */
   onShare: () => void;
-  onEdit?: () => void;
-  onDone: () => void;
+  onMore?: (anchor: HTMLElement) => void;
+  moreOpen: boolean;
 }
 
-/** The bar under the note: photos, colour, labels, reminder, the autosave status and Done. */
+/** Note tools and autosave status below the content. */
 export default function NoteEditorToolbar({
-  readOnly,
+  editing,
   live,
   autosave,
   addingPhotos,
-  doneDisabled,
   onAddPhotos,
   onColor,
   onLabels,
   onReminder,
   onShare,
-  onDone,
-  onEdit,
+  onMore,
+  moreOpen,
 }: NoteEditorToolbarProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const reminderOn = !!live?.reminder && !live.reminder.sent;
@@ -48,15 +46,21 @@ export default function NoteEditorToolbar({
       sx={{
         display: "flex",
         alignItems: "center",
+        justifyContent: "flex-end",
         gap: 0.25,
         px: 1,
         py: 0.75,
-        borderBottom: 1,
+        borderTop: 1,
         flexShrink: 0,
         borderColor: "divider",
       }}
     >
-      {!readOnly && (
+      {autosave !== "idle" && (
+        <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: "auto", pl: 1 }}>
+          {autosave === "saving" ? "Saving…" : "Saved"}
+        </Typography>
+      )}
+      {editing && (
         <>
           <input
             ref={fileInput}
@@ -81,17 +85,28 @@ export default function NoteEditorToolbar({
               <AddPhotoAlternateOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Colour">
-            <IconButton size="small" aria-label="Colour" onClick={(e) => onColor(e.currentTarget)}>
-              <PaletteOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Labels">
-            <IconButton size="small" aria-label="Labels" onClick={(e) => onLabels(e.currentTarget)}>
-              <LabelOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
         </>
+      )}
+      {onColor && (
+        <Tooltip title="Colour">
+          <IconButton size="small" aria-label="Colour" onClick={(e) => onColor(e.currentTarget)}>
+            <PaletteOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
+      {editing && (
+        <Tooltip title="Labels">
+          <IconButton size="small" aria-label="Labels" onClick={(e) => onLabels(e.currentTarget)}>
+            <LabelOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
+      {live && (
+        <Tooltip title="Share">
+          <IconButton size="small" aria-label="Share" onClick={onShare}>
+            <ShareOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       )}
       {live && (
         <Tooltip title={live.reminder ? "Reminder" : "Remind me"}>
@@ -105,27 +120,18 @@ export default function NoteEditorToolbar({
           </IconButton>
         </Tooltip>
       )}
-      {readOnly && live && (
-        <Tooltip title="Share">
-          <IconButton size="small" aria-label="Share" onClick={onShare}>
-            <ShareOutlinedIcon fontSize="small" />
+      {onMore && (
+        <Tooltip title="More note actions">
+          <IconButton
+            size="small"
+            aria-label="More note actions"
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            onClick={(e) => onMore(e.currentTarget)}
+          >
+            <MoreHorizIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-      )}
-      <Box sx={{ flex: 1 }} />
-      {autosave !== "idle" && (
-        <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: 1 }}>
-          {autosave === "saving" ? "Saving…" : "Saved"}
-        </Typography>
-      )}
-      {onEdit ? (
-        <Button variant="contained" onClick={onEdit}>
-          Edit note
-        </Button>
-      ) : (
-        <Button variant={readOnly ? "outlined" : "contained"} onClick={onDone} disabled={doneDisabled}>
-          {readOnly ? "Close" : "Done"}
-        </Button>
       )}
     </Box>
   );

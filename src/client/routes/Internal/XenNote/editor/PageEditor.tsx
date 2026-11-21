@@ -246,7 +246,7 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
   return (
     <PageLinksContext.Provider value={{ ...(links ?? defaultLinks), sourcePageId: pageId }}>
       <PageFilesContext.Provider value={filesValue}>
-        <Box sx={editorSx}>
+        <Box sx={[editorSx, { "& .ProseMirror": { minHeight: { xs: 280, sm: 380 } } }]}>
           {editable && editor && (
             <EditorToolbar editor={editor} onPickFiles={() => fileInput.current?.click()} onLink={openLink} />
           )}

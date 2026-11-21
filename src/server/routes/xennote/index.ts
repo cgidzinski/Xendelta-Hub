@@ -14,7 +14,6 @@ import { registerPageFileRoutes } from "./pageFiles";
 import { registerPageLinkRoutes } from "./pageLinks";
 import { registerPageSearchRoutes } from "./pageSearch";
 import { registerPageRoutes } from "./pages";
-import { registerPageSharingRoutes } from "./pageSharing";
 import { registerPageTrashRoutes } from "./pageTrash";
 import { registerSectionRoutes } from "./sections";
 import { registerPublicNoteRoutes } from "./public";
@@ -34,7 +33,7 @@ module.exports = function (app: any) {
   registerSharedLinkRoutes(app);
   registerSharedItemsRoutes(app);
   registerNotebookRoutes(app);
-  // Notebook sections and pages (the notebook tree, then pages, their people, files and trash).
+  // Notebook sections and pages, files, and trash.
   registerSectionRoutes(app);
   registerPageTrashRoutes(app);
   // Literal paths (/pages/peek, /pages/suggest, /search) before the /pages/:id routes.
@@ -48,7 +47,6 @@ module.exports = function (app: any) {
   registerPagePropertyRoutes(app);
   registerPageExportRoutes(app);
   registerPageTemplateRoutes(app);
-  registerPageSharingRoutes(app);
   registerPageFileRoutes(app);
   // Before the note routes: a literal path must come before a :param one.
   registerNoteTrashRoutes(app);

@@ -96,17 +96,18 @@ describe("peek", () => {
     ]);
   });
 
-  it("shows pages shared with the person alone, and their sub-pages, but not the page's siblings", async () => {
+  it("locks all pages for legacy page-only guests", async () => {
     const owner = await createUser();
     const guest = await createUser();
     const { section } = await book(owner);
     const parent = await page(owner, section, "Parent");
-    const child = (await api(owner).post(`/sections/${section}/pages`, { title: "Child", parent_id: parent })).body.data
-      .page.id;
+    const child = await page(owner, section, "Former sub-page");
     const sibling = await page(owner, section, "Sibling");
-    await api(owner).post(`/pages/${parent}/people`, { userIds: [uid(guest)], role: "viewer" });
+    await mongoose
+      .model("XenNotePage")
+      .updateOne({ _id: parent }, { members: [{ user_id: uid(guest), role: "viewer" }] });
     const res = await api(guest).post("/pages/peek", { ids: [parent, child, sibling] });
-    expect(res.body.data.pages.map((p: any) => p.locked)).toEqual([false, false, true]);
+    expect(res.body.data.pages.map((p: any) => p.locked)).toEqual([true, true, true]);
   });
 
   it("hides trashed pages and refuses bad input", async () => {
@@ -350,7 +351,9 @@ describe("search", () => {
     const open = await page(owner, a.section, "Findme open", doc(para(text("findme"))));
     const sharedOne = await page(owner, b.section, "Findme shared page");
     await page(owner, b.section, "Findme private");
-    await api(owner).post(`/pages/${sharedOne}/people`, { userIds: [uid(guest)], role: "viewer" });
+    await mongoose
+      .model("XenNotePage")
+      .updateOne({ _id: sharedOne }, { members: [{ user_id: uid(guest), role: "viewer" }] });
 
     expect(titlesOf(await api(owner).get("/search", { q: "findme" })).sort()).toEqual([
       "Findme open",
@@ -358,10 +361,7 @@ describe("search", () => {
       "Findme shared page",
     ]);
     expect(ids(await api(member).get("/search", { q: "findme" }))).toEqual([open]);
-    // The guest finds the one page shared with them, without the notebook's name or its section.
-    const forGuest = await api(guest).get("/search", { q: "findme" });
-    expect(ids(forGuest)).toEqual([sharedOne]);
-    expect(forGuest.body.data.pages[0]).toMatchObject({ in_notebook: false, notebook_name: null, section_name: null });
+    expect(ids(await api(guest).get("/search", { q: "findme" }))).toEqual([]);
     expect(ids(await api(stranger).get("/search", { q: "findme" }))).toEqual([]);
   });
 
@@ -370,7 +370,7 @@ describe("search", () => {
     const guest = await createUser();
     const a = await book(owner, "Work");
     const found = await page(owner, a.section, "Zebrafish habitat", doc(para(text("notes"))));
-    await api(owner).post(`/pages/${found}/people`, { userIds: [uid(guest)], role: "viewer" });
+    await addPerson(owner, a.nb, guest, "viewer");
 
     const hub = async (who: U) =>
       (await request(t.app).get("/api/search").query({ q: "zebrafish" }).set(auth(who))).body.data.groups as Array<{
@@ -379,8 +379,7 @@ describe("search", () => {
       }>;
     const mine = (await hub(owner)).find((g) => g.kind === "pages");
     expect(mine?.hits).toMatchObject([{ title: "Zebrafish habitat", link: `/internal/xennote/b/${a.nb}/p/${found}` }]);
-    // Someone added to the page alone opens it by itself.
     const theirs = (await hub(guest)).find((g) => g.kind === "pages");
-    expect(theirs?.hits[0].link).toBe(`/internal/xennote/p/${found}`);
+    expect(theirs?.hits[0].link).toBe(`/internal/xennote/b/${a.nb}/p/${found}`);
   });
 });

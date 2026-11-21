@@ -1,5 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { mergeRegionStyles, regionStyle, searchUrl } from "./xenstart";
+import { mergeRegionStyles, moveQuickLink, quickLinkSlots, regionStyle, searchUrl } from "./xenstart";
+
+describe("quick-link placement", () => {
+  const first = { id: "first", label: "First", url: "https://example.com" };
+  const second = { ...first, id: "second", label: "Second" };
+  const third = { ...first, id: "third", label: "Third" };
+
+  it("moves links into empty slots and keeps their previous slots empty", () => {
+    const moved = moveQuickLink([first, second, third], first.id, 5, 6)!;
+    expect(
+      quickLinkSlots(moved)
+        .slice(0, 6)
+        .map((link) => link?.id),
+    ).toEqual([undefined, second.id, third.id, undefined, undefined, first.id]);
+    expect(moveQuickLink(moved, first.id, 0, 3)).toBeNull();
+    expect(moveQuickLink(moved, second.id, 0, 3)).toEqual([
+      { ...second, slot: 0 },
+      { ...third, slot: 2 },
+      { ...first, slot: 5 },
+    ]);
+  });
+
+  it("preserves gaps and the order of hidden links when reordering occupied slots", () => {
+    const links = [first, { ...second, slot: 3 }, { ...third, slot: 7 }];
+    expect(moveQuickLink(links, first.id, 3, 6)).toEqual([
+      { ...second, slot: 0 },
+      { ...first, slot: 3 },
+      { ...third, slot: 7 },
+    ]);
+  });
+});
 
 describe("region layout preferences", () => {
   it("preserves the original layout and only applies fields changed by this draft", () => {

@@ -10,7 +10,7 @@ import { useSocketInvalidate } from "../../../../hooks/useSocketEvent";
 import { xennoteKeys } from "../../../../hooks/xennote/keys";
 import { PageLinksContext } from "./pageLinksContext";
 
-export type PublicBlockScope = { token: string; kind: "notebook" | "page" };
+export type PublicBlockScope = { token: string; kind: "notebook" };
 export const PublicBlockContext = createContext<PublicBlockScope | undefined>(undefined);
 
 function BlockView({ node }: NodeViewProps) {

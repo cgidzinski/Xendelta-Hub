@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Checkbox, Box, Button, List, ListItem, ListItemText, Paper, Tab, Tabs, Typography } from "@mui/material";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
@@ -16,11 +16,11 @@ import EmptyState from "../../../../components/ui/EmptyState";
 import ListSkeleton from "../../../../components/ui/ListSkeleton";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import { cardSx } from "../../../../components/ui/surfaceStyles";
+import NoteNavButton from "../components/NoteNavButton";
 
 const BOARD = "/internal/xennote";
 
-export default function TasksView() {
-  const { notebookId } = useParams();
+export default function TasksView({ notebookId }: { notebookId?: string }) {
   const [done, setDone] = useState(false);
   const client = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
@@ -54,14 +54,7 @@ export default function TasksView() {
   }
   return (
     <PageContainer>
-      <PageHeader
-        title={title}
-        actions={
-          <Button component={Link} to={notebookId ? `${BOARD}/b/${notebookId}` : BOARD}>
-            Back
-          </Button>
-        }
-      />
+      <PageHeader title={title} subtitle={notebookId ? undefined : "All notebooks"} actions={<NoteNavButton />} />
       <Tabs
         value={done ? "done" : "open"}
         onChange={(_, value) => setDone(value === "done")}

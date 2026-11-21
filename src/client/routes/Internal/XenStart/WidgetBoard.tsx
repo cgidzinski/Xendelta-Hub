@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Box, ButtonBase, IconButton, Stack, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import {
   WIDGET_REGIONS,
   type RegionStyles,
@@ -37,7 +37,8 @@ interface Props {
   saving: boolean;
   canAdd: boolean;
   onAdd: (region: WidgetRegion) => void;
-  onEdit: (widget: WidgetType, region: WidgetRegion) => void;
+  onRemove: (widget: WidgetType, region: WidgetRegion) => void;
+  renderControls: (widget: WidgetType) => ReactNode;
   renderWidget: (widget: WidgetType, region: WidgetRegion) => ReactNode;
 }
 
@@ -48,7 +49,8 @@ export default function WidgetBoard({
   saving,
   canAdd,
   onAdd,
-  onEdit,
+  onRemove,
+  renderControls,
   renderWidget,
 }: Props) {
   return (
@@ -101,15 +103,26 @@ export default function WidgetBoard({
                 }
               >
                 {editing && (
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2">{widgetNames[widget]}</Typography>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={0.75}
+                    useFlexGap
+                    flexWrap="wrap"
+                    sx={{ mb: 1.25 }}
+                  >
+                    <Typography variant="subtitle2" sx={{ mr: "auto" }}>
+                      {widgetNames[widget]}
+                    </Typography>
+                    {renderControls(widget)}
                     <IconButton
-                      id={`xenstart-edit-${widget}`}
-                      aria-label={`Edit ${widgetNames[widget]} widget`}
-                      onClick={() => onEdit(widget, region)}
+                      id={`xenstart-remove-${widget}`}
+                      aria-label={`Remove ${widgetNames[widget]} widget`}
+                      onClick={() => onRemove(widget, region)}
                       disabled={saving}
+                      size="small"
                     >
-                      <EditOutlinedIcon fontSize="small" />
+                      <RemoveCircleOutlineIcon fontSize="small" />
                     </IconButton>
                   </Stack>
                 )}

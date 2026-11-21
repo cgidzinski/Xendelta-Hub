@@ -61,19 +61,6 @@ const reply = (res: Response, data: BlockPreview) => res.json({ status: true, da
 
 export function registerPublicBlockRoutes(app: any) {
   app.get(
-    "/api/xennote/public/page/:token/blocks/:id/:blockId",
-    validateParams(xenNotePublicBlockParamSchema),
-    async (req: Request, res: Response) => {
-      const { token, id, blockId } = xenNotePublicBlockParamSchema.parse(req.params);
-      const page = await XenNotePage.findOne(
-        { _id: id, "share.token": token, "share.enabled": true },
-        "title files notebook_id",
-      ).lean();
-      if (!page || !(await XenNotebook.exists({ _id: page.notebook_id }))) return reply(res, locked);
-      return reply(res, await blockPreview(page, blockId));
-    },
-  );
-  app.get(
     "/api/xennote/public/notebook/:token/blocks/:id/:blockId",
     validateParams(xenNotePublicBlockParamSchema),
     async (req: Request, res: Response) => {
@@ -82,16 +69,11 @@ export function registerPublicBlockRoutes(app: any) {
       if (!book) return reply(res, locked);
       const page = await XenNotePage.findOne(
         { _id: id, notebook_id: book._id, archived: { $ne: true } },
-        "title files section_id parent_id",
+        "title files section_id",
       ).lean();
       if (!page) return reply(res, locked);
-      const [section, parent] = await Promise.all([
-        XenNoteSection.exists({ _id: page.section_id, notebook_id: book._id }),
-        page.parent_id
-          ? XenNotePage.exists({ _id: page.parent_id, section_id: page.section_id, archived: { $ne: true } })
-          : true,
-      ]);
-      return reply(res, section && parent ? await blockPreview(page, blockId) : locked);
+      const section = await XenNoteSection.exists({ _id: page.section_id, notebook_id: book._id });
+      return reply(res, section ? await blockPreview(page, blockId) : locked);
     },
   );
 }

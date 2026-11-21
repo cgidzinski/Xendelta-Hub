@@ -38,10 +38,8 @@ export const xenNoteSectionUpdateSchema = z.object({
 export const xenNoteSectionMoveSchema = z.object(position).refine(onePosition, positionMessage);
 
 export const xenNotePageCreateSchema = z
-  .object({
+  .strictObject({
     title: z.string().trim().max(MAX_PAGE_TITLE).default(""),
-    // Make it a sub-page of this page (which must be in the same section and not itself a sub-page).
-    parent_id: objectIdSchema.nullable().optional(),
     ...position,
   })
   .refine(onePosition, positionMessage);
@@ -85,10 +83,8 @@ export const xenNotePageBodySchema = z.object({
 });
 
 export const xenNotePageMoveSchema = z
-  .object({
+  .strictObject({
     section_id: objectIdSchema.optional(),
-    // null makes it a top-level page; an id makes it a sub-page of that page.
-    parent_id: objectIdSchema.nullable().optional(),
     ...position,
   })
   .refine(onePosition, positionMessage);

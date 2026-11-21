@@ -36,13 +36,14 @@ export function registerPageGraphRoutes(app: any) {
       "name",
     ).lean();
     const names = new Map(books.map((b) => [String(b._id), b.name]));
-    const nodes: GraphNode[] = rows.map((row) => {
+    const visibleRows = rows.filter((row) => names.has(String(row.notebook_id)));
+    const nodes: GraphNode[] = visibleRows.map((row) => {
       const notebookId = String(row.notebook_id);
       return {
         id: String(row._id),
         kind: "page",
         label: row.title || "Untitled page",
-        notebook_id: names.has(notebookId) ? notebookId : null,
+        notebook_id: notebookId,
         notebook_name: names.get(notebookId) ?? null,
       };
     });
@@ -50,7 +51,7 @@ export function registerPageGraphRoutes(app: any) {
     const tags = new Set<string>();
     const links: GraphEdge[] = [];
     let truncated = truncatedPages;
-    for (const row of rows) {
+    for (const row of visibleRows) {
       const source = String(row._id);
       const notebookId = String(row.notebook_id);
       for (const link of row.links) {
@@ -76,7 +77,7 @@ export function registerPageGraphRoutes(app: any) {
             label: `#${tag}`,
             kind: "tag",
             tag,
-            notebook_id: !merged && names.has(notebookId) ? notebookId : null,
+            notebook_id: merged ? null : notebookId,
             notebook_name: merged ? null : (names.get(notebookId) ?? null),
           });
         }

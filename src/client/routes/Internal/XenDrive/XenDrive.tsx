@@ -6,7 +6,10 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CreateNewFolderOutlinedIcon from "@mui/icons-material/CreateNewFolderOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import IosShareIcon from "@mui/icons-material/IosShare";
+import LinkIcon from "@mui/icons-material/Link";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 import SearchIcon from "@mui/icons-material/Search";
 import { useSnackbar } from "notistack";
 import EmptyState from "../../../components/ui/EmptyState";
@@ -36,6 +39,7 @@ import {
 import DriveBreadcrumbs from "./components/DriveBreadcrumbs";
 import { useDrive } from "./components/DriveContext";
 import DriveGrid from "./components/DriveGrid";
+import { DriveHeader, DriveHeading } from "./components/DriveHeader";
 import DriveTable, { type DriveListHandlers } from "./components/DriveTable";
 import { FilterSelect, SelectionBar, ViewToggle, type DriveViewMode } from "./components/DriveControls";
 import DeleteFolderDialog from "./components/DeleteFolderDialog";
@@ -50,6 +54,7 @@ import { XENDRIVE_ROOT, filePath, folderPath } from "./paths";
 const isViewMode = (v: unknown): v is DriveViewMode => v === "list" || v === "grid";
 
 const VIEW_TITLE = { shared: "Shared links", recent: "Recent" } as const;
+const VIEW_ICON = { shared: LinkIcon, recent: ScheduleIcon };
 
 export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const navigate = useNavigate();
@@ -275,43 +280,42 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
   const empty = !!data && folders.length === 0 && files.length === 0;
   const total = (data?.folders.length ?? 0) + (data?.files.length ?? 0);
   const heading = view ? VIEW_TITLE[view] : (data?.folder?.name ?? "My Drive");
+  const HeadingIcon = view ? VIEW_ICON[view] : HomeOutlinedIcon;
 
   return (
-    <Box sx={{ px: { xs: 2, md: 4 }, pt: { xs: 1.5, md: 3 }, pb: 12, maxWidth: 1400 }}>
-      {/* heading row */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", mb: 2 }}>
+    <>
+      <DriveHeader>
         {!view && folderId && (
           <IconButton aria-label="Up one level" onClick={goUp} edge="start" sx={{ display: { md: "none" } }}>
             <ArrowBackIcon />
           </IconButton>
         )}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          {view || searching ? (
-            <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }}>
-              {searching ? "Search results" : heading}
-            </Typography>
-          ) : (
-            <>
-              <Box sx={{ display: { xs: "none", md: "block" } }}>
-                <DriveBreadcrumbs crumbs={crumbs} folderTo={folderPath} rootTo={XENDRIVE_ROOT} />
-              </Box>
-              <Box sx={{ display: { md: "none" } }}>
-                {crumbs.length > 1 && (
-                  <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                    My Drive ›{" "}
-                    {crumbs
-                      .slice(0, -1)
-                      .map((c) => c.name)
-                      .join(" › ")}
-                  </Typography>
-                )}
-                <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }} noWrap>
-                  {heading}
+        {view || searching || !folderId ? (
+          <DriveHeading
+            title={searching ? "Search results" : heading}
+            icon={!searching && <HeadingIcon fontSize="small" />}
+          />
+        ) : (
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: { xs: "none", md: "block" } }}>
+              <DriveBreadcrumbs crumbs={crumbs} folderTo={folderPath} rootTo={XENDRIVE_ROOT} />
+            </Box>
+            <Box sx={{ display: { md: "none" } }}>
+              {crumbs.length > 1 && (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                  My Drive ›{" "}
+                  {crumbs
+                    .slice(0, -1)
+                    .map((c) => c.name)
+                    .join(" › ")}
                 </Typography>
-              </Box>
-            </>
-          )}
-        </Box>
+              )}
+              <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }} noWrap>
+                {heading}
+              </Typography>
+            </Box>
+          </Box>
+        )}
         <ViewToggle value={mode} onChange={setMode} />
         {!view && (
           <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1 }}>
@@ -340,7 +344,7 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
             </Button>
           </Box>
         )}
-      </Box>
+      </DriveHeader>
 
       {/* this month's spend, on a phone (the sidebar shows it on a computer) */}
       {usage && (
@@ -542,6 +546,6 @@ export default function XenDrive({ view }: { view?: "shared" | "recent" }) {
           }
         }}
       />
-    </Box>
+    </>
   );
 }

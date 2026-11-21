@@ -8,7 +8,6 @@ import EmptyState from "../../../components/ui/EmptyState";
 import PageContainer from "../../../components/ui/PageContainer";
 import PageHeader from "../../../components/ui/PageHeader";
 import { railItemSx } from "../../../components/ui/railStyles";
-import { useTitle } from "../../../hooks/useTitle";
 import { rememberReturnTo } from "../../../utils/returnTo";
 import { pageTitle } from "../../Internal/XenNote/notebook/pageTree";
 
@@ -58,44 +57,6 @@ function ReaderHeader({ name, signedIn }: { name?: string; signedIn: boolean }) 
   );
 }
 
-export function SharedPageReader({ token, signedIn }: { token?: string; signedIn: boolean }) {
-  const { data, isLoading, isError } = usePublicPage(token);
-  const titles = useMemo(() => new Map<string, string>(), []);
-  useTitle(data ? pageTitle(data.title) : "Shared page - XenNote");
-  return (
-    <PageContainer>
-      <Paper variant="outlined">
-        <ReaderHeader signedIn={signedIn} />
-        <Box sx={{ px: { xs: 2, sm: 5 }, py: 3 }}>
-          {isLoading ? (
-            <DetailSkeleton height={280} />
-          ) : data && !isError ? (
-            <>
-              <PageHeader
-                title={pageTitle(data.title)}
-                subtitle={
-                  data.updated_at ? "Updated " + formatDistanceToNow(data.updated_at, { addSuffix: true }) : undefined
-                }
-              />
-              <Suspense fallback={<DetailSkeleton height={200} />}>
-                <PublicPageReader
-                  key={data.id}
-                  detail={data}
-                  titles={titles}
-                  onOpenPage={() => undefined}
-                  scope={token ? { token, kind: "page" } : undefined}
-                />
-              </Suspense>
-            </>
-          ) : (
-            <Alert severity="error">{LINK_GONE}</Alert>
-          )}
-        </Box>
-      </Paper>
-    </PageContainer>
-  );
-}
-
 export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook; signedIn: boolean }) {
   const { token } = useParams();
   const [params, setParams] = useSearchParams();
@@ -104,16 +65,9 @@ export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook;
     () =>
       data.sections.map((section) => {
         const pages = data.pages.filter((page) => page.section_id === section.id);
-        const children = new Map<string, typeof pages>();
-        for (const page of pages) {
-          if (!page.parent_id) continue;
-          const siblings = children.get(page.parent_id) ?? [];
-          siblings.push(page);
-          children.set(page.parent_id, siblings);
-        }
         return {
           ...section,
-          pages: pages.filter((page) => !page.parent_id).flatMap((page) => [page, ...(children.get(page.id) ?? [])]),
+          pages,
         };
       }),
     [data.pages, data.sections],
@@ -121,7 +75,7 @@ export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook;
   const first = orderedPages.find((section) => section.pages.length)?.pages[0]?.id;
   const selected = requested ?? first;
   const publicId = selected && data.pages.some((p) => p.id === selected) ? selected : undefined;
-  const { data: detail, isLoading, isError } = usePublicPage(publicId ? token : undefined, publicId);
+  const { data: detail, isLoading, isError } = usePublicPage(token, publicId);
   const titles = useMemo(() => new Map(data.pages.map((page) => [page.id, page.title])), [data.pages]);
   const openPage = (id: string) => setParams({ page: id });
   return (
@@ -156,7 +110,7 @@ export function SharedNotebookReader({ data, signedIn }: { data: PublicNotebook;
                         selected={page.id === selected}
                         aria-current={page.id === selected ? "page" : undefined}
                         onClick={() => openPage(page.id)}
-                        sx={{ ...railItemSx, pl: page.parent_id ? 3.5 : 1.5 }}
+                        sx={railItemSx}
                       >
                         <ListItemText primary={pageTitle(page.title)} />
                       </ListItemButton>

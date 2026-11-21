@@ -52,17 +52,14 @@ export interface PageFileInfo {
 
 /** A page with its text, as the person opening it sees it. */
 export interface XenNotePageDetail {
-  viewed_at?: string;
   properties?: PageProperty[];
   reminder?: { at: string; sent: boolean } | null;
   page: XenNotePageMeta;
   doc: JSONContent;
   /** The files the text refers to, by file id. */
   files: Record<string, PageFileInfo>;
-  /** Null for someone who was added to this page alone: they see the page, not the notebook around it. */
-  notebook: { id: string; name: string } | null;
+  notebook: { id: string; name: string };
   section: { id: string; name: string; kind: SectionKind } | null;
-  children?: Array<{ id: string; title: string }>;
 }
 
 /** What a link to a page shows: its current name, or that the person can't open it. */
@@ -123,13 +120,6 @@ export interface PageBodySaved {
   conflict: boolean;
 }
 
-export interface PagePeople {
-  can_manage: boolean;
-  token: string | null;
-  members: Array<SharePerson & { role: "editor" | "viewer" }>;
-  notebook: { id: string; name: string } | null;
-}
-
 export interface SharePerson {
   user_id: string;
   username: string;
@@ -140,7 +130,7 @@ export interface SharePerson {
 export interface SharedXenNoteGroup {
   sender: SharePerson | null;
   items: Array<{
-    kind: "notebook" | "page";
+    kind: "notebook";
     id: string;
     title: string;
     role: NoteRole;

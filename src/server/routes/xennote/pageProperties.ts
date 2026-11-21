@@ -3,7 +3,7 @@ import { XenNotePage } from "../../models/xenNotePage";
 import { AppError, callerId } from "../../utils/http";
 import { validate, validateParams, xenNoteIdParamSchema } from "../../utils/validation";
 import { visiblePagesFilter } from "../../utils/xenNotePageSearch";
-import { loadPage, markNotebookChanged, notifyTree, pageAudience } from "./pageAccess";
+import { loadPage, markNotebookChanged, notifyTree } from "./pageAccess";
 import { pagePropertiesSchema, pageQuerySchema } from "../../../shared/xennote/properties";
 
 export function registerPagePropertyRoutes(app: any) {
@@ -13,7 +13,7 @@ export function registerPagePropertyRoutes(app: any) {
     validate(pagePropertiesSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
-      const { page, notebook, parent } = await loadPage(req, req.params.id as string, "edit");
+      const { page, notebook } = await loadPage(req, req.params.id as string, "edit");
       const { properties } = pagePropertiesSchema.parse(req.body);
       const changed = await XenNotePage.updateOne(
         { _id: page._id },
@@ -23,7 +23,7 @@ export function registerPagePropertyRoutes(app: any) {
       );
       if (!changed.matchedCount) throw new AppError(404, "Page not found");
       await markNotebookChanged(notebook);
-      notifyTree(notebook, pageAudience(notebook, page, parent));
+      notifyTree(notebook);
       res.json({ status: true, data: { properties } });
     },
   );

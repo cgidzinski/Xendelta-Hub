@@ -15,7 +15,6 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PagePropertiesDialog from "./PagePropertiesDialog";
 import PageHistoryDialog from "./PageHistoryDialog";
 import { downloadMarkdown } from "../../../../hooks/xennote/downloadMarkdown";
-import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,16 +33,13 @@ import { closeSnackbar, useSnackbar } from "notistack";
 import { MAX_PAGE_ALIASES, MAX_PAGE_TAGS, MAX_PAGE_TITLE, normalizeTag } from "@shared/xennote/pages";
 import ErrorDisplay from "../../../../components/ErrorDisplay";
 import DetailSkeleton from "../../../../components/ui/DetailSkeleton";
+import { cardSx } from "../../../../components/ui/surfaceStyles";
 import { useConfirm } from "../../../../components/ui/ConfirmProvider";
-import { useMarkSharedSeen } from "../../../../hooks/xennote/usePageSharing";
 import { useNotebookPageActions, useXenNotePage } from "../../../../hooks/xennote/usePages";
-import { useTitle } from "../../../../hooks/useTitle";
 import type { DraftLabel } from "../editor/pageDraft";
 import type { PageLinksValue } from "../editor/pageLinksContext";
-import PageShareDialog from "./PageShareDialog";
 import PageReferences from "./PageReferences";
 import NoteColorPopover from "../components/NoteColorPopover";
-import { pageTitle } from "./pageTree";
 
 // The editor (and ProseMirror with it) is its own chunk, loaded when a page is opened.
 const BlockPicker = lazy(() => import("../editor/BlockPicker"));
@@ -112,6 +108,8 @@ function TitleField({
 
 interface PageViewProps {
   pageId: string;
+  /** Full heading for the primary page, shown inside this view on phones. */
+  heading?: string;
   /** Shown on phones: back to the list of pages. */
   onBack?: () => void;
   /** The page was deleted, or can't be opened any more. */
@@ -121,7 +119,7 @@ interface PageViewProps {
 }
 
 /** One page: its title, tags, actions and text. */
-export default function PageView({ pageId, onBack, onGone, links }: PageViewProps) {
+export default function PageView({ pageId, heading, onBack, onGone, links }: PageViewProps) {
   const { data, isPending, isError, error, refetch } = useXenNotePage(pageId);
   const page = data?.page;
   const actions = useNotebookPageActions(page?.notebook_id ?? "");
@@ -143,13 +141,10 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
   const [pageMenu, setPageMenu] = useState<HTMLElement | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [label, setLabel] = useState<DraftLabel>("Saved");
   const [colorAnchor, setColorAnchor] = useState<HTMLElement | null>(null);
   const [tag, setTag] = useState("");
   const [alias, setAlias] = useState("");
-  useMarkSharedSeen("page", data && !data.notebook ? page?.id : undefined, data?.viewed_at);
-  useTitle(page ? pageTitle(page.title) : "XenNote");
 
   const fail = (e: unknown) => enqueueSnackbar((e as Error).message || "Couldn't save that", { variant: "error" });
 
@@ -181,7 +176,7 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
   const remove = async () => {
     const ok = await confirm({
       title: "Move this page to the Trash?",
-      message: "It and its sub-pages disappear for everyone. You can bring them back for 30 days.",
+      message: "It disappears for everyone. You can bring them back for 30 days.",
       confirmLabel: "Move to Trash",
     });
     if (!ok) return;
@@ -211,232 +206,271 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
   const inlineTags = page.tags.filter((t) => !page.tags_manual.includes(t));
 
   return (
-    <Box sx={{ maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 1.5, sm: 3 } }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1, minHeight: 40 }}>
-        {onBack && (
-          <IconButton edge="start" aria-label="Back to the pages" onClick={onBack}>
-            <ArrowBackIcon />
-          </IconButton>
-        )}
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          noWrap
-          sx={{ flex: 1, minWidth: 0, display: { xs: "none", sm: "block" } }}
+    <Box sx={{ width: "100%", maxWidth: 860, mx: "auto", px: { xs: 2, sm: 4 }, py: { xs: 1.5, sm: 3 } }}>
+      <Box component="article" sx={{ ...cardSx, bgcolor: "background.paper" }}>
+        <Box
+          component="header"
+          sx={{
+            borderBottom: 1,
+            borderColor: "divider",
+            borderTopLeftRadius: "inherit",
+            borderTopRightRadius: "inherit",
+            overflow: "hidden",
+          }}
         >
-          {[data.notebook?.name, data.section?.name].filter(Boolean).join(" / ")}
-        </Typography>
-        <Box sx={{ flex: { xs: 1, sm: 0 } }} />
-        <Typography variant="caption" color="text.secondary" role="status" sx={{ mr: 1 }}>
-          {page.can_edit ? label : "Read only"}
-        </Typography>
-        {page.can_edit && (
-          <>
-            <Tooltip title={page.favorite ? "Remove from favourites" : "Add to favourites"}>
-              <IconButton
-                aria-label={page.favorite ? "Remove from favourites" : "Add to favourites"}
-                aria-pressed={page.favorite}
-                onClick={() =>
-                  actions.favoritePage.mutate({ id: page.id, favorite: !page.favorite }, { onError: fail })
-                }
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 0.5,
+              px: { xs: 1, sm: 1.5 },
+              py: 0.5,
+              bgcolor: "action.hover",
+              borderBottom: 1,
+              borderColor: "divider",
+            }}
+          >
+            {onBack && (
+              <IconButton aria-label="Back to the pages" onClick={onBack}>
+                <ArrowBackIcon />
+              </IconButton>
+            )}
+            {!heading && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                noWrap
+                sx={{ flex: 1, minWidth: 0, display: { xs: "none", sm: "block" } }}
               >
-                {page.favorite ? <StarIcon sx={{ color: "warning.main" }} /> : <StarBorderIcon />}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Colour">
-              <IconButton aria-label="Page colour" onClick={(e) => setColorAnchor(e.currentTarget)}>
-                <PaletteOutlinedIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={page.archived ? "Unarchive" : "Archive"}>
-              <IconButton
-                aria-label={page.archived ? "Unarchive" : "Archive"}
-                onClick={() => actions.updatePage.mutate({ id: page.id, archived: !page.archived }, { onError: fail })}
+                {[data.notebook?.name, data.section?.name].filter(Boolean).join(" / ")}
+              </Typography>
+            )}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", ml: "auto" }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                role="status"
+                sx={{
+                  px: 1,
+                  py: 0.25,
+                  m: 0.5,
+                  bgcolor: "background.paper",
+                  border: 1,
+                  borderColor: "divider",
+                  borderRadius: 1,
+                }}
               >
-                {page.archived ? <UnarchiveOutlinedIcon /> : <ArchiveOutlinedIcon />}
-              </IconButton>
-            </Tooltip>
-          </>
-        )}
-        <Tooltip title={data.reminder ? "Reminder" : "Remind me"}>
-          <IconButton
-            aria-label="Reminder"
-            color={data.reminder ? "primary" : "default"}
-            onClick={(e) => setReminderAnchor(e.currentTarget)}
-          >
-            {data.reminder ? <NotificationsActiveIcon /> : <NotificationsNoneIcon />}
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Share">
-          <IconButton aria-label="Share page" onClick={() => setShareOpen(true)}>
-            <ShareOutlinedIcon />
-          </IconButton>
-        </Tooltip>
-        {page.can_manage && (
-          <Tooltip title="Delete">
-            <IconButton aria-label="Delete page" onClick={() => void remove()}>
-              <DeleteOutlineIcon />
-            </IconButton>
-          </Tooltip>
-        )}
-        <Tooltip title="Page options">
-          <IconButton aria-label="Page options" onClick={(e) => setPageMenu(e.currentTarget)}>
-            <MoreVertIcon />
-          </IconButton>
-        </Tooltip>
-        <Menu anchorEl={pageMenu} open={!!pageMenu} onClose={() => setPageMenu(null)}>
-          {(page.can_edit || !!data.properties?.length) && (
-            <MenuItem
-              onClick={() => {
-                setPageMenu(null);
-                setPropertiesOpen(true);
-              }}
-            >
-              Page properties
-            </MenuItem>
-          )}
-          <MenuItem
-            onClick={() => {
-              setPageMenu(null);
-              setBlockBacklinks(true);
-            }}
-          >
-            Block backlinks
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setPageMenu(null);
-              setHistoryOpen(true);
-            }}
-          >
-            Page history
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setPageMenu(null);
-              void downloadMarkdown("pages", page.id, page.title).catch(fail);
-            }}
-          >
-            Export Markdown
-          </MenuItem>
-        </Menu>
-      </Box>
+                {page.can_edit ? label : "Read only"}
+              </Typography>
+              {page.can_edit && (
+                <>
+                  <Tooltip title={page.favorite ? "Remove from favourites" : "Add to favourites"}>
+                    <IconButton
+                      aria-label={page.favorite ? "Remove from favourites" : "Add to favourites"}
+                      aria-pressed={page.favorite}
+                      onClick={() =>
+                        actions.favoritePage.mutate({ id: page.id, favorite: !page.favorite }, { onError: fail })
+                      }
+                    >
+                      {page.favorite ? <StarIcon sx={{ color: "warning.main" }} /> : <StarBorderIcon />}
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Colour">
+                    <IconButton aria-label="Page colour" onClick={(e) => setColorAnchor(e.currentTarget)}>
+                      <PaletteOutlinedIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={page.archived ? "Unarchive" : "Archive"}>
+                    <IconButton
+                      aria-label={page.archived ? "Unarchive" : "Archive"}
+                      onClick={() =>
+                        actions.updatePage.mutate({ id: page.id, archived: !page.archived }, { onError: fail })
+                      }
+                    >
+                      {page.archived ? <UnarchiveOutlinedIcon /> : <ArchiveOutlinedIcon />}
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
+              <Tooltip title={data.reminder ? "Reminder" : "Remind me"}>
+                <IconButton
+                  aria-label="Reminder"
+                  color={data.reminder ? "primary" : "default"}
+                  onClick={(e) => setReminderAnchor(e.currentTarget)}
+                >
+                  {data.reminder ? <NotificationsActiveIcon /> : <NotificationsNoneIcon />}
+                </IconButton>
+              </Tooltip>
+              {page.can_manage && (
+                <Tooltip title="Delete">
+                  <IconButton aria-label="Delete page" onClick={() => void remove()}>
+                    <DeleteOutlineIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title="Page options">
+                <IconButton aria-label="Page options" onClick={(e) => setPageMenu(e.currentTarget)}>
+                  <MoreVertIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            <Menu anchorEl={pageMenu} open={!!pageMenu} onClose={() => setPageMenu(null)}>
+              {(page.can_edit || !!data.properties?.length) && (
+                <MenuItem
+                  onClick={() => {
+                    setPageMenu(null);
+                    setPropertiesOpen(true);
+                  }}
+                >
+                  Page properties
+                </MenuItem>
+              )}
+              <MenuItem
+                onClick={() => {
+                  setPageMenu(null);
+                  setBlockBacklinks(true);
+                }}
+              >
+                Block backlinks
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setPageMenu(null);
+                  setHistoryOpen(true);
+                }}
+              >
+                Page history
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setPageMenu(null);
+                  void downloadMarkdown("pages", page.id, page.title).catch(fail);
+                }}
+              >
+                Export Markdown
+              </MenuItem>
+            </Menu>
+          </Box>
 
-      <TitleField
-        value={page.title}
-        editable={page.can_edit}
-        onCommit={(title) => actions.updatePage.mutate({ id: page.id, title }, { onError: fail })}
-      />
-
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", my: 1 }}>
-        {page.tags_manual.map((t) => (
-          <Chip
-            key={t}
-            size="small"
-            variant="outlined"
-            label={`#${t}`}
-            onClick={links ? () => links.onOpenTag(t) : undefined}
-            onDelete={
-              page.can_edit
-                ? () =>
-                    actions.updatePage.mutate(
-                      { id: page.id, tags_manual: page.tags_manual.filter((x) => x !== t) },
-                      { onError: fail },
-                    )
-                : undefined
-            }
-          />
-        ))}
-        {inlineTags.map((t) => (
-          <Chip
-            key={t}
-            size="small"
-            variant="outlined"
-            label={`#${t}`}
-            onClick={links ? () => links.onOpenTag(t) : undefined}
-          />
-        ))}
-        {page.can_edit && (
-          <TextField
-            size="small"
-            variant="standard"
-            placeholder="Add a tag"
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-            onBlur={addTag}
-            slotProps={{ htmlInput: { "aria-label": "Add a tag", maxLength: 40 }, input: { disableUnderline: true } }}
-            sx={{ width: 120 }}
-          />
-        )}
-      </Box>
-
-      {(page.aliases.length > 0 || page.can_edit) && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mb: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            Also called
-          </Typography>
-          {page.aliases.map((a) => (
-            <Chip
-              key={a}
-              size="small"
-              label={a}
-              onDelete={
-                page.can_edit
-                  ? () =>
-                      actions.updatePage.mutate(
-                        { id: page.id, aliases: page.aliases.filter((x) => x !== a) },
-                        { onError: fail },
-                      )
-                  : undefined
-              }
+          <Box sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1.5 }}>
+            {onBack && heading && (
+              <Typography component="h1" variant="h6" sx={{ mb: 0.5, overflowWrap: "anywhere" }}>
+                {heading}
+              </Typography>
+            )}
+            <TitleField
+              value={page.title}
+              editable={page.can_edit}
+              onCommit={(title) => actions.updatePage.mutate({ id: page.id, title }, { onError: fail })}
             />
-          ))}
-          {page.can_edit && (
-            <TextField
-              size="small"
-              variant="standard"
-              placeholder="Add another name"
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addAlias();
-                }
-              }}
-              onBlur={addAlias}
-              slotProps={{
-                htmlInput: { "aria-label": "Add another name", maxLength: MAX_PAGE_TITLE },
-                input: { disableUnderline: true },
-              }}
-              sx={{ width: 160 }}
-            />
-          )}
-        </Box>
-      )}
 
-      <Suspense fallback={<DetailSkeleton height={280} />}>
-        <PageEditor key={page.id} detail={data} onLabel={setLabel} links={links} />
-      </Suspense>
+            {(page.tags.length > 0 || page.can_edit) && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mt: 1 }}>
+                {page.tags_manual.map((t) => (
+                  <Chip
+                    key={t}
+                    size="small"
+                    variant="outlined"
+                    label={`#${t}`}
+                    onClick={links ? () => links.onOpenTag(t) : undefined}
+                    onDelete={
+                      page.can_edit
+                        ? () =>
+                            actions.updatePage.mutate(
+                              { id: page.id, tags_manual: page.tags_manual.filter((x) => x !== t) },
+                              { onError: fail },
+                            )
+                        : undefined
+                    }
+                  />
+                ))}
+                {inlineTags.map((t) => (
+                  <Chip
+                    key={t}
+                    size="small"
+                    variant="outlined"
+                    label={`#${t}`}
+                    onClick={links ? () => links.onOpenTag(t) : undefined}
+                  />
+                ))}
+                {page.can_edit && (
+                  <TextField
+                    size="small"
+                    variant="standard"
+                    placeholder="Add a tag"
+                    value={tag}
+                    onChange={(e) => setTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTag();
+                      }
+                    }}
+                    onBlur={addTag}
+                    slotProps={{
+                      htmlInput: { "aria-label": "Add a tag", maxLength: 40 },
+                      input: { disableUnderline: true },
+                    }}
+                    sx={{ width: 120 }}
+                  />
+                )}
+              </Box>
+            )}
 
-      {!!data.children?.length && (
-        <Box sx={{ mt: 2 }}>
-          <Typography component="h2" variant="subtitle2">
-            Sub-pages
-          </Typography>
-          {data.children.map((child) => (
-            <Button key={child.id} onClick={() => links?.onOpenPage(child.id)}>
-              {pageTitle(child.title)}
-            </Button>
-          ))}
+            {(page.aliases.length > 0 || page.can_edit) && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mt: 0.75 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Also called
+                </Typography>
+                {page.aliases.map((a) => (
+                  <Chip
+                    key={a}
+                    size="small"
+                    label={a}
+                    onDelete={
+                      page.can_edit
+                        ? () =>
+                            actions.updatePage.mutate(
+                              { id: page.id, aliases: page.aliases.filter((x) => x !== a) },
+                              { onError: fail },
+                            )
+                        : undefined
+                    }
+                  />
+                ))}
+                {page.can_edit && (
+                  <TextField
+                    size="small"
+                    variant="standard"
+                    placeholder="Add another name"
+                    value={alias}
+                    onChange={(e) => setAlias(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addAlias();
+                      }
+                    }}
+                    onBlur={addAlias}
+                    slotProps={{
+                      htmlInput: { "aria-label": "Add another name", maxLength: MAX_PAGE_TITLE },
+                      input: { disableUnderline: true },
+                    }}
+                    sx={{ width: 160 }}
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
         </Box>
-      )}
+
+        <Box sx={{ px: { xs: 1.5, sm: 2.5 }, pt: 0.5 }}>
+          <Suspense fallback={<DetailSkeleton height={280} />}>
+            <PageEditor key={page.id} detail={data} onLabel={setLabel} links={links} />
+          </Suspense>
+        </Box>
+      </Box>
 
       {reminderAnchor && (
         <NoteReminderMenu
@@ -470,14 +504,6 @@ export default function PageView({ pageId, onBack, onGone, links }: PageViewProp
         />
       )}
       {historyOpen && <PageHistoryDialog id={page.id} editable={page.can_edit} onClose={() => setHistoryOpen(false)} />}
-      {shareOpen && (
-        <PageShareDialog
-          pageId={page.id}
-          title={pageTitle(page.title)}
-          onClose={() => setShareOpen(false)}
-          onLeave={onGone}
-        />
-      )}
 
       <PageReferences pageId={page.id} onOpenPage={links?.onOpenPage ?? (() => undefined)} />
 

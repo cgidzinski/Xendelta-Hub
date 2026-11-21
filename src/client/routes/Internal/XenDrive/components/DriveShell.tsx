@@ -86,7 +86,9 @@ export function DriveBrowseLayout() {
     <Box sx={{ display: "flex", alignItems: "flex-start", minHeight: "calc(100vh - 64px)" }}>
       <DriveRail />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Outlet />
+        <Box sx={{ px: { xs: 2, md: 4 }, pt: { xs: 1.5, md: 3 }, pb: 12, maxWidth: 1400, mx: "auto" }}>
+          <Outlet />
+        </Box>
       </Box>
     </Box>
   );

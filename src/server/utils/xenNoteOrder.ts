@@ -1,7 +1,7 @@
 import { generateKeyBetween } from "fractional-indexing";
 import { AppError } from "./http";
 
-// Where to put an item among its siblings. Sections in a notebook and pages in a section (or under a page) are kept
+// Where to put an item among its siblings. Sections in a notebook and pages in a section are kept
 // in order by a fractional-index string: a new key is made between its neighbours, so moving or inserting writes only
 // the item that moved and never renumbers the rest.
 

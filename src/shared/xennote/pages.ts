@@ -1,6 +1,6 @@
 // What a notebook page is, shared by the server (validation, storage) and the client (editor, tree).
 //
-// A notebook holds sections, a section holds pages, and a page can hold sub-pages (one level only). A page's
+// A notebook holds sections, and each section holds pages. A page's
 // text lives in a separate body document (ProseMirror JSON); everything the tree and the graph need is
 // derived from it and stored on the page itself, so listing pages never loads a body.
 
@@ -26,9 +26,6 @@ export const MAX_PAGE_FILES = 200;
 export const MAX_PAGE_PEOPLE = 50;
 export const MAX_SECTIONS_PER_NOTEBOOK = 100;
 export const MAX_PAGES_PER_NOTEBOOK = 5000;
-
-/** Pages can have sub-pages, but a sub-page can't have its own. */
-export const MAX_PAGE_DEPTH = 1;
 
 /** The body's JSON, measured as UTF-8 bytes. A MongoDB document is capped at 16 MB; this leaves a wide margin. */
 export const MAX_PAGE_DOC_BYTES = 1_000_000;
@@ -69,7 +66,6 @@ export function normalizeTag(raw: string): string {
 export interface PageTreeEntry {
   id: string;
   section_id: string;
-  parent_id: string | null;
   order: string;
   title: string;
   icon: string | null;

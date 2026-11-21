@@ -1,6 +1,12 @@
 export const XENSTART_PATH = "/internal/xenstart";
 export const GRID_DIMENSION_LIMIT = 6;
 export const QUICK_LINK_LIMIT = GRID_DIMENSION_LIMIT ** 2;
+export const WIDGET_SIZES = ["small", "medium", "large"] as const;
+export type WidgetSize = (typeof WIDGET_SIZES)[number];
+export const BACKGROUND_UPLOAD_LIMIT = 10 * 1024 * 1024;
+export const BACKGROUND_FITS = ["cover", "contain", "fill", "none"] as const;
+export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
+export const DEFAULT_BACKGROUND_FIT: BackgroundFit = "cover";
 
 export const DEFAULT_APPEARANCE = {
   rows: 2,
@@ -80,6 +86,54 @@ export interface QuickLink {
   id: string;
   label: string;
   url: string;
+  iconUrl?: string;
+  slot?: number;
+}
+
+export function quickLinkSlots(links: QuickLink[]): (QuickLink | undefined)[] {
+  const slots = Array.from<QuickLink | undefined>({ length: QUICK_LINK_LIMIT });
+  for (const link of links) {
+    if (link.slot !== undefined) slots[link.slot] = link;
+  }
+  let index = 0;
+  for (const link of links) {
+    if (link.slot !== undefined) continue;
+    while (slots[index]) index++;
+    slots[index++] = link;
+  }
+  return slots;
+}
+
+export function linksFromSlots(slots: (QuickLink | undefined)[]): QuickLink[] {
+  return slots.flatMap((link, slot) => (link ? [{ ...link, slot }] : []));
+}
+
+export function moveQuickLink(
+  links: QuickLink[],
+  id: string,
+  destination: number,
+  visibleSlots: number,
+): QuickLink[] | null {
+  const slots = quickLinkSlots(links);
+  const source = slots.findIndex((link) => link?.id === id);
+  if (source < 0 || source >= visibleSlots || destination < 0 || destination >= visibleSlots) return null;
+  if (source === destination) return links;
+  if (!slots[destination]) {
+    slots[destination] = slots[source];
+    slots[source] = undefined;
+  } else {
+    // Reorder the occupied tiles while leaving empty slots where the user put them.
+    const occupied = slots.flatMap((link, slot) => (link ? [slot] : []));
+    const sorted = occupied.map((slot) => slots[slot]);
+    sorted.splice(occupied.indexOf(destination), 0, ...sorted.splice(occupied.indexOf(source), 1));
+    occupied.forEach((slot, index) => (slots[slot] = sorted[index]));
+  }
+  return linksFromSlots(slots);
+}
+
+export interface BookmarkMetadata {
+  label: string;
+  iconUrl?: string;
 }
 
 export interface XenStartConfig {
@@ -91,6 +145,10 @@ export interface XenStartConfig {
   layout?: WidgetLayout;
   regionStyles?: RegionStyles;
   clockFormat?: ClockFormat;
+  clockSize?: WidgetSize;
+  linkTileSize?: WidgetSize;
+  backgroundImageId?: string | null;
+  backgroundFit?: BackgroundFit;
 }
 
 export const defaultXenStartConfig = (): XenStartConfig => ({

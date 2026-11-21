@@ -64,7 +64,7 @@ describe("model indexes", () => {
   it("notebook pages are indexed for the tree, backlinks, tags and search", async () => {
     await import("./xenNotePage.js");
     const keys = await indexKeys("XenNotePage");
-    expect(keys).toContain("section_id,parent_id,order");
+    expect(keys).toContain("section_id,order");
     expect(keys).toContain("links");
     expect(keys).toContain("notebook_id,tags");
     expect(keys).toContain("notebook_id,unresolved");

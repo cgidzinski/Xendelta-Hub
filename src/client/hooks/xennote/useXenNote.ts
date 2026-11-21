@@ -169,11 +169,10 @@ export interface SharedLinkAccess {
   access: "member" | "link";
   role: "owner" | "editor" | "viewer" | null;
   note_id?: string;
-  page_id?: string;
   notebook_id: string | null;
 }
 
-export const useSharedLinkAccess = (kind: "note" | "notebook" | "page", token: string | undefined, signedIn: boolean) =>
+export const useSharedLinkAccess = (kind: "note" | "notebook", token: string | undefined, signedIn: boolean) =>
   useQuery({
     queryKey: xennoteKeys.sharedLink(kind, token ?? ""),
     queryFn: () => api.get<SharedLinkAccess>(`/api/xennote/shared/${kind}/${token}`),
@@ -184,17 +183,14 @@ export const useSharedLinkAccess = (kind: "note" | "notebook" | "page", token: s
 export interface PublicNotebook {
   notebook: { name: string; color: string };
   sections: Array<{ id: string; name: string }>;
-  pages: Array<{ id: string; title: string; section_id: string; parent_id: string | null }>;
+  pages: Array<{ id: string; title: string; section_id: string }>;
 }
 
 export const usePublicPage = (token: string | undefined, pageId?: string) =>
   useQuery({
     queryKey: xennoteKeys.publicPage(token ?? "", pageId),
-    queryFn: () =>
-      api.get<PublicPage>(
-        pageId ? `/api/xennote/public/notebook/${token}/pages/${pageId}` : `/api/xennote/public/page/${token}`,
-      ),
-    enabled: !!token,
+    queryFn: () => api.get<PublicPage>(`/api/xennote/public/notebook/${token}/pages/${pageId}`),
+    enabled: !!token && !!pageId,
     retry: false,
     gcTime: 0,
     staleTime: 0,

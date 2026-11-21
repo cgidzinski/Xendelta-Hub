@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Box,
   Card,
@@ -7,21 +6,13 @@ import {
   Chip,
   IconButton,
   LinearProgress,
-  ListItemIcon,
-  Menu,
-  MenuItem,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { formatDistanceToNowStrict } from "date-fns";
-import { useTheme } from "@mui/material/styles";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
-import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
-import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
 import LinkIcon from "@mui/icons-material/Link";
 import NotesIcon from "@mui/icons-material/Notes";
 import CheckBoxOutlinedIcon from "@mui/icons-material/CheckBoxOutlined";
@@ -30,8 +21,7 @@ import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import type { PublicXenNote, XenNote } from "../../../../types/XenNote";
 import { checklistProgress, hostOf } from "../noteDraft";
 import NoteMarkdown from "./NoteMarkdown";
-import { NOTE_COLORS } from "@shared/xennote/notes";
-import { NOTE_COLOR_LABELS, noteSurfaceSx, swatchColor } from "../noteColors";
+import { noteSurfaceSx } from "../noteColors";
 import { formatReminder } from "../reminders";
 
 interface NoteCardProps {
@@ -44,12 +34,6 @@ interface NoteCardProps {
   resolveTitle?: (title: string) => string | null;
   /** Open a note a [[link]] points to. */
   onOpenLinked?: (id: string) => void;
-  /** Quick actions from the card, so a note doesn't have to be opened to archive, recolour or delete it. */
-  onArchive?: () => void;
-  onColor?: (color: XenNote["color"]) => void;
-  onDelete?: () => void;
-  /** Open the Share dialog for this note. */
-  onShare?: () => void;
   /**
    * Set while choosing notes for a bulk action: the card shows a tick box, and a tap ticks it instead of opening it.
    * A note the person can't edit shows no tick box and can't be chosen.
@@ -118,15 +102,9 @@ export default function NoteCard({
   onTogglePin,
   resolveTitle,
   onOpenLinked,
-  onArchive,
-  onColor,
-  onDelete,
-  onShare,
   selected,
   onSelect,
 }: NoteCardProps) {
-  const theme = useTheme();
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const full = "can_edit" in note ? note : null;
   const pinned = full?.pinned ?? false;
   const editable = !!full?.can_edit;
@@ -146,7 +124,7 @@ export default function NoteCard({
 
   // The whole card is one target: a single invisible button behind the content opens the note (or ticks it while
   // selecting) and carries the hover, ripple and focus ring. The content sits above it and lets clicks fall through to
-  // it, except for the controls that do something else (pin, menu, tick boxes, checklist ticks, links in the text).
+  // it, except for the pin, tick boxes, and links in the text.
   const passThrough = {
     position: "relative",
     pointerEvents: activate ? "none" : "auto",
@@ -254,85 +232,6 @@ export default function NoteCard({
               {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
-        )}
-        {!selecting && editable && (onArchive || onColor || onDelete || onShare) && (
-          <>
-            <Tooltip title="More">
-              <IconButton
-                size="small"
-                aria-label="More actions"
-                onClick={(e) => setMenuAnchor(e.currentTarget)}
-                sx={{ color: "text.secondary" }}
-              >
-                <MoreVertIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Menu open={!!menuAnchor} anchorEl={menuAnchor} onClose={() => setMenuAnchor(null)}>
-              {onColor && (
-                <Box sx={{ display: "flex", gap: 1, px: 2, py: 1 }} role="group" aria-label="Note colour">
-                  {NOTE_COLORS.map((c) => (
-                    <IconButton
-                      key={c}
-                      size="small"
-                      aria-label={`${NOTE_COLOR_LABELS[c]} colour`}
-                      aria-pressed={full?.color === c}
-                      onClick={() => {
-                        onColor(c);
-                        setMenuAnchor(null);
-                      }}
-                      sx={{
-                        width: 24,
-                        height: 24,
-                        bgcolor: swatchColor(theme, c) ?? "background.paper",
-                        border: 2,
-                        borderColor: full?.color === c ? "text.primary" : "divider",
-                      }}
-                    />
-                  ))}
-                </Box>
-              )}
-              {onArchive && (
-                <MenuItem
-                  onClick={() => {
-                    setMenuAnchor(null);
-                    onArchive();
-                  }}
-                >
-                  <ListItemIcon>
-                    <ArchiveOutlinedIcon fontSize="small" />
-                  </ListItemIcon>
-                  {full?.archived ? "Unarchive" : "Archive"}
-                </MenuItem>
-              )}
-              {onShare && (
-                <MenuItem
-                  onClick={() => {
-                    setMenuAnchor(null);
-                    onShare();
-                  }}
-                >
-                  <ListItemIcon>
-                    <ShareOutlinedIcon fontSize="small" />
-                  </ListItemIcon>
-                  Share
-                </MenuItem>
-              )}
-              {onDelete && (
-                <MenuItem
-                  onClick={() => {
-                    setMenuAnchor(null);
-                    onDelete();
-                  }}
-                  sx={{ color: "error.main" }}
-                >
-                  <ListItemIcon sx={{ color: "inherit" }}>
-                    <DeleteOutlineIcon fontSize="small" />
-                  </ListItemIcon>
-                  Delete
-                </MenuItem>
-              )}
-            </Menu>
-          </>
         )}
       </Box>
 

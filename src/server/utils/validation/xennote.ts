@@ -24,7 +24,7 @@ export const xenNoteMemberParamSchema = z.object({ id: objectIdSchema, userId: o
 export const xenNoteImageParamSchema = z.object({ id: objectIdSchema, imageId: objectIdSchema });
 export const xenNoteVersionParamSchema = z.object({ id: objectIdSchema, versionId: objectIdSchema });
 export const xenNoteSeenSchema = z.object({ through: z.iso.datetime() });
-export const xenNoteSharedItemParamSchema = z.object({ kind: z.enum(["notebook", "page"]), id: objectIdSchema });
+export const xenNoteSharedItemParamSchema = z.object({ kind: z.literal("notebook"), id: objectIdSchema });
 export const xenNotePublicNotebookPageParamSchema = z.object({ token: shareToken, id: objectIdSchema });
 export const xenNoteTokenParamSchema = z.object({ token: shareToken });
 

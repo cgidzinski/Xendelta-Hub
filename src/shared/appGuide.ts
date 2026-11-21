@@ -390,13 +390,14 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenStart as a browser homepage for your favorite sites.", link: "/internal/xenstart" },
     features: [
       "Search the web with Google, DuckDuckGo, or Bing.",
-      "Choose how many quick links to show and keep hidden links for later.",
-      "Edit, remove, or rearrange your quick links.",
+      "Add quick links from a website URL and drag them to any open spot or reorder them.",
+      "Resize quick-link tiles and choose how many rows and columns to show.",
       "Place widgets for your pinned apps, items that need attention, or recent activity.",
       "See due and overdue routines and mark them done from the Today widget.",
       "Adjust desktop region heights, alignment, and padding in Layout settings.",
       "Copy the address to set XenStart as your browser homepage.",
-      "Set a background image and place a clock with seconds and your preferred time format.",
+      "Upload a free background image or use an image URL, then choose how it fits the screen.",
+      "Resize the clock and set your preferred time format.",
     ],
     tips: [
       {
