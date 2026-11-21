@@ -44,6 +44,7 @@ export interface XenNote {
   /** How many people it is shared with directly. */
   shared_with: number;
   created_at: string;
+  updated_by_name?: string | null;
   updated_at: string;
 }
 

@@ -8,7 +8,7 @@ export interface SlashContext {
 }
 
 /** Replace the "/…" the person typed with the block they chose. */
-export function runSlashItem(id: SlashItemId, editor: Editor, range: Range, ctx: SlashContext): void {
+export function runSlashItem(id: SlashItemId, editor: Editor, range: Range, ctx?: SlashContext): void {
   const chain = editor.chain().focus().deleteRange(range);
   switch (id) {
     case "heading1":
@@ -40,9 +40,9 @@ export function runSlashItem(id: SlashItemId, editor: Editor, range: Range, ctx:
     case "blockRef":
     case "blockEmbed":
       chain.run();
-      return ctx.pickBlock(id);
+      return ctx?.pickBlock(id);
     case "file":
       chain.run();
-      return ctx.pickFiles();
+      return ctx?.pickFiles();
   }
 }

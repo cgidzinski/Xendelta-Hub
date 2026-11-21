@@ -415,8 +415,9 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenNote for quick notes and checklists you can share.", link: "/internal/xennote" },
     features: [
       "Write notes, checklists and link notes.",
-      "Format notes with Markdown and preview them.",
-      "Link one note to another by typing its name in double square brackets, and see which notes link back.",
+      "Open a note to read it, then tap Edit to write with a formatting toolbar.",
+      "Text notes are stored as Markdown, and you can edit the Markdown directly.",
+      "Link notes by title and see linked and unlinked references in the note dialog.",
       "Tick checklist items right from the board, and drag them to reorder.",
       "Add photos to a note.",
       "Pin, archive, colour and label notes.",
@@ -452,7 +453,10 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         text: "Link one note to another by typing its name in double square brackets, and see what links back.",
         link: "/internal/xennote",
       },
-      { text: "Format a note with Markdown: headings, bold, lists and links.", link: "/internal/xennote" },
+      {
+        text: "Type / while editing a text note to insert a heading, checklist, table or quote.",
+        link: "/internal/xennote",
+      },
       {
         text: "Press the bell on a note to set a reminder, and get a notification when it is due.",
         link: "/internal/xennote",

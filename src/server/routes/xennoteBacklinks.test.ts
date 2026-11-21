@@ -102,3 +102,36 @@ describe("notes that link to a note", () => {
     expect(JSON.stringify(res.body)).not.toContain("secret words");
   });
 });
+
+it("finds and links visible prose mentions without reformatting their Markdown", async () => {
+  const [owner, viewer] = await Promise.all([createUser(), createUser()]);
+  const target = await note(owner, { title: "Trip plan" });
+  const body = "#### Saturday\n\nThe **trip plan** is ready.\n\n[Scenery][view]\n\n[view]: https://example.com";
+  const source = await note(owner, { title: "Itinerary", body });
+  const privateNote = await note(owner, { title: "Private", body: "My Trip plan" });
+  await note(owner, { title: "Code only", body: "The code is `Trip plan`" });
+  await note(owner, { title: "Already linked", body: "Confirmed [[Trip plan]]" });
+  const ids = [target._id, source._id];
+  for (const id of ids) {
+    await request(t.app)
+      .post(`/api/xennote/notes/${id}/members`)
+      .set(as(owner))
+      .send({ userIds: [viewer.user.id], role: "viewer" })
+      .expect(200);
+  }
+  const mentions = `/api/xennote/notes/${target._id}/mentions`;
+  const link = (who: U, id: string) => request(t.app).post(`${mentions}/${id}/link`).set(as(who));
+  const visible = await request(t.app).get(mentions).set(as(viewer)).expect(200);
+  expect(visible.body.data.notes).toEqual([
+    { _id: source._id, title: "Itinerary", snippet: expect.stringContaining("trip plan"), can_link: false },
+  ]);
+  await link(viewer, source._id).expect(403);
+  await link(viewer, privateNote._id).expect(404);
+  await link(owner, source._id).expect(200);
+  await link(owner, source._id).expect(409);
+
+  const saved = (await api(owner).get(`/notes/${source._id}`)).body.data.note;
+  expect(saved.body).toBe(body.replace("trip plan", "[[Trip plan|trip plan]]"));
+  expect(saved.updated_by_name).toBe(owner.user.username);
+  expect(await linkedFrom(owner, target._id)).toContain("Itinerary");
+});

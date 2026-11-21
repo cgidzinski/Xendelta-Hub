@@ -137,6 +137,25 @@ export const useXenNoteBacklinks = (noteId: string | undefined) =>
     enabled: !!noteId,
   });
 
+export const useXenNoteMentions = (noteId: string) =>
+  useQuery({
+    queryKey: xennoteKeys.noteMentions(noteId),
+    queryFn: async () =>
+      (
+        await api.get<{
+          notes: Array<{ _id: string; title: string; snippet: string; can_link: boolean }>;
+        }>(`/api/xennote/notes/${noteId}/mentions`)
+      ).notes,
+  });
+
+export const useLinkXenNoteMention = (noteId: string) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (sourceId: string) => api.post(`/api/xennote/notes/${noteId}/mentions/${sourceId}/link`),
+    onSuccess: () => client.invalidateQueries({ queryKey: xennoteKeys.all }),
+  });
+};
+
 export const usePublicNote = (token: string | undefined) =>
   useQuery({
     queryKey: xennoteKeys.publicNote(token ?? ""),

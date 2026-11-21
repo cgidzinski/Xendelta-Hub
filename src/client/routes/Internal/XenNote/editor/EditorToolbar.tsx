@@ -19,8 +19,10 @@ import { useEditorState, type Editor } from "@tiptap/react";
 
 interface EditorToolbarProps {
   editor: Editor;
-  onPickFiles: () => void;
+  onPickFiles?: () => void;
+  compact?: boolean;
   onLink: () => void;
+  onNoteLink?: () => void;
 }
 
 interface Tool {
@@ -32,7 +34,13 @@ interface Tool {
 }
 
 /** The formatting bar above a page's text: marks, headings, lists, blocks and attachments. Scrolls sideways on a phone. */
-export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToolbarProps) {
+export default function EditorToolbar({
+  editor,
+  onPickFiles,
+  onLink,
+  onNoteLink,
+  compact = false,
+}: EditorToolbarProps) {
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -72,6 +80,7 @@ export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToo
       },
       { label: "Inline code", icon: <CodeIcon />, active: s.code, run: () => chain().toggleCode().run() },
       { label: "Link", icon: <LinkIcon />, active: s.link, run: onLink },
+      ...(onNoteLink ? [{ label: "Link to a note", icon: <b>[[</b>, run: onNoteLink }] : []),
     ],
     [
       { label: "Heading 1", icon: <b>H1</b>, active: s.h1, run: () => chain().toggleHeading({ level: 1 }).run() },
@@ -120,7 +129,7 @@ export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToo
         icon: <TableChartOutlinedIcon />,
         run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
       },
-      { label: "Image or file", icon: <AttachFileIcon />, run: onPickFiles },
+      ...(onPickFiles ? [{ label: "Image or file", icon: <AttachFileIcon />, run: onPickFiles }] : []),
     ],
   ];
 
@@ -135,35 +144,39 @@ export default function EditorToolbar({ editor, onPickFiles, onLink }: EditorToo
         overflowX: "auto",
         py: 0.5,
         position: "sticky",
-        top: 0,
+        top: compact ? undefined : 0,
+        bottom: compact ? 0 : undefined,
         zIndex: 2,
         bgcolor: "background.paper",
-        borderBottom: 1,
+        borderTop: compact ? 1 : 0,
+        borderBottom: compact ? 0 : 1,
         borderColor: "divider",
       }}
     >
       {groups.map((group, g) => (
         <Box key={g} sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}>
           {g > 0 && <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.75 }} />}
-          {group.map((tool) => (
-            <Tooltip key={tool.label} title={tool.label}>
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label={tool.label}
-                  aria-pressed={tool.active ?? undefined}
-                  color={tool.active ? "primary" : "default"}
-                  disabled={tool.disabled}
-                  // Keep the focus (and the selection) in the text while a button is pressed.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={tool.run}
-                  sx={{ width: 36, height: 36, fontSize: 13 }}
-                >
-                  {tool.icon}
-                </IconButton>
-              </span>
-            </Tooltip>
-          ))}
+          {group
+            .filter((tool) => !compact || tool.label !== "Callout")
+            .map((tool) => (
+              <Tooltip key={tool.label} title={tool.label}>
+                <span>
+                  <IconButton
+                    size="small"
+                    aria-label={tool.label}
+                    aria-pressed={tool.active ?? undefined}
+                    color={tool.active ? "primary" : "default"}
+                    disabled={tool.disabled}
+                    // Keep the focus (and the selection) in the text while a button is pressed.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={tool.run}
+                    sx={{ width: 36, height: 36, fontSize: 13 }}
+                  >
+                    {tool.icon}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            ))}
         </Box>
       ))}
     </Box>

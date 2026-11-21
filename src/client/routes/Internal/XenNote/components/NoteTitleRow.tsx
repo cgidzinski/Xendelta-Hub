@@ -31,9 +31,9 @@ export default function NoteTitleRow({
         placeholder="Title"
         value={title}
         onChange={(e) => onTitle(e.target.value)}
-        disabled={readOnly}
+        readOnly={readOnly}
         slotProps={{ input: { maxLength: 200, "aria-label": "Title" } }}
-        sx={{ fontSize: 20, fontWeight: 500 }}
+        sx={{ fontSize: { xs: 26, sm: 32 }, fontWeight: 600 }}
       />
       {readOnly ? (
         <IconButton aria-label="Close" onClick={onClose}>

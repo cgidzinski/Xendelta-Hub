@@ -7,6 +7,7 @@ export const xennoteKeys = {
   notesAll: () => [...xennoteKeys.all, "notes"] as const,
   notebooks: () => [...xennoteKeys.all, "notebooks"] as const,
   /** The notes that link to one note with [[its title]]. */
+  noteMentions: (id: string) => [...xennoteKeys.all, "note-mentions", id] as const,
   backlinks: (noteId: string) => [...xennoteKeys.all, "backlinks", noteId] as const,
   counts: () => [...xennoteKeys.all, "counts"] as const,
   /** Who one note is open to. */

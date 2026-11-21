@@ -18,6 +18,7 @@ export interface SlashOptions {
    * TipTap copies plain objects in `configure`, so a ref would be cloned and the menu would write to the original.)
    */
   onKey: (event: KeyboardEvent) => boolean;
+  items?: readonly SlashItem[];
   run: (id: SlashItemId, editor: Editor, range: Range) => void;
 }
 
@@ -39,7 +40,7 @@ export const SlashCommand = Extension.create<SlashOptions>({
         editor: this.editor,
         pluginKey: new PluginKey("slashCommand"),
         char: "/",
-        items: ({ query }) => filterSlashItems(query),
+        items: ({ query }) => filterSlashItems(query, options.items),
         command: ({ editor, range, props }) => options.run(props.id, editor, range),
         render: () => {
           const publish = (p: SuggestionProps<SlashItem, SlashItem>) =>

@@ -22,6 +22,7 @@ interface NoteEditorToolbarProps {
   onReminder: (anchor: HTMLElement) => void;
   /** Opens the Share dialog; for a read-only note it shows who has the note and lets the person leave it. */
   onShare: () => void;
+  onEdit?: () => void;
   onDone: () => void;
 }
 
@@ -38,6 +39,7 @@ export default function NoteEditorToolbar({
   onReminder,
   onShare,
   onDone,
+  onEdit,
 }: NoteEditorToolbarProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const reminderOn = !!live?.reminder && !live.reminder.sent;
@@ -49,7 +51,8 @@ export default function NoteEditorToolbar({
         gap: 0.25,
         px: 1,
         py: 0.75,
-        borderTop: 1,
+        borderBottom: 1,
+        flexShrink: 0,
         borderColor: "divider",
       }}
     >
@@ -115,9 +118,15 @@ export default function NoteEditorToolbar({
           {autosave === "saving" ? "Saving…" : "Saved"}
         </Typography>
       )}
-      <Button variant="contained" onClick={onDone} disabled={doneDisabled}>
-        {readOnly ? "Close" : "Done"}
-      </Button>
+      {onEdit ? (
+        <Button variant="contained" onClick={onEdit}>
+          Edit note
+        </Button>
+      ) : (
+        <Button variant={readOnly ? "outlined" : "contained"} onClick={onDone} disabled={doneDisabled}>
+          {readOnly ? "Close" : "Done"}
+        </Button>
+      )}
     </Box>
   );
 }
