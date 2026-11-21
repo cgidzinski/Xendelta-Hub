@@ -1,4 +1,5 @@
 import { crc32 } from "node:zlib";
+import mongoose from "mongoose";
 import request from "supertest";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createUser, startTestApp, type TestApp } from "../testing/testApp";
@@ -6,6 +7,9 @@ import { createUser, startTestApp, type TestApp } from "../testing/testApp";
 let app: TestApp;
 beforeAll(async () => {
   app = await startTestApp([() => import("./xennote/index.js")]);
+  // The journal route settles concurrent requests by catching duplicate-key errors from the
+  // one-page-per-day and one-journal-section indexes, so those must exist before the race.
+  await Promise.all([mongoose.model("XenNotePage").init(), mongoose.model("XenNoteSection").init()]);
 }, 120_000);
 afterAll(async () => {
   await app?.stop();
