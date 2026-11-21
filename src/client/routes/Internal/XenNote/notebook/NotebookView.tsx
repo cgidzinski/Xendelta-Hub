@@ -369,6 +369,20 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
     tags: () => tagCounts.map((t) => t.tag),
   };
 
+  const notebookTools = (
+    <Tooltip title="Notebook tools">
+      <IconButton
+        aria-label="Notebook tools"
+        aria-haspopup="menu"
+        aria-expanded={!!optionsMenu}
+        aria-controls={optionsMenu ? "xennote-notebook-tools" : undefined}
+        onClick={(e) => setOptionsMenu(e.currentTarget)}
+      >
+        <MoreVertIcon />
+      </IconButton>
+    </Tooltip>
+  );
+
   const header = notebook && (
     <PageHeader
       title={
@@ -418,44 +432,7 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
               New page
             </Button>
           )}
-          <Tooltip title="Notebook tools">
-            <IconButton aria-label="Notebook tools" onClick={(e) => setOptionsMenu(e.currentTarget)}>
-              <MoreVertIcon />
-            </IconButton>
-          </Tooltip>
-          <Menu anchorEl={optionsMenu} open={!!optionsMenu} onClose={() => setOptionsMenu(null)}>
-            <MenuItem onClick={openGraph}>Graph</MenuItem>
-            {(canEdit || !!templateSection) && (
-              <MenuItem disabled={toolBusy} onClick={() => void openTemplates()}>
-                Manage templates
-              </MenuItem>
-            )}
-            {canEdit && !!templates.length && (
-              <MenuItem
-                onClick={() => {
-                  setOptionsMenu(null);
-                  setTemplateDialog("journal");
-                }}
-              >
-                Journal template
-              </MenuItem>
-            )}
-            <MenuItem
-              disabled={toolBusy}
-              onClick={() => void runNotebookTool(() => downloadMarkdown("notebooks", notebookId, notebook.name))}
-            >
-              Export notebook as Markdown
-            </MenuItem>
-            <Divider sx={{ my: 0.5 }} />
-            <MenuItem
-              onClick={() => {
-                setOptionsMenu(null);
-                setNotebookDialog({});
-              }}
-            >
-              Notebook settings
-            </MenuItem>
-          </Menu>
+          {notebookTools}
         </>
       }
     />
@@ -638,6 +615,7 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
           pageId={pageId}
           heading={pageHeading}
           onBack={wide ? undefined : closePage}
+          notebookTools={wide ? undefined : notebookTools}
           onGone={closePage}
           links={links}
         />
@@ -834,6 +812,46 @@ export default function NotebookView({ tool }: { tool?: "tasks" | "graph" }) {
         {body}
       </Box>
 
+      {notebook && (
+        <Menu
+          anchorEl={optionsMenu}
+          open={!!optionsMenu}
+          onClose={() => setOptionsMenu(null)}
+          slotProps={{ list: { id: "xennote-notebook-tools", "aria-label": "Notebook tools" } }}
+        >
+          <MenuItem onClick={openGraph}>Graph</MenuItem>
+          {(canEdit || !!templateSection) && (
+            <MenuItem disabled={toolBusy} onClick={() => void openTemplates()}>
+              Manage templates
+            </MenuItem>
+          )}
+          {canEdit && !!templates.length && (
+            <MenuItem
+              onClick={() => {
+                setOptionsMenu(null);
+                setTemplateDialog("journal");
+              }}
+            >
+              Journal template
+            </MenuItem>
+          )}
+          <MenuItem
+            disabled={toolBusy}
+            onClick={() => void runNotebookTool(() => downloadMarkdown("notebooks", notebookId, notebook.name))}
+          >
+            Export notebook as Markdown
+          </MenuItem>
+          <Divider sx={{ my: 0.5 }} />
+          <MenuItem
+            onClick={() => {
+              setOptionsMenu(null);
+              setNotebookDialog({});
+            }}
+          >
+            Notebook settings
+          </MenuItem>
+        </Menu>
+      )}
       <Menu
         anchorEl={newPageMenu}
         open={!!newPageMenu}
