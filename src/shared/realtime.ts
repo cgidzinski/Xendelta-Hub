@@ -58,6 +58,7 @@ export interface RealtimeEvents {
   "xenkitchen:book_update": { bookId: string };
   /** The books themselves changed: one was created, renamed or deleted, or its people changed. */
   "xenkitchen:books_updated": undefined;
+  "xenkitchen:timers_updated": undefined;
   /** A routine changed: edited, ticked, completed, postponed, or its people did. */
   "xenroutine:update": undefined;
 }

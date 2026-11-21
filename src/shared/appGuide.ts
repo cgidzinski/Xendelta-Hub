@@ -346,6 +346,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Import a recipe from photos of it, like a recipe card or the pages of a cookbook.",
       "Scale the servings and switch between metric and US units.",
       "Cook one step at a time in big text, with timers and the screen kept awake.",
+      "Run several cooking timers at once, with optional halfway alerts.",
       "Plan meals week by week.",
       "Undo removing a meal from the plan.",
       "Copy last week's meal plan onto this week, or repeat a meal on another day.",

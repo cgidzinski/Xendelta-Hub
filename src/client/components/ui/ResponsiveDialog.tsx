@@ -17,13 +17,24 @@ export default function ResponsiveDialog({
   actions,
   children,
   maxWidth = "sm",
+  "aria-labelledby": labelledBy,
   ...rest
 }: ResponsiveDialogProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   return (
-    <Dialog fullWidth maxWidth={maxWidth} fullScreen={isMobile} onClose={onClose} {...rest}>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pr: 1 }}>
+    <Dialog
+      fullWidth
+      maxWidth={maxWidth}
+      fullScreen={isMobile}
+      onClose={onClose}
+      aria-labelledby={labelledBy}
+      {...rest}
+    >
+      <DialogTitle
+        id={labelledBy ? `${labelledBy}-row` : undefined}
+        sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pr: 1 }}
+      >
         {title}
         <IconButton onClick={onClose} aria-label="Close" size="small">
           <CloseIcon />

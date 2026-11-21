@@ -69,7 +69,7 @@ describe("app routes", () => {
       "flags",
     ]);
     expect(hit("/internal/xenroutine/routines")).toEqual(["/internal", "xenroutine", "routines"]);
-    expect(hit("/internal/xenkitchen/abc")).toEqual(["/internal", "xenkitchen/:id"]);
+    expect(hit("/internal/xenkitchen/abc")).toEqual(["/internal", "xenkitchen", ":id"]);
     expect(hit("/internal/recipaint/abc/paint")).toEqual(["/internal", "recipaint/:id/paint"]);
     expect(hit("/internal/xendrive/file/f1")).toEqual(["/internal", "xendrive", "file/:fileId"]);
     expect(hit("/internal/xendrive/folder/d1")).toEqual(["/internal", "xendrive", "folder/:folderId"]);

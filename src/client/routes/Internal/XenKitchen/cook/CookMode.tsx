@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Badge,
   Box,
   Button,
   Checkbox,
-  Chip,
   Dialog,
   Drawer,
   IconButton,
@@ -16,16 +15,15 @@ import CloseIcon from "@mui/icons-material/Close";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import ListAltIcon from "@mui/icons-material/ListAlt";
-import TimerIcon from "@mui/icons-material/Timer";
 import { useWakeLock } from "../../../../hooks/useWakeLock";
-import { formatMinutes } from "@shared/xenkitchen/kitchen";
-import { alarm } from "./alarm";
-import { clampStep, formatCountdown, remainingSeconds, runningTimers, swipeDirection } from "./cookLogic";
-import { useStepTimers } from "./useStepTimers";
+import type { TimerSource } from "@shared/xenkitchen/timers";
+import { clampStep, swipeDirection } from "./cookLogic";
+import { RecipeTimerButton, TimersButton } from "../timers/TimerButtons";
 
 export interface CookStep {
   text: string;
   timer_minutes: number | null;
+  source: TimerSource;
 }
 export interface CookIngredient {
   /** A stable key for the line (its place in the recipe). */
@@ -63,7 +61,7 @@ export default function CookMode({
 }: CookModeProps) {
   const [index, setIndex] = useState(0);
   const [sheet, setSheet] = useState(false);
-  const { timers, now, start, stop } = useStepTimers(() => alarm());
+  const titleId = useId();
   const touch = useRef<{ x: number; y: number } | null>(null);
   useWakeLock(open);
 
@@ -76,61 +74,42 @@ export default function CookMode({
   const step = steps[clampStep(index, total)];
   const go = (to: number) => setIndex(clampStep(to, total));
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (sheet) return;
-      if (e.key === "ArrowRight") setIndex((i) => clampStep(i + 1, total));
-      else if (e.key === "ArrowLeft") setIndex((i) => clampStep(i - 1, total));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, sheet, total]);
-
-  const running = useMemo(() => runningTimers(timers, now), [timers, now]);
   const remainingIngredients = ingredients.filter((i) => !checked.has(i.key)).length;
   const onLast = index >= total - 1;
-  const thisTimer = timers[index];
 
   if (total === 0) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} fullScreen aria-label={`Cooking ${title}`}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullScreen
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (sheet) return;
+        if (event.key === "ArrowRight") setIndex((i) => clampStep(i + 1, total));
+        else if (event.key === "ArrowLeft") setIndex((i) => clampStep(i - 1, total));
+      }}
+    >
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 1.5, py: 1 }}>
           <IconButton aria-label="Stop cooking" onClick={onClose}>
             <CloseIcon />
           </IconButton>
-          <Typography noWrap sx={{ flex: 1, fontWeight: 700 }}>
+          <Typography id={titleId} noWrap sx={{ flex: 1, fontWeight: 700 }}>
             {title}
           </Typography>
-          <Typography variant="body2" color="text.secondary" role="status" aria-live="polite">
-            Step {index + 1} of {total}
-          </Typography>
+          <TimersButton />
         </Stack>
+        <Typography variant="body2" color="text.secondary" role="status" aria-live="polite" sx={{ px: 2, pb: 1 }}>
+          Step {index + 1} of {total}
+        </Typography>
         <LinearProgress
           variant="determinate"
           value={((index + 1) / total) * 100}
           aria-label="Progress through the steps"
           sx={{ height: 4, "& .MuiLinearProgress-bar": { bgcolor: accent } }}
         />
-
-        {running.length > 0 && (
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ px: 2, py: 1 }}>
-            {running.map((t) => (
-              <Chip
-                key={t.step}
-                size="small"
-                icon={<TimerIcon />}
-                color={t.finished ? "warning" : "default"}
-                variant={t.step === index ? "filled" : "outlined"}
-                label={`Step ${t.step + 1} · ${t.finished ? "Done!" : formatCountdown(t.seconds)}`}
-                onClick={() => go(t.step)}
-                onDelete={t.finished ? () => stop(t.step) : undefined}
-              />
-            ))}
-          </Stack>
-        )}
 
         <Box
           // A swipe moves between steps; the step text is also the target, so a thumb anywhere on it works.
@@ -174,32 +153,7 @@ export default function CookMode({
             >
               {step.text}
             </Typography>
-            {step.timer_minutes ? (
-              <Box sx={{ mt: 3 }}>
-                {thisTimer === undefined ? (
-                  <Button
-                    variant="outlined"
-                    size="large"
-                    startIcon={<TimerIcon />}
-                    onClick={() => start(index, step.timer_minutes!)}
-                  >
-                    Start {formatMinutes(step.timer_minutes)} timer
-                  </Button>
-                ) : (
-                  <Button
-                    variant="contained"
-                    size="large"
-                    color={thisTimer <= now ? "warning" : "primary"}
-                    startIcon={<TimerIcon />}
-                    onClick={() => stop(index)}
-                  >
-                    {thisTimer <= now
-                      ? "Done! Tap to clear"
-                      : `${formatCountdown(remainingSeconds(thisTimer, now))} · tap to stop`}
-                  </Button>
-                )}
-              </Box>
-            ) : null}
+            {step.timer_minutes ? <RecipeTimerButton minutes={step.timer_minutes} source={step.source} large /> : null}
           </Box>
         </Box>
 

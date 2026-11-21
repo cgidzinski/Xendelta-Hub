@@ -11,7 +11,7 @@ export const NOTIFICATION_APPS = [
   { key: "xenbudget", label: "XenBudget", about: "Being added to a budget book" },
   { key: "xenroutine", label: "XenRoutine", about: "Reminders and activity on routines" },
   { key: "xennote", label: "XenNote", about: "Note reminders and shared notebooks" },
-  { key: "xenkitchen", label: "XenKitchen", about: "Recipe books shared with you" },
+  { key: "xenkitchen", label: "XenKitchen", about: "Recipe books shared with you and cooking timers" },
   { key: "communities", label: "Communities", about: "Invites to communities" },
   { key: "billing", label: "Billing and gems", about: "Statements, allowance warnings and gems you are given" },
 ] as const;

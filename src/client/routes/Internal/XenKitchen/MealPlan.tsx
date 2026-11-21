@@ -1,3 +1,4 @@
+import { TimersButton } from "./timers/TimerButtons";
 import { useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
@@ -205,7 +206,7 @@ export default function MealPlan() {
   if (!book) {
     return (
       <PageContainer>
-        <PageHeader title="Meal plan" />
+        <PageHeader title="Meal plan" actions={<TimersButton compact />} />
         <EmptyState
           title="No recipe book yet"
           description="Open XenKitchen first to make your recipe book, then plan meals from it."
@@ -245,9 +246,12 @@ export default function MealPlan() {
       <PageHeader
         title="Meal plan"
         actions={
-          <Button variant="contained" startIcon={<ShoppingCartOutlinedIcon />} onClick={() => setShopping(true)}>
-            Shopping list
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <TimersButton compact />
+            <Button variant="contained" startIcon={<ShoppingCartOutlinedIcon />} onClick={() => setShopping(true)}>
+              Shopping list
+            </Button>
+          </Stack>
         }
       />
 

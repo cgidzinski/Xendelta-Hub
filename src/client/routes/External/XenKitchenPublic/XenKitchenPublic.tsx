@@ -16,6 +16,7 @@ import {
   usePublicKitchenItem,
 } from "../../../hooks/xenkitchen/useKitchen";
 import ItemView from "../../Internal/XenKitchen/components/ItemView";
+import { TimerProvider } from "../../Internal/XenKitchen/timers/TimerProvider";
 import { BRAND_NAME } from "@shared/brand";
 import { clickableRowProps } from "../../../utils/keyboard";
 
@@ -108,14 +109,16 @@ function XenKitchenPublicContent() {
                 Shared by {owner}
               </Typography>
             )}
-            <ItemView
-              item={item}
-              actions={
-                <Button variant="contained" startIcon={<LibraryAddIcon />} onClick={save} disabled={clone.isPending}>
-                  {isAuthenticated ? (clone.isPending ? "Saving…" : "Save to my kitchen") : "Sign in to save"}
-                </Button>
-              }
-            />
+            <TimerProvider>
+              <ItemView
+                item={item}
+                actions={
+                  <Button variant="contained" startIcon={<LibraryAddIcon />} onClick={save} disabled={clone.isPending}>
+                    {isAuthenticated ? (clone.isPending ? "Saving…" : "Save to my kitchen") : "Sign in to save"}
+                  </Button>
+                }
+              />
+            </TimerProvider>
             <PublicJoinCard app="xenkitchen" />
           </>
         )}

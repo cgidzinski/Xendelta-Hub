@@ -1,3 +1,4 @@
+import { TimersButton } from "./timers/TimerButtons";
 import PageContainer from "../../../components/ui/PageContainer";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -266,6 +267,7 @@ export default function XenKitchen() {
           </Stack>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+          <TimersButton compact />
           <Button
             component={RouterLink}
             to="/internal/xenkitchen/plan"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clampStep, formatCountdown, remainingSeconds, runningTimers, swipeDirection } from "./cookLogic";
+import { clampStep, formatCountdown, remainingSeconds, swipeDirection } from "./cookLogic";
 
 describe("clampStep", () => {
   it("stays inside the recipe", () => {
@@ -39,20 +39,5 @@ describe("countdown", () => {
     expect(formatCountdown(600)).toBe("10:00");
     expect(formatCountdown(3725)).toBe("1:02:05");
     expect(formatCountdown(-3)).toBe("0:00");
-  });
-});
-
-describe("runningTimers", () => {
-  it("lists started timers, those still running soonest first, finished ones after", () => {
-    const now = 100_000;
-    const list = runningTimers({ 2: now + 90_000, 0: now - 1_000, 5: now + 30_000 }, now);
-    expect(list.map((t) => [t.step, t.seconds, t.finished])).toEqual([
-      [5, 30, false],
-      [2, 90, false],
-      [0, 0, true],
-    ]);
-  });
-  it("is empty when nothing was started", () => {
-    expect(runningTimers({}, 1)).toEqual([]);
   });
 });
