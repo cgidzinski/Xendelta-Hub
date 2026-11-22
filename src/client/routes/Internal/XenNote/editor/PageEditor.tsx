@@ -8,10 +8,11 @@ import { normalizeTag } from "@shared/xennote/pages";
 import { createPageExtensions } from "@shared/xennote/pageSchema";
 import Banner from "../../../../components/ui/Banner";
 import ImageLightbox from "../../../../components/ui/ImageLightbox";
+import SectionLabel from "../../../../components/ui/SectionLabel";
 import UploadProgress from "../../../../components/ui/UploadProgress";
 import { useUploadProgress } from "../../../../hooks/useUploadProgress";
 import { suggestPages, uploadPageFiles } from "../../../../hooks/xennote/usePages";
-import type { XenNotePageDetail } from "../../../../types/XenNotePage";
+import type { PageFileInfo, XenNotePageDetail } from "../../../../types/XenNotePage";
 import EditorToolbar from "./EditorToolbar";
 import SlashMenu from "./SlashMenu";
 import { SlashCommand, type SlashState } from "./SlashCommand";
@@ -41,6 +42,11 @@ interface PageEditorProps {
   /** What links and tags in the text do (open a page, show a tag, make a page). */
   links?: PageLinksValue;
 }
+
+const fileBlock = (id: string, file: PageFileInfo) =>
+  file.mime.startsWith("image/")
+    ? { type: "imageBlock", attrs: { file_id: id, alt: file.name } }
+    : { type: "fileBlock", attrs: { file_id: id, name: file.name, size: file.size, mime: file.mime } };
 
 const defaultLinks: PageLinksValue = {
   notebookId: null,
@@ -205,13 +211,7 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
         editor
           .chain()
           .focus()
-          .insertContent(
-            uploaded.map((f) =>
-              f.mime.startsWith("image/")
-                ? { type: "imageBlock", attrs: { file_id: f.id, alt: f.name } }
-                : { type: "fileBlock", attrs: { file_id: f.id, name: f.name, size: f.size, mime: f.mime } },
-            ),
-          )
+          .insertContent(uploaded.map((file) => fileBlock(file.id, file)))
           .run();
       } catch (e) {
         enqueueSnackbar((e as Error).message || "Couldn't upload that", { variant: "error" });
@@ -246,6 +246,38 @@ export default function PageEditor({ detail, onLabel, links }: PageEditorProps) 
   return (
     <PageLinksContext.Provider value={{ ...(links ?? defaultLinks), sourcePageId: pageId }}>
       <PageFilesContext.Provider value={filesValue}>
+        {Object.keys(files).length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <SectionLabel>Attachments</SectionLabel>
+            {editable && (
+              <Typography variant="body2" color="text.secondary">
+                Files stay attached when you remove them from the page text.
+              </Typography>
+            )}
+            <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>
+              {Object.entries(files).map(([id, file]) => (
+                <Box component="li" key={id} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+                  {file.url ? (
+                    <Button href={file.url} target="_blank" rel="noopener noreferrer" size="small">
+                      {file.name}
+                    </Button>
+                  ) : (
+                    <Typography variant="body2">{file.name}</Typography>
+                  )}
+                  {editable && editor && (
+                    <Button
+                      size="small"
+                      aria-label={`Insert ${file.name} inline`}
+                      onClick={() => editor.chain().focus().insertContent(fileBlock(id, file)).run()}
+                    >
+                      Insert inline
+                    </Button>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
         <Box sx={[editorSx, { "& .ProseMirror": { minHeight: { xs: 280, sm: 380 } } }]}>
           {editable && editor && (
             <EditorToolbar editor={editor} onPickFiles={() => fileInput.current?.click()} onLink={openLink} />

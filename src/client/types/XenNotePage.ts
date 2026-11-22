@@ -56,7 +56,7 @@ export interface XenNotePageDetail {
   reminder?: { at: string; sent: boolean } | null;
   page: XenNotePageMeta;
   doc: JSONContent;
-  /** The files the text refers to, by file id. */
+  /** The page’s attachments and files referenced by its text, by file id. */
   files: Record<string, PageFileInfo>;
   notebook: { id: string; name: string };
   section: { id: string; name: string; kind: SectionKind } | null;

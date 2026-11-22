@@ -3,6 +3,7 @@ import { validateParams, xenNoteIdParamSchema } from "../../utils/validation";
 import { AppError, callerId } from "../../utils/http";
 import { uploadXenNotePageFiles } from "../../config/multer";
 import { FileRecord } from "../../models/fileRecord";
+import { XenNotePage } from "../../models/xenNotePage";
 import { storeAppFiles, removeAppFiles, signedUrlsFor, thumbnailUrlsFor } from "../../utils/appFiles";
 import { MAX_PAGE_FILES } from "../../../shared/xennote/pages";
 import { XENNOTE_APP } from "../../utils/xenNotePages";
@@ -52,26 +53,37 @@ export function registerPageFileRoutes(app: any) {
       const stored = await storeAppFiles(uid, { app: XENNOTE_APP, ref: page.id as string }, prepared);
 
       const ids = stored.map((f) => String(f._id));
+      let urls: Awaited<ReturnType<typeof signedUrlsFor>>;
+      let thumbs: Awaited<ReturnType<typeof thumbnailUrlsFor>>;
       try {
-        const [urls, thumbs] = await Promise.all([signedUrlsFor(ids, 60), thumbnailUrlsFor(ids)]);
-        res.json({
-          status: true,
-          message: "Files added",
-          data: {
-            files: stored.map((f) => ({
-              id: String(f._id),
-              name: f.name,
-              size: f.size,
-              mime: f.mimeType,
-              url: urls.get(String(f._id)) ?? null,
-              thumbUrl: thumbs.get(String(f._id)) ?? null,
-            })),
+        [urls, thumbs] = await Promise.all([signedUrlsFor(ids, 60), thumbnailUrlsFor(ids)]);
+        await loadPage(req, page.id as string, "edit");
+        const attached = await XenNotePage.updateOne(
+          {
+            _id: page._id,
+            $expr: {
+              $lte: [
+                { $size: { $setUnion: [{ $ifNull: ["$attachments", []] }, { $ifNull: ["$files", []] }] } },
+                MAX_PAGE_FILES - ids.length,
+              ],
+            },
           },
-        });
+          { $addToSet: { attachments: { $each: ids } } },
+        );
+        if (attached.matchedCount === 0) throw new AppError(409, "The page changed while uploading. Try again.");
       } catch (error) {
         await removeAppFiles(ids);
         throw error;
       }
+      const uploaded = stored.map((file) => ({
+        id: String(file._id),
+        name: file.name,
+        size: file.size,
+        mime: file.mimeType,
+        url: urls.get(String(file._id)) ?? null,
+        thumbUrl: thumbs.get(String(file._id)) ?? null,
+      }));
+      res.json({ status: true, message: "Files added", data: { files: uploaded } });
     },
   );
 }

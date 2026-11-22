@@ -17,7 +17,6 @@ import { canEdit } from "../../utils/membership";
 import { writePageBody } from "../../utils/xenNotePages";
 import { searchPages, visiblePagesFilter } from "../../utils/xenNotePageSearch";
 import { findMention, linkFirstMention, mentionSnippet } from "../../../shared/xennote/linkMention";
-import { normalizeTitle } from "../../../shared/xennote/wikiLinks";
 import { loadPage, notebookAudience } from "./pageAccess";
 
 // Links between pages. A link names a page by id, so what a link shows is looked up when it is drawn ("peek"), and only
@@ -70,22 +69,17 @@ export function registerPageLinkRoutes(app: any) {
     },
   );
 
-  // Pages that link here: by id, and in this notebook those that wrote [[this title]] (or an alias) before the page existed.
+  // Backlinks come from explicit links to the page ID.
   app.get(
     "/api/xennote/pages/:id/backlinks",
     validateParams(xenNoteIdParamSchema),
     async (req: Request, res: Response) => {
       const uid = callerId(req);
       const { page } = await loadPage(req, req.params.id as string, "view");
-      const names = [page.title, ...page.aliases].map(normalizeTitle).filter(Boolean);
       const visible = await visiblePagesFilter(uid);
       const rows = await XenNotePage.find(
         {
-          $and: [
-            visible,
-            { _id: { $ne: page._id } },
-            { $or: [{ links: page._id }, { notebook_id: page.notebook_id, unresolved: { $in: names } }] },
-          ],
+          $and: [visible, { _id: { $ne: page._id } }, { links: page._id }],
         },
         "title notebook_id section_id excerpt search_text",
       )
@@ -178,7 +172,7 @@ export function registerPageLinkRoutes(app: any) {
         aliases: target.aliases,
       });
       if (!changed) throw new AppError(409, "That page isn't mentioned here any more");
-      const { rev } = await writePageBody(page, doc, uid, page.rev);
+      const { rev } = await writePageBody(page, doc, uid, body.rev, undefined, true);
       // Anyone with this page open gets the new text (the editor that is typing keeps its own, and is warned).
       SocketManager.getInstance().notifyXenNotePageUpdate(notebookAudience(notebook), {
         pageId: page.id as string,

@@ -72,7 +72,7 @@ export async function pageDetail(page: PageDoc, notebook: NotebookDoc, role: Mem
     reminder: own ? { at: own.at, sent: !!own.notified_at } : null,
     page: serializePage(page, uid, role, canManagePage(notebook.toObject(), uid)),
     doc: body?.doc ?? ensureBlockIds(emptyDoc()),
-    files: await fileMapFor(page.files),
+    files: await fileMapFor([...new Set([...page.files, ...page.attachments].map(String))]),
     notebook: { id: notebook.id as string, name: notebook.name },
     section: section ? { id: String(section._id), name: section.name, kind: section.kind } : null,
   };

@@ -35,7 +35,7 @@ export function registerSectionRoutes(app: any) {
       const [sections, pages] = await Promise.all([
         XenNoteSection.find({ notebook_id: notebook._id }).sort({ order: 1, _id: 1 }),
         XenNotePage.find({ notebook_id: notebook._id })
-          .select("-search_text -members -reminders -share -links -unresolved -files")
+          .select("-search_text -members -reminders -share -links -unresolved -files -attachments")
           .sort({ order: 1, _id: 1 }),
       ]);
       res.json({
