@@ -99,6 +99,8 @@ const pageSchema = new Schema({
   links: { type: [Schema.Types.ObjectId], default: [] },
   unresolved: { type: [String], default: [] },
   files: { type: [Schema.Types.ObjectId], default: [] },
+  // Explicit page attachments survive edits to the body.
+  attachments: { type: [Schema.Types.ObjectId], default: [] },
   search_text: { type: String, default: "" },
   excerpt: { type: String, default: "" },
   todo: {

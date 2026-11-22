@@ -164,7 +164,7 @@ describe("suggest", () => {
 });
 
 describe("linked from", () => {
-  it("lists the pages that link here by id, and those that wrote the title before the page existed", async () => {
+  it("lists only pages that explicitly link to the target ID", async () => {
     const owner = await createUser();
     const { section } = await book(owner);
     const target = await page(owner, section, "Risk register");
@@ -174,16 +174,16 @@ describe("linked from", () => {
       "Weekly sync",
       doc(para(text("see "), link(target, "Risk register"), text(" now"))),
     );
-    const byTitle = await page(owner, section, "Old note", doc(para(link(null, "risk REGISTER"))));
+    await page(owner, section, "Old note", doc(para(link(null, "risk REGISTER"))));
     await page(owner, section, "Unrelated", doc(para(text("nothing here"))));
 
     const res = await api(owner).get(`/pages/${target}/backlinks`);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(ids(res).sort()).toEqual([byId, byTitle].sort());
+    expect(ids(res)).toEqual([byId]);
     expect(res.body.data.pages.find((p: any) => p.id === byId).snippet).toContain("Risk register");
   });
 
-  it("includes a link written with an alias, and leaves out pages the person can't see", async () => {
+  it("excludes title-only alias mentions and pages the viewer cannot see", async () => {
     const owner = await createUser();
     const friend = await createUser();
     const a = await book(owner, "Shared");
@@ -195,13 +195,12 @@ describe("linked from", () => {
     await page(owner, a.section, "By alias", doc(para(link(null, "The Goal"))));
 
     expect(titlesOf(await api(owner).get(`/pages/${target}/backlinks`)).sort()).toEqual([
-      "By alias",
       "Private source",
       "Visible source",
     ]);
     // The friend isn't in the private notebook: they never learn that page exists.
     const forFriend = await api(friend).get(`/pages/${target}/backlinks`);
-    expect(titlesOf(forFriend).sort()).toEqual(["By alias", "Visible source"]);
+    expect(titlesOf(forFriend).sort()).toEqual(["Visible source"]);
     expect(ids(forFriend)).toContain(visible);
   });
 

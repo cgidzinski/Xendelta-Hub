@@ -153,8 +153,8 @@ const activate = (run: (e: MouseEvent | KeyboardEvent) => void) => (e: KeyboardE
  * when the person can't open it (with the words that were typed, which they could already read), or a dotted underline
  * when there is no such page yet: clicking that makes the page.
  */
-function WikiLinkView({ node, updateAttributes, editor }: NodeViewProps) {
-  const { onOpenPage, onCreatePage } = useContext(PageLinksContext);
+function WikiLinkView({ node }: NodeViewProps) {
+  const { onOpenPage } = useContext(PageLinksContext);
   const pageId = (node.attrs.page_id as string | null) || null;
   const typed = String(node.attrs.label || node.attrs.title || "");
   const publicPages = useContext(PublicPageLinksContext);
@@ -166,32 +166,13 @@ function WikiLinkView({ node, updateAttributes, editor }: NodeViewProps) {
     sx: { color: "primary.main", borderBottom: 1, borderColor: "primary.main", cursor: "pointer" },
   } as const;
 
-  if (!pageId && publicPages) {
-    return (
-      <NodeViewWrapper as="span">
-        <Box component="span" sx={{ color: "text.secondary" }}>
-          {typed}
-        </Box>
-      </NodeViewWrapper>
-    );
-  }
-
   if (!pageId) {
-    const create = async () => {
-      if (!editor.isEditable) return;
-      const id = await onCreatePage(String(node.attrs.title || typed));
-      if (id) updateAttributes({ page_id: id });
-    };
     return (
       <NodeViewWrapper as="span">
         <Box
-          {...base}
-          role="link"
-          tabIndex={0}
-          title="No page with this name yet. Click to make it."
-          onClick={() => void create()}
-          onKeyDown={activate(() => void create())}
-          sx={{ ...base.sx, color: "text.secondary", borderColor: "text.secondary", borderBottomStyle: "dashed" }}
+          component="span"
+          title="Unlinked. Use the page picker to choose a target."
+          sx={{ color: "text.secondary", textDecoration: "underline dashed" }}
         >
           {typed}
         </Box>

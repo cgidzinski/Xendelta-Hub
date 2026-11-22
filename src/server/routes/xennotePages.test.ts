@@ -497,6 +497,11 @@ describe("a page's files", () => {
     const record = await FileRecord.findById(file.id).lean();
     expect(record?.space).toMatchObject({ app: "xennote", ref: made.page.id });
 
+    // The upload is already on the page even if the browser closes before autosave.
+    const reopened = await api(owner).get(`/pages/${made.page.id}`);
+    expect(reopened.body.data.files[file.id]).toMatchObject({ name: "plan.pdf" });
+    expect(reopened.body.data.page.rev).toBe(0);
+
     const foreign = await upload(owner, other.page.id, "secret.txt", Buffer.from("secret"), "text/plain");
     const foreignId = foreign.body.data.files[0].id;
 
@@ -516,6 +521,14 @@ describe("a page's files", () => {
     expect(Object.keys(got.files)).toEqual([file.id]);
     const page = await mongoose.model("XenNotePage").findById(made.page.id).lean<any>();
     expect(page.files.map(String)).toEqual([file.id]);
+
+    const removedInline = await api(owner).put(`/pages/${made.page.id}/body`, {
+      base_rev: saved.body.data.rev,
+      doc: doc({ type: "paragraph" }),
+    });
+    expect(removedInline.status, JSON.stringify(removedInline.body)).toBe(200);
+    const afterRemoval = await api(owner).get(`/pages/${made.page.id}`);
+    expect(afterRemoval.body.data.files[file.id]).toMatchObject({ name: "plan.pdf" });
   });
 
   it("are resized when they are pictures", async () => {

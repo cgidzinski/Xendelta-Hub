@@ -50,7 +50,7 @@ export function registerPageHistoryRoutes(app: any) {
       const { id, versionId } = xenNoteVersionParamSchema.parse(req.params);
       const { page, notebook } = await loadPage(req, id, "edit");
       const version = await getVersion(page._id, versionId);
-      const saved = await writePageBody(page, version.doc, uid, page.rev, version.title);
+      const saved = await writePageBody(page, version.doc, uid, page.rev, version.title, true);
       await markNotebookChanged(notebook);
       SocketManager.getInstance().notifyXenNotePageUpdate(notebookAudience(notebook), {
         pageId: id,
