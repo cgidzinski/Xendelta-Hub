@@ -45,15 +45,19 @@ export class CallSession {
   }
 
   /** Start sending a track (a microphone, camera or screen). */
-  publish(kind: TrackKind, track: MediaStreamTrack, trackName: string): Promise<void> {
+  publish(
+    kind: TrackKind,
+    track: MediaStreamTrack,
+    trackName: string,
+    maxBitrate: number = CALL_BITRATE_BPS[kind],
+  ): Promise<void> {
     return this.enqueue(async () => {
       // Hold the encoder to the bitrate the call is billed at (shared/calls.ts), so the bill is an upper bound.
       const transceiver = this.pc.addTransceiver(track, {
         direction: "sendonly",
         streams: [new MediaStream([track])],
-        sendEncodings: [{ maxBitrate: CALL_BITRATE_BPS[kind] }],
+        sendEncodings: [{ maxBitrate }],
       });
-      this.senders.set(kind, transceiver.sender);
       const offer = await this.pc.createOffer();
       await this.pc.setLocalDescription(offer);
       const result = await api.post<CallTracksResult>(`${this.base()}/tracks`, {
@@ -62,12 +66,25 @@ export class CallSession {
       });
       if (!result.sessionDescription) throw new Error("No answer from the call service");
       await this.pc.setRemoteDescription(result.sessionDescription);
+      this.senders.set(kind, transceiver.sender);
     });
   }
 
   /** Swap the track being sent (or stop sending with null) without renegotiating. */
   async replace(kind: TrackKind, track: MediaStreamTrack | null): Promise<void> {
-    await this.senders.get(kind)?.replaceTrack(track);
+    await this.enqueue(async () => this.senders.get(kind)?.replaceTrack(track));
+  }
+
+  setVideoBitrate(maxBitrate: number): Promise<void> {
+    return this.enqueue(async () => {
+      const sender = this.senders.get("video");
+      if (!sender) return;
+      const params = sender.getParameters();
+      const encoding = params.encodings?.[0];
+      if (!encoding) return;
+      encoding.maxBitrate = maxBitrate;
+      await sender.setParameters(params);
+    });
   }
 
   has(kind: TrackKind): boolean {
@@ -99,7 +116,6 @@ export class CallSession {
 
   close() {
     this.closed = true;
-    this.pc.getSenders().forEach((s) => s.track?.stop());
     this.pc.close();
   }
 }

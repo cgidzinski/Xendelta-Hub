@@ -47,11 +47,11 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
       "Jump back into the apps you opened lately from Home.",
       "Chat one to one or in groups, with photos, files, replies and reactions.",
       "Mention someone with @ so they are told even if they muted the chat, and see which channels name you.",
-      "Start a voice or video call with anyone in a chat or group, and share your screen during it, and pick which microphone or camera to use.",
+      "Start a voice or video call in a chat or group. Share your screen, choose your devices, or lower camera quality to save data.",
       "Add voice channels to a community: drop in to talk (with video or a shared screen), see who is there, and keep talking while you browse the app.",
       "Forward a message to other chats, with the original sender named.",
       "Create a poll with up to ten options, let people vote live, and close it when you are done.",
-      "Record a voice message and send it, then play it with a waveform, a speed button and a slider to jump around.",
+      "Record a voice message, or hold the microphone on a phone and release to send. Play it with a waveform, speed control and slider.",
       "Search for a GIF and send it in a chat.",
       "Reply in a thread under a channel message to keep a side conversation out of the main chat, and follow a thread to hear about its replies.",
       "See who is online, idle or busy, and set your own status, with a line that can clear itself.",
@@ -104,7 +104,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
         link: "/internal/messages",
       },
       {
-        text: "Try the microphone button next to the message box to send a voice message of up to five minutes.",
+        text: "Hold the microphone on a phone and release to send, or tap it to record and send when you’re ready. Voice messages can be up to five minutes.",
         link: "/internal/messages",
       },
       {

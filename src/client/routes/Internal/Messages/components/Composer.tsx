@@ -3,7 +3,6 @@ import { Box, ButtonBase, IconButton, InputBase, Paper, Typography, useMediaQuer
 import SendIcon from "@mui/icons-material/Send";
 import EmojiEmotionsOutlinedIcon from "@mui/icons-material/EmojiEmotionsOutlined";
 import GifBoxOutlinedIcon from "@mui/icons-material/GifBoxOutlined";
-import MicNoneOutlinedIcon from "@mui/icons-material/MicNoneOutlined";
 import VoiceRecorderBar from "../../../../components/chat/VoiceRecorderBar";
 import { canRecordVoice } from "../../../../hooks/chat/useVoiceRecorder";
 import type { ChatGif } from "@shared/gif";
@@ -102,7 +101,6 @@ export default function Composer({
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
   const [gifAnchor, setGifAnchor] = useState<HTMLElement | null>(null);
   const gifsEnabled = useGifsEnabled();
-  const [recordingVoice, setRecordingVoice] = useState(false);
   // `:smi` suggests emoji: the list loads the first time a colon-word is typed.
   const [emojiList, setEmojiList] = useState<EmojiEntry[] | null>(null);
   const [caret, setCaret] = useState(0);
@@ -261,13 +259,12 @@ export default function Composer({
 
       <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2.5, bgcolor: "background.paper", p: 0.75 }}>
         {tray}
-        {recordingVoice && onSendVoice ? (
-          <VoiceRecorderBar
-            conversationId={conversationId}
-            onSend={onSendVoice}
-            onClose={() => setRecordingVoice(false)}
-          />
-        ) : (
+        <VoiceRecorderBar
+          key={conversationId}
+          conversationId={conversationId}
+          enabled={!!onSendVoice && canRecordVoice() && !editing && !text.trim() && !hasAttachments}
+          onSend={onSendVoice}
+        >
           <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
             {!editing && attach}
             <IconButton aria-label="Add emoji" onClick={(e) => setEmojiAnchor(e.currentTarget)}>
@@ -323,11 +320,6 @@ export default function Composer({
               }}
               sx={{ px: 1, py: 1, fontSize: 14 }}
             />
-            {onSendVoice && canRecordVoice() && !editing && !text.trim() && !hasAttachments && (
-              <IconButton aria-label="Record a voice message" onClick={() => setRecordingVoice(true)}>
-                <MicNoneOutlinedIcon />
-              </IconButton>
-            )}
             <IconButton
               color="primary"
               onClick={submit}
@@ -343,7 +335,7 @@ export default function Composer({
               <SendIcon fontSize="small" />
             </IconButton>
           </Box>
-        )}
+        </VoiceRecorderBar>
       </Box>
       {suggesting && (
         <Paper
