@@ -15,6 +15,7 @@ import {
   createXenRoutineSchema,
   updateXenRoutineSchema,
   completeXenRoutineSchema,
+  xenRoutineReadingSchema,
   postponeXenRoutineSchema,
   xenRoutineNotificationsSchema,
   xenRoutineSettingsSchema,
@@ -26,6 +27,10 @@ import {
 } from "../utils/validation";
 import {
   addInterval,
+  applyReading,
+  isThreshold,
+  thresholdDueAt,
+  thresholdTarget,
   applyComplete,
   applyPostpone,
   canAct,
@@ -110,7 +115,9 @@ async function serialize(routines: any[], uid: string) {
       category: obj.category,
       notes: obj.notes,
       checklist: (obj.checklist ?? []).map((c: any) => ({ _id: String(c._id), text: c.text, done: !!c.done })),
+      kind: obj.kind ?? "interval",
       interval: obj.interval,
+      threshold: isThreshold(obj) ? { ...obj.threshold, target: thresholdTarget(obj.threshold) } : null,
       last_done_at: obj.last_done_at,
       due_at: obj.due_at,
       enabled: obj.enabled,
@@ -197,14 +204,20 @@ module.exports = function (app: any) {
     const uid = callerId(req);
     const b = req.body;
     const lastDone = b.last_done_at ? new Date(b.last_done_at) : null;
-    const dueAt = b.due_at ? new Date(b.due_at) : addInterval(lastDone ?? new Date(), b.interval);
+    const isThresh = b.kind === "threshold";
+    const dueAt = isThresh
+      ? thresholdDueAt(b.threshold, new Date())
+      : b.due_at
+        ? new Date(b.due_at)
+        : addInterval(lastDone ?? new Date(), b.interval);
     const routine = await XenRoutine.create({
       owner_id: uid,
       name: b.name,
       category: b.category ?? "",
       notes: b.notes ?? "",
       checklist: (b.checklist ?? []).map((c: { text: string }) => ({ text: c.text, done: false })),
-      interval: b.interval,
+      kind: isThresh ? "threshold" : "interval",
+      ...(isThresh ? { threshold: b.threshold } : { interval: b.interval }),
       last_done_at: lastDone,
       due_at: dueAt,
       remind_again_days: b.remind_again_days ?? 3,
@@ -241,7 +254,13 @@ module.exports = function (app: any) {
           })),
         );
       }
-      if (b.due_at !== undefined) {
+      if (b.threshold !== undefined && isThreshold(routine as any)) {
+        const next = { ...(routine as any).toObject().threshold, ...b.threshold };
+        routine.set("threshold", next);
+        const was = routine.due_at.getTime() <= Date.now();
+        routine.due_at = thresholdDueAt(next, new Date(), was ? routine.due_at : undefined);
+        if (routine.due_at.getTime() > Date.now()) routine.last_notified_at = null;
+      } else if (b.due_at !== undefined && !isThreshold(routine as any)) {
         routine.due_at = new Date(b.due_at);
         routine.last_notified_at = null;
       }
@@ -307,6 +326,7 @@ module.exports = function (app: any) {
           doneAt: req.body.done_at ? new Date(req.body.done_at) : undefined,
           note: req.body.note,
           occurrence: req.body.occurrence,
+          reading: req.body.reading,
           images: stored.map((f) => ({ file_id: f._id, uploaded_by: callerId(req) })),
         });
         routine.set(patch);
@@ -352,6 +372,13 @@ module.exports = function (app: any) {
         throw new AppError(409, "That can't be undone any more");
       }
       const ticked = new Set<string>(undo.checklist_done ?? []);
+      if (undo.threshold_last_done !== undefined && (routine as any).threshold) {
+        routine.set("threshold", {
+          ...(routine as any).toObject().threshold,
+          last_done_value: undo.threshold_last_done,
+          current_value: undo.threshold_current ?? undo.threshold_last_done,
+        });
+      }
       routine.set({
         last_done_at: undo.last_done_at ?? null,
         due_at: undo.due_at,
@@ -397,12 +424,31 @@ module.exports = function (app: any) {
     },
   );
 
+  // Log a reading on a threshold routine (the odometer, the hour meter). Reaching the target makes it due.
+  app.post(
+    "/api/xenroutine/routines/:id/reading",
+    validateParams(xenRoutineIdParamSchema),
+    validate(xenRoutineReadingSchema),
+    async (req: Request, res: Response) => {
+      const routine = await loadRoutine(req, "act");
+      if (!isThreshold(routine as any)) throw new AppError(400, "This routine doesn't track a reading");
+      routine.set(
+        applyReading(routine.toObject() as unknown as RoutineLike, { value: req.body.value, now: new Date() }),
+      );
+      await routine.save();
+      const [out] = await serialize([routine], callerId(req));
+      routineChanged(routine);
+      return res.json({ status: true, message: "Reading saved", data: { routine: out } });
+    },
+  );
+
   app.post(
     "/api/xenroutine/routines/:id/postpone",
     validateParams(xenRoutineIdParamSchema),
     validate(postponeXenRoutineSchema),
     async (req: Request, res: Response) => {
       const routine = await loadRoutine(req, "act");
+      if (isThreshold(routine as any)) throw new AppError(400, "A reading-based routine can't be postponed");
       const now = new Date();
       const until = req.body.until ? new Date(req.body.until) : undefined;
       if (until && until.getTime() <= now.getTime()) throw new AppError(400, "Pick a date in the future");

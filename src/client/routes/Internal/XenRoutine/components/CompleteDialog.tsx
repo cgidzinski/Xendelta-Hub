@@ -14,17 +14,25 @@ const NOTE_MAX = 500;
 interface CompleteDialogProps {
   open: boolean;
   routineName: string;
+  /** Reading-based routines: ask what the reading was. The next target counts from it. */
+  reading?: { unit: string; initial: number };
   onClose: () => void;
   /**
    * Mark it done with what was entered. Resolves when it is recorded (the dialog then closes); rejects when it
    * couldn't be, with the reason already shown, so the dialog stays open and nothing typed is lost.
    */
-  onSubmit: (v: { note: string; files: File[]; onUploadProgress: (e: AxiosProgressEvent) => void }) => Promise<void>;
+  onSubmit: (v: {
+    note: string;
+    files: File[];
+    reading?: number;
+    onUploadProgress: (e: AxiosProgressEvent) => void;
+  }) => Promise<void>;
 }
 
 /** Mark a routine done with a note and/or photos: the filter you replaced, a meter reading, what you found. */
-export default function CompleteDialog({ open, routineName, onClose, onSubmit }: CompleteDialogProps) {
+export default function CompleteDialog({ open, routineName, reading, onClose, onSubmit }: CompleteDialogProps) {
   const [note, setNote] = useState("");
+  const [readingText, setReadingText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -34,10 +42,12 @@ export default function CompleteDialog({ open, routineName, onClose, onSubmit }:
   useEffect(() => {
     if (open) {
       setNote("");
+      setReadingText(reading ? String(reading.initial) : "");
       setFiles([]);
       setProblem(null);
       reset();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reset]);
 
   // Previews of the chosen photos, released when they change or the dialog goes.
@@ -58,7 +68,12 @@ export default function CompleteDialog({ open, routineName, onClose, onSubmit }:
     setBusy(true);
     setProblem(null);
     try {
-      await onSubmit({ note: note.trim(), files, onUploadProgress });
+      await onSubmit({
+        note: note.trim(),
+        files,
+        onUploadProgress,
+        ...(reading && readingText !== "" ? { reading: Number(readingText) } : {}),
+      });
     } catch (e) {
       // The reason is already on screen (a toast); keep what was typed so a retry is one press.
       reset();
@@ -88,6 +103,17 @@ export default function CompleteDialog({ open, routineName, onClose, onSubmit }:
       }
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+        {reading && (
+          <TextField
+            label={reading.unit ? `Reading when done (${reading.unit})` : "Reading when done"}
+            type="number"
+            value={readingText}
+            onChange={(e) => setReadingText(e.target.value)}
+            helperText="The next one counts from this reading"
+            disabled={busy}
+            slotProps={{ htmlInput: { step: "any" } }}
+          />
+        )}
         <TextField
           label="Note (optional)"
           placeholder="Replaced the cartridge, next spare is in the garage"

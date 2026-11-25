@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   checklistProgress,
+  isArmedThreshold,
   pendingOccurrences,
   projectOccurrences,
   recentCompletions,
@@ -19,7 +20,9 @@ const routine = (over: Partial<Routine> = {}): Routine => ({
   category: "",
   notes: "",
   checklist: [],
+  kind: "interval",
   interval: { every: 3, unit: "months" },
+  threshold: null,
   last_done_at: null,
   due_at: iso(1),
   enabled: true,
@@ -184,5 +187,27 @@ describe("checklist helpers", () => {
     expect(stepsLabel(0, 1)).toBe("0 of 1 step");
     expect(stepsLabel(3, 3)).toBe("3 of 3 steps");
     expect(stepsLabel(0, 0)).toBeNull();
+  });
+});
+
+describe("threshold routines", () => {
+  const oil = (over: Partial<Routine> = {}) =>
+    routine({
+      kind: "threshold",
+      threshold: { unit: "km", every: 5000, last_done_value: 25000, current_value: 26000, target: 30000 },
+      due_at: "9999-01-01T00:00:00.000Z",
+      ...over,
+    });
+
+  it("always has exactly one occurrence, whatever the horizon", () => {
+    expect(projectOccurrences(oil(), now, 7)).toHaveLength(1);
+    expect(projectOccurrences(oil(), now, 365)).toHaveLength(1);
+    expect(pendingOccurrences([oil()], now, 7, false)).toHaveLength(1);
+  });
+
+  it("is armed until it is overdue", () => {
+    expect(isArmedThreshold(oil())).toBe(true);
+    expect(isArmedThreshold(oil({ status: "overdue" }))).toBe(false);
+    expect(isArmedThreshold(routine())).toBe(false);
   });
 });

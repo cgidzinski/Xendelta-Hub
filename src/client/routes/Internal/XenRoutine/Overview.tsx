@@ -5,6 +5,7 @@ import {
   Card,
   Checkbox,
   Collapse,
+  LinearProgress,
   MenuItem,
   Stack,
   TextField,
@@ -24,6 +25,8 @@ import ListSkeleton from "../../../components/ui/ListSkeleton";
 import { useConfirm } from "../../../components/ui/ConfirmProvider";
 import {
   intervalLabel,
+  readingText,
+  thresholdLabel,
   useCompleteRoutine,
   useUndoRoutineCompletion,
   useInvalidateRoutines,
@@ -37,6 +40,7 @@ import {
   DEFAULT_HORIZON_DAYS,
   dueText,
   HORIZON_OPTIONS,
+  isArmedThreshold,
   pendingOccurrences,
   recentCompletions,
   type Bucket,
@@ -44,6 +48,7 @@ import {
 } from "../../../hooks/xenroutine/routineViews";
 import { useLocalStorageState } from "../../../hooks/useLocalStorageState";
 import CompleteDialog from "./components/CompleteDialog";
+import ReadingDialog from "./components/ReadingDialog";
 import SlideToComplete from "./components/SlideToComplete";
 import AddAPhotoOutlinedIcon from "@mui/icons-material/AddAPhotoOutlined";
 import RoutineMenu from "./components/RoutineMenu";
@@ -70,6 +75,9 @@ function PendingCard({ occ }: { occ: Occurrence }) {
   const [leaving, setLeaving] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const projected = index > 1;
+  const threshold = routine.kind === "threshold" ? routine.threshold : null;
+  const armed = isArmedThreshold(routine);
+  const [readingOpen, setReadingOpen] = useState(false);
 
   // Each occurrence is its own completion. Resolves once the server has recorded it, then
   // the card collapses and only afterwards is the list refetched, so the slid handle stays
@@ -83,7 +91,12 @@ function PendingCard({ occ }: { occ: Occurrence }) {
   // Mark this occurrence done, with a note and photos when they were added in the dialog. Resolves once the server has
   // recorded it. Rejects on failure (so the slider springs back, or the dialog stays open), with a message shown.
   const handleComplete = async (
-    extra: { note?: string; images?: File[]; onUploadProgress?: (e: AxiosProgressEvent) => void } = {},
+    extra: {
+      note?: string;
+      images?: File[];
+      reading?: number;
+      onUploadProgress?: (e: AxiosProgressEvent) => void;
+    } = {},
   ) => {
     // Some steps not ticked: ask first. Cancelling rejects, so the slider springs back without an error message.
     if (unticked > 0) {
@@ -133,11 +146,19 @@ function PendingCard({ occ }: { occ: Occurrence }) {
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
               {routine.name}
             </Typography>
-            <Typography variant="body2" color={bucketForDate(date) === "overdue" ? "error.main" : "text.secondary"}>
-              {dueText(date)}
-            </Typography>
+            {threshold ? (
+              <Typography variant="body2" color={armed ? "text.secondary" : "error.main"}>
+                {armed
+                  ? `${readingText(Math.max(0, threshold.target - threshold.current_value), threshold.unit)} to go (at ${readingText(threshold.target, threshold.unit)})`
+                  : `Due at ${readingText(threshold.target, threshold.unit)} · now ${readingText(threshold.current_value, threshold.unit)}`}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color={bucketForDate(date) === "overdue" ? "error.main" : "text.secondary"}>
+                {dueText(date)}
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary">
-              {intervalLabel(routine.interval)}
+              {threshold ? thresholdLabel(threshold) : intervalLabel(routine.interval)}
               {!projected &&
                 ` · ${
                   routine.last_done_at
@@ -147,7 +168,7 @@ function PendingCard({ occ }: { occ: Occurrence }) {
               {projected && " · upcoming"}
             </Typography>
           </Box>
-          <RoutineMenu routine={routine} variant="overview" allowPostpone={!projected} />
+          <RoutineMenu routine={routine} variant="overview" allowPostpone={!projected && !threshold} />
         </Stack>
         {steps.length > 0 && (
           <Box sx={{ mt: 1 }}>
@@ -203,7 +224,23 @@ function PendingCard({ occ }: { occ: Occurrence }) {
             }}
           />
         </Box>
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.5 }}>
+        {threshold && (
+          <LinearProgress
+            variant="determinate"
+            color={armed ? "primary" : "error"}
+            value={Math.min(
+              100,
+              Math.max(0, ((threshold.current_value - threshold.last_done_value) / threshold.every) * 100),
+            )}
+            sx={{ mt: 1.5, borderRadius: 1 }}
+          />
+        )}
+        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 0.5 }}>
+          {threshold && (
+            <Button size="small" onClick={() => setReadingOpen(true)} sx={{ textTransform: "none" }}>
+              Log reading
+            </Button>
+          )}
           <Button
             size="small"
             startIcon={<AddAPhotoOutlinedIcon />}
@@ -213,12 +250,14 @@ function PendingCard({ occ }: { occ: Occurrence }) {
             Done with a note or photos
           </Button>
         </Box>
+        {threshold && <ReadingDialog routine={routine} open={readingOpen} onClose={() => setReadingOpen(false)} />}
         <CompleteDialog
           open={noteOpen}
           routineName={routine.name}
+          reading={threshold ? { unit: threshold.unit, initial: threshold.current_value } : undefined}
           onClose={() => setNoteOpen(false)}
-          onSubmit={async ({ note, files, onUploadProgress }) => {
-            await handleComplete({ note: note || undefined, images: files, onUploadProgress });
+          onSubmit={async ({ note, files, onUploadProgress, reading }) => {
+            await handleComplete({ note: note || undefined, images: files, onUploadProgress, reading });
             setNoteOpen(false);
           }}
         />
@@ -249,10 +288,13 @@ export default function Overview() {
     false,
     (v): v is boolean => typeof v === "boolean",
   );
-  const pending = useMemo(
+  const allPending = useMemo(
     () => pendingOccurrences(routines, new Date(), horizonDays, simplified),
     [routines, horizonDays, simplified],
   );
+  // Reading-based routines that haven't reached their target are always shown, in their own section.
+  const tracking = allPending.filter((o) => isArmedThreshold(o.routine));
+  const pending = allPending.filter((o) => !isArmedThreshold(o.routine));
   const completions = useMemo(() => recentCompletions(routines), [routines]);
 
   if (isLoading) return <ListSkeleton rows={4} height={140} />;
@@ -346,7 +388,7 @@ export default function Overview() {
       </Stack>
 
       {showPending &&
-        (pending.length === 0 ? (
+        (pending.length === 0 && tracking.length === 0 ? (
           <EmptyState
             icon={<CheckCircleOutlineIcon />}
             title="All caught up"
@@ -354,6 +396,14 @@ export default function Overview() {
           />
         ) : (
           <>
+            {tracking.length > 0 && (
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Tracking by reading ({tracking.length})
+                </Typography>
+                {renderCards(tracking)}
+              </Box>
+            )}
             {BUCKETS.map(({ bucket, title }) => {
               const items = pending.filter((o) => bucketForDate(o.date) === bucket);
               if (items.length === 0) return null;

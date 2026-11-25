@@ -50,6 +50,9 @@ const historySchema = new Schema(
           last_notified_at: { type: Date, default: null },
           done_ahead: { type: [Date], default: [] },
           checklist_done: { type: [String], default: [] },
+          // Threshold routines: the baseline and reading before the completion.
+          threshold_last_done: { type: Number },
+          threshold_current: { type: Number },
         },
         { _id: false },
       ),
@@ -58,6 +61,8 @@ const historySchema = new Schema(
     // For "done" on a routine with a checklist: what was ticked off, out of how many steps there were.
     steps_done: { type: [String], default: undefined },
     steps_total: { type: Number, min: 0 },
+    // For "done" on a threshold routine: the reading it was completed at.
+    reading: { type: Number },
     // Photos taken when it was marked done (the filter you replaced, a meter reading): XenDrive files tagged to this
     // routine (utils/xenRoutineFiles.ts), shown through signed links.
     images: {
@@ -80,9 +85,25 @@ const xenRoutineSchema = new Schema({
   // Free text: part numbers, filter models, where the spare lives.
   notes: { type: String, default: "", maxlength: 1000 },
   checklist: { type: [checklistItemSchema], default: [] },
+  // "interval" repeats on a schedule; "threshold" repeats by a reading (km, hours...) instead of by time.
+  kind: { type: String, enum: ["interval", "threshold"], default: "interval" },
   interval: {
-    every: { type: Number, required: true, min: 1, max: 1000 },
-    unit: { type: String, enum: ["days", "weeks", "months", "years"], required: true },
+    every: { type: Number, default: 1, min: 1, max: 1000 },
+    unit: { type: String, enum: ["days", "weeks", "months", "years"], default: "months" },
+  },
+  // Threshold routines only. Next target = last_done_value + every, where last_done_value is the reading it was
+  // actually completed at. due_at is a far-future sentinel until current_value reaches the target, then it is "now".
+  threshold: {
+    type: new Schema(
+      {
+        unit: { type: String, default: "", maxlength: 20 },
+        every: { type: Number, required: true, min: 0.000001 },
+        last_done_value: { type: Number, required: true },
+        current_value: { type: Number, required: true },
+      },
+      { _id: false },
+    ),
+    default: undefined,
   },
   last_done_at: { type: Date, default: null },
   due_at: { type: Date, required: true },
