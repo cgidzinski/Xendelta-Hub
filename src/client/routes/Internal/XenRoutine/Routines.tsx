@@ -9,7 +9,7 @@ import { useOutletContext } from "react-router-dom";
 import ErrorDisplay from "../../../components/ErrorDisplay";
 import EmptyState from "../../../components/ui/EmptyState";
 import ListSkeleton from "../../../components/ui/ListSkeleton";
-import { intervalLabel, useRoutines } from "../../../hooks/xenroutine/useRoutines";
+import { intervalLabel, readingText, thresholdLabel, useRoutines } from "../../../hooks/xenroutine/useRoutines";
 import RoutineMenu from "./components/RoutineMenu";
 import type { XenRoutineOutletContext } from "./outletContext";
 
@@ -127,8 +127,10 @@ export default function Routines() {
                 )}
               </Stack>
               <Typography variant="body2" color="text.secondary">
-                {intervalLabel(r.interval)}
-                {r.enabled ? ` · next due ${format(new Date(r.due_at), "PP")}` : ""}
+                {r.kind === "threshold" && r.threshold
+                  ? `${thresholdLabel(r.threshold)} · now ${readingText(r.threshold.current_value, r.threshold.unit)}, due at ${readingText(r.threshold.target, r.threshold.unit)}`
+                  : intervalLabel(r.interval)}
+                {r.kind !== "threshold" && r.enabled ? ` · next due ${format(new Date(r.due_at), "PP")}` : ""}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {r.last_done_at

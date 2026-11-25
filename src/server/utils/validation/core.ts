@@ -879,17 +879,31 @@ const xenRoutineChecklistSchema = z
 export const xenRoutineChecklistItemParamSchema = z.object({ id: objectIdSchema, itemId: objectIdSchema });
 export const xenRoutineChecklistTickSchema = z.object({ done: z.boolean() });
 
-export const createXenRoutineSchema = z.object({
-  name: z.string().trim().min(1, "A name is required").max(100),
-  category: z.string().trim().max(50).optional(),
-  notes: z.string().max(1000).optional(),
-  checklist: xenRoutineChecklistSchema.optional(),
-  interval: xenRoutineIntervalSchema,
-  // When it's next due. Omitted = one interval from now (or from last_done_at if given).
-  due_at: z.string().datetime({ offset: true }).optional(),
-  last_done_at: z.string().datetime({ offset: true }).optional(),
-  remind_again_days: z.number().int().min(1).max(365).optional(),
+// A routine that repeats by a reading (km, hours...) instead of by time: due every `every` units since last done.
+const xenRoutineThresholdSchema = z.object({
+  unit: z.string().trim().max(20),
+  every: z.number().positive().max(1e9),
+  last_done_value: z.number().min(-1e12).max(1e12),
+  current_value: z.number().min(-1e12).max(1e12),
 });
+
+export const createXenRoutineSchema = z
+  .object({
+    name: z.string().trim().min(1, "A name is required").max(100),
+    category: z.string().trim().max(50).optional(),
+    notes: z.string().max(1000).optional(),
+    checklist: xenRoutineChecklistSchema.optional(),
+    kind: z.enum(["interval", "threshold"]).optional(),
+    interval: xenRoutineIntervalSchema.optional(),
+    threshold: xenRoutineThresholdSchema.optional(),
+    // When it's next due. Omitted = one interval from now (or from last_done_at if given).
+    due_at: z.string().datetime({ offset: true }).optional(),
+    last_done_at: z.string().datetime({ offset: true }).optional(),
+    remind_again_days: z.number().int().min(1).max(365).optional(),
+  })
+  .refine((v) => (v.kind === "threshold" ? !!v.threshold : !!v.interval), {
+    message: "Provide a threshold for a threshold routine, or an interval otherwise",
+  });
 
 export const updateXenRoutineSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
@@ -897,6 +911,8 @@ export const updateXenRoutineSchema = z.object({
   notes: z.string().max(1000).optional(),
   checklist: xenRoutineChecklistSchema.optional(),
   interval: xenRoutineIntervalSchema.optional(),
+  // Threshold routines: change the unit, the "every" amount or correct the baseline.
+  threshold: xenRoutineThresholdSchema.partial().optional(),
   due_at: z.string().datetime({ offset: true }).optional(),
   enabled: z.boolean().optional(),
   archived: z.boolean().optional(),
@@ -911,7 +927,11 @@ export const completeXenRoutineSchema = z.object({
   occurrence: z.coerce.number().int().min(1).max(400).optional(),
   expected_due_at: z.string().datetime({ offset: true }).optional(),
   note: z.string().trim().max(500).optional(),
+  // Threshold routines: the reading it was done at (defaults to the latest reading). Coerced for the form case.
+  reading: z.coerce.number().min(-1e12).max(1e12).optional(),
 });
+
+export const xenRoutineReadingSchema = z.object({ value: z.number().min(-1e12).max(1e12) });
 
 export const postponeXenRoutineSchema = z
   .object({

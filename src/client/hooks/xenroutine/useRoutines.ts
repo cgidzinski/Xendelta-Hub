@@ -46,13 +46,25 @@ export interface RoutineChecklistItem {
   done: boolean;
 }
 
+export interface RoutineThreshold {
+  unit: string;
+  every: number;
+  last_done_value: number;
+  current_value: number;
+  target: number;
+}
+
 export interface Routine {
   _id: string;
   name: string;
   category: string;
   notes: string;
   checklist: RoutineChecklistItem[];
+  /** "threshold" routines repeat by a reading (km, hours...) instead of by time. */
+  kind: "interval" | "threshold";
   interval: { every: number; unit: IntervalUnit };
+  /** Threshold routines only: due when current_value reaches `target` (last done reading + every). */
+  threshold: RoutineThreshold | null;
   last_done_at: string | null;
   due_at: string;
   enabled: boolean;
@@ -74,7 +86,9 @@ export interface RoutineInput {
   notes?: string;
   /** The steps, in order. A step that keeps its `_id` keeps its tick; leave the field out to keep the steps as they are. */
   checklist?: Array<{ _id?: string; text: string }>;
-  interval: { every: number; unit: IntervalUnit };
+  kind?: "interval" | "threshold";
+  interval?: { every: number; unit: IntervalUnit };
+  threshold?: { unit: string; every: number; last_done_value: number; current_value: number };
   due_at?: string;
   last_done_at?: string;
   remind_again_days?: number;
@@ -109,8 +123,21 @@ function useRoutineMutation<TVars>(fn: (v: TVars) => Promise<unknown>) {
 export const useCreateRoutine = () => useRoutineMutation((input: RoutineInput) => apiClient.post(base, input));
 
 export const useUpdateRoutine = () =>
-  useRoutineMutation((v: { id: string; patch: Partial<RoutineInput> & { enabled?: boolean; archived?: boolean } }) =>
-    apiClient.put(`${base}/${v.id}`, v.patch),
+  useRoutineMutation(
+    (v: {
+      id: string;
+      patch: Omit<Partial<RoutineInput>, "threshold"> & {
+        enabled?: boolean;
+        archived?: boolean;
+        threshold?: Partial<NonNullable<RoutineInput["threshold"]>>;
+      };
+    }) => apiClient.put(`${base}/${v.id}`, v.patch),
+  );
+
+/** Log a reading (odometer, hour meter) on a threshold routine; reaching its target makes it due. */
+export const useLogReading = () =>
+  useRoutineMutation((v: { id: string; value: number }) =>
+    apiClient.post(`${base}/${v.id}/reading`, { value: v.value }),
   );
 
 /**
@@ -148,10 +175,18 @@ export const useCompleteRoutine = () =>
       done_at?: string;
       occurrence?: number;
       expected_due_at?: string;
+      /** Threshold routines: the reading it was done at. */
+      reading?: number;
       images?: File[];
       onUploadProgress?: (e: AxiosProgressEvent) => void;
     }) => {
-      const fields = { note: v.note, done_at: v.done_at, occurrence: v.occurrence, expected_due_at: v.expected_due_at };
+      const fields = {
+        note: v.note,
+        done_at: v.done_at,
+        occurrence: v.occurrence,
+        expected_due_at: v.expected_due_at,
+        reading: v.reading,
+      };
       const url = `${base}/${v.id}/complete`;
       if (!v.images || v.images.length === 0) {
         await apiClient.post(url, fields);
@@ -204,6 +239,14 @@ export const useShareRoutine = () =>
 
 export const useUnshareRoutine = () =>
   useRoutineMutation((v: { id: string; userId: string }) => apiClient.delete(`${base}/${v.id}/share/${v.userId}`));
+
+/** "46,200 km" */
+export const readingText = (value: number, unit: string) => `${value.toLocaleString()}${unit ? ` ${unit}` : ""}`;
+
+/** "Every 5,000 km" for a threshold routine. */
+export function thresholdLabel(t: RoutineThreshold): string {
+  return `Every ${readingText(t.every, t.unit)}`;
+}
 
 export function intervalLabel(i: Routine["interval"]): string {
   const unit = i.every === 1 ? i.unit.replace(/s$/, "") : i.unit;

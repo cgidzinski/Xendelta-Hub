@@ -314,6 +314,7 @@ export const APP_GUIDE: Record<GuideApp, AppGuideEntry> = {
     pitch: { text: "Try XenRoutine to get reminded about things you do on a schedule.", link: "/internal/xenroutine" },
     features: [
       "Make routines for things you do on a schedule: every few days, weeks, months or years.",
+      "Track a job by a reading instead of the calendar, like an oil change every 5,000 km, and log readings until it is due.",
       "See what is overdue, due soon and coming up, and choose how far ahead to look.",
       "Slide to mark a routine done, or add a note and photos about what you did.",
       "Undo marking a routine as done for a few minutes after, if you slid it by mistake.",

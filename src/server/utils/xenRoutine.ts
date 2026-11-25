@@ -30,7 +30,17 @@ export interface UndoState {
   done_ahead: Date[];
   /** The ids of the checklist steps that were ticked. */
   checklist_done: string[];
+  threshold_last_done?: number;
+  threshold_current?: number;
 }
+export interface RoutineThreshold {
+  unit: string;
+  every: number;
+  last_done_value: number;
+  current_value: number;
+}
+/** Armed threshold routines park due_at here, so time-based queries never see them as due. */
+export const THRESHOLD_ARMED_DUE = new Date("9999-01-01T00:00:00.000Z");
 /** How long after marking a routine done that it can still be undone. */
 export const UNDO_WINDOW_MS = 10 * 60 * 1000;
 
@@ -44,6 +54,8 @@ export interface HistoryEntry {
   /** The checklist steps ticked off when it was done, and how many steps there were. */
   steps_done?: string[];
   steps_total?: number;
+  /** The reading a threshold routine was completed at. */
+  reading?: number;
   /** Photos taken when it was marked done (XenDrive files). */
   images?: Array<{ file_id: unknown; uploaded_by?: string }>;
   /** Only on the latest completion (older ones are stripped by pushHistory). */
@@ -56,6 +68,8 @@ export interface ChecklistStep {
 }
 export interface RoutineLike {
   owner_id: string;
+  kind?: "interval" | "threshold";
+  threshold?: RoutineThreshold | null;
   interval: RoutineInterval;
   last_done_at: Date | null;
   due_at: Date;
@@ -122,7 +136,42 @@ export function undoStateOf(routine: RoutineLike): UndoState {
     last_notified_at: routine.last_notified_at,
     done_ahead: routine.done_ahead,
     checklist_done: (routine.checklist ?? []).filter((c) => c.done && c._id).map((c) => String(c._id)),
+    ...(routine.threshold
+      ? { threshold_last_done: routine.threshold.last_done_value, threshold_current: routine.threshold.current_value }
+      : {}),
   };
+}
+
+export function isThreshold(routine: Pick<RoutineLike, "kind" | "threshold">): boolean {
+  return routine.kind === "threshold" && !!routine.threshold;
+}
+
+/** The reading at which a threshold routine falls due. */
+export function thresholdTarget(t: RoutineThreshold): number {
+  return t.last_done_value + t.every;
+}
+
+/** A due_at that matches a threshold's state: now once the target is reached, else the far-future sentinel. */
+export function thresholdDueAt(t: RoutineThreshold, now: Date, current: Date = THRESHOLD_ARMED_DUE): Date {
+  return t.current_value >= thresholdTarget(t)
+    ? current.getTime() < now.getTime()
+      ? current
+      : now
+    : THRESHOLD_ARMED_DUE;
+}
+
+/** Log a new reading. Triggers (due_at = now) the first time it reaches the target; later readings keep the trigger time. */
+export function applyReading(
+  routine: RoutineLike,
+  opts: { value: number; now: Date },
+): Pick<RoutineLike, "threshold" | "due_at" | "last_notified_at"> {
+  const t = routine.threshold;
+  if (!t) throw new Error("not a threshold routine");
+  const next = { ...t, current_value: opts.value };
+  const wasTriggered = routine.due_at.getTime() <= opts.now.getTime();
+  const due = thresholdDueAt(next, opts.now, wasTriggered ? routine.due_at : THRESHOLD_ARMED_DUE);
+  const justTriggered = due.getTime() <= opts.now.getTime() && !wasTriggered;
+  return { threshold: next, due_at: due, last_notified_at: justTriggered ? null : routine.last_notified_at };
 }
 
 /** The Nth scheduled occurrence (1 = due_at), on the grid due_at + (N-1) * interval. */
@@ -168,12 +217,16 @@ export function applyComplete(
     note?: string;
     occurrence?: number;
     images?: HistoryEntry["images"];
+    /** Threshold routines: the reading it was done at. The next target is this plus the threshold's "every". */
+    reading?: number;
   },
 ): Pick<RoutineLike, "last_done_at" | "due_at" | "last_notified_at" | "history" | "done_ahead"> &
-  Partial<Pick<RoutineLike, "checklist">> {
+  Partial<Pick<RoutineLike, "checklist" | "threshold">> {
   const n = Math.max(1, Math.floor(opts.occurrence ?? 1));
   const photos = opts.images && opts.images.length > 0 ? { images: opts.images } : {};
   const doneAt = opts.doneAt && opts.doneAt.getTime() <= opts.now.getTime() ? opts.doneAt : opts.now;
+
+  if (isThreshold(routine)) return completeThreshold(routine, routine.threshold!, { ...opts, doneAt, photos });
 
   if (n > 1) {
     const date = occurrenceDate(routine, n);
@@ -218,6 +271,37 @@ export function applyComplete(
       note: opts.note,
       ...stepsRecord,
       ...photos,
+      undo_state: undoStateOf(routine),
+    }),
+    ...(steps.length > 0 ? { checklist: steps.map((c) => ({ ...c, done: false })) } : {}),
+  };
+}
+
+/** Threshold routines have one occurrence: completing it re-baselines on the reading it was actually done at. */
+function completeThreshold(
+  routine: RoutineLike,
+  t: RoutineThreshold,
+  opts: { by: string; now: Date; doneAt: Date; note?: string; reading?: number; photos: object },
+): ReturnType<typeof applyComplete> {
+  const reading = opts.reading ?? t.current_value;
+  const next: RoutineThreshold = { ...t, last_done_value: reading, current_value: reading };
+  const steps = routine.checklist ?? [];
+  const stepsRecord =
+    steps.length > 0 ? { steps_done: steps.filter((c) => c.done).map((c) => c.text), steps_total: steps.length } : {};
+  return {
+    last_done_at: opts.doneAt,
+    due_at: THRESHOLD_ARMED_DUE,
+    last_notified_at: null,
+    done_ahead: [],
+    threshold: next,
+    history: pushHistory(routine.history, {
+      action: "done",
+      at: opts.now,
+      by_user: opts.by,
+      note: opts.note,
+      reading,
+      ...stepsRecord,
+      ...opts.photos,
       undo_state: undoStateOf(routine),
     }),
     ...(steps.length > 0 ? { checklist: steps.map((c) => ({ ...c, done: false })) } : {}),

@@ -18,7 +18,12 @@ import AddIcon from "@mui/icons-material/Add";
 import { format, isValid } from "date-fns";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { addInterval } from "../../../../hooks/xenroutine/routineViews";
-import type { IntervalUnit, Routine, RoutineInput } from "../../../../hooks/xenroutine/useRoutines";
+import {
+  readingText,
+  type IntervalUnit,
+  type Routine,
+  type RoutineInput,
+} from "../../../../hooks/xenroutine/useRoutines";
 
 interface Props {
   open: boolean;
@@ -56,6 +61,12 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
   // The checklist being edited; a step that has an _id is an existing one (it keeps its tick).
   const [steps, setSteps] = useState<Array<{ key: number; _id?: string; text: string }>>([]);
   const [saving, setSaving] = useState(false);
+  // Reading-based routines (oil change every 5,000 km): the unit, the amount, and where it stands.
+  const [byReading, setByReading] = useState(false);
+  const [tUnit, setTUnit] = useState("km");
+  const [tEvery, setTEvery] = useState("5000");
+  const [tLast, setTLast] = useState("0");
+  const [tCurrent, setTCurrent] = useState("0");
 
   useEffect(() => {
     if (!open) return;
@@ -68,6 +79,11 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
     setStartDate(format(new Date(), "yyyy-MM-dd"));
     setAlreadyDone(true);
     setDueAt(routine ? format(new Date(routine.due_at), "yyyy-MM-dd") : "");
+    setByReading(from?.kind === "threshold");
+    setTUnit(from?.threshold?.unit ?? "km");
+    setTEvery(String(from?.threshold?.every ?? 5000));
+    setTLast(String(from?.threshold?.last_done_value ?? 0));
+    setTCurrent(String(from?.threshold?.current_value ?? 0));
     setSteps((from?.checklist ?? []).map((c, i) => ({ key: i, _id: routine ? c._id : undefined, text: c.text })));
   }, [open, routine, template]);
 
@@ -75,7 +91,12 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
   const today = format(new Date(), "yyyy-MM-dd");
   // A completed job can't have been done in the future; a not-yet-done one can start later.
   const startOk = !!routine || (!!startDate && (!alreadyDone || startDate <= today));
-  const valid = name.trim().length > 0 && Number.isInteger(everyNum) && everyNum >= 1 && startOk;
+  const tEveryNum = Number(tEvery);
+  const readingsOk =
+    tEvery !== "" && tEveryNum > 0 && tLast !== "" && tCurrent !== "" && Number(tCurrent) >= Number(tLast);
+  const valid = byReading
+    ? name.trim().length > 0 && readingsOk
+    : name.trim().length > 0 && Number.isInteger(everyNum) && everyNum >= 1 && startOk;
 
   const firstReminder = (() => {
     if (routine || !startDate || !Number.isInteger(everyNum) || everyNum < 1) return null;
@@ -90,12 +111,30 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
   const submit = async () => {
     setSaving(true);
     try {
-      await onSubmit({
+      const common = {
         name: name.trim(),
         notes,
         checklist: steps
           .filter((st) => st.text.trim())
           .map((st) => ({ ...(st._id ? { _id: st._id } : {}), text: st.text.trim() })),
+      };
+      if (byReading) {
+        await onSubmit({
+          ...common,
+          kind: "threshold",
+          threshold: {
+            unit: tUnit.trim(),
+            every: tEveryNum,
+            last_done_value: Number(tLast),
+            current_value: Number(tCurrent),
+          },
+          ...(routine ? { category: category.trim() } : {}),
+        });
+        onClose();
+        return;
+      }
+      await onSubmit({
+        ...common,
         interval: { every: everyNum, unit },
         // Edit keeps whatever category it had; create has none for now.
         ...(routine ? { category: category.trim(), ...(dueAt ? { due_at: toIso(dueAt) } : {}) } : {}),
@@ -136,67 +175,133 @@ export default function RoutineDialog({ open, routine, template, onClose, onSubm
               slotProps={{ htmlInput: { maxLength: 50 } }}
             />
           )}
-          <Stack direction="row" spacing={2}>
-            <TextField
-              label="Every"
-              type="number"
-              value={every}
-              onChange={(e) => setEvery(e.target.value)}
-              slotProps={{ htmlInput: { min: 1, max: 1000 } }}
-              sx={{ width: 120 }}
-            />
-            <TextField
-              select
-              label="Unit"
-              value={unit}
-              onChange={(e) => setUnit(e.target.value as IntervalUnit)}
+          {!routine && (
+            <ToggleButtonGroup
+              exclusive
               fullWidth
+              size="small"
+              color="primary"
+              value={byReading ? "reading" : "time"}
+              onChange={(_, v) => {
+                if (v) setByReading(v === "reading");
+              }}
             >
-              {UNITS.map((u) => (
-                <MenuItem key={u} value={u}>
-                  {u}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Stack>
-          {routine ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <DatePicker
-                label="Next due"
-                value={toDate(dueAt)}
-                onChange={(d) => setDueAt(fromDate(d))}
-                slotProps={{ textField: { fullWidth: true }, actionBar: { actions: ["today", "accept"] } }}
-              />
-              <Button onClick={() => setDueAt(today)} disabled={dueAt === today}>
-                Today
-              </Button>
-            </Stack>
+              <ToggleButton value="time">By time</ToggleButton>
+              <ToggleButton value="reading">By reading (km, hours…)</ToggleButton>
+            </ToggleButtonGroup>
+          )}
+          {byReading ? (
+            <>
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Every"
+                  type="number"
+                  value={tEvery}
+                  onChange={(e) => setTEvery(e.target.value)}
+                  slotProps={{ htmlInput: { min: 0, step: "any" } }}
+                  sx={{ width: 140 }}
+                />
+                <TextField
+                  label="Unit"
+                  value={tUnit}
+                  onChange={(e) => setTUnit(e.target.value)}
+                  placeholder="km"
+                  fullWidth
+                  slotProps={{ htmlInput: { maxLength: 20 } }}
+                />
+              </Stack>
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Last done at"
+                  type="number"
+                  value={tLast}
+                  onChange={(e) => setTLast(e.target.value)}
+                  helperText="Reading when it was last done"
+                  slotProps={{ htmlInput: { step: "any" } }}
+                  fullWidth
+                />
+                <TextField
+                  label="Reading now"
+                  type="number"
+                  value={tCurrent}
+                  onChange={(e) => setTCurrent(e.target.value)}
+                  error={tCurrent !== "" && tLast !== "" && Number(tCurrent) < Number(tLast)}
+                  slotProps={{ htmlInput: { step: "any" } }}
+                  fullWidth
+                />
+              </Stack>
+              {readingsOk && (
+                <Typography variant="body2" color="text.secondary">
+                  Due at {readingText(Number(tLast) + tEveryNum, tUnit.trim())}. Each time you finish it, the next one
+                  counts from the reading you finished at.
+                </Typography>
+              )}
+            </>
           ) : (
             <>
-              <DatePicker
-                label="Start date"
-                value={toDate(startDate)}
-                onChange={(d) => setStartDate(fromDate(d))}
-                maxDate={alreadyDone ? new Date() : undefined}
-                slotProps={{ textField: { fullWidth: true }, actionBar: { actions: ["today", "accept"] } }}
-              />
-              <ToggleButtonGroup
-                exclusive
-                fullWidth
-                size="small"
-                color="primary"
-                value={alreadyDone ? "done" : "not"}
-                onChange={(_, v) => {
-                  if (v) setAlreadyDone(v === "done");
-                }}
-              >
-                <ToggleButton value="done">I did it on this date</ToggleButton>
-                <ToggleButton value="not">Not done yet</ToggleButton>
-              </ToggleButtonGroup>
-              {firstReminder && (
-                <Typography variant="body2" color="text.secondary">
-                  {firstReminder}
-                </Typography>
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Every"
+                  type="number"
+                  value={every}
+                  onChange={(e) => setEvery(e.target.value)}
+                  slotProps={{ htmlInput: { min: 1, max: 1000 } }}
+                  sx={{ width: 120 }}
+                />
+                <TextField
+                  select
+                  label="Unit"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value as IntervalUnit)}
+                  fullWidth
+                >
+                  {UNITS.map((u) => (
+                    <MenuItem key={u} value={u}>
+                      {u}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
+              {routine ? (
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <DatePicker
+                    label="Next due"
+                    value={toDate(dueAt)}
+                    onChange={(d) => setDueAt(fromDate(d))}
+                    slotProps={{ textField: { fullWidth: true }, actionBar: { actions: ["today", "accept"] } }}
+                  />
+                  <Button onClick={() => setDueAt(today)} disabled={dueAt === today}>
+                    Today
+                  </Button>
+                </Stack>
+              ) : (
+                <>
+                  <DatePicker
+                    label="Start date"
+                    value={toDate(startDate)}
+                    onChange={(d) => setStartDate(fromDate(d))}
+                    maxDate={alreadyDone ? new Date() : undefined}
+                    slotProps={{ textField: { fullWidth: true }, actionBar: { actions: ["today", "accept"] } }}
+                  />
+                  <ToggleButtonGroup
+                    exclusive
+                    fullWidth
+                    size="small"
+                    color="primary"
+                    value={alreadyDone ? "done" : "not"}
+                    onChange={(_, v) => {
+                      if (v) setAlreadyDone(v === "done");
+                    }}
+                  >
+                    <ToggleButton value="done">I did it on this date</ToggleButton>
+                    <ToggleButton value="not">Not done yet</ToggleButton>
+                  </ToggleButtonGroup>
+                  {firstReminder && (
+                    <Typography variant="body2" color="text.secondary">
+                      {firstReminder}
+                    </Typography>
+                  )}
+                </>
               )}
             </>
           )}

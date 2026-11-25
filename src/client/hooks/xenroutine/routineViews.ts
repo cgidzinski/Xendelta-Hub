@@ -48,6 +48,10 @@ export function routineStatusBucket(r: Pick<Routine, "due_at">, now: Date = new 
   return bucketForDate(new Date(r.due_at), now);
 }
 
+/** A reading-based routine that has not reached its target yet (shown as a progress card, not as due). */
+export const isArmedThreshold = (r: Pick<Routine, "kind" | "status">) =>
+  r.kind === "threshold" && r.status !== "overdue";
+
 /** One scheduled instance of a routine. index 1 is the real due_at; 2, 3, … are projected. */
 export interface Occurrence {
   routine: Routine;
@@ -67,6 +71,8 @@ export function projectOccurrences(
   horizonDays = OVERVIEW_HORIZON_DAYS,
   cap = horizonDays <= OVERVIEW_HORIZON_DAYS ? 12 : 60,
 ): Occurrence[] {
+  // A reading-based routine has exactly one occurrence, always shown: pending once triggered, otherwise a progress card.
+  if (routine.kind === "threshold") return [{ routine, index: 1, date: new Date(routine.due_at) }];
   const limit = now.getTime() + horizonDays * DAY;
   const first = new Date(routine.due_at);
   const out: Occurrence[] = [];
