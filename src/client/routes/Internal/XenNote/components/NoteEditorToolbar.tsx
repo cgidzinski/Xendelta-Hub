@@ -48,8 +48,10 @@ export default function NoteEditorToolbar({
         alignItems: "center",
         justifyContent: "flex-end",
         gap: 0.25,
-        px: 1,
-        py: 0.75,
+        // Keep the buttons clear of a phone's rounded corners and home bar.
+        px: { xs: "max(16px, env(safe-area-inset-left))", sm: 1 },
+        pt: 0.75,
+        pb: { xs: "max(14px, env(safe-area-inset-bottom))", sm: 0.75 },
         borderTop: 1,
         flexShrink: 0,
         borderColor: "divider",
