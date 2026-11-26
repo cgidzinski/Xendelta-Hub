@@ -234,6 +234,7 @@ export const useXenNoteActions = () => {
     mutationFn: (id: string) => api.delete(`/api/xennote/notes/${id}`),
     onSuccess: (_result, id) => {
       queryClient.removeQueries({ queryKey: xennoteKeys.backlinks(id) });
+      queryClient.removeQueries({ queryKey: xennoteKeys.noteMentions(id) });
       void refresh();
     },
   });
