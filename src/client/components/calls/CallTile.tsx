@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
 import { Box, Typography } from "@mui/material";
+import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
 import type { Cosmetics } from "@shared/cosmetics";
+import { RADIUS } from "../../theme";
 import UserAvatar from "../user/UserAvatar";
 import UserName from "../user/UserName";
 
@@ -35,20 +37,21 @@ export default function CallTile({ name, avatar, cosmetics, stream, muted, speak
         position: "relative",
         minWidth: 0,
         minHeight: 0,
-        borderRadius: 2,
+        borderRadius: RADIUS.lg,
+        border: 1,
+        borderColor: speaking ? "success.main" : "divider",
+        containerType: "inline-size",
         overflow: "hidden",
-        bgcolor: "action.hover",
-        outline: 3,
-        outlineStyle: "solid",
-        outlineColor: speaking ? "success.main" : "transparent",
-        transition: "outline-color 0.15s",
+        bgcolor: screen ? "common.black" : "background.paper",
+        boxShadow: (t) => (speaking ? `inset 0 0 0 1px ${t.palette.success.main}` : "none"),
+        transition: "border-color 0.15s",
         "@media (prefers-reduced-motion: reduce)": { transition: "none" },
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        aspectRatio: "16 / 10",
+        aspectRatio: screen ? undefined : "16 / 10",
       }}
-      aria-label={`${name}${screen ? "'s screen" : ""}${speaking ? ", speaking" : ""}${muted ? ", muted" : ""}`}
+      aria-label={`${name}${speaking ? ", speaking" : ""}${muted ? ", muted" : ""}`}
       role="group"
     >
       {showVideo ? (
@@ -59,6 +62,8 @@ export default function CallTile({ name, avatar, cosmetics, stream, muted, speak
           playsInline
           muted
           sx={{
+            position: "absolute",
+            inset: 0,
             width: "100%",
             height: "100%",
             objectFit: screen ? "contain" : "cover",
@@ -66,30 +71,38 @@ export default function CallTile({ name, avatar, cosmetics, stream, muted, speak
           }}
         />
       ) : (
-        <UserAvatar user={{ avatar, cosmetics }} sx={{ width: 72, height: 72, fontSize: 28 }}>
+        <UserAvatar
+          user={{ avatar, cosmetics }}
+          sx={{
+            width: "clamp(24px, 22cqw, 72px)",
+            height: "clamp(24px, 22cqw, 72px)",
+            fontSize: "clamp(12px, 8cqw, 28px)",
+          }}
+        >
           {name[0]?.toUpperCase()}
         </UserAvatar>
       )}
       <Box
         sx={{
           position: "absolute",
-          left: 8,
-          bottom: 8,
+          left: 6,
+          bottom: 6,
+          maxWidth: "calc(100% - 12px)",
           display: "flex",
           alignItems: "center",
           gap: 0.5,
           px: 1,
           py: 0.25,
-          borderRadius: 1,
+          borderRadius: RADIUS.sm,
           bgcolor: "background.paper",
           opacity: 0.92,
         }}
       >
         {screen && <ScreenShareIcon sx={{ fontSize: 14 }} aria-hidden />}
+        {speaking && <GraphicEqIcon sx={{ fontSize: 14, color: "success.main" }} aria-hidden />}
         {muted && <MicOffIcon sx={{ fontSize: 14 }} color="error" aria-hidden />}
         <Typography variant="caption" noWrap>
           {self ? "You" : <UserName user={{ username: name, cosmetics }} />}
-          {screen ? "'s screen" : ""}
         </Typography>
       </Box>
     </Box>

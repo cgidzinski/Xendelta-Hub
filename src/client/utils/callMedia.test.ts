@@ -1,6 +1,16 @@
-import { describe, it, expect } from "vitest";
-import type { CallState } from "@shared/calls";
-import { callClock, canShareScreen, gridColumns, newTrackName, staleTracks, tracksToPull } from "./callMedia";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { CALL_BITRATE_BPS, type CallState } from "@shared/calls";
+import {
+  CALL_VIDEO_QUALITIES,
+  callCameraConstraints,
+  callClock,
+  canShareScreen,
+  gridColumns,
+  newTrackName,
+  preferredVideoQuality,
+  staleTracks,
+  tracksToPull,
+} from "./callMedia";
 
 const call = (participants: Array<{ userId: string; sessionId: string; tracks?: any }>): CallState => ({
   conversationId: "c",
@@ -66,5 +76,29 @@ describe("track names and screen share", () => {
   });
   it("screen share is a question for the browser", () => {
     expect(typeof canShareScreen()).toBe("boolean");
+  });
+});
+
+describe("camera quality", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([{ type: "cellular" }, { saveData: true }])("defaults to data saver for %j", (connection) => {
+    vi.stubGlobal("navigator", { connection });
+    expect(preferredVideoQuality()).toBe("low");
+  });
+
+  it("uses standard quality when connection information is unavailable", () => {
+    vi.stubGlobal("navigator", {});
+    expect(preferredVideoQuality()).toBe("standard");
+  });
+
+  it("reduces both capture and encoder bandwidth without exceeding the standard call ceiling", () => {
+    expect(callCameraConstraints("low")).toEqual({
+      width: { ideal: 640, max: 640 },
+      height: { ideal: 360, max: 360 },
+      frameRate: { ideal: 15, max: 15 },
+    });
+    expect(CALL_VIDEO_QUALITIES.low.bitrate).toBeLessThan(CALL_VIDEO_QUALITIES.standard.bitrate);
+    expect(CALL_VIDEO_QUALITIES.standard.bitrate).toBe(CALL_BITRATE_BPS.video);
   });
 });

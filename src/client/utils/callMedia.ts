@@ -1,6 +1,6 @@
 // The small decisions a call makes, kept apart from the browser so they can be tested: which tracks to pull, how the tiles
 // are laid out, and how long the call has gone on.
-import type { CallState } from "@shared/calls";
+import { CALL_BITRATE_BPS, type CallState } from "@shared/calls";
 
 export type TrackKind = "audio" | "video" | "screen";
 
@@ -64,3 +64,27 @@ export function callClock(seconds: number): string {
 
 /** Whether this browser can share its screen (not iOS, and few phones). */
 export const canShareScreen = () => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
+
+export const CALL_VIDEO_QUALITIES = {
+  standard: { label: "Standard (720p)", width: 1280, height: 720, frameRate: 30, bitrate: CALL_BITRATE_BPS.video },
+  low: { label: "Data saver (360p)", width: 640, height: 360, frameRate: 15, bitrate: 400_000 },
+} as const;
+
+export type CallVideoQuality = keyof typeof CALL_VIDEO_QUALITIES;
+
+export function preferredVideoQuality(): CallVideoQuality {
+  if (typeof navigator === "undefined") return "standard";
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean; type?: string } }).connection;
+  return connection?.saveData || connection?.type === "cellular" ? "low" : "standard";
+}
+
+export function callCameraConstraints(quality: CallVideoQuality): MediaTrackConstraints {
+  const { width, height, frameRate } = CALL_VIDEO_QUALITIES[quality];
+  return {
+    width: { ideal: width, max: width },
+    height: { ideal: height, max: height },
+    frameRate: { ideal: frameRate, max: frameRate },
+  };
+}
+
+export const CALL_MIC_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };

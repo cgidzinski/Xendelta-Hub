@@ -3,6 +3,7 @@ import { Box, Button, Typography } from "@mui/material";
 import CallIcon from "@mui/icons-material/Call";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import CallEndIcon from "@mui/icons-material/CallEnd";
+import { RADIUS } from "../../theme";
 import { useCall } from "../../contexts/CallContext";
 
 /** A soft two-note ring, made with the browser's audio (no sound file to ship), repeating until stopped. */
@@ -45,7 +46,7 @@ export default function IncomingCallBanner() {
   if (!incoming) return null;
   return (
     <Box
-      role="alertdialog"
+      role="region"
       aria-label={`Incoming call from ${incoming.fromName}`}
       sx={{
         position: "fixed",
@@ -56,16 +57,16 @@ export default function IncomingCallBanner() {
         width: "min(420px, calc(100vw - 24px))",
         display: "flex",
         alignItems: "center",
-        gap: 1.5,
+        flexWrap: "wrap",
+        gap: 1,
         p: 1.5,
-        borderRadius: 3,
+        borderRadius: RADIUS.xl,
         bgcolor: "background.paper",
         border: 1,
         borderColor: "divider",
-        boxShadow: 6,
       }}
     >
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box role="status" sx={{ flex: "1 1 120px", minWidth: 0 }}>
         <Typography sx={{ fontWeight: 600 }} noWrap>
           {incoming.fromName}
         </Typography>
@@ -74,7 +75,7 @@ export default function IncomingCallBanner() {
         </Typography>
       </Box>
       <Button
-        variant="contained"
+        variant="outlined"
         color="error"
         onClick={() => void decline()}
         startIcon={<CallEndIcon />}

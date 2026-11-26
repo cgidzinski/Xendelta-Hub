@@ -11,122 +11,126 @@ export interface Recording {
 export const canRecordVoice = () =>
   typeof window !== "undefined" && typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
 
-/**
- * Record from the microphone. `start()` asks for the microphone and begins; `finish()` stops and returns the file with its
- * length and waveform (measured while recording, so nothing has to be decoded afterwards, which Safari is fussy about);
- * `cancel()` throws it away. It stops by itself at the longest allowed length.
- */
+/** Record audio and measure its waveform while recording. */
 export function useVoiceRecorder() {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const recorder = useRef<MediaRecorder | null>(null);
-  const stream = useRef<MediaStream | null>(null);
-  const audio = useRef<AudioContext | null>(null);
-  const chunks = useRef<Blob[]>([]);
-  const samples = useRef<number[]>([]);
-  const started = useRef(0);
-  const ticker = useRef<ReturnType<typeof setInterval> | null>(null);
-  const done = useRef<((r: Recording | null) => void) | null>(null);
-  const extension = useRef("webm");
-
-  const release = useCallback(() => {
-    if (ticker.current) clearInterval(ticker.current);
-    ticker.current = null;
-    stream.current?.getTracks().forEach((t) => t.stop());
-    stream.current = null;
-    void audio.current?.close().catch(() => undefined);
-    audio.current = null;
-    recorder.current = null;
-    setRecording(false);
-  }, []);
-
-  const finish = useCallback(
-    () =>
-      new Promise<Recording | null>((resolve) => {
-        const r = recorder.current;
-        if (!r || r.state === "inactive") return resolve(null);
-        done.current = resolve;
-        r.stop();
-      }),
-    [],
-  );
+  const requested = useRef<symbol | null>(null);
+  const current = useRef<{ stop: () => void; discard: () => void; result: Promise<Recording | null> } | null>(null);
 
   const cancel = useCallback(() => {
-    const r = recorder.current;
-    done.current = () => undefined;
-    chunks.current = [];
-    if (r && r.state !== "inactive") r.stop();
-    else release();
-  }, [release]);
+    requested.current = null;
+    const previous = current.current;
+    current.current = null;
+    previous?.discard();
+  }, []);
 
   const start = useCallback(async () => {
+    const ticket = Symbol();
+    requested.current = ticket;
     const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.current = media;
-    const { mime, extension: ext } = pickRecordingType((t) => MediaRecorder.isTypeSupported(t));
-    extension.current = ext;
-    const r = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
-    recorder.current = r;
-    chunks.current = [];
-    samples.current = [];
-
-    // Read the loudness ten times a second for the waveform.
-    const Ctx = window.AudioContext ?? (window as any).webkitAudioContext;
-    if (Ctx) {
-      const ctx: AudioContext = new Ctx();
-      audio.current = ctx;
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      ctx.createMediaStreamSource(media).connect(analyser);
-      const buffer = new Uint8Array(analyser.fftSize);
-      ticker.current = setInterval(() => {
-        analyser.getByteTimeDomainData(buffer);
-        let peak = 0;
-        for (const v of buffer) peak = Math.max(peak, Math.abs(v - 128) / 128);
-        samples.current.push(peak);
-      }, 100);
+    const release = () => media.getTracks().forEach((track) => track.stop());
+    if (requested.current !== ticket) {
+      release();
+      return false;
     }
 
-    r.ondataavailable = (e) => e.data.size > 0 && chunks.current.push(e.data);
-    r.onstop = () => {
-      const duration = Math.min(VOICE_MAX_SECONDS, (Date.now() - started.current) / 1000);
-      const type = r.mimeType || mime || "audio/webm";
-      const blob = new Blob(chunks.current, { type });
-      const resolve = done.current;
-      done.current = null;
-      const waveformSource = samples.current.length > 0 ? samples.current : [0];
+    let audio: AudioContext | undefined;
+    let sampling: ReturnType<typeof setInterval> | undefined;
+    let clock: ReturnType<typeof setInterval> | undefined;
+    const cleanUp = () => {
+      clearInterval(sampling);
+      clearInterval(clock);
       release();
-      resolve?.(
-        blob.size > 0
-          ? {
-              file: new File([blob], `voice-message.${extension.current}`, { type: blob.type }),
-              voice: { duration: Math.max(0.5, duration), waveform: toWaveform(waveformSource) },
-            }
-          : null,
-      );
+      void audio?.close().catch(() => undefined);
     };
-    started.current = Date.now();
-    setSeconds(0);
-    r.start();
-    setRecording(true);
-    const clock = setInterval(() => {
-      const elapsed = (Date.now() - started.current) / 1000;
-      setSeconds(elapsed);
-      if (elapsed >= VOICE_MAX_SECONDS && recorder.current?.state === "recording") recorder.current.stop();
-    }, 250);
-    // The clock stops with the recording.
-    const stopClock = () => clearInterval(clock);
-    r.addEventListener("stop", stopClock);
-  }, [release]);
+    try {
+      const { mime, extension } = pickRecordingType((t) => MediaRecorder.isTypeSupported(t));
+      const recorder = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
+      const chunks: Blob[] = [];
+      const samples: number[] = [];
+      const Ctx =
+        window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) {
+        try {
+          audio = new Ctx();
+          void audio.resume().catch(() => undefined);
+          const analyser = audio.createAnalyser();
+          analyser.fftSize = 512;
+          audio.createMediaStreamSource(media).connect(analyser);
+          const buffer = new Uint8Array(analyser.fftSize);
+          sampling = setInterval(() => {
+            analyser.getByteTimeDomainData(buffer);
+            let peak = 0;
+            for (const value of buffer) peak = Math.max(peak, Math.abs(value - 128) / 128);
+            samples.push(peak);
+          }, 100);
+        } catch {
+          // A waveform is optional. The recording still works without Web Audio.
+        }
+      }
 
-  // Leaving the screen while recording throws the recording away and lets go of the microphone.
-  useEffect(
-    () => () => {
-      done.current = () => undefined;
-      if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
-      else release();
-    },
-    [release],
-  );
+      const started = Date.now();
+      const stop = () => {
+        if (recorder.state !== "inactive") recorder.stop();
+      };
+      const result = new Promise<Recording | null>((resolve) => {
+        const complete = (recording: Recording | null) => {
+          cleanUp();
+          if (requested.current === ticket) setRecording(false);
+          resolve(recording);
+        };
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onerror = () => complete(null);
+        recorder.onstop = () => {
+          if (requested.current !== ticket) return complete(null);
+          const duration = Math.min(VOICE_MAX_SECONDS, (Date.now() - started) / 1000);
+          const blob = new Blob(chunks, { type: recorder.mimeType || mime || "audio/webm" });
+          complete(
+            blob.size
+              ? {
+                  file: new File([blob], `voice-message.${extension}`, { type: blob.type }),
+                  voice: { duration: Math.max(0.5, duration), waveform: toWaveform(samples.length ? samples : [0]) },
+                }
+              : null,
+          );
+        };
+      });
+      recorder.start();
+      current.current = {
+        result,
+        stop,
+        discard: () => {
+          stop();
+          cleanUp();
+          setRecording(false);
+        },
+      };
+      setSeconds(0);
+      setRecording(true);
+      clock = setInterval(() => {
+        const elapsed = Math.min(VOICE_MAX_SECONDS, (Date.now() - started) / 1000);
+        setSeconds(elapsed);
+        if (elapsed >= VOICE_MAX_SECONDS) stop();
+      }, 250);
+      return true;
+    } catch (error) {
+      cleanUp();
+      throw error;
+    }
+  }, []);
+
+  const finish = async () => {
+    const held = current.current;
+    if (!held) return null;
+    current.current = null;
+    held.stop();
+    return held.result;
+  };
+
+  useEffect(() => cancel, [cancel]);
 
   return { recording, seconds, start, finish, cancel };
 }

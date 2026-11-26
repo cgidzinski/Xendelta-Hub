@@ -6,6 +6,7 @@ import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TagIcon from "@mui/icons-material/Tag";
 import VolumeUpOutlinedIcon from "@mui/icons-material/VolumeUpOutlined";
+import GraphicEqIcon from "@mui/icons-material/GraphicEq";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import { useCall } from "../../../../contexts/CallContext";
 import { useChatCall } from "../../../../hooks/calls/useChatCall";
@@ -119,26 +120,37 @@ function Row({ channel, selected, onSelect }: { channel: CommunityChannel; selec
 
 /** Who is in a voice channel right now, listed under it. */
 function VoiceParticipants({ channelId }: { channelId: string }) {
-  const { enabled } = useCall();
+  const { enabled, active, speaking } = useCall();
   const { call, people } = useChatCall(channelId, enabled);
   if (!call || call.participants.length === 0) return null;
   return (
     <Box component="ul" aria-label="In this voice channel" sx={{ listStyle: "none", m: 0, pl: 4.5, pr: 1, pb: 0.5 }}>
       {call.participants.map((p) => {
         const person = people.find((x) => x._id === p.userId);
+        const talking = active?.conversationId === channelId && !p.muted && speaking.has(p.userId);
         return (
           <Box
             component="li"
             key={p.userId}
             sx={{ display: "flex", alignItems: "center", gap: 1, height: 28, color: "text.secondary" }}
           >
-            <UserAvatar user={person} sx={{ width: 20, height: 20, fontSize: 11 }}>
+            <UserAvatar
+              user={person}
+              sx={{
+                width: 20,
+                height: 20,
+                fontSize: 11,
+                outline: talking ? "2px solid" : undefined,
+                outlineColor: talking ? "success.main" : undefined,
+              }}
+            >
               {person?.username[0]?.toUpperCase()}
             </UserAvatar>
             <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>
               {person?.username ?? "Someone"}
             </Typography>
-            {p.muted && <MicOffIcon sx={{ fontSize: 14 }} aria-label="Muted" />}
+            {talking && <GraphicEqIcon sx={{ fontSize: 16, color: "success.main" }} titleAccess="Speaking" />}
+            {p.muted && <MicOffIcon sx={{ fontSize: 14 }} titleAccess="Muted" />}
           </Box>
         );
       })}

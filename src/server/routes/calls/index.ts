@@ -50,8 +50,19 @@ async function inCall(req: Request) {
 }
 
 module.exports = function (app: Application) {
-  // A person whose last tab closes leaves their calls.
-  SocketManager.getInstance().onUserOffline((userId) => void leaveAllCalls(userId).catch(() => undefined));
+  const socket = SocketManager.getInstance();
+  const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  socket.onUserOffline((userId) => {
+    if (callRegistry.callsOf(userId).length === 0) return;
+    clearTimeout(disconnectTimers.get(userId));
+    // A network change can briefly disconnect the last tab as well as its media connection.
+    const timer = setTimeout(() => {
+      disconnectTimers.delete(userId);
+      if (!socket.isOnline(userId)) void leaveAllCalls(userId).catch(() => undefined);
+    }, 30_000);
+    timer.unref();
+    disconnectTimers.set(userId, timer);
+  });
 
   // Whether calls are set up (the call buttons are left out when they aren't).
   app.get("/api/calls/status", authenticateToken, (_req: Request, res: Response) =>
