@@ -101,6 +101,17 @@ export default function NoteTitleRow({
           placeholder="Untitled note"
           value={title}
           onChange={(e) => onTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || readOnly || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            // Enter in the title moves to the body: the block editor, the text/caption field, or the first list item.
+            const dialog = titleInput.current?.closest('[role="dialog"]');
+            dialog
+              ?.querySelector<HTMLElement>(
+                '[role="textbox"][aria-label="Note"], textarea[aria-label="Note"], textarea[aria-label="Caption"], .MuiDialogContent-root input[type="text"]',
+              )
+              ?.focus();
+          }}
           readOnly={readOnly}
           slotProps={{ input: { maxLength: 200 } }}
           sx={{
