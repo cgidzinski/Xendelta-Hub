@@ -43,6 +43,27 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
   // What the server holds for this note right now (photos and the link change it outside the draft).
   const [live, setLive] = useState<XenNote | null>(note);
   const pendingSave = useRef<Promise<XenNote> | null>(null);
+  // A new note being created by autosave; closing waits for it so the note isn't created twice.
+  const pendingCreate = useRef<Promise<XenNote> | null>(null);
+
+  const createNew = async (nextDraft: NoteDraft) => {
+    const request = (async () => {
+      let created = await actions.createNote.mutateAsync(toInput(nextDraft));
+      if (nextDraft.pendingImages.length)
+        created = await actions.addImages.mutateAsync({ id: created._id, files: nextDraft.pendingImages });
+      return created;
+    })();
+    pendingCreate.current = request;
+    try {
+      const created = await request;
+      setLive(created);
+      // What was uploaded is no longer pending; anything typed meanwhile stays in the draft.
+      setDraft((d) => ({ ...d, pendingImages: d.pendingImages.filter((f) => !nextDraft.pendingImages.includes(f)) }));
+      return created;
+    } finally {
+      if (pendingCreate.current === request) pendingCreate.current = null;
+    }
+  };
 
   const saveExisting = async (savedNote: XenNote, nextDraft: NoteDraft) => {
     const request = actions.updateNote.mutateAsync({ id: savedNote._id, input: toInput(nextDraft) });
@@ -69,9 +90,28 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
   const readOnly = !!live && !live.can_edit;
   const set = (patch: Partial<NoteDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
-  // An existing note saves itself shortly after you stop typing; a new one is created when you press Done.
+  // A note saves itself shortly after you stop typing; a new one is created on the first pause, then updated.
   useEffect(() => {
-    if (!open || saving || readOnly || !live || pendingSave.current || !isDirty(draft, draftFromNote(live))) return;
+    if (!open || saving || readOnly || pendingSave.current || pendingCreate.current) return;
+    if (!live) {
+      if (
+        isEmptyDraft(draft) ||
+        (draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim()))
+      )
+        return;
+      const timer = setTimeout(async () => {
+        setAutosave("saving");
+        try {
+          await createNew(draft);
+          setAutosave("saved");
+        } catch (e) {
+          setAutosave("idle");
+          enqueueSnackbar((e as Error).message || "Couldn't save the note", { variant: "error" });
+        }
+      }, AUTOSAVE_MS);
+      return () => clearTimeout(timer);
+    }
+    if (!isDirty(draft, draftFromNote(live))) return;
     if (draft.type === "link" && draft.link.url.trim() !== "" && !isSafeUrl(draft.link.url.trim())) return;
     const timer = setTimeout(async () => {
       setAutosave("saving");
@@ -96,17 +136,16 @@ export function useNoteDraft({ open, onClose, note, startType, onOpenNote }: Use
     if (saving) return false;
     try {
       setSaving(true);
-      if (!live) {
-        if (!isEmptyDraft(draft)) {
-          const created = await actions.createNote.mutateAsync(toInput(draft));
-          if (draft.pendingImages.length)
-            await actions.addImages.mutateAsync({ id: created._id, files: draft.pendingImages });
-        }
+      // A close while autosave is in flight must finish that write before flushing a newer draft.
+      const createdNote = await pendingCreate.current?.catch(() => null);
+      const current = live ?? createdNote ?? null;
+      if (!current) {
+        if (!isEmptyDraft(draft)) await createNew(draft);
       } else {
-        // A close while autosave is in flight must finish that write before flushing a newer draft.
         const saved = await pendingSave.current?.catch(() => null);
-        const baseline = saved?._id === live._id ? saved : live;
-        if (isDirty(draft, draftFromNote(baseline))) await saveExisting(baseline, draft);
+        const baseline = saved?._id === current._id ? saved : current;
+        // Photos picked before the note existed were uploaded when it was created.
+        if (isDirty({ ...draft, pendingImages: [] }, draftFromNote(baseline))) await saveExisting(baseline, draft);
       }
       return true;
     } catch (e) {
